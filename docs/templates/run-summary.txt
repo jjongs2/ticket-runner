@@ -14,8 +14,8 @@ took no Ticket prints `  nothing to do` in place of the rows.
 `skipped` names why a candidate was passed over: `blocked` for one an open
 blocker held back all Run, and otherwise the guard reason that kept it from
 being claimed — `spec`, `no-criteria` or `body-only-blockers` for Planning a
-guard rejected, `claimed` or `not-ready` for an issue `ticket <n>` named that no
-Run may take.
+guard rejected, `claimed` or `not-ready` for an issue that is nobody's to take,
+which is usually one `ticket <n>` named by hand.
 
 The last line says why the Run stopped: `Frontier empty.` when nothing is left,
 `Frontier blocked.` when every remaining candidate has an open blocker.

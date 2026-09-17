@@ -80,8 +80,8 @@ reproducing a Stage by hand reproduces its environment too.
 
 Any failure hands the Ticket over instead: `ready-for-human`, unassigned, draft PR,
 branch and worktree preserved. Exit code is `0` when nothing was handed off, `1` when
-something was, and `2` when the Run never started — which includes a `ticket <n>` a
-guard refused, since nothing was taken.
+something was, and `2` when nothing was taken at all — the Run never started, or a
+guard refused the issue named. A `run` that skipped every candidate still exits `0`.
 
 Every Stage writes its exact command line, stdout, stderr and stream-json transcript to
 `.agent-pipeline/runs/<runId>/<n>/`, so any Stage can be reproduced by hand. The command

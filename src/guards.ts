@@ -27,11 +27,16 @@ export type Refusal = "claimed" | "not-ready";
 /** A Planning defect, which is worth exactly one warning comment. */
 export type GuardReason = "spec" | "no-criteria" | "body-only-blockers";
 
-const GUARD_REASONS: readonly SkipReason[] = ["spec", "no-criteria", "body-only-blockers"];
+/** Keyed rather than listed, so a new reason cannot be left out of it silently. */
+const GUARD_REASONS: Record<GuardReason, true> = {
+  spec: true,
+  "no-criteria": true,
+  "body-only-blockers": true,
+};
 
 /** Whether the skip is something to warn the humans about on the issue. */
 export function isGuardReason(reason: SkipReason): reason is GuardReason {
-  return GUARD_REASONS.includes(reason);
+  return reason in GUARD_REASONS;
 }
 
 /**
@@ -41,7 +46,7 @@ export function isGuardReason(reason: SkipReason): reason is GuardReason {
  * and a Spec is named a Spec rather than whatever else is unlike a Ticket
  * about it.
  */
-export function guardCandidate(issue: Issue, readyForAgent: string): SkipReason | undefined {
+export function skipReason(issue: Issue, readyForAgent: string): SkipReason | undefined {
   if (issue.assignees.length > 0) return "claimed";
   if (!issue.labels.includes(readyForAgent)) return "not-ready";
   if (issue.subIssues > 0) return "spec";
@@ -69,7 +74,8 @@ function bodyOnlyBlockers(issue: Issue): number[] {
   );
 }
 
-const ISSUE_REFERENCE = /#(\d+)\b/g;
+/** `#12`, but not the `other/repo#12` this repo cannot compare numbers with. */
+const ISSUE_REFERENCE = /(?<![\w/])#(\d+)\b/g;
 const LIST_ITEM = /^\s*[-*+]\s/;
 /** Whatever a heading, a list item or bold text puts in front of the words. */
 const DECORATION = /^[\s>#*_-]+/;
@@ -77,28 +83,28 @@ const DECORATION = /^[\s>#*_-]+/;
 /**
  * Every `#<n>` a body's `Blocked by` section names.
  *
- * The section is whatever follows the line that announces it — a `## Blocked
- * by` heading with a list under it, or an inline `Blocked by: #3` — until a
- * line that is neither blank nor a list item, which is the next section
- * whatever its shape. Issue references elsewhere in the body are prose: a
- * Parent, a follow-up, a duplicate.
+ * A body says it one of two ways, and the section ends where that way ends: an
+ * inline `Blocked by: #3` is over at the end of its own line, and a `## Blocked
+ * by` heading is over at the end of the one list under it. Reading any further
+ * would take the Acceptance Criteria — a list of `#<n>`-quoting checkboxes, two
+ * blank lines below — for blockers and reject a Ticket Planning got right.
+ * Issue references elsewhere in the body are prose: a Parent, a follow-up, a
+ * duplicate.
  */
 function bodyBlockerReferences(body: string): number[] {
-  const references: number[] = [];
-  let inSection = false;
+  const lines = body.split("\n");
+  const announcement = lines.findIndex(announcesBlockers);
+  if (announcement === -1) return [];
 
-  for (const line of body.split("\n")) {
-    if (announcesBlockers(line)) {
-      inSection = true;
-      references.push(...issueReferences(line));
-      continue;
-    }
-    if (!inSection) continue;
-    if (line.trim() === "") continue;
-    if (!LIST_ITEM.test(line)) {
-      inSection = false;
-      continue;
-    }
+  const inline = issueReferences(lines[announcement] as string);
+  if (inline.length > 0) return inline;
+
+  const references: number[] = [];
+  let listStarted = false;
+  for (const line of lines.slice(announcement + 1)) {
+    if (!listStarted && line.trim() === "") continue;
+    if (!LIST_ITEM.test(line)) break;
+    listStarted = true;
     references.push(...issueReferences(line));
   }
 

@@ -30,6 +30,17 @@ const GUARD_SENTENCES: Record<GuardReason, string> = {
     "with `gh issue edit <n> --add-blocked-by <m>`, then re-run.",
 };
 
+/**
+ * Whether one of these comments is already on the issue.
+ *
+ * The marker is the first line of every pipeline comment, which is the whole
+ * point of it: this is how a second Run knows it has nothing new to say.
+ */
+export function hasGuardWarning(comments: string[], reason: GuardReason): boolean {
+  const marker = guardMarker(reason);
+  return comments.some((body) => body.trimStart().startsWith(marker));
+}
+
 /** The one warning a skipped candidate gets. Two sentences: the reason, the fix. */
 export function guardComment(reason: GuardReason): string {
   return [

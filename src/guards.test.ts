@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { guardCandidate } from "./guards.js";
+import { skipReason } from "./guards.js";
 import type { Issue } from "./ports/tracker.js";
 
 const READY = "ready-for-agent";
@@ -19,7 +19,7 @@ function issue(overrides: Partial<Issue> = {}): Issue {
   };
 }
 
-const guard = (overrides: Partial<Issue> = {}) => guardCandidate(issue(overrides), READY);
+const guard = (overrides: Partial<Issue> = {}) => skipReason(issue(overrides), READY);
 
 describe("a Ticket Planning got right", () => {
   it("passes every guard", () => {
@@ -136,6 +136,29 @@ describe("the body-only blockers guard", () => {
         body: "- [ ] it works\n\nBlocked by: #3\n\nThis is the follow-up to #8.\n",
         blockedBy: [3],
       }),
+    ).toBeUndefined();
+  });
+
+  it("stops at the list that comes after the section, not at the next heading", () => {
+    // Acceptance Criteria are a list of checkboxes that quote issue numbers, so
+    // reading past the blockers rejects a Ticket Planning got right.
+    expect(
+      guard({
+        body: "## Blocked by\n\n- #3\n\n- [ ] it closes #9\n",
+        blockedBy: [3],
+      }),
+    ).toBeUndefined();
+  });
+
+  it("reads an inline `Blocked by:` line and nothing under it", () => {
+    expect(
+      guard({ body: "Blocked by: #3\n\n- [ ] it closes #9\n", blockedBy: [3] }),
+    ).toBeUndefined();
+  });
+
+  it("ignores a blocker in another repository, whose numbers do not compare", () => {
+    expect(
+      guard({ body: "- [ ] it works\n\nBlocked by: acme/other#42\n" }),
     ).toBeUndefined();
   });
 

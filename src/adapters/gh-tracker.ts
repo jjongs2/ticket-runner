@@ -123,8 +123,7 @@ export class GhTracker implements Tracker {
       labels: raw.labels.map((label) => label.name),
       assignees: raw.assignees.map((assignee) => assignee.login),
       comments: raw.comments.map((comment) => comment.body),
-      subIssues: subIssues(raw),
-      blockedBy: (raw.blockedBy?.nodes ?? []).map((blocker) => blocker.number),
+      ...relations(raw),
     };
   }
 
@@ -285,21 +284,29 @@ function openBlockers(issue: RawCandidate): number {
 }
 
 /**
- * A missing sub-issue summary is an error, for the reason
- * {@link openBlockers} refuses a missing dependency summary: guessing zero
- * would hand every Spec to an implement Stage. `blockedBy` is read the same
- * way, since the two arrive together or not at all.
+ * The two native relations the guards read, and neither may be guessed.
+ *
+ * A missing one is an error for the reason {@link openBlockers} refuses a
+ * missing dependency summary: reading it as zero would hand every Spec to an
+ * implement Stage and take every body-only blocker at its word (ADR-0003).
  */
-function subIssues(issue: RawIssue): number {
-  const total = issue.subIssuesSummary?.total;
-  if (typeof total !== "number" || issue.blockedBy === undefined) {
+function relations(issue: RawIssue): Pick<Issue, "subIssues" | "blockedBy"> {
+  const missing = [
+    typeof issue.subIssuesSummary?.total === "number" ? "" : "subIssuesSummary.total",
+    issue.blockedBy === undefined ? "blockedBy" : "",
+  ].filter((field) => field !== "");
+
+  if (missing.length > 0) {
     throw new Error(
-      `#${issue.number} came back without subIssuesSummary.total or blockedBy, ` +
-        "so whether it is a Spec and what blocks it cannot be read; " +
-        "agent-pipeline trusts GitHub's native relations only (ADR-0003)",
+      `#${issue.number} came back without ${missing.join(" or ")}, so whether it ` +
+        "is a Spec and what blocks it cannot be read; agent-pipeline trusts " +
+        "GitHub's native relations only (ADR-0003)",
     );
   }
-  return total;
+  return {
+    subIssues: issue.subIssuesSummary?.total as number,
+    blockedBy: (issue.blockedBy?.nodes ?? []).map((blocker) => blocker.number),
+  };
 }
 
 /** `pending` means "ask again"; everything else is an answer. */

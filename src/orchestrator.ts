@@ -1,6 +1,6 @@
 import { branchName, worktreePath } from "./branch.js";
 import type { Config } from "./config.js";
-import { type SkipReason, guardCandidate, isGuardReason } from "./guards.js";
+import { type SkipReason, isGuardReason, skipReason } from "./guards.js";
 import type { FailurePoint } from "./lifecycle.js";
 import type { AgentRunner, StageFailure, StageResult } from "./ports/agent-runner.js";
 import type { Issue, Tracker } from "./ports/tracker.js";
@@ -10,8 +10,8 @@ import { stageLogDir } from "./run-log.js";
 import {
   draftPullRequestBody,
   guardComment,
-  guardMarker,
   handoffComment,
+  hasGuardWarning,
   pullRequestBody,
   squashCommit,
 } from "./templates.js";
@@ -91,7 +91,7 @@ export async function processTicket(
   const log = pipeline.log ?? (() => {});
 
   const issue = await tracker.getIssue(ticket);
-  const skip = guardCandidate(issue, config.labels.readyForAgent);
+  const skip = skipReason(issue, config.labels.readyForAgent);
   if (skip !== undefined) return await passOver(pipeline, issue, skip);
 
   const user = await tracker.currentUser();
@@ -183,9 +183,9 @@ async function passOver(
   const { tracker, config } = pipeline;
 
   if (isGuardReason(reason)) {
-    const marker = guardMarker(reason);
-    const warned = issue.comments.some((body) => body.trimStart().startsWith(marker));
-    if (!warned) await tracker.comment(issue.number, guardComment(reason));
+    if (!hasGuardWarning(issue.comments, reason)) {
+      await tracker.comment(issue.number, guardComment(reason));
+    }
     // A Spec is not a Ticket and no edit will make it one; the other two are
     // fixable in place, so their candidates keep the label and stay visible.
     if (reason === "spec") {

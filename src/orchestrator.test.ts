@@ -680,11 +680,11 @@ describe("the Planning guards", () => {
     tracker.issue(TICKET).body = "## What to build\n\nSomething good.";
 
     await run();
-    // The warning is on the issue now, which is what the second Run reads.
-    tracker.issue(TICKET).comments = warnings();
+    // The first warning is on the issue now, which is what the second Run reads.
     await run();
 
     expect(warnings()).toHaveLength(1);
+    expect(tracker.issue(TICKET).comments).toHaveLength(1);
   });
 
   it("warns again when a second guard has something else to say", async () => {

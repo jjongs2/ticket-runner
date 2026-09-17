@@ -118,7 +118,26 @@ describe("reading", () => {
       ),
     ).getIssue(2);
 
-    await expect(issue).rejects.toThrow(/subIssuesSummary/);
+    await expect(issue).rejects.toThrow(/subIssuesSummary.total or blockedBy/);
+  });
+
+  it("names the relation that is missing, not the one that came back", async () => {
+    const issue = tracker(
+      ok(
+        JSON.stringify({
+          number: 2,
+          title: "Skeleton",
+          url: "https://github.com/acme/repo/issues/2",
+          body: "",
+          labels: [],
+          assignees: [],
+          comments: [],
+          subIssuesSummary: { total: 0 },
+        }),
+      ),
+    ).getIssue(2);
+
+    await expect(issue).rejects.toThrow(/without blockedBy/);
   });
   it("reads candidates, their assignees and their open native blockers", async () => {
     const candidates = await tracker(
