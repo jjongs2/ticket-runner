@@ -281,6 +281,35 @@ describe("a Ticket the rate limit released", () => {
 });
 
 describe("a Ticket that throws", () => {
+  it("still reports the Notes it had already routed", async () => {
+    tracker.addIssue({ number: 4 });
+    runner.queue("implement", stageResult({ result: { notes: [{ note: "no cleanup" }] } }));
+    // The Notes are routed first; the Ticket then fails, and the hand-off's own
+    // writes are outside processTicket's net, so the tracker going down there
+    // throws past the outcome the Notes would otherwise have ridden out on.
+    runner.queue("verify", stageResult({ ok: false, failure: "nonzero-exit" }));
+    tracker.comment = async () => {
+      throw new Error("gh: connection reset");
+    };
+
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes).toEqual([
+      {
+        outcome: "handed-off",
+        ticket: 4,
+        title: "Ticket 4",
+        branch: "agent/4-ticket-4",
+        // `take` catches what processTicket could not, so it can only blame setup.
+        stage: "setup",
+        failure: "gh: connection reset",
+        notes: [
+          { origin: 4, stage: "implement", issue: 200, opened: true, note: "no cleanup" },
+        ],
+      },
+    ]);
+  });
+
   it("is reported as handed off and the Run carries on", async () => {
     for (const number of [4, 5]) tracker.addIssue({ number });
     // The claim is outside processTicket's own hand-off net, so a tracker that

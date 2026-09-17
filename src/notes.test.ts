@@ -44,12 +44,18 @@ describe("parseNotes", () => {
     ]);
   });
 
-  it("keeps the notes around one the schema rejects", () => {
+  it("drops an entry with no words in it and keeps the rest", () => {
+    const notes = parseNotes({ notes: [{ note: "first" }, { note: 42 }, { note: "third" }] });
+
+    expect(notes).toEqual([{ note: "first" }, { note: "third" }]);
+  });
+
+  it("keeps a note whose ticket number is unusable, minus the number", () => {
     const notes = parseNotes({
-      notes: [{ note: "first" }, { note: 42 }, { ticket: "eight", note: "third" }],
+      notes: [{ ticket: "eight", note: "a" }, { ticket: 0, note: "b" }, { ticket: 1.5, note: "c" }],
     });
 
-    expect(notes).toEqual([{ note: "first" }]);
+    expect(notes).toEqual([{ note: "a" }, { note: "b" }, { note: "c" }]);
   });
 
   it("asks for a ticket and a note, and requires only the note", () => {
@@ -202,10 +208,43 @@ describe("escaping", () => {
   });
 });
 
-describe("when the tracker will not take a Note", () => {
-  it("routes the rest and says what was lost", async () => {
+describe("when a Ticket will not take a Note", () => {
+  it("opens an issue for it rather than losing it", async () => {
+    const tracker = new FakeTracker();
+    const lines: string[] = [];
+
+    const routed = await routeNotes(routing(tracker, (line) => lines.push(line)), {
+      notes: [{ ticket: 404, note: "the flag is wrong" }],
+    });
+
+    expect(routed).toEqual([
+      {
+        origin: ORIGIN,
+        stage: "implement",
+        issue: 200,
+        opened: true,
+        note: "the flag is wrong",
+      },
+    ]);
+    expect(lines.join("\n")).toContain("could not comment its Note on #404");
+  });
+
+  it("tells triage which Ticket the Note was reaching for", async () => {
+    const tracker = new FakeTracker();
+
+    await routeNotes(routing(tracker), { notes: [{ ticket: 404, note: "the flag is wrong" }] });
+
+    expect(tracker.createdIssues[0]?.body).toContain(
+      "From #10 implement, meant for #404, which would not take the comment",
+    );
+  });
+
+  it("routes the rest, and says so when the queue will not take it either", async () => {
     const tracker = new FakeTracker();
     tracker.addIssue({ number: 7 });
+    tracker.createIssue = async () => {
+      throw new Error("gh: connection reset");
+    };
     const lines: string[] = [];
 
     const routed = await routeNotes(routing(tracker, (line) => lines.push(line)), {

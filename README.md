@@ -202,10 +202,12 @@ Acceptance Criteria to everything that reads a Ticket, and a Note is not asking
 for any. The Run summary lists every Note with the issue it reached, so a night
 of work says what it noticed as well as what it merged.
 
-Routing a Note can never cost a Ticket. A number the Stage invented, or a
-tracker that refuses the write, loses that one Note and nothing else — and a
-Stage that fails still has its Notes routed, because a session that ran out of
-turns still noticed whatever it noticed.
+Routing a Note can never cost a Ticket, and the triage queue is the fallback for
+all of it: a number the Stage invented, or a Ticket that will not take the
+comment, opens an issue carrying the number it was reaching for rather than
+dropping the finding. Only a tracker that refuses that too loses a Note, and it
+loses that one and nothing else. A Stage that fails still has its Notes routed,
+because a session that ran out of turns still noticed whatever it noticed.
 
 ## Rebase conflicts
 

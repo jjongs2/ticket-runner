@@ -1834,12 +1834,24 @@ describe("Notes a Stage makes", () => {
     });
   });
 
-  it("does not fail the Stage over a Note the tracker refused", async () => {
-    runner.queue("implement", noteResult([{ ticket: 404, note: "lost" }]));
+  it("sends a Note to triage when the Ticket it named will not take it", async () => {
+    runner.queue("implement", noteResult([{ ticket: 404, note: "the flag is wrong" }]));
 
     const outcome = await run();
 
-    expect(outcome).toMatchObject({ outcome: "merged", notes: [] });
+    expect(outcome).toMatchObject({
+      outcome: "merged",
+      notes: [{ issue: 200, opened: true, note: "the flag is wrong" }],
+    });
+  });
+
+  it("merges the Ticket anyway when a Note reaches nowhere at all", async () => {
+    tracker.createIssue = async () => {
+      throw new Error("gh: connection reset");
+    };
+    runner.queue("implement", noteResult([{ ticket: 404, note: "lost" }]));
+
+    expect(await run()).toMatchObject({ outcome: "merged", notes: [] });
   });
 });
 

@@ -229,6 +229,12 @@ export interface NoteSubject {
   origin: number;
   stage: StageName;
   note: string;
+  /**
+   * The Ticket this was meant to be a comment on, when that Ticket would not
+   * take it. Set only on the issue a refused comment falls back to, so triage
+   * can see the link the Note was reaching for.
+   */
+  intended?: number;
 }
 
 /** A task list item at the start of a line, which is what a guard reads. */
@@ -309,9 +315,14 @@ function noteTitle(subject: NoteSubject): string {
 
 /** The issue a Note opens when it names no Ticket. The label is the caller's. */
 export function noteIssue(subject: NoteSubject): { title: string; body: string } {
+  const provenance =
+    subject.intended === undefined
+      ? noteProvenance(subject)
+      : `${noteProvenance(subject)}, meant for #${subject.intended}, which would not take the comment`;
+
   return {
     title: noteTitle(subject),
-    body: [noteProvenance(subject), "", escapeCheckboxes(subject.note.trim()), ""].join("\n"),
+    body: [provenance, "", escapeCheckboxes(subject.note.trim()), ""].join("\n"),
   };
 }
 

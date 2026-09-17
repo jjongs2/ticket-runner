@@ -11,6 +11,12 @@ A Note that names the Ticket its own Stage is working on comes here too. That
 Ticket is about to be closed by the Run that made the Note, and a comment on it
 would be filed under work that is finished.
 
+So does a Note whose Ticket refused the comment — a number the Stage invented,
+an issue somebody locked. That one's provenance line carries the number it was
+reaching for: `From #<origin> <stage>, meant for #<n>, which would not take the
+comment`. The queue is the fallback for every Note, because the one outcome
+worth preventing is a finding going nowhere.
+
 The title is derived from the Note rather than asked for: the first sentence of
 it, trimmed to fit an issue list. Triage is what turns a Note into a Ticket, so
 the title only has to be good enough to be read.

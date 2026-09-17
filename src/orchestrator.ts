@@ -158,6 +158,12 @@ function asTicketFailure(error: unknown, point: FailurePoint): TicketFailure {
 export async function processTicket(
   pipeline: Pipeline,
   ticket: number,
+  /**
+   * Where the Notes are collected, so a caller that has to catch an exception
+   * this function could not turn into a hand-off still knows what was routed.
+   * The returned outcome carries the same array.
+   */
+  notes: RoutedNote[] = [],
 ): Promise<TicketOutcome> {
   const { tracker, workspace, config, repoRoot, runId } = pipeline;
   const log = pipeline.log ?? (() => {});
@@ -213,10 +219,6 @@ export async function processTicket(
   // Declared out here because ticking the Acceptance Criteria it proved happens
   // after the merge, where a failure may no longer hand the Ticket off.
   let verdict: Verdict;
-
-  // Every Note this Ticket's Stages routed. Collected as they are posted, so a
-  // Ticket that ends in a hand-off still reports what it noticed on the way.
-  const notes: RoutedNote[] = [];
 
   try {
     // A released Ticket kept its worktree and branch, and the Stages that

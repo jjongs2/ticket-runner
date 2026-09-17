@@ -16,7 +16,7 @@
 
 import type { StageName } from "./ports/agent-runner.js";
 import type { Tracker } from "./ports/tracker.js";
-import { noteComment, noteIssue } from "./templates.js";
+import { type NoteSubject, noteComment, noteIssue } from "./templates.js";
 import { z } from "zod";
 
 /** One finding, and the Ticket it belongs to when the Stage knew of one. */
@@ -37,8 +37,16 @@ export interface RoutedNote {
   note: string;
 }
 
+/**
+ * One entry of a Stage's `notes` list.
+ *
+ * `ticket` is read separately from `note` and forgiven separately: a number the
+ * Stage wrote as a string, a float or a zero is no number, but the words beside
+ * it are still a finding. Dropping the entry over its label would lose exactly
+ * what this whole module exists to keep.
+ */
 const noteSchema = z.object({
-  ticket: z.number().int().positive().optional(),
+  ticket: z.number().int().positive().optional().catch(undefined),
   note: z.string(),
 });
 
@@ -140,28 +148,54 @@ export async function routeNotes(
 }
 
 /**
- * Where one Note goes.
+ * Where one Note goes: the Ticket it names, and otherwise the triage queue.
  *
  * A Note that names the Ticket its own Stage is working on names no Ticket, as
  * far as this is concerned. A Stage says that when it has found something the
  * Acceptance Criteria do not cover, and commenting on that Ticket would file
  * the finding under an issue that is about to be closed by the very Run that
  * made it. The triage queue outlives the Run; the Ticket does not.
+ *
+ * A Ticket that will not take the comment — a number the Stage invented, an
+ * issue somebody locked — falls to the triage queue as well, carrying the
+ * number it was meant for. The queue is the fallback for everything, because
+ * the one outcome this module exists to prevent is a finding going nowhere.
  */
 async function route(routing: NoteRouting, note: Note): Promise<RoutedNote> {
   const { tracker, origin, stage } = routing;
   const from = { origin, stage, note: note.note };
 
   if (note.ticket !== undefined && note.ticket !== origin) {
-    await tracker.comment(note.ticket, noteComment(from));
-    routing.log?.(`#${origin} noted on #${note.ticket}`);
-    return { origin, stage, issue: note.ticket, opened: false, note: note.note };
+    try {
+      await tracker.comment(note.ticket, noteComment(from));
+      routing.log?.(`#${origin} noted on #${note.ticket}`);
+      return { origin, stage, issue: note.ticket, opened: false, note: note.note };
+    } catch (error) {
+      routing.log?.(
+        `#${origin} could not comment its Note on #${note.ticket} ` +
+          `(${(error as Error).message}); opening an issue for it instead`,
+      );
+      return await openForTriage(routing, { ...from, intended: note.ticket });
+    }
   }
 
-  const issue = await tracker.createIssue({
-    ...noteIssue(from),
+  return await openForTriage(routing, from);
+}
+
+async function openForTriage(
+  routing: NoteRouting,
+  subject: NoteSubject,
+): Promise<RoutedNote> {
+  const issue = await routing.tracker.createIssue({
+    ...noteIssue(subject),
     labels: [routing.needsTriage],
   });
-  routing.log?.(`#${origin} noted as #${issue.number}`);
-  return { origin, stage, issue: issue.number, opened: true, note: note.note };
+  routing.log?.(`#${routing.origin} noted as #${issue.number}`);
+  return {
+    origin: routing.origin,
+    stage: routing.stage,
+    issue: issue.number,
+    opened: true,
+    note: subject.note,
+  };
 }
