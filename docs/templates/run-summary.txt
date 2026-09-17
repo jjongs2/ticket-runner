@@ -1,0 +1,8 @@
+agent-pipeline run <runId> · <duration>
+
+  merged   #3 Run: drain the Frontier (PR #12)
+  handed   #5 Fix Stage with a single retry · verify · 1 unmet
+  released #6 Rebase conflict resolution · rate limit at implement
+  skipped  #9 no-criteria
+
+Frontier empty.
