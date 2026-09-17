@@ -348,9 +348,9 @@ async function handOff(
   };
 }
 
-/** The PR title becomes the squash commit, so it carries the Ticket reference. */
+/** The PR title becomes the squash commit subject; GitHub appends the PR number itself. */
 function pullRequestTitle(issue: Issue): string {
-  return `${issue.title} (#${issue.number})`;
+  return issue.title;
 }
 
 function describeStageFailure(

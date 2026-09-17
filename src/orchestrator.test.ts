@@ -124,7 +124,7 @@ describe("the happy path", () => {
 
     expect(pr.draft).toBe(false);
     expect(pr.head).toBe(BRANCH);
-    expect(pr.title).toContain(`(#${TICKET})`);
+    expect(pr.title).toBe(tracker.issue(TICKET).title);
     expect(pr.body.split("\n")[0]).toBe(`Closes #${TICKET}`);
     expect(pr.body).toContain("**Verdict:** 1 met · 0 unmet · 0 unverifiable");
   });
