@@ -57,3 +57,7 @@ _Avoid_: requirements, definition of done
 **Verdict**:
 The structured result of Verify: one status per criterion (met, unmet, unverifiable) with evidence.
 _Avoid_: report, review result, score
+
+**Note**:
+A finding a Stage makes that belongs to another Ticket, or to no Ticket yet. Routed to that Ticket's comments or to a new needs-triage issue; never acted on in the current Ticket.
+_Avoid_: handoff, finding, TODO, side note

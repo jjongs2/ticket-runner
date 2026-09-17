@@ -10,6 +10,7 @@ Humans read all of these, so each stays short: one line of status, details folde
 | `handoff-comment.md` | a Ticket is handed to a human | `<!-- agent-pipeline:handoff -->` |
 | `guard-comment.md` | a candidate is skipped by a guard | `<!-- agent-pipeline:guard:<reason> -->` |
 | `pr-body.md` | the PR is opened | none (PR body) |
+| `draft-pr-body.md` | a hand-off opens the PR as a draft, so no Verdict exists | none (PR body) |
 | `run-summary.txt` | a Run ends (terminal) | none |
 
 Markers are how the pipeline finds its own comment again. A marker is the first line of the comment and never changes.

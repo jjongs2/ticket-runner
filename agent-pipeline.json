@@ -1,0 +1,10 @@
+{
+  "stages": {
+    "implement": {
+      "extraPrompt": "Notes for other Tickets (interim, until the pipeline routes them itself): if you discover something that belongs to another Ticket, or to no Ticket yet, do not act on it here. Before you finish, post it as a comment on the Ticket it belongs to with `gh issue comment <n>`, or open a new issue with `gh issue create --label needs-triage` when none fits. Start the note with `From #<this ticket> implement`. Write notes as plain sentences with no checkboxes."
+    },
+    "fix": {
+      "extraPrompt": "Notes for other Tickets (interim, until the pipeline routes them itself): if you discover something that belongs to another Ticket, or to no Ticket yet, do not act on it here. Before you finish, post it as a comment on the Ticket it belongs to with `gh issue comment <n>`, or open a new issue with `gh issue create --label needs-triage` when none fits. Start the note with `From #<this ticket> fix`. Write notes as plain sentences with no checkboxes."
+    }
+  }
+}

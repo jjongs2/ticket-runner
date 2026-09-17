@@ -21,7 +21,7 @@ Conventions for humans and agents working in this repo. Vocabulary is defined in
 
 ## Pull requests
 
-- One PR per Ticket. The PR title follows the commit subject format; it becomes the squash commit on `main`.
+- One PR per Ticket. The PR title becomes the squash commit subject on `main`, and GitHub appends the PR number to it. Hand-written PRs follow the commit subject format without the `(#<n>)`; pipeline PRs use the Ticket title as is. The Ticket link lives in the body's `Closes #<n>`.
 - Body starts with `Closes #<n>` on its own line so the merge closes the Ticket. For pipeline PRs the Verdict summary follows.
 - A draft PR means the Ticket was handed off; the hand-off comment on the Ticket names the branch and worktree.
 - Merge when CI is green: squash, then delete the branch. A PR with no checks is not mergeable.
