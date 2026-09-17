@@ -211,12 +211,17 @@ function classify(
   // 124 is what the wall-clock kill in `exec` reports.
   if (execution.exitCode === 124) return "timed-out";
 
-  const text = [result?.subtype ?? "", String(result?.result ?? ""), execution.stderr].join(
-    " ",
-  );
-  if (/usage limit|rate limit|rate_limit/i.test(text)) return "rate-limited";
   if (result?.subtype === "error_max_turns") return "turn-capped";
-  if (execution.exitCode !== 0 || result?.is_error === true || result === undefined) {
+
+  // A session's failure is read from how it ended, never from what it talked
+  // about: a Ticket about rate limits mentions them hundreds of times and
+  // still succeeds.
+  const failed = execution.exitCode !== 0 || result?.is_error === true || result === undefined;
+  if (failed) {
+    const text = [result?.subtype ?? "", String(result?.result ?? ""), execution.stderr].join(
+      " ",
+    );
+    if (/usage limit|rate limit|rate_limit/i.test(text)) return "rate-limited";
     return "nonzero-exit";
   }
   if (request.jsonSchema !== undefined && structuredOutput(result) === undefined) {
