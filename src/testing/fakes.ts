@@ -62,6 +62,8 @@ export class FakeTracker implements Tracker {
       labels: ["ready-for-agent"],
       assignees: [],
       comments: [],
+      subIssues: 0,
+      blockedBy: [],
       ...issue,
     };
     this.issues.set(full.number, full);
@@ -132,6 +134,9 @@ export class FakeTracker implements Tracker {
   async comment(number: number, body: string): Promise<void> {
     this.calls.push(`comment:${number}`);
     this.comments.push({ issue: number, body });
+    // A comment is on the issue from now on, which is what the next getIssue
+    // has to see: the pipeline finds its own comments again by marker.
+    this.issues.get(number)?.comments.push(body);
   }
 
   async createPullRequest(pr: CreatePullRequest): Promise<PullRequestRef> {

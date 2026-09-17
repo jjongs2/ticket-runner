@@ -1,5 +1,6 @@
 import { branchName, worktreePath } from "./branch.js";
 import type { Config } from "./config.js";
+import { type SkipReason, isGuardReason, skipReason } from "./guards.js";
 import type { FailurePoint } from "./lifecycle.js";
 import type { AgentRunner, StageFailure, StageResult } from "./ports/agent-runner.js";
 import type { Issue, Tracker } from "./ports/tracker.js";
@@ -8,7 +9,9 @@ import { implementPrompt, verifyPrompt } from "./prompts.js";
 import { stageLogDir } from "./run-log.js";
 import {
   draftPullRequestBody,
+  guardComment,
   handoffComment,
+  hasGuardWarning,
   pullRequestBody,
   squashCommit,
 } from "./templates.js";
@@ -38,6 +41,13 @@ export type TicketOutcome =
       stage: FailurePoint;
       failure: string;
       pullRequest?: number;
+    }
+  | {
+      outcome: "skipped";
+      ticket: number;
+      title: string;
+      /** The guard that passed it over, in the guard's own word for it. */
+      reason: SkipReason;
     };
 
 export interface Pipeline {
@@ -62,11 +72,16 @@ class TicketFailure extends Error {
 }
 
 /**
- * Take one Ticket from claimed to merged, or hand it to a human.
+ * Take one Ticket from claimed to merged, hand it to a human, or pass it over.
  *
- * The happy path is: claim → worktree and branch → implement Stage → Checks →
- * verify Stage → rebase → PR → CI → squash merge → cleanup. Any failure along
- * the way ends in a hand-off, never in a merge.
+ * The happy path is: guards → claim → worktree and branch → implement Stage →
+ * Checks → verify Stage → rebase → PR → CI → squash merge → cleanup. Any
+ * failure along the way ends in a hand-off, never in a merge.
+ *
+ * The guards come before the claim, so an issue the pipeline will not take is
+ * never marked as taken. A Run has already dropped the claimed and the
+ * untriaged from its Frontier; `ticket <n>` names an issue by hand and reaches
+ * those guards too.
  */
 export async function processTicket(
   pipeline: Pipeline,
@@ -76,6 +91,9 @@ export async function processTicket(
   const log = pipeline.log ?? (() => {});
 
   const issue = await tracker.getIssue(ticket);
+  const skip = skipReason(issue, config.labels.readyForAgent);
+  if (skip !== undefined) return await passOver(pipeline, issue, skip);
+
   const user = await tracker.currentUser();
   const branch = branchName(ticket, issue.title);
   const worktree = worktreePath(repoRoot, ticket);
@@ -147,6 +165,36 @@ export async function processTicket(
   log(`#${ticket} merged · PR #${pullRequest}`);
 
   return { outcome: "merged", ticket, title: issue.title, branch, pullRequest };
+}
+
+/**
+ * Pass a candidate over, and warn about it once.
+ *
+ * The warning is a Planning defect a human has to fix, so it is posted at most
+ * once per reason: a Run that meets the same issue again — and, for everything
+ * but a Spec, the label is still there, so it will — says nothing a second
+ * time. An issue that was never offered to the pipeline is refused in silence.
+ */
+async function passOver(
+  pipeline: Pipeline,
+  issue: Issue,
+  reason: SkipReason,
+): Promise<TicketOutcome> {
+  const { tracker, config } = pipeline;
+
+  if (isGuardReason(reason)) {
+    if (!hasGuardWarning(issue.comments, reason)) {
+      await tracker.comment(issue.number, guardComment(reason));
+    }
+    // A Spec is not a Ticket and no edit will make it one; the other two are
+    // fixable in place, so their candidates keep the label and stay visible.
+    if (reason === "spec") {
+      await tracker.removeLabel(issue.number, config.labels.readyForAgent);
+    }
+  }
+
+  pipeline.log?.(`#${issue.number} skipped · ${reason}`);
+  return { outcome: "skipped", ticket: issue.number, title: issue.title, reason };
 }
 
 async function implement(

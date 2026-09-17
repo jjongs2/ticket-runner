@@ -58,6 +58,10 @@ _Avoid_: flag, sandbox, guard variable
 A deterministic command the pipeline runs itself to gate a Ticket — tests, typecheck, CI. Never an agent's opinion.
 _Avoid_: validation, test run
 
+**Guard**:
+A rule that rejects a Candidate before it is claimed, because Planning left it unusable: a Spec offered as a Ticket, no Acceptance Criteria, blockers only the body knows about. It rejects and warns once; it never repairs the issue.
+_Avoid_: validation, precondition, check (a Check gates a claimed Ticket, a Guard gates the claim)
+
 **Verify**:
 The Stage that adversarially tries to prove a Ticket's Acceptance Criteria are not met, and returns a Verdict.
 _Avoid_: review, QA, audit

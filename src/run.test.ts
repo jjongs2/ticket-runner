@@ -163,6 +163,58 @@ describe("blocked candidates", () => {
   });
 });
 
+describe("candidates a guard rejected", () => {
+  it("passes one over and takes the next Ticket", async () => {
+    tracker.addIssue({ number: 4, body: "no criteria here" });
+    tracker.addIssue({ number: 5 });
+
+    const result = await processRun(pipeline());
+
+    expect(processed()).toEqual([5]);
+    expect(result.outcomes[0]).toEqual({
+      outcome: "skipped",
+      ticket: 4,
+      title: "Ticket 4",
+      reason: "no-criteria",
+    });
+  });
+
+  it("does not meet the same rejected candidate twice in one Run", async () => {
+    // Only the Spec loses its label, so the rest stay on the Frontier all Run.
+    tracker.addIssue({ number: 4, body: "no criteria here" });
+
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes).toHaveLength(1);
+    expect(tracker.comments).toHaveLength(1);
+  });
+
+  it("reports every rejected candidate with its reason", async () => {
+    tracker.addIssue({ number: 4, subIssues: 2 });
+    tracker.addIssue({ number: 5, body: "- [ ] it works\n\nBlocked by: #99\n" });
+    tracker.addIssue({ number: 6 });
+
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes).toEqual([
+      { outcome: "skipped", ticket: 4, title: "Ticket 4", reason: "spec" },
+      { outcome: "skipped", ticket: 5, title: "Ticket 5", reason: "body-only-blockers" },
+      expect.objectContaining({ outcome: "merged", ticket: 6 }),
+    ]);
+    expect(logged).toContain("#4 skipped · spec");
+  });
+
+  it("ends the Run when every candidate was rejected", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number, body: "no criteria here" });
+
+    const result = await processRun(pipeline());
+
+    expect(processed()).toEqual([]);
+    expect(runner.requests).toEqual([]);
+    expect(result.blocked).toEqual([]);
+  });
+});
+
 describe("a Ticket that fails", () => {
   beforeEach(() => {
     for (const number of [4, 5]) tracker.addIssue({ number });

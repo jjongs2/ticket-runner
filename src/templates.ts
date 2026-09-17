@@ -3,6 +3,7 @@
  * source of truth for these; change it there first.
  */
 
+import type { GuardReason } from "./guards.js";
 import type { FailurePoint } from "./lifecycle.js";
 import type { TicketOutcome } from "./orchestrator.js";
 import type { SquashCommit } from "./ports/tracker.js";
@@ -10,6 +11,44 @@ import { type Criterion, type Verdict, countStatuses } from "./verdict.js";
 
 /** How the pipeline finds its own hand-off comment again. */
 export const HANDOFF_MARKER = "<!-- agent-pipeline:handoff -->";
+
+/** How the pipeline finds a warning it has already posted: one marker per reason. */
+export function guardMarker(reason: GuardReason): string {
+  return `<!-- agent-pipeline:guard:${reason} -->`;
+}
+
+/** What each guard tells the human: what was wrong, and what to do about it. */
+const GUARD_SENTENCES: Record<GuardReason, string> = {
+  spec:
+    "This issue has sub-issues, so it is a Spec, not a Ticket; `ready-for-agent` " +
+    "was removed. Its Tickets are picked up individually.",
+  "no-criteria":
+    "No `- [ ]` acceptance criteria found in the body or comments. Add criteria " +
+    "the verify Stage can grade, then re-run.",
+  "body-only-blockers":
+    "The body lists blockers that have no native `blocked by` edge. Add the edges " +
+    "with `gh issue edit <n> --add-blocked-by <m>`, then re-run.",
+};
+
+/**
+ * Whether one of these comments is already on the issue.
+ *
+ * The marker is the first line of every pipeline comment, which is the whole
+ * point of it: this is how a second Run knows it has nothing new to say.
+ */
+export function hasGuardWarning(comments: string[], reason: GuardReason): boolean {
+  const marker = guardMarker(reason);
+  return comments.some((body) => body.trimStart().startsWith(marker));
+}
+
+/** The one warning a skipped candidate gets. Two sentences: the reason, the fix. */
+export function guardComment(reason: GuardReason): string {
+  return [
+    guardMarker(reason),
+    `**Skipped by agent-pipeline.** ${GUARD_SENTENCES[reason]}`,
+    "",
+  ].join("\n");
+}
 
 /** The Verdict summary both the pull request body and the squash commit carry. */
 function verdictCounts(verdict: Verdict): string {
@@ -202,13 +241,20 @@ export function runSummary({ runId, durationMs, outcomes, blocked }: RunSummary)
 
 /** One Ticket's line in a summary: what happened to it, and where to look. */
 function ticketRow(outcome: TicketOutcome): string {
-  return outcome.outcome === "merged"
-    ? row("merged", outcome.ticket, `${outcome.title} (PR #${outcome.pullRequest})`)
-    : row(
+  switch (outcome.outcome) {
+    case "merged":
+      return row("merged", outcome.ticket, `${outcome.title} (PR #${outcome.pullRequest})`);
+    case "handed-off":
+      return row(
         "handed",
         outcome.ticket,
         `${outcome.title} · ${outcome.stage} · ${outcome.failure}`,
       );
+    case "skipped":
+      // The reason is the guard's own word for it, which is also the marker on
+      // the warning comment the human is being pointed at.
+      return row("skipped", outcome.ticket, outcome.reason);
+  }
 }
 
 function row(verb: string, ticket: number, detail: string): string {

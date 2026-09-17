@@ -23,7 +23,11 @@ Usage:
 Options:
   -h, --help                   Show this message.`;
 
-/** Exit codes: 0 nothing handed off, 1 at least one hand-off, 2 the Run never started. */
+/**
+ * Exit codes: 0 nothing handed off, 1 at least one hand-off, 2 nothing was
+ * taken at all — the Run never started, or `ticket <n>` named an issue a guard
+ * refused.
+ */
 async function main(argv: string[]): Promise<number> {
   // First, before the repo, the config, `gh` or even `--help`: a Stage's shell
   // may not start a Run of the pipeline it is working on.
@@ -135,6 +139,11 @@ async function execute(work: Work, { repoRoot, config, runId }: Setup): Promise<
   // `ticket <n>` drains no Frontier, so its summary does not claim one.
   const outcome = await processTicket(pipeline, work.ticket);
   console.log(`\n${summary([outcome])}`);
+  // A guard that refused the named issue leaves the invocation with nothing
+  // taken, which is the same nothing a lock or a bad argument reports. A `run`
+  // that skipped every candidate still exits 0: draining a Frontier of
+  // unusable Tickets is the job, not a failure to do it.
+  if (outcome.outcome === "skipped") return 2;
   return exitCode([outcome]);
 }
 

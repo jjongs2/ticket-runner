@@ -3,6 +3,7 @@ agent-pipeline run <runId> · <duration>
   merged   #3 Run: drain the Frontier (PR #12)
   handed   #5 Fix Stage with a single retry · verify · 1 unmet
   released #6 Rebase conflict resolution · rate limit at implement
+  skipped  #7 no-criteria
   skipped  #9 blocked
 
 Frontier empty.
@@ -11,7 +12,10 @@ The verb is padded to nine columns so the Ticket numbers line up. A Run that
 took no Ticket prints `  nothing to do` in place of the rows.
 
 `skipped` names why a candidate was passed over: `blocked` for one an open
-blocker held back all Run.
+blocker held back all Run, and otherwise the guard reason that kept it from
+being claimed — `spec`, `no-criteria` or `body-only-blockers` for Planning a
+guard rejected, `claimed` or `not-ready` for an issue that is nobody's to take,
+which is usually one `ticket <n>` named by hand.
 
 The last line says why the Run stopped: `Frontier empty.` when nothing is left,
 `Frontier blocked.` when every remaining candidate has an open blocker.

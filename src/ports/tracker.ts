@@ -19,6 +19,13 @@ export interface Issue {
   labels: string[];
   assignees: string[];
   comments: string[];
+  /** How many native sub-issues it has; anything above zero is a Spec. */
+  subIssues: number;
+  /**
+   * The issues GitHub records as blocking this one, open or closed. The body's
+   * own `Blocked by` section is never a substitute for these (ADR-0003).
+   */
+  blockedBy: number[];
 }
 
 /**

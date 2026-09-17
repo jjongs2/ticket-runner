@@ -590,6 +590,158 @@ describe("hand-off", () => {
   });
 });
 
+describe("the Planning guards", () => {
+  /** What the pipeline said to the Ticket, if anything. */
+  const warnings = () => tracker.comments.filter((c) => c.issue === TICKET).map((c) => c.body);
+
+  /** Nothing was claimed and no Stage was started. */
+  function expectUntouched() {
+    expect(tracker.calls).not.toContain(`assign:${TICKET}:pipeline-user`);
+    expect(tracker.issue(TICKET).labels).not.toContain("in-progress");
+    expect(runner.requests).toEqual([]);
+    expect(workspace.worktrees.size).toBe(0);
+  }
+
+  it("skips a candidate with native sub-issues and says it is a Spec", async () => {
+    tracker.issue(TICKET).subIssues = 4;
+
+    const outcome = await run();
+
+    expect(outcome).toEqual({
+      outcome: "skipped",
+      ticket: TICKET,
+      title: "Skeleton: one Ticket end to end",
+      reason: "spec",
+    });
+    expect(warnings()).toHaveLength(1);
+    expect(warnings()[0]).toContain("<!-- agent-pipeline:guard:spec -->");
+    expect(warnings()[0]).toContain("it is a Spec, not a Ticket");
+    expectUntouched();
+  });
+
+  it("takes ready-for-agent off the Spec, so no Run offers it again", async () => {
+    tracker.issue(TICKET).subIssues = 4;
+
+    await run();
+
+    expect(tracker.issue(TICKET).labels).toEqual([]);
+    expect(tracker.calls).toContain(`removeLabel:${TICKET}:ready-for-agent`);
+  });
+
+  it("skips a candidate with no acceptance criteria anywhere", async () => {
+    tracker.issue(TICKET).body = "## What to build\n\nSomething good.";
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "skipped", reason: "no-criteria" });
+    expect(warnings()[0]).toContain("<!-- agent-pipeline:guard:no-criteria -->");
+    expectUntouched();
+  });
+
+  it("leaves a criteria-less Ticket labelled, because a human can still fix it", async () => {
+    tracker.issue(TICKET).body = "## What to build\n\nSomething good.";
+
+    await run();
+
+    expect(tracker.issue(TICKET).labels).toEqual(["ready-for-agent"]);
+  });
+
+  it("takes the criteria a triage comment posted instead of the body", async () => {
+    const issue = tracker.issue(TICKET);
+    issue.body = "## What to build\n\nSomething good.";
+    issue.comments = ["Brief:\n\n- [ ] it works"];
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+  });
+
+  it("skips a candidate whose body names blockers GitHub does not know about", async () => {
+    tracker.issue(TICKET).body = "- [ ] it works\n\n## Blocked by\n\n- #3\n";
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "skipped", reason: "body-only-blockers" });
+    expect(warnings()[0]).toContain("<!-- agent-pipeline:guard:body-only-blockers -->");
+    expectUntouched();
+  });
+
+  it("takes a Ticket whose body copy matches its native edges", async () => {
+    const issue = tracker.issue(TICKET);
+    issue.body = "- [ ] it works\n\n## Blocked by\n\n- #3\n";
+    issue.blockedBy = [3];
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+  });
+
+  it("warns once, however many Runs meet the same candidate", async () => {
+    tracker.issue(TICKET).body = "## What to build\n\nSomething good.";
+
+    await run();
+    // The first warning is on the issue now, which is what the second Run reads.
+    await run();
+
+    expect(warnings()).toHaveLength(1);
+    expect(tracker.issue(TICKET).comments).toHaveLength(1);
+  });
+
+  it("warns again when a second guard has something else to say", async () => {
+    const issue = tracker.issue(TICKET);
+    issue.body = "## What to build\n\nSomething good.";
+    issue.comments = ["<!-- agent-pipeline:guard:body-only-blockers -->\n**Skipped by agent-pipeline.**"];
+
+    await run();
+
+    expect(warnings()).toHaveLength(1);
+    expect(warnings()[0]).toContain("no-criteria");
+  });
+});
+
+describe("an issue that is nobody\u0027s to take", () => {
+  it("refuses one somebody has already claimed, without a word on the issue", async () => {
+    tracker.issue(TICKET).assignees = ["octocat"];
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "skipped", reason: "claimed" });
+    expect(tracker.comments).toEqual([]);
+    expect(tracker.issue(TICKET).labels).toEqual(["ready-for-agent"]);
+  });
+
+  it("refuses one that is not labelled ready-for-agent", async () => {
+    tracker.issue(TICKET).labels = ["needs-triage"];
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "skipped", reason: "not-ready" });
+    expect(tracker.comments).toEqual([]);
+    expect(runner.requests).toEqual([]);
+  });
+
+  it("refuses a Spec nobody labelled, rather than commenting on it", async () => {
+    const issue = tracker.issue(TICKET);
+    issue.labels = [];
+    issue.subIssues = 9;
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "skipped", reason: "not-ready" });
+    expect(tracker.comments).toEqual([]);
+  });
+
+  it("refuses under the label this repo configured", async () => {
+    tracker.issue(TICKET).labels = ["ready-for-agent"];
+
+    const outcome = await run({
+      labels: { ...config().labels, readyForAgent: "agent-ready" },
+    });
+
+    expect(outcome).toMatchObject({ outcome: "skipped", reason: "not-ready" });
+  });
+});
+
 function handoffBody(): string {
   const comment = tracker.comments.at(-1);
   if (!comment) throw new Error("no hand-off comment was written");
