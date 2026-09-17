@@ -14,6 +14,7 @@ import type {
   StageResult,
 } from "../ports/agent-runner.js";
 import type {
+  Candidate,
   CiOutcome,
   CreatePullRequest,
   Issue,
@@ -41,6 +42,12 @@ export class FakeTracker implements Tracker {
   comments: { issue: number; body: string }[] = [];
   pullRequests: FakePullRequest[] = [];
   ci: CiOutcome = { state: "passed" };
+  /** Open blockers per issue number; anything unlisted has none. */
+  openBlockers = new Map<number, number>();
+  /** Issue numbers closed by a merge, which drop out of the candidate list. */
+  closed = new Set<number>();
+  /** Fires after a squash merge, for tests where merging unblocks something. */
+  onSquashMerge: ((pullRequest: number) => void) | undefined;
   ciWaits: { pullRequest: number; timeoutMs: number }[] = [];
   calls: string[] = [];
 
@@ -80,6 +87,20 @@ export class FakeTracker implements Tracker {
 
   async getIssue(number: number): Promise<Issue> {
     return structuredClone(this.issue(number));
+  }
+
+  /** Every open issue carrying `label`, deliberately in reverse number order. */
+  async listCandidates(label: string): Promise<Candidate[]> {
+    this.calls.push(`listCandidates:${label}`);
+    return [...this.issues.values()]
+      .filter((issue) => !this.closed.has(issue.number) && issue.labels.includes(label))
+      .sort((a, b) => b.number - a.number)
+      .map((issue) => ({
+        number: issue.number,
+        title: issue.title,
+        assignees: [...issue.assignees],
+        openBlockers: this.openBlockers.get(issue.number) ?? 0,
+      }));
   }
 
   async assign(number: number, user: string): Promise<void> {
@@ -130,7 +151,12 @@ export class FakeTracker implements Tracker {
 
   async squashMerge(number: number): Promise<void> {
     this.calls.push(`squashMerge:${number}`);
-    this.pullRequest(number).merged = true;
+    const pr = this.pullRequest(number);
+    pr.merged = true;
+    // The PR body closes the Ticket, which is how a Run's Frontier shrinks.
+    const closes = /Closes #(\d+)/.exec(pr.body);
+    if (closes) this.closed.add(Number.parseInt(closes[1] as string, 10));
+    this.onSquashMerge?.(number);
   }
 
   pullRequest(number: number): FakePullRequest {

@@ -77,6 +77,7 @@ describe("the happy path", () => {
     expect(outcome).toEqual({
       outcome: "merged",
       ticket: TICKET,
+      title: "Skeleton: one Ticket end to end",
       branch: BRANCH,
       pullRequest: 100,
     });

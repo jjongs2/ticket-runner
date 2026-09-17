@@ -1,4 +1,5 @@
 import type {
+  Candidate,
   CiOutcome,
   CreatePullRequest,
   Issue,
@@ -15,6 +16,17 @@ export interface GhTrackerOptions {
   pollIntervalMs?: number;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
+}
+
+/** The fields the Frontier needs from one entry of the REST issue list. */
+interface RawCandidate {
+  number: number;
+  title: string;
+  assignees: { login: string }[] | null;
+  /** Present on pull requests only; GitHub lists them as issues too. */
+  pull_request?: unknown;
+  /** `blocked_by` counts open blockers only, which is exactly the gate. */
+  issue_dependencies_summary?: { blocked_by?: number };
 }
 
 /** One entry of `gh pr checks --json`. */
@@ -97,6 +109,39 @@ export class GhTracker implements Tracker {
       assignees: raw.assignees.map((assignee) => assignee.login),
       comments: raw.comments.map((comment) => comment.body),
     };
+  }
+
+  /**
+   * The open issues carrying `label`, straight from the REST issue list.
+   *
+   * `gh issue list` cannot report blocking dependencies, so this goes to the
+   * API for `issue_dependencies_summary`, the only blocker source the pipeline
+   * trusts (ADR-0003).
+   */
+  async listCandidates(label: string): Promise<Candidate[]> {
+    const { stdout } = await this.gh([
+      "api",
+      "--paginate",
+      "--method",
+      "GET",
+      "repos/{owner}/{repo}/issues",
+      "-f",
+      "state=open",
+      "-f",
+      `labels=${label}`,
+      "-F",
+      "per_page=100",
+    ]);
+
+    const raw = JSON.parse(stdout) as RawCandidate[];
+    return raw
+      .filter((issue) => issue.pull_request === undefined)
+      .map((issue) => ({
+        number: issue.number,
+        title: issue.title,
+        assignees: (issue.assignees ?? []).map((assignee) => assignee.login),
+        openBlockers: issue.issue_dependencies_summary?.blocked_by ?? 0,
+      }));
   }
 
   async assign(number: number, user: string): Promise<void> {

@@ -21,8 +21,33 @@ conventions in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ```bash
 npm install
-npm run agent-pipeline -- ticket 3
+npm run agent-pipeline -- run         # drain the Frontier
+npm run agent-pipeline -- ticket 3    # one named Ticket
 ```
+
+`run` drains the **Frontier**: the open Tickets labelled `ready-for-agent` that nobody
+has claimed and whose native `blocked by` issues have all closed. It takes them one at a
+time, lowest number first, and recomputes the Frontier after each one, so a merge that
+closes a blocker puts the Ticket it unblocked into the same Run. A Ticket that fails is
+handed off and the Run carries on. The Run ends when nothing is left to pick — the
+Frontier is empty, or everything still on it is blocked — and prints a summary:
+
+```
+agent-pipeline run 2026-09-17T09-00-00-000 · 84m
+
+  merged   #4 Planning guards (PR #12)
+  handed   #5 Fix Stage with a single retry · verify · 1 unmet
+  skipped  #9 blocked
+
+Frontier blocked.
+```
+
+Body text is never read for blockers: only GitHub's native dependencies count
+([ADR-0003](docs/adr/0003-github-native-relations-only.md)).
+
+One Run at a time per repo. A second `run`, or a `ticket` started while a `run` holds the
+lock, exits immediately naming the holder. The lock is a PID file at
+`.agent-pipeline/lock.json`, so a Run that was killed does not block the next one.
 
 `ticket <n>` takes exactly one Ticket from claimed to merged:
 
@@ -35,8 +60,8 @@ npm run agent-pipeline -- ticket 3
 7. squash-merge, pull `main`, remove the worktree
 
 Any failure hands the Ticket over instead: `ready-for-human`, unassigned, draft PR,
-branch and worktree preserved. Exit code is `0` for a merge, `1` for a hand-off and `2`
-when the Run never started.
+branch and worktree preserved. Exit code is `0` when nothing was handed off, `1` when
+something was, and `2` when the Run never started.
 
 Every Stage writes its exact command line, stdout, stderr and stream-json transcript to
 `.agent-pipeline/runs/<runId>/<n>/`, so any Stage can be reproduced by hand.

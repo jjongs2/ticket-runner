@@ -21,6 +21,22 @@ export interface Issue {
   comments: string[];
 }
 
+/**
+ * What the Frontier is computed from: one open issue carrying the
+ * `ready-for-agent` label, with the two facts that can keep it off the
+ * Frontier.
+ */
+export interface Candidate {
+  number: number;
+  title: string;
+  assignees: string[];
+  /**
+   * Open `blocked by` issues, from GitHub's native dependency summary. Body
+   * text is never read (ADR-0003).
+   */
+  openBlockers: number;
+}
+
 export interface PullRequestRef {
   number: number;
   url: string;
@@ -51,6 +67,8 @@ export interface Tracker {
   listLabels(): Promise<string[]>;
   createLabel(label: LabelSpec): Promise<void>;
   getIssue(number: number): Promise<Issue>;
+  /** Every open issue carrying `label`, in no particular order. */
+  listCandidates(label: string): Promise<Candidate[]>;
   assign(number: number, user: string): Promise<void>;
   unassign(number: number, user: string): Promise<void>;
   addLabel(number: number, label: string): Promise<void>;
