@@ -4,6 +4,7 @@
  */
 
 import type { FailurePoint } from "./lifecycle.js";
+import type { TicketOutcome } from "./orchestrator.js";
 import { type Criterion, type Verdict, countStatuses } from "./verdict.js";
 
 /** How the pipeline finds its own hand-off comment again. */
@@ -112,4 +113,54 @@ export function handoffComment(handoff: HandoffComment): string {
   }
 
   return lines.join("\n");
+}
+
+export interface RunSummary {
+  runId: string;
+  durationMs: number;
+  outcomes: TicketOutcome[];
+  /**
+   * Candidates an open blocker kept off the Frontier for the whole Run. Only a
+   * Run has a Frontier, so `ticket <n>` leaves this out and the summary says
+   * nothing about what else was pickable.
+   */
+  blocked?: number[];
+}
+
+/** Every summary row is `<verb> #<n> <detail>`, so the numbers line up. */
+const VERB_WIDTH = 9;
+
+/**
+ * What a Run prints when it ends. One line per Ticket, then why the Run
+ * stopped — the Frontier is either empty or everything left on it is blocked.
+ */
+export function runSummary({ runId, durationMs, outcomes, blocked }: RunSummary): string {
+  const rows = [
+    ...outcomes.map(ticketRow),
+    ...(blocked ?? []).map((ticket) => row("skipped", ticket, "blocked")),
+  ];
+
+  return [
+    `agent-pipeline run ${runId} · ${Math.round(durationMs / 60_000)}m`,
+    "",
+    ...(rows.length === 0 ? ["  nothing to do"] : rows),
+    "",
+    ...(blocked === undefined ? [] : [blocked.length === 0 ? "Frontier empty." : "Frontier blocked."]),
+    "",
+  ].join("\n");
+}
+
+/** One Ticket's line in a summary: what happened to it, and where to look. */
+function ticketRow(outcome: TicketOutcome): string {
+  return outcome.outcome === "merged"
+    ? row("merged", outcome.ticket, `${outcome.title} (PR #${outcome.pullRequest})`)
+    : row(
+        "handed",
+        outcome.ticket,
+        `${outcome.title} · ${outcome.stage} · ${outcome.failure}`,
+      );
+}
+
+function row(verb: string, ticket: number, detail: string): string {
+  return `  ${verb.padEnd(VERB_WIDTH)}#${ticket} ${detail}`;
 }

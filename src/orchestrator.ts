@@ -17,10 +17,18 @@ import {
 } from "./verdict.js";
 
 export type TicketOutcome =
-  | { outcome: "merged"; ticket: number; branch: string; pullRequest: number }
+  | {
+      outcome: "merged";
+      ticket: number;
+      /** Carried so a Run summary can name the Ticket without asking again. */
+      title: string;
+      branch: string;
+      pullRequest: number;
+    }
   | {
       outcome: "handed-off";
       ticket: number;
+      title: string;
       branch: string;
       stage: FailurePoint;
       failure: string;
@@ -126,7 +134,7 @@ export async function processTicket(
   }
   log(`#${ticket} merged · PR #${pullRequest}`);
 
-  return { outcome: "merged", ticket, branch, pullRequest };
+  return { outcome: "merged", ticket, title: issue.title, branch, pullRequest };
 }
 
 async function implement(
@@ -341,6 +349,7 @@ async function handOff(
   return {
     outcome: "handed-off",
     ticket,
+    title: issue.title,
     branch,
     stage: failure.point,
     failure: failure.summary,

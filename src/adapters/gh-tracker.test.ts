@@ -64,6 +64,66 @@ describe("reading", () => {
     });
     expect(calls[0]?.slice(0, 3)).toEqual(["issue", "view", "2"]);
   });
+  it("reads candidates, their assignees and their open native blockers", async () => {
+    const candidates = await tracker(
+      ok(
+        JSON.stringify([
+          {
+            number: 4,
+            title: "Planning guards",
+            assignees: [{ login: "octocat" }],
+            issue_dependencies_summary: { blocked_by: 1, total_blocked_by: 2 },
+          },
+          {
+            number: 5,
+            title: "Fix Stage",
+            assignees: [],
+            issue_dependencies_summary: { blocked_by: 0, total_blocked_by: 1 },
+          },
+        ]),
+      ),
+    ).listCandidates("ready-for-agent");
+
+    expect(candidates).toEqual([
+      { number: 4, title: "Planning guards", assignees: ["octocat"], openBlockers: 1 },
+      { number: 5, title: "Fix Stage", assignees: [], openBlockers: 0 },
+    ]);
+  });
+
+  it("refuses to read a missing dependency summary as unblocked", async () => {
+    // Defaulting to zero would merge every blocked Ticket without a word.
+    const listing = tracker(
+      ok(JSON.stringify([{ number: 4, title: "Planning guards", assignees: [] }])),
+    ).listCandidates("ready-for-agent");
+
+    await expect(listing).rejects.toThrow(/issue_dependencies_summary/);
+  });
+
+  it("asks the API for open issues with the label, since gh issue list has no blockers", async () => {
+    await tracker(ok("[]")).listCandidates("ready-for-agent");
+
+    expect(calls[0]).toContain("repos/{owner}/{repo}/issues");
+    expect(calls[0]).toContain("state=open");
+    expect(calls[0]).toContain("labels=ready-for-agent");
+  });
+
+  it("drops the pull requests GitHub returns from the issue list", async () => {
+    const candidates = await tracker(
+      ok(
+        JSON.stringify([
+          { number: 12, title: "A PR", assignees: [], pull_request: { url: "..." } },
+          {
+            number: 5,
+            title: "A Ticket",
+            assignees: [],
+            issue_dependencies_summary: { blocked_by: 0 },
+          },
+        ]),
+      ),
+    ).listCandidates("ready-for-agent");
+
+    expect(candidates.map((candidate) => candidate.number)).toEqual([5]);
+  });
 });
 
 describe("writing", () => {

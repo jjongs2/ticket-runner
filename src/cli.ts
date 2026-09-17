@@ -1,23 +1,28 @@
 import { parseArgs } from "node:util";
 import { ClaudeAgentRunner } from "./adapters/claude-agent-runner.js";
-import { execOrThrow } from "./adapters/exec.js";
 import { GhTracker } from "./adapters/gh-tracker.js";
 import { GitWorkspace } from "./adapters/git-workspace.js";
-import { ConfigError, loadConfig } from "./config.js";
+import { findRepoRoot } from "./adapters/repo-root.js";
+import { type Config, ConfigError, loadConfig } from "./config.js";
 import { ensureLabels } from "./labels.js";
+import { acquireLock, lockHeldMessage } from "./lock.js";
+import type { Pipeline, TicketOutcome } from "./orchestrator.js";
 import { processTicket } from "./orchestrator.js";
 import { newRunId } from "./run-log.js";
+import { processRun } from "./run.js";
 import { startupMessages } from "./startup.js";
+import { runSummary } from "./templates.js";
 
 const USAGE = `agent-pipeline — humans plan, the pipeline executes.
 
 Usage:
+  agent-pipeline run           Drain the Frontier, one Ticket at a time.
   agent-pipeline ticket <n>    Take one Ticket from claimed to merged.
 
 Options:
   -h, --help                   Show this message.`;
 
-/** Exit codes: 0 merged, 1 handed off, 2 the Run never started. */
+/** Exit codes: 0 nothing handed off, 1 at least one hand-off, 2 the Run never started. */
 async function main(argv: string[]): Promise<number> {
   const { positionals, values } = parseArgs({
     args: argv,
@@ -31,15 +36,19 @@ async function main(argv: string[]): Promise<number> {
   }
 
   const [command, ...rest] = positionals;
-  if (command !== "ticket") {
+  if (command !== "ticket" && command !== "run") {
     console.error(`Unknown command \`${command}\`.\n\n${USAGE}`);
     return 2;
   }
 
-  const ticket = Number.parseInt(rest[0] ?? "", 10);
-  if (!Number.isInteger(ticket) || ticket <= 0) {
-    console.error(`\`ticket\` needs an issue number.\n\n${USAGE}`);
-    return 2;
+  let work: Work = { command: "run" };
+  if (command === "ticket") {
+    const ticket = Number.parseInt(rest[0] ?? "", 10);
+    if (!Number.isInteger(ticket) || ticket <= 0) {
+      console.error(`\`ticket\` needs an issue number.\n\n${USAGE}`);
+      return 2;
+    }
+    work = { command: "ticket", ticket };
   }
 
   const repoRoot = await findRepoRoot();
@@ -52,40 +61,77 @@ async function main(argv: string[]): Promise<number> {
     return 2;
   }
 
+  const runId = newRunId();
+  // Taken before the first write, so two Runs never both claim a Ticket.
+  const lock = acquireLock(repoRoot, {
+    pid: process.pid,
+    command: `agent-pipeline ${positionals.join(" ")}`,
+    runId,
+    startedAt: new Date().toISOString(),
+  });
+  if (!lock.ok) {
+    console.error(lockHeldMessage(lock.holder, repoRoot));
+    return 2;
+  }
+
+  try {
+    return await execute(work, { repoRoot, config, runId });
+  } finally {
+    lock.release();
+  }
+}
+
+/** What this invocation was asked to do, once the arguments are understood. */
+type Work = { command: "run" } | { command: "ticket"; ticket: number };
+
+interface Setup {
+  repoRoot: string;
+  config: Config;
+  runId: string;
+}
+
+async function execute(work: Work, { repoRoot, config, runId }: Setup): Promise<number> {
   const tracker = new GhTracker({ cwd: repoRoot });
   const created = await ensureLabels(tracker, config.labels);
   if (created.length > 0) console.log(`Created labels: ${created.join(", ")}`);
 
-  const runId = newRunId();
+  const pipeline: Pipeline = {
+    tracker,
+    runner: new ClaudeAgentRunner(),
+    workspace: new GitWorkspace(repoRoot),
+    config,
+    repoRoot,
+    runId,
+    log: (line) => console.log(line),
+  };
+
   const startedAt = Date.now();
-  console.log(`agent-pipeline run ${runId} · #${ticket}`);
-
-  const outcome = await processTicket(
-    {
-      tracker,
-      runner: new ClaudeAgentRunner(),
-      workspace: new GitWorkspace(repoRoot),
-      config,
-      repoRoot,
-      runId,
-      log: (line) => console.log(line),
-    },
-    ticket,
+  console.log(
+    `agent-pipeline run ${runId}${work.command === "run" ? "" : ` · #${work.ticket}`}`,
   );
+  const summary = (outcomes: TicketOutcome[], blocked?: number[]) =>
+    runSummary({
+      runId,
+      durationMs: Date.now() - startedAt,
+      outcomes,
+      ...(blocked === undefined ? {} : { blocked }),
+    });
 
-  const minutes = Math.round((Date.now() - startedAt) / 60_000);
-  console.log(`\nagent-pipeline run ${runId} · ${minutes}m\n`);
-  if (outcome.outcome === "merged") {
-    console.log(`  merged   #${ticket} ${outcome.branch} (PR #${outcome.pullRequest})`);
-    return 0;
+  if (work.command === "run") {
+    const { outcomes, blocked } = await processRun(pipeline);
+    console.log(`\n${summary(outcomes, blocked)}`);
+    return exitCode(outcomes);
   }
-  console.log(`  handed   #${ticket} ${outcome.branch} · ${outcome.stage} · ${outcome.failure}`);
-  return 1;
+
+  // `ticket <n>` drains no Frontier, so its summary does not claim one.
+  const outcome = await processTicket(pipeline, work.ticket);
+  console.log(`\n${summary([outcome])}`);
+  return exitCode([outcome]);
 }
 
-async function findRepoRoot(): Promise<string> {
-  const { stdout } = await execOrThrow("git", ["rev-parse", "--show-toplevel"]);
-  return stdout.trim();
+/** A hand-off is what the exit code reports; a Run that took nothing is a 0. */
+function exitCode(outcomes: TicketOutcome[]): number {
+  return outcomes.some((outcome) => outcome.outcome === "handed-off") ? 1 : 0;
 }
 
 try {
