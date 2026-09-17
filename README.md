@@ -82,7 +82,9 @@ branch and worktree preserved. Exit code is `0` when nothing was handed off, `1`
 something was, and `2` when the Run never started.
 
 Every Stage writes its exact command line, stdout, stderr and stream-json transcript to
-`.agent-pipeline/runs/<runId>/<n>/`, so any Stage can be reproduced by hand.
+`.agent-pipeline/runs/<runId>/<n>/`, so any Stage can be reproduced by hand. The command
+line lands there before the Stage starts, and its output as the Stage prints it, so a Run
+killed mid-Stage still leaves behind what it had reached.
 
 ## Configuration
 

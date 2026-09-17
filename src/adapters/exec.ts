@@ -15,6 +15,14 @@ export interface ExecOptions {
   timeoutMs?: number;
   /** Variables merged over the environment the child inherits, not replacing it. */
   extraEnv?: Record<string, string>;
+  /**
+   * Called with each chunk the child prints on that stream, as it arrives, so
+   * a caller that saves the output has it before the child exits. A sink runs
+   * inside the stream's handler: one that throws takes this process down.
+   */
+  onStdout?: (chunk: string) => void;
+  /** As `onStdout`, for what the child prints on stderr. */
+  onStderr?: (chunk: string) => void;
 }
 
 /**
@@ -61,10 +69,12 @@ export function exec(
     child.stdout.on("data", (chunk: string) => {
       stdout += chunk;
       output += chunk;
+      options.onStdout?.(chunk);
     });
     child.stderr.on("data", (chunk: string) => {
       stderr += chunk;
       output += chunk;
+      options.onStderr?.(chunk);
     });
 
     child.on("error", (error) => {
