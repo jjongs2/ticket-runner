@@ -140,7 +140,7 @@ export class GhTracker implements Tracker {
         number: issue.number,
         title: issue.title,
         assignees: (issue.assignees ?? []).map((assignee) => assignee.login),
-        openBlockers: issue.issue_dependencies_summary?.blocked_by ?? 0,
+        openBlockers: openBlockers(issue),
       }));
   }
 
@@ -229,6 +229,25 @@ export class GhTracker implements Tracker {
     });
     return options.allowFailure ? result : throwOnFailure("gh", args, result);
   }
+}
+
+/**
+ * A missing dependency summary is an error, not an unblocked Ticket.
+ *
+ * Defaulting it to zero would put every blocked Ticket on the Frontier and
+ * merge it, silently, on a GitHub that does not report the field. ADR-0003
+ * trusts native relations only, so no answer has to mean no Run.
+ */
+function openBlockers(issue: RawCandidate): number {
+  const blocked = issue.issue_dependencies_summary?.blocked_by;
+  if (typeof blocked !== "number") {
+    throw new Error(
+      `#${issue.number} came back without issue_dependencies_summary.blocked_by, ` +
+        "so its open blockers cannot be read; agent-pipeline trusts GitHub's " +
+        "native dependencies only (ADR-0003)",
+    );
+  }
+  return blocked;
 }
 
 /** `pending` means "ask again"; everything else is an answer. */

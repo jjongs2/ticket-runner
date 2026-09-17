@@ -1,15 +1,14 @@
 import { parseArgs } from "node:util";
 import { ClaudeAgentRunner } from "./adapters/claude-agent-runner.js";
-import { execOrThrow } from "./adapters/exec.js";
 import { GhTracker } from "./adapters/gh-tracker.js";
 import { GitWorkspace } from "./adapters/git-workspace.js";
-import { ConfigError, loadConfig } from "./config.js";
+import { findRepoRoot } from "./adapters/repo-root.js";
+import { type Config, ConfigError, loadConfig } from "./config.js";
 import { ensureLabels } from "./labels.js";
 import { acquireLock, lockHeldMessage } from "./lock.js";
 import type { Pipeline, TicketOutcome } from "./orchestrator.js";
 import { processTicket } from "./orchestrator.js";
 import { newRunId } from "./run-log.js";
-import type { RunResult } from "./run.js";
 import { processRun } from "./run.js";
 import { startupMessages } from "./startup.js";
 import { runSummary } from "./templates.js";
@@ -42,13 +41,14 @@ async function main(argv: string[]): Promise<number> {
     return 2;
   }
 
-  let ticket: number | undefined;
+  let work: Work = { command: "run" };
   if (command === "ticket") {
-    ticket = Number.parseInt(rest[0] ?? "", 10);
+    const ticket = Number.parseInt(rest[0] ?? "", 10);
     if (!Number.isInteger(ticket) || ticket <= 0) {
       console.error(`\`ticket\` needs an issue number.\n\n${USAGE}`);
       return 2;
     }
+    work = { command: "ticket", ticket };
   }
 
   const repoRoot = await findRepoRoot();
@@ -75,27 +75,22 @@ async function main(argv: string[]): Promise<number> {
   }
 
   try {
-    return await execute({ command, ticket, repoRoot, config, runId });
+    return await execute(work, { repoRoot, config, runId });
   } finally {
     lock.release();
   }
 }
 
-interface Execution {
-  command: "run" | "ticket";
-  ticket: number | undefined;
+/** What this invocation was asked to do, once the arguments are understood. */
+type Work = { command: "run" } | { command: "ticket"; ticket: number };
+
+interface Setup {
   repoRoot: string;
-  config: ReturnType<typeof loadConfig>;
+  config: Config;
   runId: string;
 }
 
-async function execute({
-  command,
-  ticket,
-  repoRoot,
-  config,
-  runId,
-}: Execution): Promise<number> {
+async function execute(work: Work, { repoRoot, config, runId }: Setup): Promise<number> {
   const tracker = new GhTracker({ cwd: repoRoot });
   const created = await ensureLabels(tracker, config.labels);
   if (created.length > 0) console.log(`Created labels: ${created.join(", ")}`);
@@ -112,24 +107,31 @@ async function execute({
 
   const startedAt = Date.now();
   console.log(
-    `agent-pipeline run ${runId}${ticket === undefined ? "" : ` · #${ticket}`}`,
+    `agent-pipeline run ${runId}${work.command === "run" ? "" : ` · #${work.ticket}`}`,
   );
+  const summary = (outcomes: TicketOutcome[], blocked?: number[]) =>
+    runSummary({
+      runId,
+      durationMs: Date.now() - startedAt,
+      outcomes,
+      ...(blocked === undefined ? {} : { blocked }),
+    });
 
-  // `ticket <n>` never computes a Frontier, so its summary does not claim one.
-  const result: RunResult | { outcomes: TicketOutcome[] } =
-    command === "run"
-      ? await processRun(pipeline)
-      : { outcomes: [await processTicket(pipeline, ticket as number)] };
+  if (work.command === "run") {
+    const { outcomes, blocked } = await processRun(pipeline);
+    console.log(`\n${summary(outcomes, blocked)}`);
+    return exitCode(outcomes);
+  }
 
-  console.log(
-    `\n${runSummary({ runId, durationMs: Date.now() - startedAt, ...result })}`,
-  );
-  return result.outcomes.some((outcome) => outcome.outcome === "handed-off") ? 1 : 0;
+  // `ticket <n>` drains no Frontier, so its summary does not claim one.
+  const outcome = await processTicket(pipeline, work.ticket);
+  console.log(`\n${summary([outcome])}`);
+  return exitCode([outcome]);
 }
 
-async function findRepoRoot(): Promise<string> {
-  const { stdout } = await execOrThrow("git", ["rev-parse", "--show-toplevel"]);
-  return stdout.trim();
+/** A hand-off is what the exit code reports; a Run that took nothing is a 0. */
+function exitCode(outcomes: TicketOutcome[]): number {
+  return outcomes.some((outcome) => outcome.outcome === "handed-off") ? 1 : 0;
 }
 
 try {

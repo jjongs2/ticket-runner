@@ -159,7 +159,7 @@ describe("blocked candidates", () => {
 
     expect(processed()).toEqual([]);
     expect(result.blocked).toEqual([4, 6]);
-    expect(logged).toContain("Frontier blocked · #4 #6");
+    expect(runner.requests).toEqual([]);
   });
 });
 
@@ -188,6 +188,45 @@ describe("a Ticket that fails", () => {
 
     expect(processed()).toEqual([4, 5]);
     expect(result.outcomes).toHaveLength(2);
+  });
+});
+
+describe("a Ticket that throws", () => {
+  it("is reported as handed off and the Run carries on", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    // The claim is outside processTicket's own hand-off net, so a tracker that
+    // goes down there throws all the way out.
+    const assign = tracker.assign.bind(tracker);
+    tracker.assign = async (number, user) => {
+      if (number === 4) throw new Error("gh: connection reset");
+      return assign(number, user);
+    };
+
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes).toEqual([
+      {
+        outcome: "handed-off",
+        ticket: 4,
+        title: "Ticket 4",
+        branch: "agent/4-ticket-4",
+        stage: "setup",
+        failure: "gh: connection reset",
+      },
+      expect.objectContaining({ outcome: "merged", ticket: 5 }),
+    ]);
+    expect(logged).toContain("#4 failed outside the hand-off path: gh: connection reset");
+  });
+
+  it("is never retried in the same Run", async () => {
+    tracker.addIssue({ number: 4 });
+    tracker.assign = async () => {
+      throw new Error("gh: connection reset");
+    };
+
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes).toHaveLength(1);
   });
 });
 

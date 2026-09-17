@@ -1,5 +1,7 @@
-import { blockedCandidates, frontier } from "./frontier.js";
+import { branchName } from "./branch.js";
+import { selectFrontier } from "./frontier.js";
 import { type Pipeline, type TicketOutcome, processTicket } from "./orchestrator.js";
+import type { Candidate } from "./ports/tracker.js";
 
 /**
  * What a Run has to show for itself: every Ticket it took, in the order it took
@@ -21,7 +23,6 @@ export interface RunResult {
  */
 export async function processRun(pipeline: Pipeline): Promise<RunResult> {
   const { tracker, config } = pipeline;
-  const log = pipeline.log ?? (() => {});
 
   const outcomes: TicketOutcome[] = [];
   // Every Ticket this Run has taken. A Ticket normally leaves the candidate
@@ -31,18 +32,42 @@ export async function processRun(pipeline: Pipeline): Promise<RunResult> {
   let blocked: number[] = [];
 
   for (;;) {
-    const candidates = await tracker.listCandidates(config.labels.readyForAgent);
-    blocked = blockedCandidates(candidates).map((candidate) => candidate.number);
+    const selection = selectFrontier(
+      await tracker.listCandidates(config.labels.readyForAgent),
+    );
+    blocked = selection.blocked.map((candidate) => candidate.number);
 
-    const next = frontier(candidates).find((candidate) => !taken.has(candidate.number));
+    const next = selection.frontier.find((candidate) => !taken.has(candidate.number));
     if (next === undefined) break;
 
     taken.add(next.number);
-    outcomes.push(await processTicket(pipeline, next.number));
+    outcomes.push(await take(pipeline, next));
   }
 
-  if (blocked.length > 0) {
-    log(`Frontier blocked · ${blocked.map((ticket) => `#${ticket}`).join(" ")}`);
-  }
   return { outcomes, blocked };
+}
+
+/**
+ * One Ticket, and never an exception.
+ *
+ * {@link processTicket} hands off everything it can, but its claim and its own
+ * hand-off writes are outside that net: a tracker that goes down mid-Ticket
+ * would otherwise take the whole Run with it. The Ticket is reported as handed
+ * off — which, without the label, is what a human will find on the board.
+ */
+async function take(pipeline: Pipeline, candidate: Candidate): Promise<TicketOutcome> {
+  try {
+    return await processTicket(pipeline, candidate.number);
+  } catch (error) {
+    const failure = (error as Error).message;
+    pipeline.log?.(`#${candidate.number} failed outside the hand-off path: ${failure}`);
+    return {
+      outcome: "handed-off",
+      ticket: candidate.number,
+      title: candidate.title,
+      branch: branchName(candidate.number, candidate.title),
+      stage: "setup",
+      failure,
+    };
+  }
 }

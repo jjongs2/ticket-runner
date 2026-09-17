@@ -74,7 +74,12 @@ describe("reading", () => {
             assignees: [{ login: "octocat" }],
             issue_dependencies_summary: { blocked_by: 1, total_blocked_by: 2 },
           },
-          { number: 5, title: "Fix Stage", assignees: [] },
+          {
+            number: 5,
+            title: "Fix Stage",
+            assignees: [],
+            issue_dependencies_summary: { blocked_by: 0, total_blocked_by: 1 },
+          },
         ]),
       ),
     ).listCandidates("ready-for-agent");
@@ -83,6 +88,15 @@ describe("reading", () => {
       { number: 4, title: "Planning guards", assignees: ["octocat"], openBlockers: 1 },
       { number: 5, title: "Fix Stage", assignees: [], openBlockers: 0 },
     ]);
+  });
+
+  it("refuses to read a missing dependency summary as unblocked", async () => {
+    // Defaulting to zero would merge every blocked Ticket without a word.
+    const listing = tracker(
+      ok(JSON.stringify([{ number: 4, title: "Planning guards", assignees: [] }])),
+    ).listCandidates("ready-for-agent");
+
+    await expect(listing).rejects.toThrow(/issue_dependencies_summary/);
   });
 
   it("asks the API for open issues with the label, since gh issue list has no blockers", async () => {
@@ -98,7 +112,12 @@ describe("reading", () => {
       ok(
         JSON.stringify([
           { number: 12, title: "A PR", assignees: [], pull_request: { url: "..." } },
-          { number: 5, title: "A Ticket", assignees: [] },
+          {
+            number: 5,
+            title: "A Ticket",
+            assignees: [],
+            issue_dependencies_summary: { blocked_by: 0 },
+          },
         ]),
       ),
     ).listCandidates("ready-for-agent");
