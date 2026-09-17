@@ -4,6 +4,18 @@
  * (ADR-0002).
  */
 
+import { STAGE_ENV_VAR } from "./stage-guard.js";
+
+/**
+ * Appended to every Stage prompt, the fix Stage included. The mechanical guard
+ * in `stage-guard.ts` is a tripwire against a slip; this is what covers intent.
+ */
+export const SELF_HOSTING_GUIDANCE = `This checkout is the pipeline that started this session, so running it is running yourself:
+
+- Exercise the pipeline only through its tests and fakes. Never run its commands against this repository or GitHub, by any spelling: \`agent-pipeline\`, \`npm run agent-pipeline\`, \`npx tsx src/cli.ts\`.
+- Never kill processes you did not start. A pattern kill such as \`pkill -f tsx\` takes down the Run you belong to.
+- ${STAGE_ENV_VAR} is set in this shell and the pipeline's own CLI refuses to start while it is. That refusal is expected; do not work around it.`;
+
 /**
  * Guidance appended to every implement Stage, working around known defects of
  * the `implement` skill in an unattended session.
@@ -30,13 +42,19 @@ export function implementPrompt(issueUrl: string, extraPrompt: string): string {
   return sections([
     `/mattpocock-skills:implement ${issueUrl}`,
     IMPLEMENT_GUIDANCE,
+    SELF_HOSTING_GUIDANCE,
     extraPrompt,
   ]);
 }
 
 /** A fresh session with no plugin skill, graded against the Verdict schema. */
 export function verifyPrompt(issueUrl: string, extraPrompt: string): string {
-  return sections([`Ticket: ${issueUrl}`, VERIFY_INSTRUCTIONS, extraPrompt]);
+  return sections([
+    `Ticket: ${issueUrl}`,
+    VERIFY_INSTRUCTIONS,
+    SELF_HOSTING_GUIDANCE,
+    extraPrompt,
+  ]);
 }
 
 function sections(parts: string[]): string {

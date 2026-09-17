@@ -49,6 +49,24 @@ One Run at a time per repo. A second `run`, or a `ticket` started while a `run` 
 lock, exits immediately naming the holder. The lock is a PID file at
 `.agent-pipeline/lock.json`, so a Run that was killed does not block the next one.
 
+A Stage may not start a Run either. Every Stage session runs with `AGENT_PIPELINE_STAGE`
+set to the Stage's name, and while that variable is set the CLI refuses before it looks at
+the repository, the config or `gh` — `--help` included, because there is nothing a Stage
+legitimately needs from this command:
+
+```
+$ agent-pipeline ticket 13
+Refusing to start: AGENT_PIPELINE_STAGE is set to `implement`, so this shell belongs to
+the implement Stage of a Run that is already in progress. A Stage may not run the
+pipeline: doing so claims a Ticket on the live tracker, creates a second worktree and
+starts a nested Run. Exercise the pipeline through its tests and fakes instead.
+```
+
+Exit code `2`, like every other Run that never started. The variable is a tripwire against
+an honest mistake rather than a sandbox, so every Stage prompt carries the same instruction
+in words. It is also written into the command line saved beside each Stage's transcript, so
+reproducing a Stage by hand reproduces its environment too.
+
 `ticket <n>` takes exactly one Ticket from claimed to merged:
 
 1. assign it, swap `ready-for-agent` for `in-progress`

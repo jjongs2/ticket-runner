@@ -50,6 +50,10 @@ _Avoid_: mutex, pidfile
 One Claude Code session inside a Run with a single purpose: implement, verify, or fix.
 _Avoid_: step, phase, task
 
+**Stage mark**:
+The `AGENT_PIPELINE_STAGE` variable a Run sets in every Stage's shell. The pipeline refuses to start while it is present, so a Stage cannot start a nested Run. A tripwire, not a sandbox, where the Run lock stops two humans.
+_Avoid_: flag, sandbox, guard variable
+
 **Check**:
 A deterministic command the pipeline runs itself to gate a Ticket — tests, typecheck, CI. Never an agent's opinion.
 _Avoid_: validation, test run
