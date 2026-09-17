@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   HANDOFF_MARKER,
+  guardComment,
+  guardMarker,
   handoffComment,
   pullRequestBody,
   runSummary,
@@ -143,6 +145,34 @@ describe("handoffComment", () => {
   });
 });
 
+describe("guardComment", () => {
+  it("opens with the marker the pipeline finds its own warning by", () => {
+    expect(guardComment("spec").split("\n")[0]).toBe("<!-- agent-pipeline:guard:spec -->");
+  });
+
+  it("gives a marker per reason, so one warning does not silence another", () => {
+    expect(guardMarker("no-criteria")).not.toBe(guardMarker("body-only-blockers"));
+  });
+
+  it("says a Spec was treated as one and that the label is gone", () => {
+    const comment = guardComment("spec");
+
+    expect(comment).toContain("**Skipped by agent-pipeline.**");
+    expect(comment).toContain("it is a Spec, not a Ticket");
+    expect(comment).toContain("`ready-for-agent` was removed");
+  });
+
+  it("tells a criteria-less Ticket what verify needs", () => {
+    expect(guardComment("no-criteria")).toContain(
+      "No `- [ ]` acceptance criteria found in the body or comments.",
+    );
+  });
+
+  it("tells a body-only blocker how to make the edge native", () => {
+    expect(guardComment("body-only-blockers")).toContain("--add-blocked-by");
+  });
+});
+
 describe("runSummary", () => {
   const merged = {
     outcome: "merged" as const,
@@ -176,6 +206,20 @@ describe("runSummary", () => {
 
     expect(summary).toContain("  merged   #3 Run: drain the Frontier (PR #12)");
     expect(summary).toContain("  handed   #5 Fix Stage with a single retry · verify · 1 unmet");
+    expect(summary).toContain("  skipped  #9 blocked");
+  });
+
+  it("names the guard that passed a candidate over", () => {
+    const summary = runSummary({
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [
+        { outcome: "skipped", ticket: 7, title: "Progress comment", reason: "no-criteria" },
+      ],
+      blocked: [9],
+    });
+
+    expect(summary).toContain("  skipped  #7 no-criteria");
     expect(summary).toContain("  skipped  #9 blocked");
   });
 

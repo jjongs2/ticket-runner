@@ -37,6 +37,7 @@ agent-pipeline run 2026-09-17T09-00-00-000 · 84m
 
   merged   #4 Planning guards (PR #12)
   handed   #5 Fix Stage with a single retry · verify · 1 unmet
+  skipped  #7 no-criteria
   skipped  #9 blocked
 
 Frontier blocked.
@@ -69,7 +70,7 @@ reproducing a Stage by hand reproduces its environment too.
 
 `ticket <n>` takes exactly one Ticket from claimed to merged:
 
-1. assign it, swap `ready-for-agent` for `in-progress`
+1. run the guards, then assign it and swap `ready-for-agent` for `in-progress`
 2. create `agent/<n>-<slug>` from `main` in a worktree under `.worktrees/`
 3. implement Stage
 4. the configured Checks, run by the pipeline itself
@@ -79,12 +80,32 @@ reproducing a Stage by hand reproduces its environment too.
 
 Any failure hands the Ticket over instead: `ready-for-human`, unassigned, draft PR,
 branch and worktree preserved. Exit code is `0` when nothing was handed off, `1` when
-something was, and `2` when the Run never started.
+something was, and `2` when the Run never started — which includes a `ticket <n>` a
+guard refused, since nothing was taken.
 
 Every Stage writes its exact command line, stdout, stderr and stream-json transcript to
 `.agent-pipeline/runs/<runId>/<n>/`, so any Stage can be reproduced by hand. The command
 line lands there before the Stage starts, and its output as the Stage prints it, so a Run
 killed mid-Stage still leaves behind what it had reached.
+
+## Guards
+
+Planning is human work, and every candidate is guarded against the known ways it
+goes wrong before a Run claims it. A candidate that fails a guard is passed over,
+gets one warning comment saying what to fix, and appears in the summary as
+`skipped` with the guard's reason:
+
+| Reason | What the candidate did | What the pipeline does |
+|---|---|---|
+| `spec` | has native sub-issues, so it is a Spec | skips it and removes `ready-for-agent`, since its Tickets are picked up individually |
+| `no-criteria` | has no `- [ ]` checkbox in its body or comments, so verify has nothing to grade | skips it and leaves the label, since a comment can still supply criteria |
+| `body-only-blockers` | has a `Blocked by` line naming issues with no native edge | skips it and leaves the label; the body line is never read as a blocker |
+
+The warning is posted at most once per reason, so a nightly Run that meets the
+same unfixed candidate again says nothing further. `ticket <n>` applies the same
+guards, and refuses in silence when the issue named is already assigned or is not
+labelled `ready-for-agent`: it may not steal a claimed Ticket or take an
+untriaged one.
 
 ## Configuration
 

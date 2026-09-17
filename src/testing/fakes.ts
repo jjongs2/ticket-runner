@@ -62,6 +62,8 @@ export class FakeTracker implements Tracker {
       labels: ["ready-for-agent"],
       assignees: [],
       comments: [],
+      subIssues: 0,
+      blockedBy: [],
       ...issue,
     };
     this.issues.set(full.number, full);

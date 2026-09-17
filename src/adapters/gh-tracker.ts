@@ -21,6 +21,19 @@ export interface GhTrackerOptions {
   now?: () => number;
 }
 
+/** One issue as `gh issue view --json` reports it. */
+interface RawIssue {
+  number: number;
+  title: string;
+  url: string;
+  body: string;
+  labels: { name: string }[];
+  assignees: { login: string }[];
+  comments: { body: string }[];
+  subIssuesSummary?: { total?: number };
+  blockedBy?: { nodes: { number: number }[] };
+}
+
 /** The fields the Frontier needs from one entry of the REST issue list. */
 interface RawCandidate {
   number: number;
@@ -88,23 +101,20 @@ export class GhTracker implements Tracker {
     ]);
   }
 
+  /**
+   * One issue, with the two native relations the guards read: how many
+   * sub-issues it has, and what GitHub says blocks it. `gh issue view` reports
+   * both, so the guards cost no extra call.
+   */
   async getIssue(number: number): Promise<Issue> {
     const { stdout } = await this.gh([
       "issue",
       "view",
       String(number),
       "--json",
-      "number,title,url,body,labels,assignees,comments",
+      "number,title,url,body,labels,assignees,comments,subIssuesSummary,blockedBy",
     ]);
-    const raw = JSON.parse(stdout) as {
-      number: number;
-      title: string;
-      url: string;
-      body: string;
-      labels: { name: string }[];
-      assignees: { login: string }[];
-      comments: { body: string }[];
-    };
+    const raw = JSON.parse(stdout) as RawIssue;
     return {
       number: raw.number,
       title: raw.title,
@@ -113,6 +123,8 @@ export class GhTracker implements Tracker {
       labels: raw.labels.map((label) => label.name),
       assignees: raw.assignees.map((assignee) => assignee.login),
       comments: raw.comments.map((comment) => comment.body),
+      subIssues: subIssues(raw),
+      blockedBy: (raw.blockedBy?.nodes ?? []).map((blocker) => blocker.number),
     };
   }
 
@@ -270,6 +282,24 @@ function openBlockers(issue: RawCandidate): number {
     );
   }
   return blocked;
+}
+
+/**
+ * A missing sub-issue summary is an error, for the reason
+ * {@link openBlockers} refuses a missing dependency summary: guessing zero
+ * would hand every Spec to an implement Stage. `blockedBy` is read the same
+ * way, since the two arrive together or not at all.
+ */
+function subIssues(issue: RawIssue): number {
+  const total = issue.subIssuesSummary?.total;
+  if (typeof total !== "number" || issue.blockedBy === undefined) {
+    throw new Error(
+      `#${issue.number} came back without subIssuesSummary.total or blockedBy, ` +
+        "so whether it is a Spec and what blocks it cannot be read; " +
+        "agent-pipeline trusts GitHub's native relations only (ADR-0003)",
+    );
+  }
+  return total;
 }
 
 /** `pending` means "ask again"; everything else is an answer. */

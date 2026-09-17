@@ -1,0 +1,145 @@
+import { describe, expect, it } from "vitest";
+import { guardCandidate } from "./guards.js";
+import type { Issue } from "./ports/tracker.js";
+
+const READY = "ready-for-agent";
+
+function issue(overrides: Partial<Issue> = {}): Issue {
+  return {
+    number: 4,
+    title: "Planning guards",
+    url: "https://github.com/acme/repo/issues/4",
+    body: "- [ ] it works",
+    labels: [READY],
+    assignees: [],
+    comments: [],
+    subIssues: 0,
+    blockedBy: [],
+    ...overrides,
+  };
+}
+
+const guard = (overrides: Partial<Issue> = {}) => guardCandidate(issue(overrides), READY);
+
+describe("a Ticket Planning got right", () => {
+  it("passes every guard", () => {
+    expect(guard()).toBeUndefined();
+  });
+});
+
+describe("issues no Run may take", () => {
+  it("refuses one somebody has already claimed", () => {
+    expect(guard({ assignees: ["octocat"] })).toBe("claimed");
+  });
+
+  it("refuses one that is not labelled ready-for-agent", () => {
+    expect(guard({ labels: ["needs-triage"] })).toBe("not-ready");
+  });
+
+  it("refuses an untriaged issue before reading it as a Ticket", () => {
+    // Nothing the guards would comment on gets said to an issue that was never
+    // offered to the pipeline in the first place.
+    expect(guard({ labels: [], body: "no criteria here", subIssues: 3 })).toBe("not-ready");
+  });
+});
+
+describe("the spec guard", () => {
+  it("skips a candidate with native sub-issues", () => {
+    expect(guard({ subIssues: 5 })).toBe("spec");
+  });
+
+  it("names the Spec before anything else that is wrong with it", () => {
+    expect(guard({ subIssues: 5, body: "no criteria here" })).toBe("spec");
+  });
+});
+
+describe("the criteria guard", () => {
+  it("skips a candidate with no checkbox anywhere", () => {
+    expect(guard({ body: "## What to build\n\nSomething good." })).toBe("no-criteria");
+  });
+
+  it("accepts criteria a triage comment posted instead of the body", () => {
+    expect(
+      guard({ body: "## What to build\n\nSomething good.", comments: ["- [ ] it works"] }),
+    ).toBeUndefined();
+  });
+
+  it("accepts an indented or starred checkbox", () => {
+    expect(guard({ body: "Criteria:\n  * [ ] it works" })).toBeUndefined();
+  });
+
+  it("does not count a checked box as something left to grade", () => {
+    expect(guard({ body: "- [x] it worked once" })).toBe("no-criteria");
+  });
+
+  it("does not read its own warning comment as criteria", () => {
+    // The `no-criteria` warning quotes `- [ ]`, so a naive search for the
+    // sequence would find it and pass the issue on the next Run.
+    expect(
+      guard({
+        body: "nothing to grade",
+        comments: [
+          "<!-- agent-pipeline:guard:no-criteria -->\n**Skipped by agent-pipeline.** No `- [ ]` acceptance criteria found in the body or comments.",
+        ],
+      }),
+    ).toBe("no-criteria");
+  });
+});
+
+describe("the body-only blockers guard", () => {
+  it("skips a candidate whose body names a blocker with no native edge", () => {
+    expect(guard({ body: "- [ ] it works\n\n## Blocked by\n\n- #3\n" })).toBe(
+      "body-only-blockers",
+    );
+  });
+
+  it("accepts a body that copies the native edges", () => {
+    expect(
+      guard({ body: "- [ ] it works\n\n## Blocked by\n\n- #3\n- #7\n", blockedBy: [7, 3] }),
+    ).toBeUndefined();
+  });
+
+  it("skips a body that names one more blocker than the edges do", () => {
+    expect(
+      guard({ body: "- [ ] it works\n\n## Blocked by\n\n- #3\n- #7\n", blockedBy: [3] }),
+    ).toBe("body-only-blockers");
+  });
+
+  it("reads an inline `Blocked by:` line as well as a heading", () => {
+    expect(guard({ body: "- [ ] it works\n\nBlocked by: #3, #7\n", blockedBy: [3] })).toBe(
+      "body-only-blockers",
+    );
+  });
+
+  it("never takes a blocker from the body, only from the edges", () => {
+    // A native edge to a closed blocker is what unblocks a Ticket; the body
+    // copy says the same thing and decides nothing.
+    expect(guard({ body: "- [ ] it works\n\n## Blocked by\n\n- #3\n", blockedBy: [3] })).toBeUndefined();
+  });
+
+  it("leaves the Parent section alone", () => {
+    expect(guard({ body: "## Parent\n\n#1\n\n- [ ] it works\n" })).toBeUndefined();
+  });
+
+  it("stops reading at the section after the blockers", () => {
+    expect(
+      guard({
+        body: "## Blocked by\n\n- #3\n\n## Acceptance criteria\n\n- [ ] it closes #9\n",
+        blockedBy: [3],
+      }),
+    ).toBeUndefined();
+  });
+
+  it("stops reading at the prose after an inline blockers line", () => {
+    expect(
+      guard({
+        body: "- [ ] it works\n\nBlocked by: #3\n\nThis is the follow-up to #8.\n",
+        blockedBy: [3],
+      }),
+    ).toBeUndefined();
+  });
+
+  it("accepts a section that names no blocker at all", () => {
+    expect(guard({ body: "- [ ] it works\n\n## Blocked by\n\nNothing.\n" })).toBeUndefined();
+  });
+});
