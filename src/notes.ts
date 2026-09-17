@@ -139,11 +139,20 @@ export async function routeNotes(
   return routed;
 }
 
+/**
+ * Where one Note goes.
+ *
+ * A Note that names the Ticket its own Stage is working on names no Ticket, as
+ * far as this is concerned. A Stage says that when it has found something the
+ * Acceptance Criteria do not cover, and commenting on that Ticket would file
+ * the finding under an issue that is about to be closed by the very Run that
+ * made it. The triage queue outlives the Run; the Ticket does not.
+ */
 async function route(routing: NoteRouting, note: Note): Promise<RoutedNote> {
   const { tracker, origin, stage } = routing;
   const from = { origin, stage, note: note.note };
 
-  if (note.ticket !== undefined) {
+  if (note.ticket !== undefined && note.ticket !== origin) {
     await tracker.comment(note.ticket, noteComment(from));
     routing.log?.(`#${origin} noted on #${note.ticket}`);
     return { origin, stage, issue: note.ticket, opened: false, note: note.note };

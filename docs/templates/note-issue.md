@@ -7,6 +7,10 @@ From #<origin> <stage>
 The issue a Note opens when it names no Ticket, labelled `needs-triage` so the
 triage on-ramp picks it up. The first line is the title; the rest is the body.
 
+A Note that names the Ticket its own Stage is working on comes here too. That
+Ticket is about to be closed by the Run that made the Note, and a comment on it
+would be filed under work that is finished.
+
 The title is derived from the Note rather than asked for: the first sentence of
 it, trimmed to fit an issue list. Triage is what turns a Note into a Ticket, so
 the title only has to be good enough to be read.

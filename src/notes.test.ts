@@ -98,6 +98,29 @@ describe("routing a Note that names a Ticket", () => {
   });
 });
 
+describe("routing a Note that names the Ticket it came from", () => {
+  it("opens an issue rather than commenting on a Ticket that is closing", async () => {
+    const tracker = new FakeTracker();
+    tracker.addIssue({ number: ORIGIN });
+
+    const routed = await routeNotes(routing(tracker), {
+      notes: [{ ticket: ORIGIN, note: "the flag needs renaming" }],
+    });
+
+    expect(tracker.comments).toEqual([]);
+    expect(tracker.createdIssues).toHaveLength(1);
+    expect(routed).toEqual([
+      {
+        origin: ORIGIN,
+        stage: "implement",
+        issue: 200,
+        opened: true,
+        note: "the flag needs renaming",
+      },
+    ]);
+  });
+});
+
 describe("routing a Note that names no Ticket", () => {
   it("opens a needs-triage issue naming the origin Ticket and Stage", async () => {
     const tracker = new FakeTracker();

@@ -264,14 +264,30 @@ export function noteComment(subject: NoteSubject): string {
   ].join("\n");
 }
 
-/** How much of a Note's first sentence fits an issue list unhelpfully truncated. */
+/** How much of a Note's first sentence fits an issue list untruncated. */
 const TITLE_LIMIT = 72;
 
-/** Whatever a heading, a list item or bold text puts in front of the words. */
-const DECORATION = /^[\s>#*_+-]+/;
+/**
+ * What a title has to lose from the front of a Note's first line: a heading's
+ * hashes, a bullet, the stars around bold text. Deliberately its own copy of
+ * what `guards.ts` strips off a `Blocked by` line — that one reads a document a
+ * human wrote in a shape the guard has to recognise, where this one is
+ * tidying an agent's prose, and the two are free to drift.
+ */
+const TITLE_DECORATION = /^[\s>#*_+-]+/;
 
 /** The first sentence, if the Note opens with one short enough to end. */
 const FIRST_SENTENCE = /^(.+?[.!?])(?:\s|$)/;
+
+/** A Note's opening line, which is as much of it as any summary has room for. */
+function firstLine(text: string): string {
+  return (text.split("\n").find((line) => line.trim() !== "") ?? "").trim();
+}
+
+/** `text`, or as much of it as fits with an ellipsis standing in for the rest. */
+function truncate(text: string, limit: number): string {
+  return text.length <= limit ? text : `${text.slice(0, limit - 1).trimEnd()}\u2026`;
+}
 
 /**
  * The title a Note's issue gets: its first sentence, trimmed to be read at a
@@ -282,15 +298,13 @@ const FIRST_SENTENCE = /^(.+?[.!?])(?:\s|$)/;
  * title worth having — this one only has to be enough to open the issue on.
  */
 function noteTitle(subject: NoteSubject): string {
-  const first = subject.note.split("\n").find((line) => line.trim() !== "") ?? "";
-  const stripped = first.replace(DECORATION, "").trim();
+  const stripped = firstLine(subject.note).replace(TITLE_DECORATION, "").trim();
   const sentence = FIRST_SENTENCE.exec(stripped)?.[1] ?? stripped;
   const title = sentence.replace(/\.$/, "").trim();
 
-  if (title === "") return `Note from #${subject.origin} ${subject.stage}`;
-  return title.length <= TITLE_LIMIT
-    ? title
-    : `${title.slice(0, TITLE_LIMIT - 1).trimEnd()}\u2026`;
+  return title === ""
+    ? `Note from #${subject.origin} ${subject.stage}`
+    : truncate(title, TITLE_LIMIT);
 }
 
 /** The issue a Note opens when it names no Ticket. The label is the caller's. */
@@ -358,13 +372,11 @@ const NOTE_WIDTH = 40;
 
 /** One Note's line: where it went, where it came from, and the gist of it. */
 function noteRow({ origin, stage, issue, opened, note }: RoutedNote): string {
-  const gist = (note.split("\n").find((line) => line.trim() !== "") ?? "").trim();
+  const destination = opened ? "new" : "comment";
   return row(
     "noted",
     issue,
-    `${opened ? "new" : "comment"} · from #${origin} ${stage} · ${
-      gist.length <= NOTE_WIDTH ? gist : `${gist.slice(0, NOTE_WIDTH - 1).trimEnd()}\u2026`
-    }`,
+    `${destination} · from #${origin} ${stage} · ${truncate(firstLine(note), NOTE_WIDTH)}`,
   );
 }
 

@@ -192,6 +192,9 @@ routes each one out of the session:
   Stage it came from
 - a Note that names none opens an issue labelled `needs-triage`, which is where
   the triage on-ramp starts
+- a Note that names the Ticket its own Stage is working on counts as naming
+  none: commenting there would file the finding under an issue this very Run is
+  about to close
 
 A Note is never acted on where it was found, and never changes the current
 Ticket's scope. Checkboxes in one are escaped before it is posted: `- [ ]` is
