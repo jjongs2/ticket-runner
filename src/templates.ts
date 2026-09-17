@@ -5,12 +5,17 @@
 
 import type { GuardReason } from "./guards.js";
 import type { FailurePoint } from "./lifecycle.js";
+import type { RoutedNote } from "./notes.js";
 import type { TicketOutcome } from "./orchestrator.js";
+import type { StageName } from "./ports/agent-runner.js";
 import type { IssueComment, SquashCommit } from "./ports/tracker.js";
 import { type Criterion, type Verdict, countStatuses } from "./verdict.js";
 
 /** How the pipeline finds its own hand-off comment again. */
 export const HANDOFF_MARKER = "<!-- agent-pipeline:handoff -->";
+
+/** What a Note comment is signed with. Nothing looks it up; a human reads it. */
+export const NOTE_MARKER = "<!-- agent-pipeline:note -->";
 
 /** How the pipeline finds a warning it has already posted: one marker per reason. */
 export function guardMarker(reason: GuardReason): string {
@@ -218,6 +223,109 @@ export function handoffComment(handoff: HandoffComment): string {
   return lines.join("\n");
 }
 
+/** A Note, and where it came from, as both Note templates announce it. */
+export interface NoteSubject {
+  /** The Ticket whose Stage made the finding. */
+  origin: number;
+  stage: StageName;
+  note: string;
+  /**
+   * The Ticket this was meant to be a comment on, when that Ticket would not
+   * take it. Set only on the issue a refused comment falls back to, so triage
+   * can see the link the Note was reaching for.
+   */
+  intended?: number;
+}
+
+/** A task list item at the start of a line, which is what a guard reads. */
+const NOTE_CHECKBOX = /^([ \t]*[-*+] )\[ \]/gm;
+
+/**
+ * A Note's prose, with every checkbox defused.
+ *
+ * `- [ ]` is Acceptance Criteria to everything that reads a Ticket: the
+ * `no-criteria` guard counts one as a usable Ticket, verify grades it, and the
+ * merge ticks it. A Note is prose a human should read, not work anyone
+ * promised, so its boxes are escaped into the text they were meant to be.
+ * Brackets anywhere but at the head of a list item are left alone, because that
+ * is the only shape those readers recognise.
+ */
+function escapeCheckboxes(note: string): string {
+  return note.replaceAll(NOTE_CHECKBOX, (_, bullet: string) => `${bullet}\\[ \\]`);
+}
+
+/** Where the Note came from, in the one line both Note templates open with. */
+function noteProvenance({ origin, stage }: NoteSubject): string {
+  return `From #${origin} ${stage}`;
+}
+
+/** One Note, posted on the Ticket it names. */
+export function noteComment(subject: NoteSubject): string {
+  return [
+    NOTE_MARKER,
+    noteProvenance(subject),
+    "",
+    escapeCheckboxes(subject.note.trim()),
+    "",
+  ].join("\n");
+}
+
+/** How much of a Note's first sentence fits an issue list untruncated. */
+const TITLE_LIMIT = 72;
+
+/**
+ * What a title has to lose from the front of a Note's first line: a heading's
+ * hashes, a bullet, the stars around bold text. Deliberately its own copy of
+ * what `guards.ts` strips off a `Blocked by` line — that one reads a document a
+ * human wrote in a shape the guard has to recognise, where this one is
+ * tidying an agent's prose, and the two are free to drift.
+ */
+const TITLE_DECORATION = /^[\s>#*_+-]+/;
+
+/** The first sentence, if the Note opens with one short enough to end. */
+const FIRST_SENTENCE = /^(.+?[.!?])(?:\s|$)/;
+
+/** A Note's opening line, which is as much of it as any summary has room for. */
+function firstLine(text: string): string {
+  return (text.split("\n").find((line) => line.trim() !== "") ?? "").trim();
+}
+
+/** `text`, or as much of it as fits with an ellipsis standing in for the rest. */
+function truncate(text: string, limit: number): string {
+  return text.length <= limit ? text : `${text.slice(0, limit - 1).trimEnd()}\u2026`;
+}
+
+/**
+ * The title a Note's issue gets: its first sentence, trimmed to be read at a
+ * glance.
+ *
+ * Derived rather than asked for. A Stage that writes a title as well as a note
+ * writes two things badly, and triage is where a Note becomes a Ticket with a
+ * title worth having — this one only has to be enough to open the issue on.
+ */
+function noteTitle(subject: NoteSubject): string {
+  const stripped = firstLine(subject.note).replace(TITLE_DECORATION, "").trim();
+  const sentence = FIRST_SENTENCE.exec(stripped)?.[1] ?? stripped;
+  const title = sentence.replace(/\.$/, "").trim();
+
+  return title === ""
+    ? `Note from #${subject.origin} ${subject.stage}`
+    : truncate(title, TITLE_LIMIT);
+}
+
+/** The issue a Note opens when it names no Ticket. The label is the caller's. */
+export function noteIssue(subject: NoteSubject): { title: string; body: string } {
+  const provenance =
+    subject.intended === undefined
+      ? noteProvenance(subject)
+      : `${noteProvenance(subject)}, meant for #${subject.intended}, which would not take the comment`;
+
+  return {
+    title: noteTitle(subject),
+    body: [provenance, "", escapeCheckboxes(subject.note.trim()), ""].join("\n"),
+  };
+}
+
 export interface RunSummary {
   runId: string;
   durationMs: number;
@@ -239,7 +347,7 @@ const VERB_WIDTH = 9;
  */
 export function runSummary({ runId, durationMs, outcomes, blocked }: RunSummary): string {
   const rows = [
-    ...outcomes.map(ticketRow),
+    ...outcomes.flatMap(ticketRows),
     ...(blocked ?? []).map((ticket) => row("skipped", ticket, "blocked")),
   ];
 
@@ -251,6 +359,36 @@ export function runSummary({ runId, durationMs, outcomes, blocked }: RunSummary)
     ...(blocked === undefined ? [] : [blocked.length === 0 ? "Frontier empty." : "Frontier blocked."]),
     "",
   ].join("\n");
+}
+
+/**
+ * One Ticket's lines: what happened to it, then every Note its Stages made.
+ *
+ * The Notes follow their own Ticket rather than being gathered at the end, so a
+ * Run that took six Tickets still says which one noticed what.
+ */
+function ticketRows(outcome: TicketOutcome): string[] {
+  return [
+    ticketRow(outcome),
+    ...(outcome.outcome === "skipped" ? [] : outcome.notes.map(noteRow)),
+  ];
+}
+
+/**
+ * How much of a Note a summary line shows before pointing at GitHub for the
+ * rest. Chosen so a `noted` row is no longer than the Ticket rows it sits
+ * among, which is what makes the column of numbers worth lining up.
+ */
+const NOTE_WIDTH = 40;
+
+/** One Note's line: where it went, where it came from, and the gist of it. */
+function noteRow({ origin, stage, issue, opened, note }: RoutedNote): string {
+  const destination = opened ? "new" : "comment";
+  return row(
+    "noted",
+    issue,
+    `${destination} · from #${origin} ${stage} · ${truncate(firstLine(note), NOTE_WIDTH)}`,
+  );
 }
 
 /** One Ticket's line in a summary: what happened to it, and where to look. */

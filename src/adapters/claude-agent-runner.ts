@@ -224,7 +224,13 @@ function classify(
     if (/usage limit|rate limit|rate_limit/i.test(text)) return "rate-limited";
     return "nonzero-exit";
   }
-  if (request.jsonSchema !== undefined && structuredOutput(result) === undefined) {
+  // A schema the Stage answered with nothing is only a failure where the
+  // structured output was the point of the Stage; see `resultRequired`.
+  if (
+    request.jsonSchema !== undefined &&
+    request.resultRequired !== false &&
+    structuredOutput(result) === undefined
+  ) {
     return "invalid-result";
   }
   return undefined;

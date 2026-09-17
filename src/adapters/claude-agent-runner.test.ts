@@ -269,6 +269,27 @@ describe("reading the outcome", () => {
     expect(result).toMatchObject({ ok: false, failure: "invalid-result" });
   });
 
+  it("passes a Stage whose schema was only ever a side channel", async () => {
+    const stdout = transcript({
+      type: "result",
+      subtype: "success",
+      is_error: false,
+      num_turns: 4,
+      result: "I implemented it and noticed nothing",
+    });
+
+    const result = await runner(execution({ stdout })).run(
+      request({
+        stage: "implement",
+        jsonSchema: { type: "object" },
+        resultRequired: false,
+      }),
+    );
+
+    expect(result).toMatchObject({ ok: true });
+    expect(result.failure).toBeUndefined();
+  });
+
   it("classifies a wall-clock kill as a timeout", async () => {
     const result = await runner(execution({ exitCode: 124, stdout: "" })).run(request());
 

@@ -175,3 +175,29 @@ describe("the self-hosting guidance", () => {
     );
   });
 });
+
+describe("the Notes channel", () => {
+  it("tells the implement Stage where a finding for another Ticket goes", () => {
+    const prompt = implementPrompt(url, "");
+
+    expect(prompt).toContain("Notes for other Tickets");
+    expect(prompt).toContain("`notes`");
+  });
+
+  it("tells the fix Stage the same", () => {
+    expect(fixPrompt(url, FAILED_CHECK, "")).toContain("Notes for other Tickets");
+  });
+
+  it("tells a Stage to leave the number out rather than guess it", () => {
+    expect(implementPrompt(url, "")).toContain("leave it out when you are not sure");
+  });
+
+  it("tells a Stage that finding nothing is the ordinary case", () => {
+    expect(implementPrompt(url, "")).toContain(`"notes": []`);
+  });
+
+  it("asks the Stages that only grade or rebase for no Notes", () => {
+    expect(verifyPrompt(url, "")).not.toContain("Notes for other Tickets");
+    expect(conflictPrompt(url, CONFLICT, "")).not.toContain("Notes for other Tickets");
+  });
+});

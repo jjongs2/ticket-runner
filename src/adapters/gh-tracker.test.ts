@@ -331,6 +331,36 @@ describe("pull requests", () => {
     ]);
   });
 
+  it("opens an issue for a Note and reads its number off the URL", async () => {
+    const issue = await tracker(ok("https://github.com/acme/repo/issues/31\n")).createIssue({
+      title: "Nothing cleans up worktrees",
+      body: "From #10 implement\n\nNothing cleans up worktrees.\n",
+      labels: ["needs-triage"],
+    });
+
+    expect(issue).toEqual({ number: 31, url: "https://github.com/acme/repo/issues/31" });
+    expect(calls[0]).toEqual([
+      "issue",
+      "create",
+      "--title",
+      "Nothing cleans up worktrees",
+      "--body",
+      "From #10 implement\n\nNothing cleans up worktrees.\n",
+      "--label",
+      "needs-triage",
+    ]);
+  });
+
+  it("refuses output it cannot read an issue number from", async () => {
+    await expect(
+      tracker(ok("could not create issue\n")).createIssue({
+        title: "t",
+        body: "b",
+        labels: [],
+      }),
+    ).rejects.toThrow("could not read an issue number");
+  });
+
   it("opens a draft PR when the Ticket is being handed off", async () => {
     await tracker(ok("https://github.com/acme/repo/pull/12\n")).createPullRequest({
       head: "agent/2-skeleton",

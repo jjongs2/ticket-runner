@@ -1,9 +1,11 @@
 import type {
   Candidate,
   CiOutcome,
+  CreateIssue,
   CreatePullRequest,
   Issue,
   IssueComment,
+  IssueRef,
   LabelSpec,
   PullRequestRef,
   SquashCommit,
@@ -129,6 +131,30 @@ export class GhTracker implements Tracker {
       })),
       ...relations(raw),
     };
+  }
+
+  /**
+   * Open an issue, and read its number back out of the URL `gh` prints.
+   *
+   * Every label is passed in one `--label`, so a repo missing one fails the
+   * whole create rather than opening an issue nobody's filter will find.
+   */
+  async createIssue(issue: CreateIssue): Promise<IssueRef> {
+    const { stdout } = await this.gh([
+      "issue",
+      "create",
+      "--title",
+      issue.title,
+      "--body",
+      issue.body,
+      ...issue.labels.flatMap((label) => ["--label", label]),
+    ]);
+    const url = stdout.trim().split("\n").at(-1) ?? "";
+    const number = Number.parseInt(url.split("/").at(-1) ?? "", 10);
+    if (!Number.isInteger(number)) {
+      throw new Error(`could not read an issue number from gh output: ${stdout}`);
+    }
+    return { number, url };
   }
 
   /**

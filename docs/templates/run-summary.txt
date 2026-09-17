@@ -1,7 +1,9 @@
 agent-pipeline run <runId> · <duration>
 
   merged   #3 Run: drain the Frontier (PR #12)
+  noted    #8 comment · from #3 implement · the CLI help drifts from the README
   handed   #5 Fix Stage with a single retry · verify · 1 unmet
+  noted    #31 new · from #5 fix · nothing cleans up abandoned worktrees
   released #6 Rebase conflict resolution · rate limit at implement
   skipped  #7 no-criteria
   skipped  #9 blocked
@@ -21,6 +23,12 @@ blocker held back all Run, and otherwise the guard reason that kept it from
 being claimed — `spec`, `no-criteria` or `body-only-blockers` for Planning a
 guard rejected, `claimed` or `not-ready` for an issue that is nobody's to take,
 which is usually one `ticket <n>` named by hand.
+
+`noted` is a Note a Stage made, and follows the row of the Ticket whose Stage
+made it. Its number is where the Note went, not where it came from: `comment`
+for a Note posted on the Ticket it named, `new` for one that named none and got
+a `needs-triage` issue of its own. The note itself is trimmed to one line; the
+whole of it is on GitHub.
 
 The last line says why the Run stopped: `Frontier empty.` when nothing is left,
 `Frontier blocked.` when every remaining candidate has an open blocker.

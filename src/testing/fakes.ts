@@ -16,9 +16,11 @@ import type {
 import type {
   Candidate,
   CiOutcome,
+  CreateIssue,
   CreatePullRequest,
   Issue,
   IssueComment,
+  IssueRef,
   LabelSpec,
   PullRequestRef,
   SquashCommit,
@@ -45,6 +47,8 @@ export class FakeTracker implements Tracker {
   createdLabels: LabelSpec[] = [];
   issues = new Map<number, Issue>();
   comments: { issue: number; body: string }[] = [];
+  /** Every issue the pipeline opened itself, in order, as it asked for it. */
+  createdIssues: CreateIssue[] = [];
   /** Every in-place comment edit, in order, as {@link updateComment} took it. */
   updatedComments: { id: string; body: string }[] = [];
   pullRequests: FakePullRequest[] = [];
@@ -101,6 +105,20 @@ export class FakeTracker implements Tracker {
     return structuredClone(this.issue(number));
   }
 
+  /** Numbered from 200 so a new issue is never mistaken for a seeded one. */
+  async createIssue(issue: CreateIssue): Promise<IssueRef> {
+    const number = 200 + this.createdIssues.length;
+    this.calls.push(`createIssue:${number}`);
+    this.createdIssues.push(issue);
+    this.addIssue({
+      number,
+      title: issue.title,
+      body: issue.body,
+      labels: [...issue.labels],
+    });
+    return { number, url: `https://github.com/acme/repo/issues/${number}` };
+  }
+
   /** Every open issue carrying `label`, deliberately in reverse number order. */
   async listCandidates(label: string): Promise<Candidate[]> {
     this.calls.push(`listCandidates:${label}`);
@@ -139,6 +157,9 @@ export class FakeTracker implements Tracker {
   }
 
   async comment(number: number, body: string): Promise<IssueComment> {
+    // A comment on an issue the fake never heard of is the tracker refusing a
+    // write, which is what a Stage that invented a Ticket number would get.
+    this.issue(number);
     this.calls.push(`comment:${number}`);
     this.comments.push({ issue: number, body });
     // A comment is on the issue from now on, which is what the next getIssue

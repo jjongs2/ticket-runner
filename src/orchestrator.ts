@@ -3,6 +3,7 @@ import type { Config } from "./config.js";
 import { tickMetCriteria } from "./criteria.js";
 import { type SkipReason, isGuardReason, skipReason } from "./guards.js";
 import type { FailureKind, FailurePoint } from "./lifecycle.js";
+import { NOTES_JSON_SCHEMA, type RoutedNote, routeNotes } from "./notes.js";
 import type {
   AgentRunner,
   StageFailure,
@@ -52,6 +53,8 @@ export type TicketOutcome =
       title: string;
       branch: string;
       pullRequest: number;
+      /** Every Note this Ticket's Stages routed, in the order they were routed. */
+      notes: RoutedNote[];
     }
   | {
       outcome: "handed-off";
@@ -61,6 +64,7 @@ export type TicketOutcome =
       stage: FailurePoint;
       failure: string;
       pullRequest?: number;
+      notes: RoutedNote[];
     }
   | {
       outcome: "released";
@@ -69,6 +73,7 @@ export type TicketOutcome =
       branch: string;
       /** Where the rate limit landed, which is all the summary says about it. */
       stage: FailurePoint;
+      notes: RoutedNote[];
     }
   | {
       outcome: "skipped";
@@ -153,6 +158,12 @@ function asTicketFailure(error: unknown, point: FailurePoint): TicketFailure {
 export async function processTicket(
   pipeline: Pipeline,
   ticket: number,
+  /**
+   * Where the Notes are collected, so a caller that has to catch an exception
+   * this function could not turn into a hand-off still knows what was routed.
+   * The returned outcome carries the same array.
+   */
+  notes: RoutedNote[] = [],
 ): Promise<TicketOutcome> {
   const { tracker, workspace, config, repoRoot, runId } = pipeline;
   const log = pipeline.log ?? (() => {});
@@ -217,7 +228,7 @@ export async function processTicket(
     }
     if (resume === undefined || resume.state === "claimed") {
       point = "implement";
-      await implement(pipeline, issue, worktree, branch, logDir, progress);
+      await implement(pipeline, issue, worktree, branch, logDir, progress, notes);
     }
 
     let commits: string[];
@@ -277,6 +288,7 @@ export async function processTicket(
           logDir,
           { kind: failure.kind, summary: failure.summary, evidence: failure.evidence },
           progress,
+          notes,
         );
       }
     }
@@ -298,6 +310,7 @@ export async function processTicket(
         // budget is still there for the Run that resumes the Ticket.
         fixUsed: fixUsed && error.point !== "fix",
         ...(pullRequest === undefined ? {} : { pullRequest }),
+        notes,
       });
     }
     return handOff(pipeline, {
@@ -308,6 +321,7 @@ export async function processTicket(
       pullRequest,
       failure: asTicketFailure(error, point),
       fixUsed,
+      notes,
     });
   }
 
@@ -339,7 +353,7 @@ export async function processTicket(
   }
   log(`#${ticket} merged · PR #${pullRequest}`);
 
-  return { outcome: "merged", ticket, title: issue.title, branch, pullRequest };
+  return { outcome: "merged", ticket, title: issue.title, branch, pullRequest, notes };
 }
 
 /**
@@ -407,7 +421,13 @@ async function passOver(
 function runStage(
   pipeline: Pipeline,
   stage: StageName,
-  request: { prompt: string; cwd: string; logDir: string; jsonSchema?: unknown },
+  request: {
+    prompt: string;
+    cwd: string;
+    logDir: string;
+    jsonSchema?: unknown;
+    resultRequired?: boolean;
+  },
 ): Promise<StageResult> {
   const limits = pipeline.config.stages[stage];
   return pipeline.runner.run({
@@ -420,6 +440,9 @@ function runStage(
     maxTurns: limits.maxTurns,
     maxMinutes: limits.maxMinutes,
     ...(request.jsonSchema === undefined ? {} : { jsonSchema: request.jsonSchema }),
+    ...(request.resultRequired === undefined
+      ? {}
+      : { resultRequired: request.resultRequired }),
   });
 }
 
@@ -466,6 +489,34 @@ async function stageDidNotFinish(
   );
 }
 
+/**
+ * Put a Stage's Notes where they belong, before its own outcome is judged.
+ *
+ * Before, because a Stage that ran out of turns still noticed whatever it
+ * noticed, and the Ticket it noticed it on has no idea a Run is even happening.
+ * Losing the Notes would be a second cost for the same failure.
+ */
+async function collectNotes(
+  pipeline: Pipeline,
+  ticket: number,
+  stage: StageName,
+  result: StageResult,
+  notes: RoutedNote[],
+): Promise<void> {
+  notes.push(
+    ...(await routeNotes(
+      {
+        tracker: pipeline.tracker,
+        origin: ticket,
+        stage,
+        needsTriage: pipeline.config.labels.needsTriage,
+        ...(pipeline.log === undefined ? {} : { log: pipeline.log }),
+      },
+      result.result,
+    )),
+  );
+}
+
 async function implement(
   pipeline: Pipeline,
   issue: Issue,
@@ -473,13 +524,19 @@ async function implement(
   branch: string,
   logDir: string,
   progress: Progress,
+  notes: RoutedNote[],
 ): Promise<void> {
   const stage = pipeline.config.stages.implement;
   const result = await runStage(pipeline, "implement", {
     prompt: implementPrompt(issue.url, stage.extraPrompt),
     cwd: worktree,
     logDir,
+    jsonSchema: NOTES_JSON_SCHEMA,
+    // The Notes are a side channel, not the Stage's product: a session that
+    // emitted none has implemented the Ticket exactly as it always did.
+    resultRequired: false,
   });
+  await collectNotes(pipeline, issue.number, "implement", result, notes);
   if (!result.ok) throw await stageDidNotFinish(pipeline, progress, "implement", result);
 
   // An agent that gave up silently leaves a clean branch behind. That is a
@@ -603,6 +660,7 @@ async function fix(
   logDir: string,
   failure: FixFailure,
   progress: Progress,
+  notes: RoutedNote[],
 ): Promise<void> {
   const stage = pipeline.config.stages.fix;
   pipeline.log?.(`#${issue.number} fixing · ${failure.summary}`);
@@ -611,7 +669,10 @@ async function fix(
     prompt: fixPrompt(issue.url, failure, stage.extraPrompt),
     cwd: worktree,
     logDir,
+    jsonSchema: NOTES_JSON_SCHEMA,
+    resultRequired: false,
   });
+  await collectNotes(pipeline, issue.number, "fix", result, notes);
   if (!result.ok) throw await stageDidNotFinish(pipeline, progress, "fix", result);
 
   await progress.record(stageRow("fix", result, "✅ committed"));
@@ -804,6 +865,7 @@ interface Release {
   /** Whether the Fix budget was spent by a failure of the Ticket's own. */
   fixUsed: boolean;
   pullRequest?: number;
+  notes: RoutedNote[];
 }
 
 /**
@@ -817,7 +879,7 @@ interface Release {
  */
 async function release(
   pipeline: Pipeline,
-  { issue, user, branch, limit, fixUsed, pullRequest }: Release,
+  { issue, user, branch, limit, fixUsed, pullRequest, notes }: Release,
 ): Promise<TicketOutcome> {
   const { tracker, config, repoRoot } = pipeline;
   const ticket = issue.number;
@@ -841,7 +903,7 @@ async function release(
   await tracker.unassign(ticket, user);
   pipeline.log?.(`#${ticket} released at ${limit.point} · rate limit · ${branch}`);
 
-  return { outcome: "released", ticket, title: issue.title, branch, stage: limit.point };
+  return { outcome: "released", ticket, title: issue.title, branch, stage: limit.point, notes };
 }
 
 interface HandOff {
@@ -853,6 +915,7 @@ interface HandOff {
   failure: TicketFailure;
   /** Whether the Ticket's fix budget had already been spent when this failure came. */
   fixUsed: boolean;
+  notes: RoutedNote[];
 }
 
 /**
@@ -861,7 +924,7 @@ interface HandOff {
  */
 async function handOff(
   pipeline: Pipeline,
-  { issue, user, branch, worktree, pullRequest, failure, fixUsed }: HandOff,
+  { issue, user, branch, worktree, pullRequest, failure, fixUsed, notes }: HandOff,
 ): Promise<TicketOutcome> {
   const { tracker, workspace, config } = pipeline;
   const ticket = issue.number;
@@ -926,6 +989,7 @@ async function handOff(
     branch,
     stage: failure.point,
     failure: failure.summary,
+    notes,
     ...(pullRequest === undefined ? {} : { pullRequest }),
   };
 }
@@ -1003,7 +1067,7 @@ const STAGE_FAILURES: Record<
   "nonzero-exit": { cell: "exited non-zero", sentence: () => "exited non-zero" },
   "invalid-result": {
     cell: "invalid result",
-    sentence: () => "returned output the Verdict schema rejected",
+    sentence: () => "returned output its schema rejected",
   },
 };
 

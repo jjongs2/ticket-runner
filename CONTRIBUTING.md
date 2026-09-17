@@ -42,7 +42,7 @@ Write issue titles in the glossary's words and keep them short. Describe behavio
 ## Templates
 
 - `.github/PULL_REQUEST_TEMPLATE.md` is what GitHub applies to hand-written PRs.
-- `docs/templates/` holds the exact shapes the pipeline writes: progress and hand-off comments, guard warnings, PR bodies, the Run summary. Change a shape there before changing the code that writes it.
+- `docs/templates/` holds the exact shapes the pipeline writes: progress and hand-off comments, guard warnings, [Note comments](docs/templates/note-comment.md) and the [issues a Note opens](docs/templates/note-issue.md), PR bodies, the Run summary. Change a shape there before changing the code that writes it.
 
 ## Worktrees and local state
 

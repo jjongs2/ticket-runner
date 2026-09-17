@@ -1,5 +1,6 @@
 import { branchName } from "./branch.js";
 import { selectFrontier } from "./frontier.js";
+import type { RoutedNote } from "./notes.js";
 import { type Pipeline, type TicketOutcome, processTicket } from "./orchestrator.js";
 import type { Candidate } from "./ports/tracker.js";
 
@@ -56,8 +57,12 @@ export async function processRun(pipeline: Pipeline): Promise<RunResult> {
  * off — which, without the label, is what a human will find on the board.
  */
 async function take(pipeline: Pipeline, candidate: Candidate): Promise<TicketOutcome> {
+  // Handed to the Ticket rather than read off its outcome, because there is no
+  // outcome on this path: a Note already on GitHub has to reach the summary
+  // whether or not the Ticket that made it came back.
+  const notes: RoutedNote[] = [];
   try {
-    return await processTicket(pipeline, candidate.number);
+    return await processTicket(pipeline, candidate.number, notes);
   } catch (error) {
     const failure = (error as Error).message;
     pipeline.log?.(`#${candidate.number} failed outside the hand-off path: ${failure}`);
@@ -68,6 +73,7 @@ async function take(pipeline: Pipeline, candidate: Candidate): Promise<TicketOut
       branch: branchName(candidate.number, candidate.title),
       stage: "setup",
       failure,
+      notes,
     };
   }
 }
