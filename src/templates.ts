@@ -11,6 +11,12 @@ import { type Criterion, type Verdict, countStatuses } from "./verdict.js";
 /** How the pipeline finds its own hand-off comment again. */
 export const HANDOFF_MARKER = "<!-- agent-pipeline:handoff -->";
 
+/** The Verdict summary both the pull request body and the squash commit carry. */
+function verdictCounts(verdict: Verdict): string {
+  const counts = countStatuses(verdict);
+  return `${counts.met} met · ${counts.unmet} unmet · ${counts.unverifiable} unverifiable`;
+}
+
 const STATUS_ICON: Record<Criterion["status"], string> = {
   met: "✅",
   unmet: "❌",
@@ -24,7 +30,6 @@ export interface PullRequestBody {
 }
 
 export function pullRequestBody({ ticket, verdict, runId }: PullRequestBody): string {
-  const counts = countStatuses(verdict);
   const criteria = verdict.criteria.map((criterion) => {
     const line = `- ${STATUS_ICON[criterion.status]} ${criterion.text}`;
     return criterion.status === "met" ? line : `${line} — ${criterion.evidence}`;
@@ -33,7 +38,7 @@ export function pullRequestBody({ ticket, verdict, runId }: PullRequestBody): st
   return [
     `Closes #${ticket}`,
     "",
-    `**Verdict:** ${counts.met} met · ${counts.unmet} unmet · ${counts.unverifiable} unverifiable`,
+    `**Verdict:** ${verdictCounts(verdict)}`,
     "",
     "<details><summary>Criteria</summary>",
     "",
@@ -94,14 +99,12 @@ export function squashCommit({
   verdict,
   commits,
 }: SquashCommitMessage): SquashCommit {
-  const counts = countStatuses(verdict);
-
   return {
     subject: title,
     body: [
       `Closes #${ticket}`,
       "",
-      `Verdict: ${counts.met} met · ${counts.unmet} unmet · ${counts.unverifiable} unverifiable`,
+      `Verdict: ${verdictCounts(verdict)}`,
       "",
       ...commits.map((subject) => `- ${subject}`),
       "",

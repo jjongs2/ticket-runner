@@ -21,8 +21,8 @@ Conventions for humans and agents working in this repo. Vocabulary is defined in
 
 ## Pull requests
 
-- One PR per Ticket. The PR title becomes the squash commit subject on `main`, so it follows the commit subject format without the `(#<n>)`.
-- A pipeline PR takes its title from the subject of the branch's first commit with that trailing `(#<n>)` removed, and falls back to the Ticket title when the first subject is not in the commit format. A draft PR the hand-off opens keeps the Ticket title, since nothing of it is merged; a PR that was already open when the hand-off came keeps the title it was opened with.
+- One PR per Ticket. The PR title becomes the squash commit subject on `main`, so write it in the commit subject format without the `(#<n>)`.
+- A pipeline PR takes its title from the subject of the branch's first commit with that trailing `(#<n>)` removed. When that subject is not in the commit format the Ticket title is used instead, and it is the one subject on `main` allowed not to be: a Stage that could not write one conventional subject is not trusted to have one invented for it, and the Ticket title at least says what the work was. A draft PR the hand-off opens keeps the Ticket title, since nothing of it is merged; a PR that was already open when the hand-off came keeps the title it was opened with.
 - Body starts with `Closes #<n>` on its own line so the merge closes the Ticket. For pipeline PRs the Verdict summary follows.
 - A draft PR means the Ticket was handed off; the hand-off comment on the Ticket names the branch and worktree.
 - Merge when CI is green: squash, then delete the branch. A PR with no checks is not mergeable.

@@ -86,6 +86,17 @@ describe("commitSubjects", () => {
     ]);
   });
 
+  it("keeps a commit whose subject is empty, so the order does not shift", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    writeFileSync(join(path, "a.txt"), "a\n");
+    git(path, "add", "-A");
+    git(path, "commit", "--allow-empty-message", "-m", "");
+    commit(path, "b.txt", "b\n", "feat: b (#2)");
+
+    expect(await workspace.commitSubjects("agent/2-x")).toEqual(["", "feat: b (#2)"]);
+  });
+
   it("reads the subject only, never the body", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
     await workspace.createWorktree({ path, branch: "agent/2-x" });

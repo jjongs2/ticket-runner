@@ -37,7 +37,11 @@ export class GitWorkspace implements Workspace {
       "--format=%s",
       `${this.mainBranch}..${branch}`,
     ]);
-    return stdout.split("\n").filter((subject) => subject.trim() !== "");
+    // Only git's trailing newline is dropped: a commit with an empty subject is
+    // still a commit, and losing it would shift which one counts as the first.
+    const subjects = stdout.split("\n");
+    if (subjects.at(-1) === "") subjects.pop();
+    return subjects;
   }
 
   async runCheck(command: string, cwd: string): Promise<CheckOutcome> {

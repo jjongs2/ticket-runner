@@ -111,7 +111,7 @@ export async function processTicket(
     point = "pr";
     // Read after the rebase, because these are the commits that land on main.
     const commits = await workspace.commitSubjects(branch);
-    const title = pullRequestTitle(issue, commits);
+    const title = pullRequestTitle(commits, issue.title);
     pullRequest = await openPullRequest(pipeline, issue, branch, worktree, verdict, title);
     point = "ci";
     await requireGreenCi(pipeline, pullRequest);
@@ -385,9 +385,9 @@ const TICKET_REFERENCE = /\s*\(#\d+\)$/;
  * on main, and neither is a Ticket the Stage left no commits on: the Ticket
  * title says at least as much.
  */
-function pullRequestTitle(issue: Issue, commits: string[]): string {
+function pullRequestTitle(commits: string[], ticketTitle: string): string {
   const first = (commits[0] ?? "").replace(TICKET_REFERENCE, "");
-  return CONVENTIONAL_SUBJECT.test(first) ? first : issue.title;
+  return CONVENTIONAL_SUBJECT.test(first) ? first : ticketTitle;
 }
 
 function describeStageFailure(
