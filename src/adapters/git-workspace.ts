@@ -93,8 +93,8 @@ export class GitWorkspace implements Workspace {
   }
 
   /**
-   * The four ways a worktree can still be short of a finished rebase, gathered
-   * into one answer so nothing downstream has to ask git itself.
+   * Every way a worktree can still be short of a finished rebase, gathered into
+   * one answer so nothing downstream has to ask git itself.
    *
    * The ancestry check is what catches the resolution nobody asked for: a
    * session that gave up and ran `git rebase --abort` leaves a tree as clean as
@@ -108,15 +108,30 @@ export class GitWorkspace implements Workspace {
       reasons.push("a rebase is still in progress");
     } else if (!(await this.isRebasedOnMain(cwd))) {
       reasons.push(`the branch is not rebased onto ${this.mainBranch}`);
+    } else {
+      // Being on top of main is not the same as having been replayed onto it:
+      // merging main in would satisfy the ancestry and put a merge commit on a
+      // branch whose every commit is about to be listed in a squash message.
+      const merges = await this.lines(cwd, [
+        "rev-list",
+        "--merges",
+        `${this.mainBranch}..HEAD`,
+      ]);
+      if (merges.length > 0) {
+        reasons.push(`the conflict was merged into the branch, not rebased onto ${this.mainBranch}`);
+      }
     }
 
     const unmerged = await this.lines(cwd, ["diff", "--name-only", "--diff-filter=U"]);
     if (unmerged.length > 0) reasons.push(`unmerged paths: ${unmerged.join(", ")}`);
 
+    // --untracked, because a marker in a file nobody staged is still a marker
+    // in the tree; ignored files stay out, so node_modules is not searched.
     // -I: a binary file that happens to hold those bytes is not a conflict.
     const marked = await this.lines(cwd, [
       "grep",
       "--files-with-matches",
+      "--untracked",
       "-I",
       "-E",
       CONFLICT_MARKER,

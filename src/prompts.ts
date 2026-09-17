@@ -103,7 +103,7 @@ export function conflictPrompt(
     "/mattpocock-skills:resolving-merge-conflicts",
     `Ticket: ${issueUrl}`,
     CONFLICT_INSTRUCTIONS,
-    fenced("## Where the rebase stopped", conflict),
+    outputSection("## Where the rebase stopped", conflict),
     SELF_HOSTING_GUIDANCE,
     extraPrompt,
   ]);
@@ -126,14 +126,14 @@ export function fixPrompt(
 
 /** The failure, its kind and its evidence, under a heading naming the kind. */
 function failureSection({ kind, summary, evidence }: FixFailure): string {
-  return fenced(`## The failure: ${FAILURE_SENTENCES[kind]}`, evidence, summary);
+  return outputSection(`## The failure: ${FAILURE_SENTENCES[kind]}`, evidence, summary);
 }
 
 /**
  * A heading, an optional line of prose, and raw command output. The output is
  * fenced because it would otherwise be read as Markdown.
  */
-function fenced(heading: string, output: string, prose = ""): string {
+function outputSection(heading: string, output: string, prose = ""): string {
   const trimmed = output.trim();
   return [
     heading,

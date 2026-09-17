@@ -47,8 +47,7 @@ The PID file that stops two Runs, or a Run and a `ticket`, sharing one repo. Rep
 _Avoid_: mutex, pidfile
 
 **Stage**:
-One Claude Code session inside a Run with a single purpose: implement, verify, fix, or
-resolve a rebase conflict.
+One Claude Code session inside a Run with a single purpose: implement, verify, fix, or resolve a rebase conflict.
 _Avoid_: step, phase, task
 
 **Stage mark**:
@@ -68,9 +67,7 @@ The Stage that adversarially tries to prove a Ticket's Acceptance Criteria are n
 _Avoid_: review, QA, audit
 
 **Conflict Stage**:
-The Stage that resolves a rebase conflict, driving the resolving-merge-conflicts skill in
-the worktree where git stopped. What it left behind is judged by the worktree, not by how
-the session ended.
+The Stage that resolves a rebase conflict, driving the resolving-merge-conflicts skill in the worktree where git stopped. What it left behind is judged by the worktree, not by how the session ended.
 _Avoid_: merge Stage, conflict resolution
 
 **Acceptance Criteria**:

@@ -285,6 +285,36 @@ describe("rebaseState", () => {
     expect(state.unresolved).toBe("conflict markers left in: README.md");
   });
 
+  it("sees a marker in a file nobody staged", async () => {
+    const path = conflictingWorktree();
+    await workspace.rebaseOnMain(path);
+    writeFileSync(join(path, "README.md"), "both versions\n");
+    git(path, "add", "-A");
+    git(path, "-c", "core.editor=true", "rebase", "--continue");
+    // Scratch the session wrote by hand and never staged.
+    writeFileSync(join(path, "notes.md"), `${"<".repeat(7)} HEAD\nmine\n`);
+
+    const state = await workspace.rebaseState(path);
+
+    expect(state.resolved).toBe(false);
+    if (state.resolved) throw new Error("expected an unresolved marker");
+    expect(state.unresolved).toBe("conflict markers left in: notes.md");
+  });
+
+  it("refuses a conflict that was merged in rather than rebased away", async () => {
+    const path = conflictingWorktree();
+    await workspace.rebaseOnMain(path);
+    await workspace.abortRebase(path);
+
+    git(path, "-c", "core.editor=true", "merge", "main", "--strategy-option=ours");
+
+    const state = await workspace.rebaseState(path);
+
+    expect(state.resolved).toBe(false);
+    if (state.resolved) throw new Error("expected the merge to be refused");
+    expect(state.unresolved).toContain("merged into the branch, not rebased");
+  });
+
   it("does not mistake a marker quoted mid-line for a conflict", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
     await workspace.createWorktree({ path, branch: "agent/2-x" });

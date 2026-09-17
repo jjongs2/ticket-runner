@@ -166,6 +166,9 @@ export async function processTicket(
         point = "rebase";
         const rebase = await workspace.rebaseOnMain(worktree);
         if (!rebase.ok) {
+          // Once per conflict, not once per Ticket: a pass the fix budget
+          // bought meets a branch the fix Stage has changed, so the conflict it
+          // rebases into is a new one.
           await resolveConflict(pipeline, issue, worktree, logDir, rebase.conflict);
           // The resolution is code nothing has graded: the Checks passed on one
           // side of the conflict and CI on the other. The Verdict is not asked
@@ -437,29 +440,57 @@ async function resolveConflict(
   logDir: string,
   conflict: string,
 ): Promise<void> {
-  const stage = pipeline.config.stages.conflict;
   pipeline.log?.(`#${issue.number} resolving a rebase conflict`);
 
-  const result = await runStage(pipeline, "conflict", {
-    prompt: conflictPrompt(issue.url, conflict, stage.extraPrompt),
-    cwd: worktree,
-    logDir,
-  });
+  const failure = await conflictStage(pipeline, issue, worktree, logDir, conflict);
+  if (failure === undefined) return;
 
-  const state = await pipeline.workspace.rebaseState(worktree);
-  if (state.resolved) return;
-
-  // Nothing downstream may run inside a half-finished rebase, least of all the
-  // fix Stage the budget may still buy: it has to have a branch to commit on.
+  // Nothing may leave this function with a rebase still in the worktree, least
+  // of all the fix Stage the budget may still buy: it has to have a branch to
+  // commit on, and the hand-off behind it has to have one it can push.
   await pipeline.workspace.abortRebase(worktree);
-  throw new TicketFailure(
-    "rebase",
-    result.ok
-      ? "the conflict Stage did not finish the rebase onto main"
-      : describeStageFailure("conflict", stage, result),
-    [conflict, state.unresolved].join("\n\n"),
-    "unresolved-conflict",
-  );
+  throw failure;
+}
+
+/**
+ * The Stage, and what is left of the conflict once it has finished: `undefined`
+ * when the worktree came back rebased.
+ *
+ * It returns its failure rather than throwing it so that nothing — not a Stage
+ * that fell over, not git itself — can skip the abort its caller owes the
+ * worktree.
+ */
+async function conflictStage(
+  pipeline: Pipeline,
+  issue: Issue,
+  worktree: string,
+  logDir: string,
+  conflict: string,
+): Promise<TicketFailure | undefined> {
+  const stage = pipeline.config.stages.conflict;
+  try {
+    const result = await runStage(pipeline, "conflict", {
+      prompt: conflictPrompt(issue.url, conflict, stage.extraPrompt),
+      cwd: worktree,
+      logDir,
+    });
+
+    const state = await pipeline.workspace.rebaseState(worktree);
+    if (state.resolved) return undefined;
+
+    return new TicketFailure(
+      "rebase",
+      result.ok
+        ? "the conflict Stage did not finish the rebase onto main"
+        : describeStageFailure("conflict", stage, result),
+      [conflict, state.unresolved].join("\n\n"),
+      "unresolved-conflict",
+    );
+  } catch (error) {
+    // The Stage never ran, or git could not be asked what it left behind.
+    // Neither is a defect in the branch, so no fix Stage is offered for it.
+    return asTicketFailure(error, "rebase");
+  }
 }
 
 interface PullRequestSubject {

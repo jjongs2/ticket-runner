@@ -532,6 +532,22 @@ describe("rebase", () => {
     expect(workspace.aborts).toBe(1);
   });
 
+  it("aborts the rebase even when the Stage itself could not be started", async () => {
+    workspace.conflictOnce(CONFLICT);
+    const run_ = runner.run.bind(runner);
+    runner.run = async (request) => {
+      if (request.stage === "conflict") throw new Error("claude: command not found");
+      return run_(request);
+    };
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "rebase" });
+    expect(workspace.aborts).toBe(1);
+    // Nothing a fix Stage could mend, so the budget is still there.
+    expect(handoffBody()).not.toMatch(/fix budget/i);
+  });
+
   it("hands off naming the limit when the conflict Stage ran out of turns", async () => {
     // A Check spends the budget first, so this conflict gets one Stage only.
     workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");

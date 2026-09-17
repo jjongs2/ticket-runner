@@ -81,7 +81,8 @@ reproducing a Stage by hand reproduces its environment too.
 7. squash-merge, pull `main`, remove the worktree
 
 A failing Check, a Verdict with an `unmet` criterion, a red CI, or a rebase conflict the
-conflict Stage could not resolve spends the Ticket's **fix budget** rather than ending it. A fresh session runs in the same worktree on the
+conflict Stage could not resolve spends the Ticket's **fix budget** rather than ending
+it. A fresh session runs in the same worktree on the
 same branch, given the kind of failure and the evidence that was captured — the failing
 Check's output, the unmet criteria with theirs, or the CI summary — and asked for the
 regression test a gap the Verdict found should have had. Step 4 then starts again, so
@@ -115,9 +116,10 @@ while the Ticket was being implemented. So the rebase is left where git stopped 
 its own turn and wall-clock limits, and it does not spend the fix budget.
 
 The worktree decides whether it worked, not how the session ended: the rebase has to be
-finished, `main` an ancestor of the branch, nothing left unmerged and no conflict marker
-left in a tracked file. A Stage that ran out of turns having already finished the rebase has
-still done the job; one that came back clean because it quietly abandoned the rebase has not.
+finished with no merge commit standing in for it, `main` an ancestor of the branch, nothing
+left unmerged and no conflict marker left in any file the tree carries, staged or not. A
+Stage that ran out of turns having already finished the rebase has still done the job; one
+that came back clean because it quietly abandoned the rebase has not.
 The Checks then run again, because the resolution is code no gate has seen yet, and only then
 does the pull request open.
 
