@@ -1,0 +1,7 @@
+node_modules/
+
+# Pipeline worktrees, one per Ticket.
+.worktrees/
+
+# Run logs, transcripts and state.
+.agent-pipeline/
