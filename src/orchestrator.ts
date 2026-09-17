@@ -111,6 +111,7 @@ export async function processTicket(
     point = "pr";
     // Read after the rebase, because these are the commits that land on main.
     const commits = await workspace.commitSubjects(branch);
+    const coAuthors = await workspace.coAuthors(branch);
     const title = pullRequestTitle(commits, issue.title);
     pullRequest = await openPullRequest(pipeline, issue, branch, worktree, verdict, title);
     point = "ci";
@@ -119,7 +120,7 @@ export async function processTicket(
     point = "merge";
     await tracker.squashMerge(
       pullRequest,
-      squashCommit({ ticket, title, verdict, commits }),
+      squashCommit({ ticket, pullRequest, title, verdict, commits, coAuthors }),
     );
   } catch (error) {
     const failure =

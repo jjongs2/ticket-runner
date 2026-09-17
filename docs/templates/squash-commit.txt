@@ -1,4 +1,4 @@
-<type>(<scope>): <summary>
+<type>(<scope>): <summary> (#<pr>)
 
 Closes #<n>
 
@@ -6,3 +6,5 @@ Verdict: <k> met · <u> unmet · <v> unverifiable
 
 - <branch commit subject>
 - <branch commit subject>
+
+Co-authored-by: <name> <email>

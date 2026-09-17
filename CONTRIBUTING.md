@@ -26,7 +26,7 @@ Conventions for humans and agents working in this repo. Vocabulary is defined in
 - Body starts with `Closes #<n>` on its own line so the merge closes the Ticket. For pipeline PRs the Verdict summary follows.
 - A draft PR means the Ticket was handed off; the hand-off comment on the Ticket names the branch and worktree.
 - Merge when CI is green: squash, then delete the branch. A PR with no checks is not mergeable.
-- A pipeline merge composes the squash commit itself instead of taking GitHub's default: the PR title as the subject, then `Closes #<n>`, the Verdict line, and one line per branch commit subject. `docs/templates/squash-commit.txt` is the shape. GitHub uses an explicit subject verbatim and appends no PR number, so `Closes #<n>` is what ties the commit to its Ticket; a human merging by hand takes the default subject, which does get `(#<pr>)` appended.
+- A pipeline merge composes the squash commit itself instead of taking GitHub's default: the PR title with ` (#<pr>)` appended as the subject, then `Closes #<n>`, the Verdict line, one line per branch commit subject, and the branch's unique `Co-authored-by` trailers. `docs/templates/squash-commit.txt` is the shape. GitHub uses an explicit subject and body verbatim, so everything its default message would have added is added here; a human merging by hand takes the default, which gives the same result.
 
 ## Issues
 

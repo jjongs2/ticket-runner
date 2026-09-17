@@ -218,6 +218,7 @@ export class FakeWorkspace implements Workspace {
   calls: string[] = [];
   /** The branch's commit subjects, oldest first, as an implement Stage leaves them. */
   commits = ["feat(cli): do the thing (#2)", "test(cli): cover the thing (#2)"];
+  coAuthorList: string[] = [];
   /** Per-command Check outcomes; anything unlisted passes. */
   checkOutcomes = new Map<string, CheckOutcome>();
   ranChecks: { command: string; cwd: string }[] = [];
@@ -243,6 +244,11 @@ export class FakeWorkspace implements Workspace {
   async commitSubjects(branch: string): Promise<string[]> {
     this.calls.push(`commitSubjects:${branch}`);
     return [...this.commits];
+  }
+
+  async coAuthors(branch: string): Promise<string[]> {
+    this.calls.push(`coAuthors:${branch}`);
+    return [...this.coAuthorList];
   }
 
   async runCheck(command: string, cwd: string): Promise<CheckOutcome> {
