@@ -83,7 +83,7 @@ something was, and `2` when the Run never started.
 
 Every Stage writes its exact command line, stdout, stderr and stream-json transcript to
 `.agent-pipeline/runs/<runId>/<n>/`, so any Stage can be reproduced by hand. The command
-line is there before the session starts and its output as the session prints it, so a Run
+line lands there before the Stage starts, and its output as the Stage prints it, so a Run
 killed mid-Stage still leaves behind what it had reached.
 
 ## Configuration

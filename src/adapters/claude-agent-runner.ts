@@ -55,7 +55,7 @@ export class ClaudeAgentRunner implements AgentRunner {
         onStderr: log.appendStderr,
       });
     } catch (error) {
-      return spawnFailure(error, log);
+      return spawnFailure(error);
     }
   }
 
@@ -64,14 +64,14 @@ export class ClaudeAgentRunner implements AgentRunner {
     const commandLine = quoteCommand(stageEnv(request), this.binary, args);
     const startedAt = Date.now();
 
-    // Opened before the child starts: a Run killed mid-Stage still leaves the
+    // Started before the child, so a Run killed mid-Stage still leaves the
     // command line and everything printed so far behind.
-    const log = openStageLog(request, commandLine);
+    const log = startStageLog(request, commandLine);
     const execution = await this.spawn(request, args, log);
 
-    const events = parseEvents(execution.stdout);
-    log.writeTranscript(events);
+    log.close(execution, parseEvents(execution.stdout));
 
+    const events = parseEvents(execution.stdout);
     const result = events.findLast(isResultEvent);
     const failure = classify(request, execution, result);
     const structured = request.jsonSchema === undefined ? undefined : structuredOutput(result);
@@ -89,9 +89,8 @@ export class ClaudeAgentRunner implements AgentRunner {
 }
 
 /** A session that could not even start still has to leave a trace behind. */
-async function spawnFailure(error: unknown, log: StageLog): Promise<Execution> {
+async function spawnFailure(error: unknown): Promise<Execution> {
   const message = `agent-pipeline could not start the Stage: ${(error as Error).message}\n`;
-  log.appendStderr(message);
   return { exitCode: 1, stdout: "", stderr: message, output: message };
 }
 
@@ -123,39 +122,62 @@ function buildArgs(request: StageRequest): string[] {
   return args;
 }
 
-/** This Stage's four files, open for the whole Stage. */
+/** The Stage's four files, written from the moment the Stage starts. */
 interface StageLog {
   transcriptPath: string;
   appendStdout: (chunk: string) => void;
   appendStderr: (chunk: string) => void;
-  writeTranscript: (events: unknown[]) => void;
+  /** Reconcile the output files with the finished child, then transcribe it. */
+  close: (execution: Execution, events: unknown[]) => void;
 }
 
 /**
- * Put the Stage's command line on disk and open its output files, before
+ * Put the Stage's command line on disk and empty its output files, before
  * anything is spawned. Chunks are appended as they arrive rather than saved at
- * the end, so the files hold what the session printed even if nobody is left
+ * the end, so the files hold what the session printed even when nobody is left
  * alive to write them (#12). The transcript is the one derivation that has to
  * wait: it is parsed out of the stdout the session has finished printing.
  */
-function openStageLog(request: StageRequest, commandLine: string): StageLog {
+function startStageLog(request: StageRequest, commandLine: string): StageLog {
   mkdirSync(request.logDir, { recursive: true });
   const path = (suffix: string) => join(request.logDir, `${request.stage}.${suffix}`);
 
   writeFileSync(path("command"), `${commandLine}\n`);
-  // Truncated up front, so a re-run of a Stage never appends to stale output.
+  // Emptied up front, so a Stage never appends to output from an earlier one.
   writeFileSync(path("stdout"), "");
   writeFileSync(path("stderr"), "");
 
+  const appended = { stdout: 0, stderr: 0 };
+  // Appending happens inside the child's stream handler, where a throw would
+  // take the whole Run down. A write that fails is left to `close` to redo.
+  const append = (suffix: "stdout" | "stderr") => (chunk: string) => {
+    try {
+      appendFileSync(path(suffix), chunk);
+      appended[suffix] += chunk.length;
+    } catch {
+      // Nothing is lost: the chunk is still part of the Execution.
+    }
+  };
+
   return {
     transcriptPath: path("transcript.jsonl"),
-    appendStdout: (chunk) => appendFileSync(path("stdout"), chunk),
-    appendStderr: (chunk) => appendFileSync(path("stderr"), chunk),
-    writeTranscript: (events) =>
+    appendStdout: append("stdout"),
+    appendStderr: append("stderr"),
+    close: (execution, events) => {
+      // Whatever the appends missed — a failed write, or a process runner that
+      // delivered no chunks at all — is written back whole here, so a Stage
+      // that ran to the end always has its full output on disk.
+      if (appended.stdout !== execution.stdout.length) {
+        writeFileSync(path("stdout"), execution.stdout);
+      }
+      if (appended.stderr !== execution.stderr.length) {
+        writeFileSync(path("stderr"), execution.stderr);
+      }
       writeFileSync(
         path("transcript.jsonl"),
         events.map((event) => JSON.stringify(event)).join("\n") + (events.length ? "\n" : ""),
-      ),
+      );
+    },
   };
 }
 

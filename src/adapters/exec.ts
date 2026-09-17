@@ -16,11 +16,12 @@ export interface ExecOptions {
   /** Variables merged over the environment the child inherits, not replacing it. */
   extraEnv?: Record<string, string>;
   /**
-   * Called with each chunk the child prints, as it arrives. What the caller
-   * does with a chunk is done before the child exits, so output survives a
-   * process that dies mid-run (#12).
+   * Called with each chunk the child prints on that stream, as it arrives, so
+   * a caller that saves the output has it before the child exits. A sink runs
+   * inside the stream's handler: one that throws takes this process down.
    */
   onStdout?: (chunk: string) => void;
+  /** As `onStdout`, for what the child prints on stderr. */
   onStderr?: (chunk: string) => void;
 }
 
