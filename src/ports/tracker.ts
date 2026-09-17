@@ -19,8 +19,15 @@ export interface LabelSpec {
  * merges — so a body on its own is not enough to go on.
  */
 export interface IssueComment {
-  /** GitHub's own id for the comment, as {@link Tracker.updateComment} takes it. */
-  id: string;
+  /**
+   * GitHub's own id for the comment, as {@link Tracker.updateComment} takes it.
+   *
+   * Absent when the tracker reported a comment it gave no id for, which means
+   * nothing more than that this one cannot be edited. Reading an issue must not
+   * fail over it: the bodies are what the guards grade a candidate on, and
+   * whether a comment can be rewritten decides nothing.
+   */
+  id?: string;
   body: string;
 }
 

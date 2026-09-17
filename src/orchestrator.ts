@@ -1,6 +1,6 @@
 import { branchName, worktreePath } from "./branch.js";
 import type { Config } from "./config.js";
-import { tickCriteria } from "./criteria.js";
+import { tickMetCriteria } from "./criteria.js";
 import { type SkipReason, isGuardReason, skipReason } from "./guards.js";
 import type { FailureKind, FailurePoint } from "./lifecycle.js";
 import type {
@@ -11,7 +11,7 @@ import type {
 } from "./ports/agent-runner.js";
 import type { Issue, Tracker } from "./ports/tracker.js";
 import type { Workspace } from "./ports/workspace.js";
-import { Progress, type ProgressRow, type ProgressStage } from "./progress.js";
+import { Progress, type ProgressPoint, type ProgressRow } from "./progress.js";
 import {
   type FixFailure,
   conflictPrompt,
@@ -213,11 +213,14 @@ export async function processTicket(
         fixUsed = true;
         point = "fix";
         logDir = retryLogDir(repoRoot, runId, ticket);
-        await fix(pipeline, issue, worktree, logDir, progress, {
-          kind: failure.kind,
-          summary: failure.summary,
-          evidence: failure.evidence,
-        });
+        await fix(
+          pipeline,
+          issue,
+          worktree,
+          logDir,
+          { kind: failure.kind, summary: failure.summary, evidence: failure.evidence },
+          progress,
+        );
       }
     }
 
@@ -226,7 +229,7 @@ export async function processTicket(
       pullRequest,
       squashCommit({ ticket, pullRequest, title, verdict, commits, coAuthors }),
     );
-    await progress.record({ stage: "merge", outcome: `✅ #${pullRequest}` });
+    await progress.record({ point: "merge", outcome: `✅ #${pullRequest}` });
   } catch (error) {
     return handOff(pipeline, {
       issue,
@@ -241,7 +244,7 @@ export async function processTicket(
 
   // The Ticket is merged from here on, so nothing below may hand it off.
   try {
-    await tickMetCriteria(pipeline, ticket, verdict);
+    await tickMetCriteria(tracker, ticket, verdict, log);
   } catch (error) {
     log(`#${ticket} merged, but ticking its criteria failed: ${(error as Error).message}`);
   }
@@ -361,7 +364,7 @@ async function runChecks(
     const result = await pipeline.workspace.runCheck(command, worktree);
     if (!result.ok) {
       await progress.record({
-        stage: "checks",
+        point: "checks",
         outcome: `❌ \`${command}\` failed`,
         durationMs: Date.now() - startedAt,
       });
@@ -374,7 +377,7 @@ async function runChecks(
     }
   }
   await progress.record({
-    stage: "checks",
+    point: "checks",
     outcome: "✅ passed",
     durationMs: Date.now() - startedAt,
   });
@@ -455,8 +458,8 @@ async function fix(
   issue: Issue,
   worktree: string,
   logDir: string,
-  progress: Progress,
   failure: FixFailure,
+  progress: Progress,
 ): Promise<void> {
   const stage = pipeline.config.stages.fix;
   pipeline.log?.(`#${issue.number} fixing · ${failure.summary}`);
@@ -550,7 +553,8 @@ async function conflictStage(
   } catch (error) {
     // The Stage never ran, or git could not be asked what it left behind.
     // Neither is a defect in the branch, so no fix Stage is offered for it.
-    await progress.record({ stage: "conflict", outcome: "❌ unresolved" });
+    // Nothing read the worktree, so nothing here knows what the Stage left.
+    await progress.record({ point: "conflict", outcome: "❌ unknown" });
     return asTicketFailure(error, "rebase");
   }
 }
@@ -607,7 +611,7 @@ async function requireGreenCi(
     pipeline.config.ciTimeoutMinutes * 60_000,
   );
   const record = (cell: string) =>
-    progress.record({ stage: "ci", outcome: cell, durationMs: Date.now() - startedAt });
+    progress.record({ point: "ci", outcome: cell, durationMs: Date.now() - startedAt });
 
   switch (outcome.state) {
     case "passed":
@@ -740,73 +744,60 @@ function pullRequestTitle(commits: string[], ticketTitle: string): string {
  * zero: nothing ran is not the same as nothing was needed.
  */
 function stageRow(
-  stage: ProgressStage,
+  stage: ProgressPoint,
   result: StageResult,
   outcome: string,
 ): ProgressRow {
   return {
-    stage,
+    point: stage,
     outcome,
     ...(result.turns === undefined ? {} : { turns: result.turns }),
     durationMs: result.durationMs,
   };
 }
 
-/** The short form of a Stage failure, for a table cell rather than a sentence. */
-const STAGE_FAILURE_CELLS: Record<StageFailure, string> = {
-  "rate-limited": "rate limited",
-  "timed-out": "timed out",
-  "turn-capped": "turn capped",
-  "nonzero-exit": "exited non-zero",
-  "invalid-result": "invalid result",
-};
-
-function stageFailureCell(result: StageResult): string {
-  return result.failure ? STAGE_FAILURE_CELLS[result.failure] : "failed";
-}
-
 /**
- * Tick every Acceptance Criterion the Verdict proved, where it lives.
- *
- * The issue is read again rather than reusing the copy the Ticket was claimed
- * with: a whole Run has happened since, and this writes the body back whole.
- * `unverifiable` criteria stay unticked, because nobody gathered the evidence
- * that would justify the tick.
+ * Why a Stage did not finish, said twice: the words a hand-off comment reads in
+ * and the two the progress table has room for. Keyed together so a new failure
+ * cannot be given one and not the other.
  */
-async function tickMetCriteria(
-  pipeline: Pipeline,
-  ticket: number,
-  verdict: Verdict,
-): Promise<void> {
-  const met = verdict.criteria
-    .filter((criterion) => criterion.status === "met")
-    .map((criterion) => criterion.text);
-  if (met.length === 0) return;
-
-  const issue = await pipeline.tracker.getIssue(ticket);
-  const body = tickCriteria(issue.body, met);
-  if (body !== issue.body) await pipeline.tracker.updateIssueBody(ticket, body);
-
-  // Triage posts its brief as a comment, so the criteria are not always in the
-  // body, and nothing says they are all in one place.
-  for (const comment of issue.comments) {
-    const ticked = tickCriteria(comment.body, met);
-    if (ticked !== comment.body) await pipeline.tracker.updateComment(comment.id, ticked);
-  }
+function stageFailures(limits: { maxTurns: number; maxMinutes: number }): Record<
+  StageFailure,
+  { sentence: string; cell: string }
+> {
+  return {
+    "rate-limited": { sentence: "hit the subscription rate limit", cell: "rate limited" },
+    "timed-out": {
+      sentence: `ran past its ${limits.maxMinutes} minute limit`,
+      cell: "timed out",
+    },
+    "turn-capped": {
+      sentence: `hit its ${limits.maxTurns} turn limit`,
+      cell: "turn capped",
+    },
+    "nonzero-exit": { sentence: "exited non-zero", cell: "exited non-zero" },
+    "invalid-result": {
+      sentence: "returned output the Verdict schema rejected",
+      cell: "invalid result",
+    },
+  };
 }
+
+/** A Stage that came back without saying why gets the one word that is true. */
+const UNEXPLAINED = { sentence: "failed", cell: "failed" } as const;
 
 function describeStageFailure(
   stage: string,
   limits: { maxTurns: number; maxMinutes: number },
   result: StageResult,
 ): string {
-  const reasons: Record<StageFailure, string> = {
-    "rate-limited": "hit the subscription rate limit",
-    "timed-out": `ran past its ${limits.maxMinutes} minute limit`,
-    "turn-capped": `hit its ${limits.maxTurns} turn limit`,
-    "nonzero-exit": "exited non-zero",
-    "invalid-result": "returned output the Verdict schema rejected",
-  };
-  const reason = result.failure ? reasons[result.failure] : "failed";
-  return `the ${stage} Stage ${reason}`;
+  const failure = result.failure ? stageFailures(limits)[result.failure] : UNEXPLAINED;
+  return `the ${stage} Stage ${failure.sentence}`;
+}
+
+/** The same failure, short enough for a table cell. */
+function stageFailureCell(result: StageResult): string {
+  // The limits only ever reach the sentence, so any will do for the cell.
+  const failures = stageFailures({ maxTurns: 0, maxMinutes: 0 });
+  return (result.failure ? failures[result.failure] : UNEXPLAINED).cell;
 }

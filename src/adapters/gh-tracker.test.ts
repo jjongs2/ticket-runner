@@ -84,6 +84,26 @@ describe("reading", () => {
     expect(calls[0]?.slice(0, 3)).toEqual(["issue", "view", "2"]);
   });
 
+  it("reads an issue whose comment has no id in its url, since the bodies still grade it", async () => {
+    const issue = await tracker(
+      ok(
+        JSON.stringify({
+          number: 2,
+          title: "Skeleton",
+          url: "https://github.com/acme/repo/issues/2",
+          body: "",
+          labels: [],
+          assignees: [],
+          comments: [{ body: "- [ ] it works", url: "" }],
+          subIssuesSummary: { total: 0 },
+          blockedBy: { nodes: [] },
+        }),
+      ),
+    ).getIssue(2);
+
+    expect(issue.comments).toEqual([{ body: "- [ ] it works" }]);
+  });
+
   it("asks for the relations the guards need in the same call", async () => {
     await tracker(
       ok(
@@ -263,8 +283,8 @@ describe("writing", () => {
     expect(posted).toEqual({ id: "5714903734", body: "<!-- agent-pipeline:progress -->" });
   });
 
-  it("refuses a comment it was given no id for, rather than one that cannot be edited", async () => {
-    await expect(tracker(ok("")).comment(2, "body")).rejects.toThrow(/comment id/);
+  it("reports a comment with no id rather than failing, since an id costs an edit only", async () => {
+    expect(await tracker(ok("")).comment(2, "body")).toEqual({ body: "body" });
   });
 
   it("edits a comment in place through the REST endpoint", async () => {

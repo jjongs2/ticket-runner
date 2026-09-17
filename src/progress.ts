@@ -12,12 +12,17 @@
  */
 
 import type { IssueComment, Tracker } from "./ports/tracker.js";
+import { findMarkedComment } from "./templates.js";
 
 /** How the pipeline finds its own progress comment again. */
 export const PROGRESS_MARKER = "<!-- agent-pipeline:progress -->";
 
-/** What a row can be about: the four Stages, and the gates between them. */
-export type ProgressStage =
+/**
+ * What a row is about. Named after the lifecycle step rather than the Stage,
+ * for the reason {@link import("./lifecycle.js").FailurePoint} is: the Checks,
+ * CI and the merge each earn a row and none of them is an agent session.
+ */
+export type ProgressPoint =
   | "implement"
   | "checks"
   | "verify"
@@ -27,7 +32,8 @@ export type ProgressStage =
   | "merge";
 
 export interface ProgressRow {
-  stage: ProgressStage;
+  /** Written under the `Stage` column, which is what the template heads it. */
+  point: ProgressPoint;
   /** An icon and a handful of words; details belong to the hand-off comment. */
   outcome: string;
   /** Agent turns. Checks, CI and the merge run no agent, so they have none. */
@@ -54,7 +60,7 @@ export function progressComment({ runId, branch, rows }: ProgressCommentBody): s
     "|---|---|---|---|",
     ...rows.map(
       (row) =>
-        `| ${row.stage} | ${cell(row.outcome)} | ${count(row.turns)} | ${minutes(row.durationMs)} |`,
+        `| ${row.point} | ${cell(row.outcome)} | ${count(row.turns)} | ${minutes(row.durationMs)} |`,
     ),
     "",
   ].join("\n");
@@ -75,14 +81,16 @@ function minutes(durationMs: number | undefined): string {
 }
 
 /**
- * The progress comment already on a Ticket, if any.
+ * The progress comment already on a Ticket, if there is one this Run can edit.
  *
- * The marker is the first line of the comment and never changes, so a Run that
- * comes back to a Ticket another Run reported on edits that comment rather than
- * starting a second table beside it.
+ * A Run that comes back to a Ticket another Run reported on carries on in that
+ * comment rather than starting a second table beside it. One the tracker gave
+ * no id for is not one of those: it cannot be edited, so a fresh comment is the
+ * only way to report at all.
  */
 export function findProgressComment(comments: IssueComment[]): IssueComment | undefined {
-  return comments.find((comment) => comment.body.trimStart().startsWith(PROGRESS_MARKER));
+  const found = findMarkedComment(comments, PROGRESS_MARKER);
+  return found?.id === undefined ? undefined : found;
 }
 
 export interface ProgressOptions {
@@ -107,22 +115,33 @@ export interface ProgressOptions {
 export class Progress {
   private readonly rows: ProgressRow[] = [];
   private comment: IssueComment | undefined;
+  /** Set when reporting again could only mean a second comment, never an edit. */
+  private stopped = false;
 
   constructor(private readonly options: ProgressOptions) {
     this.comment = findProgressComment(options.comments);
   }
 
-  /** Append a Stage's row, and show it on the Ticket. */
+  /** Append a row, and show it on the Ticket. */
   async record(row: ProgressRow): Promise<void> {
     this.rows.push(row);
+    if (this.stopped) return;
+
     const { tracker, ticket, runId, branch } = this.options;
     const body = progressComment({ runId, branch, rows: this.rows });
 
     try {
-      if (this.comment === undefined) {
-        this.comment = await tracker.comment(ticket, body);
-      } else {
-        await tracker.updateComment(this.comment.id, body);
+      const id = this.comment?.id;
+      if (id !== undefined) {
+        await tracker.updateComment(id, body);
+        return;
+      }
+      this.comment = await tracker.comment(ticket, body);
+      if (this.comment.id === undefined) {
+        // A comment nothing can edit is a comment per Stage, which is the noise
+        // this whole table exists to avoid. One row is better than a dozen.
+        this.stopped = true;
+        this.options.log?.(`#${ticket} posted a progress comment it cannot edit again`);
       }
     } catch (error) {
       this.options.log?.(

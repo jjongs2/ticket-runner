@@ -20,6 +20,11 @@ rebase conflict adds a `conflict` row and the `checks` row that re-grades what i
 resolved. A Stage that is never reached has no row, which is how the table shows
 where a Ticket stopped.
 
+A later Run finds this comment by its marker and carries on in it, rewriting the
+header and the rows with its own. The table is what the Run reporting now did,
+not a history of every Run the Ticket has had; the transcripts under
+`.agent-pipeline/runs/` are that.
+
 `–` is what a cell has no answer for: Checks, CI and the merge run no agent, so
 they have no turn count, and the merge takes no measurable time of its own.
 
@@ -34,12 +39,18 @@ fix budget, `⚠️` was tolerated by a gate that is switched off.
 
 | Stage | Outcome |
 |---|---|
-| implement, fix | `✅ committed`, `❌ no commits`, `❌ <why the Stage did not finish>` |
+| implement | `✅ committed`, `❌ no commits`, `❌ <why the Stage did not finish>` |
+| fix | `✅ committed`, `❌ <why the Stage did not finish>` |
 | checks | `✅ passed`, ``❌ `<command>` failed`` |
 | verify | `✅ <k> met · <u> unverifiable`, `❌ <k> unmet`, `❌ no evidence`, `❌ no Verdict`, `❌ <why the Stage did not finish>` |
-| conflict | `✅ rebased`, `❌ unresolved` |
+| conflict | `✅ rebased`, `❌ unresolved`, `❌ unknown` |
 | ci | `✅ passed`, `❌ failed`, `❌ no checks`, `⚠️ no checks`, `❌ timed out` |
 | merge | `✅ #<pr>` |
 
 `<why the Stage did not finish>` is the short form of a Stage failure: `rate
-limited`, `timed out`, `turn capped`, `exited non-zero`, `invalid result`.
+limited`, `timed out`, `turn capped`, `exited non-zero`, `invalid result`, or
+`failed` when the Stage came back without saying which.
+
+`conflict` is the one row that can say `❌ unknown`: the worktree decides whether
+the rebase was finished, so a worktree git could not be asked about leaves the
+Stage's outcome unread rather than guessed at.

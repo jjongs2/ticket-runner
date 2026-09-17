@@ -35,8 +35,8 @@ describe("the comment body", () => {
       runId: "run-1",
       branch: BRANCH,
       rows: [
-        { stage: "implement", outcome: "✅ committed", turns: 7, durationMs: 1_200_000 },
-        { stage: "checks", outcome: "✅ passed", durationMs: 120_000 },
+        { point: "implement", outcome: "✅ committed", turns: 7, durationMs: 1_200_000 },
+        { point: "checks", outcome: "✅ passed", durationMs: 120_000 },
       ],
     });
 
@@ -49,9 +49,9 @@ describe("the comment body", () => {
       runId: "run-1",
       branch: BRANCH,
       rows: [
-        { stage: "checks", outcome: "❌ `npm test` failed", durationMs: 0 },
-        { stage: "fix", outcome: "✅ committed", turns: 4, durationMs: 0 },
-        { stage: "checks", outcome: "✅ passed", durationMs: 0 },
+        { point: "checks", outcome: "❌ `npm test` failed", durationMs: 0 },
+        { point: "fix", outcome: "✅ committed", turns: 4, durationMs: 0 },
+        { point: "checks", outcome: "✅ passed", durationMs: 0 },
       ],
     });
 
@@ -62,7 +62,7 @@ describe("the comment body", () => {
     const rendered = progressComment({
       runId: "run-1",
       branch: BRANCH,
-      rows: [{ stage: "merge", outcome: "✅ #100" }],
+      rows: [{ point: "merge", outcome: "✅ #100" }],
     });
 
     expect(rendered).toContain("| merge | ✅ #100 | – | – |");
@@ -72,7 +72,7 @@ describe("the comment body", () => {
     const rendered = progressComment({
       runId: "run-1",
       branch: BRANCH,
-      rows: [{ stage: "checks", outcome: "❌ `npm test | tee log` failed", durationMs: 0 }],
+      rows: [{ point: "checks", outcome: "❌ `npm test | tee log` failed", durationMs: 0 }],
     });
 
     expect(rendered).toContain("| checks | ❌ `npm test \\| tee log` failed | – | 0m |");
@@ -107,7 +107,7 @@ describe("recording a Stage", () => {
     const tracker = new FakeTracker();
     tracker.addIssue({ number: TICKET });
 
-    await progress(tracker).record({ stage: "implement", outcome: "✅ committed", turns: 7 });
+    await progress(tracker).record({ point: "implement", outcome: "✅ committed", turns: 7 });
 
     expect(tracker.comments).toHaveLength(1);
     expect(body(tracker)).toContain("| implement | ✅ committed | 7 | – |");
@@ -118,8 +118,8 @@ describe("recording a Stage", () => {
     tracker.addIssue({ number: TICKET });
     const recorder = progress(tracker);
 
-    await recorder.record({ stage: "implement", outcome: "✅ committed", turns: 7 });
-    await recorder.record({ stage: "checks", outcome: "✅ passed", durationMs: 0 });
+    await recorder.record({ point: "implement", outcome: "✅ committed", turns: 7 });
+    await recorder.record({ point: "checks", outcome: "✅ passed", durationMs: 0 });
 
     expect(tracker.comments).toHaveLength(1);
     expect(tracker.updatedComments).toHaveLength(1);
@@ -132,7 +132,7 @@ describe("recording a Stage", () => {
     const issue = tracker.addIssue({ number: TICKET });
     issue.comments.push({ id: "42", body: `${PROGRESS_MARKER}\nold` });
 
-    await progress(tracker, issue.comments).record({ stage: "implement", outcome: "✅ committed" });
+    await progress(tracker, issue.comments).record({ point: "implement", outcome: "✅ committed" });
 
     expect(tracker.comments).toEqual([]);
     expect(tracker.updatedComments).toEqual([
@@ -145,10 +145,46 @@ describe("recording a Stage", () => {
     const issue = tracker.addIssue({ number: TICKET });
     issue.comments.push({ id: "42", body: `${PROGRESS_MARKER}\n**agent-pipeline** · run \`run-0\`` });
 
-    await progress(tracker, issue.comments).record({ stage: "implement", outcome: "✅ committed" });
+    await progress(tracker, issue.comments).record({ point: "implement", outcome: "✅ committed" });
 
     expect(tracker.updatedComments[0]?.body).toContain("run `run-1`");
     expect(tracker.updatedComments[0]?.body).not.toContain("run `run-0`");
+  });
+
+  it("starts a fresh comment when the one already there cannot be edited", async () => {
+    const tracker = new FakeTracker();
+    const issue = tracker.addIssue({ number: TICKET });
+    issue.comments.push({ body: `${PROGRESS_MARKER}\nposted by something with no id` });
+
+    await progress(tracker, issue.comments).record({ point: "implement", outcome: "✅ committed" });
+
+    expect(tracker.comments).toHaveLength(1);
+    expect(tracker.updatedComments).toEqual([]);
+  });
+
+  it("stops after a comment it cannot edit, rather than posting one per Stage", async () => {
+    const tracker = new FakeTracker();
+    tracker.addIssue({ number: TICKET });
+    const lines: string[] = [];
+    let posted = 0;
+    tracker.comment = async (_number, body) => {
+      posted += 1;
+      return { body };
+    };
+    const recorder = new Progress({
+      tracker,
+      ticket: TICKET,
+      runId: "run-1",
+      branch: BRANCH,
+      comments: [],
+      log: (line) => lines.push(line),
+    });
+
+    await recorder.record({ point: "implement", outcome: "✅ committed" });
+    await recorder.record({ point: "checks", outcome: "✅ passed" });
+
+    expect(posted).toBe(1);
+    expect(lines).toEqual([`#${TICKET} posted a progress comment it cannot edit again`]);
   });
 
   it("swallows a tracker that will not take the comment, because a Ticket is not lost over one", async () => {
@@ -165,7 +201,7 @@ describe("recording a Stage", () => {
       log: (line) => lines.push(line),
     });
 
-    await expect(recorder.record({ stage: "implement", outcome: "✅ committed" })).resolves.toBeUndefined();
+    await expect(recorder.record({ point: "implement", outcome: "✅ committed" })).resolves.toBeUndefined();
     expect(lines).toEqual([`#${TICKET} could not write the progress comment: 502 from GitHub`]);
   });
 });

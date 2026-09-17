@@ -124,7 +124,7 @@ export class GhTracker implements Tracker {
       labels: raw.labels.map((label) => label.name),
       assignees: raw.assignees.map((assignee) => assignee.login),
       comments: raw.comments.map((comment) => ({
-        id: commentId(comment.url),
+        ...withCommentId(comment.url),
         body: comment.body,
       })),
       ...relations(raw),
@@ -183,7 +183,7 @@ export class GhTracker implements Tracker {
   /** `gh` prints the new comment's URL, which is the only handle it gives back. */
   async comment(number: number, body: string): Promise<IssueComment> {
     const { stdout } = await this.gh(["issue", "comment", String(number), "--body", body]);
-    return { id: commentId(stdout.trim().split("\n").at(-1) ?? ""), body };
+    return { ...withCommentId(stdout.trim().split("\n").at(-1) ?? ""), body };
   }
 
   /**
@@ -299,18 +299,21 @@ export class GhTracker implements Tracker {
 const COMMENT_ID = /#issuecomment-(\d+)\s*$/;
 
 /**
- * A comment's id, read out of its URL.
+ * A comment's id, read out of its URL, or nothing when the URL carries none.
  *
  * GitHub's REST API edits comments by a numeric id that `gh issue view` does not
  * report — its `id` is the GraphQL node id — and `gh issue comment` reports
  * nothing but a URL. The URL is the one handle both halves agree on, so both go
- * through here, and a URL without an id in it is an error rather than a handle
- * that fails later at the edit.
+ * through here.
+ *
+ * Unlike the native relations this adapter refuses to guess, a missing id
+ * decides nothing: it costs an edit, never a Ticket. So it is reported as
+ * missing rather than thrown, and the one caller that needs to edit posts a
+ * fresh comment instead.
  */
-function commentId(url: string): string {
+function withCommentId(url: string): { id?: string } {
   const id = COMMENT_ID.exec(url);
-  if (!id) throw new Error(`could not read a comment id from: ${url || "(no url)"}`);
-  return id[1] as string;
+  return id ? { id: id[1] as string } : {};
 }
 
 /**
