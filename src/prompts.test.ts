@@ -15,6 +15,8 @@ describe("implementPrompt", () => {
 
     expect(prompt).toMatch(/confirm the ticket title/i);
     expect(prompt).toMatch(/commit .*before .*code-review/i);
+    expect(prompt).toMatch(/first commit's subject becomes the pull request title/i);
+    expect(prompt).toMatch(/summarise the whole Ticket/i);
     expect(prompt).toMatch(/nested review agents|additional review agents/i);
     expect(prompt).toMatch(/do not open pull requests/i);
     expect(prompt).toMatch(/do not close/i);

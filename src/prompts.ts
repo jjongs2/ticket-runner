@@ -24,6 +24,7 @@ const IMPLEMENT_GUIDANCE = `This session is unattended. Follow this guidance as 
 
 - Confirm the Ticket title matches what you are about to build before you start.
 - Make an initial commit before running code-review, so the reviewed diff is not empty.
+- Your first commit's subject becomes the pull request title and the squash commit on \`main\`, so write it in the repo's commit convention and make it summarise the whole Ticket, not just that first commit.
 - Do not spawn nested review agents beyond what the skill itself does.
 - Do not open pull requests and do not close the issue; the pipeline does both.
 - Commit all of your work to the branch that is already checked out.`;

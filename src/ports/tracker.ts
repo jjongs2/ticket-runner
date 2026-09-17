@@ -37,6 +37,15 @@ export interface Candidate {
   openBlockers: number;
 }
 
+/**
+ * The commit a squash merge lands on main. Both halves are used verbatim, so
+ * GitHub appends no pull request number to the subject.
+ */
+export interface SquashCommit {
+  subject: string;
+  body: string;
+}
+
 export interface PullRequestRef {
   number: number;
   url: string;
@@ -77,5 +86,5 @@ export interface Tracker {
   createPullRequest(pr: CreatePullRequest): Promise<PullRequestRef>;
   convertPullRequestToDraft(number: number): Promise<void>;
   waitForCi(number: number, timeoutMs: number): Promise<CiOutcome>;
-  squashMerge(number: number): Promise<void>;
+  squashMerge(number: number, commit: SquashCommit): Promise<void>;
 }

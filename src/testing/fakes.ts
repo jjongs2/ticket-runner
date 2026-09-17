@@ -20,6 +20,7 @@ import type {
   Issue,
   LabelSpec,
   PullRequestRef,
+  SquashCommit,
   Tracker,
 } from "../ports/tracker.js";
 import type {
@@ -32,6 +33,8 @@ import type {
 export interface FakePullRequest extends CreatePullRequest {
   number: number;
   merged: boolean;
+  /** What the merge composed, once it has happened. */
+  squashCommit?: SquashCommit;
 }
 
 export class FakeTracker implements Tracker {
@@ -149,10 +152,11 @@ export class FakeTracker implements Tracker {
     return this.ci;
   }
 
-  async squashMerge(number: number): Promise<void> {
+  async squashMerge(number: number, commit: SquashCommit): Promise<void> {
     this.calls.push(`squashMerge:${number}`);
     const pr = this.pullRequest(number);
     pr.merged = true;
+    pr.squashCommit = commit;
     // The PR body closes the Ticket, which is how a Run's Frontier shrinks.
     const closes = /Closes #(\d+)/.exec(pr.body);
     if (closes) this.closed.add(Number.parseInt(closes[1] as string, 10));
@@ -212,7 +216,8 @@ export class FakeWorkspace implements Workspace {
   /** worktree path → branch, for the worktrees that currently exist. */
   worktrees = new Map<string, string>();
   calls: string[] = [];
-  commits = 3;
+  /** The branch's commit subjects, oldest first, as an implement Stage leaves them. */
+  commits = ["feat(cli): do the thing (#2)", "test(cli): cover the thing (#2)"];
   /** Per-command Check outcomes; anything unlisted passes. */
   checkOutcomes = new Map<string, CheckOutcome>();
   ranChecks: { command: string; cwd: string }[] = [];
@@ -235,9 +240,9 @@ export class FakeWorkspace implements Workspace {
     this.worktrees.delete(path);
   }
 
-  async commitCount(branch: string): Promise<number> {
-    this.calls.push(`commitCount:${branch}`);
-    return this.commits;
+  async commitSubjects(branch: string): Promise<string[]> {
+    this.calls.push(`commitSubjects:${branch}`);
+    return [...this.commits];
   }
 
   async runCheck(command: string, cwd: string): Promise<CheckOutcome> {

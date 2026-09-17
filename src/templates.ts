@@ -5,10 +5,17 @@
 
 import type { FailurePoint } from "./lifecycle.js";
 import type { TicketOutcome } from "./orchestrator.js";
+import type { SquashCommit } from "./ports/tracker.js";
 import { type Criterion, type Verdict, countStatuses } from "./verdict.js";
 
 /** How the pipeline finds its own hand-off comment again. */
 export const HANDOFF_MARKER = "<!-- agent-pipeline:handoff -->";
+
+/** The Verdict summary both the pull request body and the squash commit carry. */
+function verdictCounts(verdict: Verdict): string {
+  const counts = countStatuses(verdict);
+  return `${counts.met} met · ${counts.unmet} unmet · ${counts.unverifiable} unverifiable`;
+}
 
 const STATUS_ICON: Record<Criterion["status"], string> = {
   met: "✅",
@@ -23,7 +30,6 @@ export interface PullRequestBody {
 }
 
 export function pullRequestBody({ ticket, verdict, runId }: PullRequestBody): string {
-  const counts = countStatuses(verdict);
   const criteria = verdict.criteria.map((criterion) => {
     const line = `- ${STATUS_ICON[criterion.status]} ${criterion.text}`;
     return criterion.status === "met" ? line : `${line} — ${criterion.evidence}`;
@@ -32,7 +38,7 @@ export function pullRequestBody({ ticket, verdict, runId }: PullRequestBody): st
   return [
     `Closes #${ticket}`,
     "",
-    `**Verdict:** ${counts.met} met · ${counts.unmet} unmet · ${counts.unverifiable} unverifiable`,
+    `**Verdict:** ${verdictCounts(verdict)}`,
     "",
     "<details><summary>Criteria</summary>",
     "",
@@ -69,6 +75,41 @@ export function draftPullRequestBody({
     `Run \`${runId}\` · transcripts in \`.agent-pipeline/runs/${runId}/${ticket}/\``,
     "",
   ].join("\n");
+}
+
+export interface SquashCommitMessage {
+  ticket: number;
+  /** The pull request title, which is the subject that lands on main. */
+  title: string;
+  verdict: Verdict;
+  /** The branch's commit subjects, oldest first. */
+  commits: string[];
+}
+
+/**
+ * The commit a merged Ticket leaves on main.
+ *
+ * `git log` renders no HTML, so this is the one template with nothing folded
+ * away: the Verdict is counts only, and the per-criterion evidence stays in the
+ * pull request body where a browser can collapse it.
+ */
+export function squashCommit({
+  ticket,
+  title,
+  verdict,
+  commits,
+}: SquashCommitMessage): SquashCommit {
+  return {
+    subject: title,
+    body: [
+      `Closes #${ticket}`,
+      "",
+      `Verdict: ${verdictCounts(verdict)}`,
+      "",
+      ...commits.map((subject) => `- ${subject}`),
+      "",
+    ].join("\n"),
+  };
 }
 
 export interface HandoffComment {

@@ -224,10 +224,22 @@ describe("pull requests", () => {
     expect(calls[0]).toEqual(["pr", "ready", "12", "--undo"]);
   });
 
-  it("squash-merges", async () => {
-    await tracker(ok("")).squashMerge(12);
+  it("squash-merges with the subject and body the pipeline composed", async () => {
+    await tracker(ok("")).squashMerge(12, {
+      subject: "feat(cli): add a flag",
+      body: "Closes #2\n\nVerdict: 1 met · 0 unmet · 0 unverifiable\n",
+    });
 
-    expect(calls[0]).toEqual(["pr", "merge", "12", "--squash"]);
+    expect(calls[0]).toEqual([
+      "pr",
+      "merge",
+      "12",
+      "--squash",
+      "--subject",
+      "feat(cli): add a flag",
+      "--body",
+      "Closes #2\n\nVerdict: 1 met · 0 unmet · 0 unverifiable\n",
+    ]);
   });
 });
 

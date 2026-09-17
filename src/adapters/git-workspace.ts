@@ -29,13 +29,19 @@ export class GitWorkspace implements Workspace {
     await this.git(["branch", "-D", branch]);
   }
 
-  async commitCount(branch: string): Promise<number> {
+  async commitSubjects(branch: string): Promise<string[]> {
+    // --reverse turns git's newest-first log into the order they were written.
     const { stdout } = await this.git([
-      "rev-list",
-      "--count",
+      "log",
+      "--reverse",
+      "--format=%s",
       `${this.mainBranch}..${branch}`,
     ]);
-    return Number.parseInt(stdout.trim(), 10);
+    // Only git's trailing newline is dropped: a commit with an empty subject is
+    // still a commit, and losing it would shift which one counts as the first.
+    const subjects = stdout.split("\n");
+    if (subjects.at(-1) === "") subjects.pop();
+    return subjects;
   }
 
   async runCheck(command: string, cwd: string): Promise<CheckOutcome> {

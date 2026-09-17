@@ -5,6 +5,7 @@ import type {
   Issue,
   LabelSpec,
   PullRequestRef,
+  SquashCommit,
   Tracker,
 } from "../ports/tracker.js";
 import { type Execution, type RunProcess, exec, throwOnFailure } from "./exec.js";
@@ -224,8 +225,17 @@ export class GhTracker implements Tracker {
     }
   }
 
-  async squashMerge(number: number): Promise<void> {
-    await this.gh(["pr", "merge", String(number), "--squash"]);
+  async squashMerge(number: number, commit: SquashCommit): Promise<void> {
+    await this.gh([
+      "pr",
+      "merge",
+      String(number),
+      "--squash",
+      "--subject",
+      commit.subject,
+      "--body",
+      commit.body,
+    ]);
   }
 
   private editIssue(number: number, flag: string, value: string) {
