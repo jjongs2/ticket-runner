@@ -756,48 +756,56 @@ function stageRow(
   };
 }
 
-/**
- * Why a Stage did not finish, said twice: the words a hand-off comment reads in
- * and the two the progress table has room for. Keyed together so a new failure
- * cannot be given one and not the other.
- */
-function stageFailures(limits: { maxTurns: number; maxMinutes: number }): Record<
-  StageFailure,
-  { sentence: string; cell: string }
-> {
-  return {
-    "rate-limited": { sentence: "hit the subscription rate limit", cell: "rate limited" },
-    "timed-out": {
-      sentence: `ran past its ${limits.maxMinutes} minute limit`,
-      cell: "timed out",
-    },
-    "turn-capped": {
-      sentence: `hit its ${limits.maxTurns} turn limit`,
-      cell: "turn capped",
-    },
-    "nonzero-exit": { sentence: "exited non-zero", cell: "exited non-zero" },
-    "invalid-result": {
-      sentence: "returned output the Verdict schema rejected",
-      cell: "invalid result",
-    },
-  };
+/** The limits a Stage was given, which are half of what its failure means. */
+interface StageLimits {
+  maxTurns: number;
+  maxMinutes: number;
 }
 
+/**
+ * Why a Stage did not finish, said twice: the words a hand-off comment reads in
+ * and the two the progress table has room for. Kept in one entry per failure so
+ * a new one cannot be given a sentence and left without a cell.
+ */
+const STAGE_FAILURES: Record<
+  StageFailure,
+  { cell: string; sentence: (limits: StageLimits) => string }
+> = {
+  "rate-limited": {
+    cell: "rate limited",
+    sentence: () => "hit the subscription rate limit",
+  },
+  "timed-out": {
+    cell: "timed out",
+    sentence: (limits) => `ran past its ${limits.maxMinutes} minute limit`,
+  },
+  "turn-capped": {
+    cell: "turn capped",
+    sentence: (limits) => `hit its ${limits.maxTurns} turn limit`,
+  },
+  "nonzero-exit": { cell: "exited non-zero", sentence: () => "exited non-zero" },
+  "invalid-result": {
+    cell: "invalid result",
+    sentence: () => "returned output the Verdict schema rejected",
+  },
+};
+
 /** A Stage that came back without saying why gets the one word that is true. */
-const UNEXPLAINED = { sentence: "failed", cell: "failed" } as const;
+const UNEXPLAINED = { cell: "failed", sentence: () => "failed" } as const;
+
+function stageFailure(result: StageResult) {
+  return result.failure ? STAGE_FAILURES[result.failure] : UNEXPLAINED;
+}
 
 function describeStageFailure(
   stage: string,
-  limits: { maxTurns: number; maxMinutes: number },
+  limits: StageLimits,
   result: StageResult,
 ): string {
-  const failure = result.failure ? stageFailures(limits)[result.failure] : UNEXPLAINED;
-  return `the ${stage} Stage ${failure.sentence}`;
+  return `the ${stage} Stage ${stageFailure(result).sentence(limits)}`;
 }
 
 /** The same failure, short enough for a table cell. */
 function stageFailureCell(result: StageResult): string {
-  // The limits only ever reach the sentence, so any will do for the cell.
-  const failures = stageFailures({ maxTurns: 0, maxMinutes: 0 });
-  return (result.failure ? failures[result.failure] : UNEXPLAINED).cell;
+  return stageFailure(result).cell;
 }
