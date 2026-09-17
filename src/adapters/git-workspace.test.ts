@@ -67,17 +67,33 @@ describe("worktrees", () => {
   });
 });
 
-describe("commitCount", () => {
-  it("counts only the commits main does not have", async () => {
+describe("commitSubjects", () => {
+  it("reads only the commits main does not have, oldest first", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
     await workspace.createWorktree({ path, branch: "agent/2-x" });
 
-    expect(await workspace.commitCount("agent/2-x")).toBe(0);
+    expect(await workspace.commitSubjects("agent/2-x")).toEqual([]);
 
     commit(path, "a.txt", "a\n", "feat: a (#2)");
-    commit(path, "b.txt", "b\n", "feat: b (#2)");
+    commit(path, "b.txt", "b\n", "test: b (#2)");
+    commit(path, "c.txt", "c\n", "docs: c (#2)");
 
-    expect(await workspace.commitCount("agent/2-x")).toBe(2);
+    // Not main's own "docs: initial commit (#1)", and not git's newest-first order.
+    expect(await workspace.commitSubjects("agent/2-x")).toEqual([
+      "feat: a (#2)",
+      "test: b (#2)",
+      "docs: c (#2)",
+    ]);
+  });
+
+  it("reads the subject only, never the body", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    writeFileSync(join(path, "a.txt"), "a\n");
+    git(path, "add", "-A");
+    git(path, "commit", "-m", "feat: a (#2)", "-m", "A body\n\nwith blank lines.");
+
+    expect(await workspace.commitSubjects("agent/2-x")).toEqual(["feat: a (#2)"]);
   });
 });
 
@@ -144,7 +160,7 @@ describe("rebaseOnMain", () => {
 
     expect(result.ok).toBe(true);
     expect(existsSync(join(path, "main.txt"))).toBe(true);
-    expect(await workspace.commitCount("agent/2-x")).toBe(1);
+    expect(await workspace.commitSubjects("agent/2-x")).toEqual(["feat: a (#2)"]);
   });
 
   it("reports a conflict and leaves no rebase in progress", async () => {

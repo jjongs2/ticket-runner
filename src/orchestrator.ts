@@ -6,7 +6,12 @@ import type { Issue, Tracker } from "./ports/tracker.js";
 import type { Workspace } from "./ports/workspace.js";
 import { implementPrompt, verifyPrompt } from "./prompts.js";
 import { stageLogDir } from "./run-log.js";
-import { draftPullRequestBody, handoffComment, pullRequestBody } from "./templates.js";
+import {
+  draftPullRequestBody,
+  handoffComment,
+  pullRequestBody,
+  squashCommit,
+} from "./templates.js";
 import {
   type Verdict,
   VERDICT_JSON_SCHEMA,
@@ -104,12 +109,18 @@ export async function processTicket(
     }
 
     point = "pr";
-    pullRequest = await openPullRequest(pipeline, issue, branch, worktree, verdict);
+    // Read after the rebase, because these are the commits that land on main.
+    const commits = await workspace.commitSubjects(branch);
+    const title = pullRequestTitle(issue, commits);
+    pullRequest = await openPullRequest(pipeline, issue, branch, worktree, verdict, title);
     point = "ci";
     await requireGreenCi(pipeline, pullRequest);
 
     point = "merge";
-    await tracker.squashMerge(pullRequest);
+    await tracker.squashMerge(
+      pullRequest,
+      squashCommit({ ticket, title, verdict, commits }),
+    );
   } catch (error) {
     const failure =
       error instanceof TicketFailure
@@ -160,7 +171,7 @@ async function implement(
 
   // An agent that gave up silently leaves a clean branch behind. That is a
   // failure, not something to verify.
-  if ((await pipeline.workspace.commitCount(branch)) === 0) {
+  if ((await pipeline.workspace.commitSubjects(branch)).length === 0) {
     throw new TicketFailure(
       "implement",
       "the implement Stage left no new commits on the branch",
@@ -243,11 +254,12 @@ async function openPullRequest(
   branch: string,
   worktree: string,
   verdict: Verdict,
+  title: string,
 ): Promise<number> {
   await pipeline.workspace.push(worktree, branch);
   const pr = await pipeline.tracker.createPullRequest({
     head: branch,
-    title: pullRequestTitle(issue),
+    title,
     body: pullRequestBody({
       ticket: issue.number,
       verdict,
@@ -315,7 +327,8 @@ async function handOff(
       await workspace.push(worktree, branch);
       const pr = await tracker.createPullRequest({
         head: branch,
-        title: pullRequestTitle(issue),
+        // Nothing here is merged, so there is no commit subject worth deriving.
+        title: issue.title,
         body: draftPullRequestBody({
           ticket,
           stage: failure.point,
@@ -357,9 +370,24 @@ async function handOff(
   };
 }
 
-/** The PR title becomes the squash commit subject; GitHub appends the PR number itself. */
-function pullRequestTitle(issue: Issue): string {
-  return issue.title;
+/** Any `<type>(<scope>): <summary>`; the repo's own types and scopes are CONTRIBUTING.md's business. */
+const CONVENTIONAL_SUBJECT = /^[a-z]+(\([a-z0-9._-]+\))?: \S/;
+
+/** The `(#<n>)` a branch commit carries, which the squash commit's `Closes #<n>` replaces. */
+const TICKET_REFERENCE = /\s*\(#\d+\)$/;
+
+/**
+ * The pull request title, which is also the subject of the squash commit.
+ *
+ * The implement Stage is told its first commit must summarise the whole Ticket
+ * in the commit convention, so that subject is the one line written about the
+ * branch as a whole. A subject that ignored the convention is not worth putting
+ * on main, and neither is a Ticket the Stage left no commits on: the Ticket
+ * title says at least as much.
+ */
+function pullRequestTitle(issue: Issue, commits: string[]): string {
+  const first = (commits[0] ?? "").replace(TICKET_REFERENCE, "");
+  return CONVENTIONAL_SUBJECT.test(first) ? first : issue.title;
 }
 
 function describeStageFailure(

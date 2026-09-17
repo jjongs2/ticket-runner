@@ -1,0 +1,8 @@
+<type>(<scope>): <summary>
+
+Closes #<n>
+
+Verdict: <k> met · <u> unmet · <v> unverifiable
+
+- <branch commit subject>
+- <branch commit subject>

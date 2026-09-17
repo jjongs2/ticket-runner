@@ -5,6 +5,7 @@
 
 import type { FailurePoint } from "./lifecycle.js";
 import type { TicketOutcome } from "./orchestrator.js";
+import type { SquashCommit } from "./ports/tracker.js";
 import { type Criterion, type Verdict, countStatuses } from "./verdict.js";
 
 /** How the pipeline finds its own hand-off comment again. */
@@ -69,6 +70,43 @@ export function draftPullRequestBody({
     `Run \`${runId}\` · transcripts in \`.agent-pipeline/runs/${runId}/${ticket}/\``,
     "",
   ].join("\n");
+}
+
+export interface SquashCommitMessage {
+  ticket: number;
+  /** The pull request title, which is the subject that lands on main. */
+  title: string;
+  verdict: Verdict;
+  /** The branch's commit subjects, oldest first. */
+  commits: string[];
+}
+
+/**
+ * The commit a merged Ticket leaves on main.
+ *
+ * `git log` renders no HTML, so this is the one template with nothing folded
+ * away: the Verdict is counts only, and the per-criterion evidence stays in the
+ * pull request body where a browser can collapse it.
+ */
+export function squashCommit({
+  ticket,
+  title,
+  verdict,
+  commits,
+}: SquashCommitMessage): SquashCommit {
+  const counts = countStatuses(verdict);
+
+  return {
+    subject: title,
+    body: [
+      `Closes #${ticket}`,
+      "",
+      `Verdict: ${counts.met} met · ${counts.unmet} unmet · ${counts.unverifiable} unverifiable`,
+      "",
+      ...commits.map((subject) => `- ${subject}`),
+      "",
+    ].join("\n"),
+  };
 }
 
 export interface HandoffComment {

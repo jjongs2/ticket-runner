@@ -23,8 +23,14 @@ export interface Workspace {
   createWorktree(worktree: WorktreeRef): Promise<void>;
   /** Remove the worktree and delete its branch. */
   removeWorktree(worktree: WorktreeRef): Promise<void>;
-  /** Commits on `branch` that main does not have. */
-  commitCount(branch: string): Promise<number>;
+  /**
+   * Subjects of the commits on `branch` that main does not have, oldest first.
+   *
+   * The order is the port's promise, not an accident of git's default: the
+   * first subject names the whole Ticket, and the squash commit lists the rest
+   * in the order they were written.
+   */
+  commitSubjects(branch: string): Promise<string[]>;
   runCheck(command: string, cwd: string): Promise<CheckOutcome>;
   /** Restore the worktree to its committed state, tracked and untracked. */
   discardChanges(cwd: string): Promise<void>;

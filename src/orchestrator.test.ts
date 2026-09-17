@@ -43,6 +43,15 @@ const PASSING_VERDICT = verdictResult([
   { text: "it works", status: "met", evidence: "npm test is green" },
 ]);
 
+const MIXED_VERDICT = verdictResult([
+  { text: "it works", status: "met", evidence: "npm test is green" },
+  {
+    text: "the docs say so",
+    status: "unverifiable",
+    evidence: "the docs are not readable from here",
+  },
+]);
+
 let tracker: FakeTracker;
 let runner: FakeAgentRunner;
 let workspace: FakeWorkspace;
@@ -125,7 +134,7 @@ describe("the happy path", () => {
 
     expect(pr.draft).toBe(false);
     expect(pr.head).toBe(BRANCH);
-    expect(pr.title).toBe(tracker.issue(TICKET).title);
+    expect(pr.title).toBe("feat(cli): do the thing");
     expect(pr.body.split("\n")[0]).toBe(`Closes #${TICKET}`);
     expect(pr.body).toContain("**Verdict:** 1 met · 0 unmet · 0 unverifiable");
   });
@@ -136,6 +145,99 @@ describe("the happy path", () => {
     expect(tracker.issue(TICKET).labels).toEqual([]);
     expect(tracker.issue(TICKET).assignees).toEqual(["pipeline-user"]);
     expect(tracker.comments).toEqual([]);
+  });
+});
+
+describe("the pull request title and the squash commit", () => {
+  it("takes the title from the first commit subject, without its Ticket reference", async () => {
+    workspace.commits = [
+      "feat(tracker): compose the squash commit (#2)",
+      "docs: describe the new rule (#2)",
+    ];
+
+    await run();
+
+    expect(tracker.pullRequest(100).title).toBe("feat(tracker): compose the squash commit");
+  });
+
+  it("falls back to the Ticket title when the first subject is not in the convention", async () => {
+    workspace.commits = ["wip", "feat(cli): do the thing (#2)"];
+
+    await run();
+
+    expect(tracker.pullRequest(100).title).toBe("Skeleton: one Ticket end to end");
+  });
+
+  it("merges with the PR title as the subject", async () => {
+    workspace.commits = ["fix(cli): stop double-counting (#2)"];
+
+    await run();
+    const pr = tracker.pullRequest(100);
+
+    expect(pr.squashCommit?.subject).toBe(pr.title);
+    expect(pr.squashCommit?.subject).toBe("fix(cli): stop double-counting");
+  });
+
+  it("composes a body of Closes, the Verdict counts and every branch commit in order", async () => {
+    workspace.commits = [
+      "feat(cli): do the thing (#2)",
+      "test(cli): cover the thing (#2)",
+      "docs: write it down (#2)",
+    ];
+    runner.queue("verify", stageResult({ result: MIXED_VERDICT }));
+
+    await run();
+
+    expect(tracker.pullRequest(100).squashCommit?.body).toBe(
+      [
+        `Closes #${TICKET}`,
+        "",
+        "Verdict: 1 met · 0 unmet · 1 unverifiable",
+        "",
+        "- feat(cli): do the thing (#2)",
+        "- test(cli): cover the thing (#2)",
+        "- docs: write it down (#2)",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("keeps the evidence out of the commit: no HTML and no details block", async () => {
+    runner.queue("verify", stageResult({ result: MIXED_VERDICT }));
+
+    await run();
+    const commit = tracker.pullRequest(100).squashCommit;
+
+    expect(commit?.body).not.toContain("<");
+    expect(commit?.body).not.toContain("details");
+    expect(commit?.body).not.toContain("the docs are not readable from here");
+  });
+
+  it("reads the branch commits after the rebase, so the merge lists what lands", async () => {
+    await run();
+
+    expect(workspace.calls.indexOf("rebaseOnMain")).toBeLessThan(
+      workspace.calls.lastIndexOf(`commitSubjects:${BRANCH}`),
+    );
+  });
+
+  it("keeps the Ticket title on a draft PR the hand-off opens, which merges nothing", async () => {
+    workspace.commits = [];
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off" });
+    expect(tracker.pullRequest(100).draft).toBe(true);
+    expect(tracker.pullRequest(100).title).toBe("Skeleton: one Ticket end to end");
+  });
+
+  it("leaves the title of a PR that was already open when the hand-off came", async () => {
+    tracker.ci = { state: "none" };
+
+    await run();
+
+    expect(tracker.pullRequest(100).draft).toBe(true);
+    expect(tracker.pullRequest(100).title).toBe("feat(cli): do the thing");
   });
 });
 
@@ -212,7 +314,7 @@ describe("implement Stage failures", () => {
   });
 
   it("treats a Stage that left no new commits as a failure", async () => {
-    workspace.commits = 0;
+    workspace.commits = [];
 
     const outcome = await run();
 
@@ -426,7 +528,7 @@ describe("failures the pipeline did not expect", () => {
 
 describe("hand-off", () => {
   beforeEach(() => {
-    workspace.commits = 0;
+    workspace.commits = [];
   });
 
   it("opens a draft PR, comments, relabels and unassigns", async () => {
@@ -448,7 +550,7 @@ describe("hand-off", () => {
   });
 
   it("converts the existing PR to a draft rather than opening a second one", async () => {
-    workspace.commits = 3;
+    workspace.commits = ["feat(cli): do the thing (#2)"];
     tracker.ci = { state: "failed", summary: "checks/build failed" };
 
     await run();

@@ -4,6 +4,7 @@ import {
   handoffComment,
   pullRequestBody,
   runSummary,
+  squashCommit,
 } from "./templates.js";
 import { parseVerdict } from "./verdict.js";
 
@@ -39,6 +40,41 @@ describe("pullRequestBody", () => {
     const body = pullRequestBody({ ticket: 2, verdict, runId: "r1" });
 
     expect(body).toContain("Run `r1` · transcripts in `.agent-pipeline/runs/r1/2/`");
+  });
+});
+
+describe("squashCommit", () => {
+  const commit = () =>
+    squashCommit({
+      ticket: 2,
+      title: "feat(cli): add a flag",
+      verdict,
+      commits: ["feat(cli): add a flag (#2)", "docs: write it down (#2)"],
+    });
+
+  it("uses the pull request title as the subject, with nothing appended", () => {
+    expect(commit().subject).toBe("feat(cli): add a flag");
+  });
+
+  it("opens the body with Closes, then the Verdict counts, then the branch commits in order", () => {
+    expect(commit().body).toBe(
+      [
+        "Closes #2",
+        "",
+        "Verdict: 1 met · 0 unmet · 1 unverifiable",
+        "",
+        "- feat(cli): add a flag (#2)",
+        "- docs: write it down (#2)",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("carries no HTML and no evidence: git log renders neither", () => {
+    const body = commit().body;
+
+    expect(body).not.toContain("<");
+    expect(body).not.toContain("no way to tell");
   });
 });
 
