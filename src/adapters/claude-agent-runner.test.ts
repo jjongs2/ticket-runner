@@ -219,6 +219,22 @@ describe("reading the outcome", () => {
     expect(result).toMatchObject({ ok: false, failure: "rate-limited" });
   });
 
+  it("leaves a trace and fails when the session could not be started at all", async () => {
+    const broken = new ClaudeAgentRunner({
+      run: async () => {
+        throw new Error("spawn claude ENOENT");
+      },
+    });
+
+    const result = await broken.run(request());
+
+    expect(result).toMatchObject({ ok: false, failure: "nonzero-exit" });
+    expect(readFileSync(join(logDir, "implement.stderr"), "utf8")).toContain(
+      "spawn claude ENOENT",
+    );
+    expect(readFileSync(join(logDir, "implement.command"), "utf8")).toContain("claude --print");
+  });
+
   it("falls back to a non-zero exit when nothing more specific is known", async () => {
     const result = await runner(execution({ exitCode: 2, stderr: "boom" })).run(request());
 

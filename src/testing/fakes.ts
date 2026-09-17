@@ -14,7 +14,7 @@ import type {
   StageResult,
 } from "../ports/agent-runner.js";
 import type {
-  ChecksOutcome,
+  CiOutcome,
   CreatePullRequest,
   Issue,
   LabelSpec,
@@ -23,7 +23,7 @@ import type {
 } from "../ports/tracker.js";
 import type {
   CheckOutcome,
-  CreateWorktree,
+  WorktreeRef,
   RebaseOutcome,
   Workspace,
 } from "../ports/workspace.js";
@@ -40,8 +40,8 @@ export class FakeTracker implements Tracker {
   issues = new Map<number, Issue>();
   comments: { issue: number; body: string }[] = [];
   pullRequests: FakePullRequest[] = [];
-  checks: ChecksOutcome = { state: "passed" };
-  checkWaits: { pullRequest: number; timeoutMs: number }[] = [];
+  ci: CiOutcome = { state: "passed" };
+  ciWaits: { pullRequest: number; timeoutMs: number }[] = [];
   calls: string[] = [];
 
   addIssue(issue: Partial<Issue> & { number: number }): Issue {
@@ -122,10 +122,10 @@ export class FakeTracker implements Tracker {
     this.pullRequest(number).draft = true;
   }
 
-  async waitForChecks(number: number, timeoutMs: number): Promise<ChecksOutcome> {
-    this.calls.push(`waitForChecks:${number}`);
-    this.checkWaits.push({ pullRequest: number, timeoutMs });
-    return this.checks;
+  async waitForCi(number: number, timeoutMs: number): Promise<CiOutcome> {
+    this.calls.push(`waitForCi:${number}`);
+    this.ciWaits.push({ pullRequest: number, timeoutMs });
+    return this.ci;
   }
 
   async squashMerge(number: number): Promise<void> {
@@ -199,12 +199,12 @@ export class FakeWorkspace implements Workspace {
     return this;
   }
 
-  async createWorktree({ path, branch }: CreateWorktree): Promise<void> {
+  async createWorktree({ path, branch }: WorktreeRef): Promise<void> {
     this.calls.push(`createWorktree:${branch}`);
     this.worktrees.set(path, branch);
   }
 
-  async removeWorktree({ path, branch }: CreateWorktree): Promise<void> {
+  async removeWorktree({ path, branch }: WorktreeRef): Promise<void> {
     this.calls.push(`removeWorktree:${branch}`);
     this.worktrees.delete(path);
   }

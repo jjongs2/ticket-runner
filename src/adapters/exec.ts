@@ -13,11 +13,17 @@ export interface ExecOptions {
   /** Run through the shell, for user-supplied Check commands. */
   shell?: boolean;
   timeoutMs?: number;
-  env?: NodeJS.ProcessEnv;
-  /** Called with each chunk as it arrives, for live transcripts. */
-  onStdout?: (chunk: string) => void;
-  onStderr?: (chunk: string) => void;
 }
+
+/**
+ * How a child process is run. Adapters take one so tests can hand them
+ * recorded output instead of spawning anything.
+ */
+export type RunProcess = (
+  command: string,
+  args: string[],
+  options: ExecOptions,
+) => Promise<Execution>;
 
 /** Run a child process to completion. Never throws on a non-zero exit. */
 export function exec(
@@ -28,7 +34,6 @@ export function exec(
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
-      ...(options.env === undefined ? {} : { env: options.env }),
       shell: options.shell ?? false,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -51,12 +56,10 @@ export function exec(
     child.stdout.on("data", (chunk: string) => {
       stdout += chunk;
       output += chunk;
-      options.onStdout?.(chunk);
     });
     child.stderr.on("data", (chunk: string) => {
       stderr += chunk;
       output += chunk;
-      options.onStderr?.(chunk);
     });
 
     child.on("error", (error) => {
@@ -81,7 +84,15 @@ export async function execOrThrow(
   args: string[],
   options: ExecOptions = {},
 ): Promise<Execution> {
-  const result = await exec(command, args, options);
+  return throwOnFailure(command, args, await exec(command, args, options));
+}
+
+/** Turn a non-zero exit into an error naming the command and its output. */
+export function throwOnFailure(
+  command: string,
+  args: string[],
+  result: Execution,
+): Execution {
   if (result.exitCode !== 0) {
     throw new Error(
       `\`${command} ${args.join(" ")}\` exited ${result.exitCode}\n${result.output.trim()}`,

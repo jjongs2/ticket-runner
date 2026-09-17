@@ -6,13 +6,7 @@ import type {
   StageRequest,
   StageResult,
 } from "../ports/agent-runner.js";
-import { type ExecOptions, type Execution, exec } from "./exec.js";
-
-export type RunProcess = (
-  command: string,
-  args: string[],
-  options: ExecOptions,
-) => Promise<Execution>;
+import { type Execution, type RunProcess, exec } from "./exec.js";
 
 export interface ClaudeAgentRunnerOptions {
   binary?: string;
@@ -38,11 +32,22 @@ interface ResultEvent {
  */
 export class ClaudeAgentRunner implements AgentRunner {
   private readonly binary: string;
-  private readonly run_: RunProcess;
+  private readonly runProcess: RunProcess;
 
   constructor(options: ClaudeAgentRunnerOptions = {}) {
     this.binary = options.binary ?? "claude";
-    this.run_ = options.run ?? exec;
+    this.runProcess = options.run ?? exec;
+  }
+
+  private async spawn(request: StageRequest, args: string[]): Promise<Execution> {
+    try {
+      return await this.runProcess(this.binary, args, {
+        cwd: request.cwd,
+        timeoutMs: request.maxMinutes * 60_000,
+      });
+    } catch (error) {
+      return spawnFailure(error);
+    }
   }
 
   async run(request: StageRequest): Promise<StageResult> {
@@ -50,10 +55,7 @@ export class ClaudeAgentRunner implements AgentRunner {
     const commandLine = quoteCommand(this.binary, args);
     const startedAt = Date.now();
 
-    const execution = await this.run_(this.binary, args, {
-      cwd: request.cwd,
-      timeoutMs: request.maxMinutes * 60_000,
-    });
+    const execution = await this.spawn(request, args);
 
     const events = parseEvents(execution.stdout);
     const transcriptPath = save(request, commandLine, execution, events);
@@ -72,6 +74,12 @@ export class ClaudeAgentRunner implements AgentRunner {
       durationMs: result?.duration_ms ?? Date.now() - startedAt,
     };
   }
+}
+
+/** A session that could not even start still has to leave a trace behind. */
+async function spawnFailure(error: unknown): Promise<Execution> {
+  const message = `agent-pipeline could not start the Stage: ${(error as Error).message}\n`;
+  return { exitCode: 1, stdout: "", stderr: message, output: message };
 }
 
 function buildArgs(request: StageRequest): string[] {

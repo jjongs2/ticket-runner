@@ -161,12 +161,12 @@ describe("pull requests", () => {
   });
 });
 
-describe("waiting for checks", () => {
+describe("waiting for CI", () => {
   const checks = (...buckets: string[]) =>
     JSON.stringify(buckets.map((bucket, i) => ({ name: `check-${i}`, bucket, state: bucket })));
 
   it("passes once every check is in the pass bucket", async () => {
-    const outcome = await tracker(ok(checks("pass", "skipping"))).waitForChecks(12, 60_000);
+    const outcome = await tracker(ok(checks("pass", "skipping"))).waitForCi(12, 60_000);
 
     expect(outcome).toEqual({ state: "passed" });
     expect(calls[0]?.slice(0, 3)).toEqual(["pr", "checks", "12"]);
@@ -176,7 +176,7 @@ describe("waiting for checks", () => {
     const outcome = await tracker(
       ok(checks("pending"), { exitCode: 8 }),
       ok(checks("pass")),
-    ).waitForChecks(12, 60_000);
+    ).waitForCi(12, 60_000);
 
     expect(outcome).toEqual({ state: "passed" });
     expect(calls).toHaveLength(2);
@@ -185,7 +185,7 @@ describe("waiting for checks", () => {
   it("names the failing checks", async () => {
     const outcome = await tracker(
       ok(checks("pass", "fail"), { exitCode: 1 }),
-    ).waitForChecks(12, 60_000);
+    ).waitForCi(12, 60_000);
 
     expect(outcome).toEqual({ state: "failed", summary: "check-1 failed" });
   });
@@ -196,20 +196,20 @@ describe("waiting for checks", () => {
       stdout: "",
       stderr: "no checks reported on the 'agent/2-x' branch",
       output: "",
-    }).waitForChecks(12, 60_000);
+    }).waitForCi(12, 60_000);
 
     expect(outcome).toEqual({ state: "none" });
   });
 
   it("reports an empty check list as no checks", async () => {
-    expect(await tracker(ok("[]")).waitForChecks(12, 60_000)).toEqual({ state: "none" });
+    expect(await tracker(ok("[]")).waitForCi(12, 60_000)).toEqual({ state: "none" });
   });
 
   it("gives up when the checks stay pending past the timeout", async () => {
     const outcome = await tracker(
       ok(checks("pending"), { exitCode: 8 }),
       ok(checks("pending"), { exitCode: 8 }),
-    ).waitForChecks(12, 0);
+    ).waitForCi(12, 0);
 
     expect(outcome).toEqual({ state: "timed-out" });
     expect(calls).toHaveLength(1);

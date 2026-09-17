@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
+import { PERMISSION_MODES, type PermissionMode } from "./ports/agent-runner.js";
 
 export const CONFIG_FILENAME = "agent-pipeline.json";
 
@@ -34,9 +35,7 @@ const configSchema = z
       })
       .strict()
       .optional(),
-    permissionMode: z
-      .enum(["auto", "acceptEdits", "bypassPermissions", "manual", "dontAsk", "plan"])
-      .optional(),
+    permissionMode: z.enum(PERMISSION_MODES).optional(),
     ciTimeoutMinutes: z.number().positive().optional(),
     labels: z
       .object({
@@ -51,8 +50,6 @@ const configSchema = z
       .optional(),
   })
   .strict();
-
-export type PermissionMode = z.infer<typeof configSchema>["permissionMode"] & string;
 
 export interface StageConfig {
   model: string;

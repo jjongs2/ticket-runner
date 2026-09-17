@@ -8,6 +8,14 @@
 export type StageName = "implement" | "verify" | "fix";
 
 /**
+ * The permission modes a Stage can run under. Only the modes that can actually
+ * do work unattended: `plan` and the prompting modes would guarantee a no-op.
+ */
+export const PERMISSION_MODES = ["auto", "acceptEdits", "bypassPermissions"] as const;
+
+export type PermissionMode = (typeof PERMISSION_MODES)[number];
+
+/**
  * Why a Stage did not finish cleanly. `rate-limited` is singled out because the
  * pipeline releases a claim rather than blaming the Ticket for it.
  */
@@ -26,7 +34,7 @@ export interface StageRequest {
   model: string;
   maxTurns: number;
   maxMinutes: number;
-  permissionMode: string;
+  permissionMode: PermissionMode;
   /** Where the command line, stdout, stderr and transcript are written. */
   logDir: string;
   /** When set, the Stage must emit structured output matching this schema. */

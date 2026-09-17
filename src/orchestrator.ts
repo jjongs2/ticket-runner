@@ -1,5 +1,6 @@
 import { branchName, worktreePath } from "./branch.js";
 import type { Config } from "./config.js";
+import type { FailurePoint } from "./lifecycle.js";
 import type { AgentRunner, StageFailure, StageResult } from "./ports/agent-runner.js";
 import type { Issue, Tracker } from "./ports/tracker.js";
 import type { Workspace } from "./ports/workspace.js";
@@ -14,16 +15,6 @@ import {
   passes,
   unmetCriteria,
 } from "./verdict.js";
-
-/** The point in the Ticket lifecycle a failure happened at. */
-export type FailurePoint =
-  | "implement"
-  | "checks"
-  | "verify"
-  | "rebase"
-  | "pr"
-  | "ci"
-  | "merge";
 
 export type TicketOutcome =
   | { outcome: "merged"; ticket: number; branch: string; pullRequest: number }
@@ -84,35 +75,51 @@ export async function processTicket(
   log(`#${ticket} claimed · ${branch}`);
 
   let pullRequest: number | undefined;
+  // Where an unexpected error would have happened, so the hand-off comment
+  // names the step the human has to look at rather than guessing.
+  let point: FailurePoint = "setup";
 
   try {
     await workspace.createWorktree({ path: worktree, branch });
 
+    point = "implement";
     await implement(pipeline, issue, worktree, branch);
+    point = "checks";
     await runChecks(pipeline, worktree);
+    point = "verify";
     const verdict = await verify(pipeline, issue, worktree);
 
+    point = "rebase";
     const rebase = await workspace.rebaseOnMain(worktree);
     if (!rebase.ok) {
       throw new TicketFailure("rebase", "the branch does not rebase onto main", rebase.conflict);
     }
 
+    point = "pr";
     pullRequest = await openPullRequest(pipeline, issue, branch, worktree, verdict);
-    await waitForCi(pipeline, pullRequest);
+    point = "ci";
+    await requireGreenCi(pipeline, pullRequest);
 
+    point = "merge";
     await tracker.squashMerge(pullRequest);
-    await workspace.pullMain();
-    await workspace.removeWorktree({ path: worktree, branch });
-    log(`#${ticket} merged · PR #${pullRequest}`);
-
-    return { outcome: "merged", ticket, branch, pullRequest };
   } catch (error) {
     const failure =
       error instanceof TicketFailure
         ? error
-        : new TicketFailure("merge", (error as Error).message);
+        : new TicketFailure(point, (error as Error).message);
     return handOff(pipeline, { issue, user, branch, worktree, pullRequest, failure });
   }
+
+  // The Ticket is merged from here on, so nothing below may hand it off.
+  try {
+    await workspace.pullMain();
+    await workspace.removeWorktree({ path: worktree, branch });
+  } catch (error) {
+    log(`#${ticket} merged, but cleaning up failed: ${(error as Error).message}`);
+  }
+  log(`#${ticket} merged · PR #${pullRequest}`);
+
+  return { outcome: "merged", ticket, branch, pullRequest };
 }
 
 async function implement(
@@ -126,7 +133,7 @@ async function implement(
     stage: "implement",
     prompt: implementPrompt(issue.url, stage.extraPrompt),
     cwd: worktree,
-    logDir: logDir(pipeline, issue.number),
+    logDir: stageLogDir(pipeline.repoRoot, pipeline.runId, issue.number),
     permissionMode: pipeline.config.permissionMode,
     model: stage.model,
     maxTurns: stage.maxTurns,
@@ -165,7 +172,7 @@ async function verify(
     stage: "verify",
     prompt: verifyPrompt(issue.url, stage.extraPrompt),
     cwd: worktree,
-    logDir: logDir(pipeline, issue.number),
+    logDir: stageLogDir(pipeline.repoRoot, pipeline.runId, issue.number),
     permissionMode: pipeline.config.permissionMode,
     model: stage.model,
     maxTurns: stage.maxTurns,
@@ -236,27 +243,31 @@ async function openPullRequest(
   return pr.number;
 }
 
-async function waitForCi(pipeline: Pipeline, pullRequest: number): Promise<void> {
-  const outcome = await pipeline.tracker.waitForChecks(
+/**
+ * A red or unfinished pull request is a failure whatever the gates say. Turning
+ * `gates.ci` off only tolerates a pull request that has no checks at all.
+ */
+async function requireGreenCi(pipeline: Pipeline, pullRequest: number): Promise<void> {
+  const outcome = await pipeline.tracker.waitForCi(
     pullRequest,
     pipeline.config.ciTimeoutMinutes * 60_000,
   );
-  if (!pipeline.config.gates.ci) return;
 
   switch (outcome.state) {
     case "passed":
       return;
     case "failed":
       throw new TicketFailure("ci", "a pull request check failed", outcome.summary);
-    case "none":
-      throw new TicketFailure(
-        "ci",
-        "the pull request has no checks, so CI cannot gate the merge",
-      );
     case "timed-out":
       throw new TicketFailure(
         "ci",
         `the pull request checks did not finish within ${pipeline.config.ciTimeoutMinutes} minutes`,
+      );
+    case "none":
+      if (!pipeline.config.gates.ci) return;
+      throw new TicketFailure(
+        "ci",
+        "the pull request has no checks, so CI cannot gate the merge",
       );
   }
 }
@@ -333,10 +344,6 @@ async function handOff(
 /** The PR title becomes the squash commit, so it carries the Ticket reference. */
 function pullRequestTitle(issue: Issue): string {
   return `${issue.title} (#${issue.number})`;
-}
-
-function logDir(pipeline: Pipeline, ticket: number): string {
-  return stageLogDir(pipeline.repoRoot, pipeline.runId, ticket);
 }
 
 function describeStageFailure(

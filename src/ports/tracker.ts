@@ -34,12 +34,13 @@ export interface CreatePullRequest {
 }
 
 /**
- * The outcome of waiting for a pull request's checks.
+ * The outcome of waiting for a pull request's CI checks. Distinct from a Check,
+ * which is a command the pipeline runs itself (CONTEXT.md).
  *
  * `none` means the PR has no checks at all, which `gates.ci` treats as a
  * failure rather than a silent bypass.
  */
-export type ChecksOutcome =
+export type CiOutcome =
   | { state: "passed" }
   | { state: "failed"; summary: string }
   | { state: "none" }
@@ -57,6 +58,6 @@ export interface Tracker {
   comment(number: number, body: string): Promise<void>;
   createPullRequest(pr: CreatePullRequest): Promise<PullRequestRef>;
   convertPullRequestToDraft(number: number): Promise<void>;
-  waitForChecks(number: number, timeoutMs: number): Promise<ChecksOutcome>;
+  waitForCi(number: number, timeoutMs: number): Promise<CiOutcome>;
   squashMerge(number: number): Promise<void>;
 }

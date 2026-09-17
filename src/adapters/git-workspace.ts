@@ -1,7 +1,7 @@
 import { rmSync } from "node:fs";
 import type {
   CheckOutcome,
-  CreateWorktree,
+  WorktreeRef,
   RebaseOutcome,
   Workspace,
 } from "../ports/workspace.js";
@@ -18,11 +18,11 @@ export class GitWorkspace implements Workspace {
     private readonly remote = "origin",
   ) {}
 
-  async createWorktree({ path, branch }: CreateWorktree): Promise<void> {
+  async createWorktree({ path, branch }: WorktreeRef): Promise<void> {
     await this.git(["worktree", "add", "-b", branch, path, this.mainBranch]);
   }
 
-  async removeWorktree({ path, branch }: CreateWorktree): Promise<void> {
+  async removeWorktree({ path, branch }: WorktreeRef): Promise<void> {
     await this.git(["worktree", "remove", "--force", path]);
     // A worktree directory left behind would block the next Run on this Ticket.
     rmSync(path, { recursive: true, force: true });

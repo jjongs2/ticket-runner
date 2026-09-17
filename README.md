@@ -65,6 +65,7 @@ Every Stage writes its exact command line, stdout, stderr and stream-json transc
   },
 
   // Passed to every Stage, which also always runs with `--permission-prompts none`.
+  // One of "auto", "acceptEdits" or "bypassPermissions".
   "permissionMode": "auto",
 
   "ciTimeoutMinutes": 30,

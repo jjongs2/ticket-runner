@@ -330,11 +330,11 @@ describe("CI", () => {
   it("waits for the PR checks up to the configured timeout", async () => {
     await run({ ciTimeoutMinutes: 5 });
 
-    expect(tracker.checkWaits).toEqual([{ pullRequest: 100, timeoutMs: 5 * 60_000 }]);
+    expect(tracker.ciWaits).toEqual([{ pullRequest: 100, timeoutMs: 5 * 60_000 }]);
   });
 
   it("hands off when a check fails", async () => {
-    tracker.checks = { state: "failed", summary: "checks/build failed" };
+    tracker.ci = { state: "failed", summary: "checks/build failed" };
 
     const outcome = await run();
 
@@ -343,7 +343,7 @@ describe("CI", () => {
   });
 
   it("hands off when the PR has no checks at all", async () => {
-    tracker.checks = { state: "none" };
+    tracker.ci = { state: "none" };
 
     const outcome = await run();
 
@@ -352,17 +352,69 @@ describe("CI", () => {
   });
 
   it("hands off when CI does not finish in time", async () => {
-    tracker.checks = { state: "timed-out" };
+    tracker.ci = { state: "timed-out" };
 
     expect(await run()).toMatchObject({ outcome: "handed-off", stage: "ci" });
   });
 
   it("merges a PR with no checks when the CI gate is off", async () => {
-    tracker.checks = { state: "none" };
+    tracker.ci = { state: "none" };
 
     expect(await run({ gates: { checks: true, ci: false } })).toMatchObject({
       outcome: "merged",
     });
+  });
+
+  it("still refuses a red PR when the CI gate is off", async () => {
+    tracker.ci = { state: "failed", summary: "checks/build failed" };
+
+    expect(await run({ gates: { checks: true, ci: false } })).toMatchObject({
+      outcome: "handed-off",
+      stage: "ci",
+    });
+  });
+
+  it("still refuses a PR whose checks never finished when the CI gate is off", async () => {
+    tracker.ci = { state: "timed-out" };
+
+    expect(await run({ gates: { checks: true, ci: false } })).toMatchObject({
+      outcome: "handed-off",
+      stage: "ci",
+    });
+  });
+});
+
+describe("failures the pipeline did not expect", () => {
+  it("names the step it was on rather than blaming the merge", async () => {
+    workspace.createWorktree = async () => {
+      throw new Error("worktree path already exists");
+    };
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "setup" });
+    expect(handoffBody()).toContain("worktree path already exists");
+  });
+
+  it("blames the PR step when the push fails", async () => {
+    workspace.push = async () => {
+      throw new Error("remote rejected");
+    };
+
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "pr" });
+  });
+
+  it("reports a merged Ticket even when cleaning up afterwards fails", async () => {
+    workspace.removeWorktree = async () => {
+      throw new Error("worktree is locked");
+    };
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged", pullRequest: 100 });
+    expect(tracker.pullRequest(100).merged).toBe(true);
+    expect(tracker.comments).toEqual([]);
+    expect(tracker.issue(TICKET).labels).toEqual(["in-progress"]);
   });
 });
 
@@ -391,7 +443,7 @@ describe("hand-off", () => {
 
   it("converts the existing PR to a draft rather than opening a second one", async () => {
     workspace.commits = 3;
-    tracker.checks = { state: "failed", summary: "checks/build failed" };
+    tracker.ci = { state: "failed", summary: "checks/build failed" };
 
     await run();
 

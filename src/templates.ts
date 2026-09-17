@@ -3,7 +3,7 @@
  * source of truth for these; change it there first.
  */
 
-import type { StageName } from "./ports/agent-runner.js";
+import type { FailurePoint } from "./lifecycle.js";
 import { type Criterion, type Verdict, countStatuses } from "./verdict.js";
 
 /** How the pipeline finds its own hand-off comment again. */
@@ -46,7 +46,7 @@ export function pullRequestBody({ ticket, verdict, runId }: PullRequestBody): st
 
 export interface DraftPullRequestBody {
   ticket: number;
-  stage: string;
+  stage: FailurePoint;
   failure: string;
   runId: string;
 }
@@ -71,7 +71,7 @@ export function draftPullRequestBody({
 }
 
 export interface HandoffComment {
-  stage: StageName | "checks" | "rebase" | "pr" | "ci" | "merge";
+  stage: FailurePoint;
   /** One line a human can read in a notification. */
   failure: string;
   branch: string;

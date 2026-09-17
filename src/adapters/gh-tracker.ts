@@ -1,13 +1,12 @@
 import type {
-  ChecksOutcome,
+  CiOutcome,
   CreatePullRequest,
   Issue,
   LabelSpec,
   PullRequestRef,
   Tracker,
 } from "../ports/tracker.js";
-import type { RunProcess } from "./claude-agent-runner.js";
-import { type Execution, exec } from "./exec.js";
+import { type Execution, type RunProcess, exec, throwOnFailure } from "./exec.js";
 
 export interface GhTrackerOptions {
   run?: RunProcess;
@@ -19,7 +18,7 @@ export interface GhTrackerOptions {
 }
 
 /** One entry of `gh pr checks --json`. */
-interface CheckRun {
+interface CiCheck {
   name: string;
   bucket: string;
 }
@@ -28,10 +27,12 @@ interface CheckRun {
  * The GitHub-backed {@link Tracker}, spoken through the `gh` CLI so it reuses
  * the repo's own auth and conventions.
  *
- * Thin on purpose: argument building and output parsing, no decisions.
+ * Argument building and output parsing, plus the one piece of waiting the port
+ * owns: polling a pull request's CI until it settles or the caller's timeout
+ * runs out. What that outcome means is the orchestrator's decision.
  */
 export class GhTracker implements Tracker {
-  private readonly run_: RunProcess;
+  private readonly runProcess: RunProcess;
   private readonly cwd: string | undefined;
   private readonly baseBranch: string;
   private readonly pollIntervalMs: number;
@@ -39,7 +40,7 @@ export class GhTracker implements Tracker {
   private readonly now: () => number;
 
   constructor(options: GhTrackerOptions = {}) {
-    this.run_ = options.run ?? exec;
+    this.runProcess = options.run ?? exec;
     this.cwd = options.cwd;
     this.baseBranch = options.baseBranch ?? "main";
     this.pollIntervalMs = options.pollIntervalMs ?? 15_000;
@@ -147,10 +148,10 @@ export class GhTracker implements Tracker {
   }
 
   /**
-   * Poll the PR's checks until they settle or the timeout runs out. A PR with
-   * no checks is reported as such, never as a pass.
+   * Poll the PR's CI until it settles or the timeout runs out. A PR with no
+   * checks is reported as such, never as a pass.
    */
-  async waitForChecks(number: number, timeoutMs: number): Promise<ChecksOutcome> {
+  async waitForCi(number: number, timeoutMs: number): Promise<CiOutcome> {
     const deadline = this.now() + timeoutMs;
 
     for (;;) {
@@ -159,7 +160,7 @@ export class GhTracker implements Tracker {
         { allowFailure: true },
       );
 
-      const outcome = readChecks(result);
+      const outcome = readCi(result);
       if (outcome !== "pending") return outcome;
       if (this.now() >= deadline) return { state: "timed-out" };
       await this.sleep(this.pollIntervalMs);
@@ -178,23 +179,20 @@ export class GhTracker implements Tracker {
     args: string[],
     options: { allowFailure?: boolean } = {},
   ): Promise<Execution> {
-    const result = await this.run_("gh", args, {
+    const result = await this.runProcess("gh", args, {
       ...(this.cwd === undefined ? {} : { cwd: this.cwd }),
     });
-    if (result.exitCode !== 0 && !options.allowFailure) {
-      throw new Error(`\`gh ${args.join(" ")}\` exited ${result.exitCode}\n${result.output.trim()}`);
-    }
-    return result;
+    return options.allowFailure ? result : throwOnFailure("gh", args, result);
   }
 }
 
 /** `pending` means "ask again"; everything else is an answer. */
-function readChecks(result: Execution): ChecksOutcome | "pending" {
+function readCi(result: Execution): CiOutcome | "pending" {
   if (/no checks reported/i.test(result.stderr)) return { state: "none" };
 
-  let runs: CheckRun[];
+  let runs: CiCheck[];
   try {
-    runs = JSON.parse(result.stdout) as CheckRun[];
+    runs = JSON.parse(result.stdout) as CiCheck[];
   } catch {
     if (result.exitCode !== 0) return { state: "none" };
     throw new Error(`could not read gh pr checks output: ${result.output.trim()}`);

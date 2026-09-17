@@ -13,16 +13,16 @@ export interface CheckOutcome {
 
 export type RebaseOutcome = { ok: true } | { ok: false; conflict: string };
 
-export interface CreateWorktree {
+export interface WorktreeRef {
   path: string;
   branch: string;
 }
 
 export interface Workspace {
   /** Create `branch` fresh from main and check it out at `path`. */
-  createWorktree(options: CreateWorktree): Promise<void>;
+  createWorktree(worktree: WorktreeRef): Promise<void>;
   /** Remove the worktree and delete its branch. */
-  removeWorktree(options: CreateWorktree): Promise<void>;
+  removeWorktree(worktree: WorktreeRef): Promise<void>;
   /** Commits on `branch` that main does not have. */
   commitCount(branch: string): Promise<number>;
   runCheck(command: string, cwd: string): Promise<CheckOutcome>;
