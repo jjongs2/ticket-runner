@@ -220,6 +220,25 @@ describe("runSummary", () => {
     expect(summary).toContain("  skipped  #9 blocked");
   });
 
+  it("says where the rate limit landed on a released Ticket", () => {
+    const summary = runSummary({
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [
+        {
+          outcome: "released",
+          ticket: 6,
+          title: "Rebase conflict resolution",
+          branch: "agent/6-rebase-conflict-resolution",
+          stage: "implement",
+        },
+      ],
+      blocked: [],
+    });
+
+    expect(summary).toContain("  released #6 Rebase conflict resolution · rate limit at implement");
+  });
+
   it("names the guard that passed a candidate over", () => {
     const summary = runSummary({
       runId: "r1",

@@ -147,7 +147,11 @@ async function execute(work: Work, { repoRoot, config, runId }: Setup): Promise<
   return exitCode([outcome]);
 }
 
-/** A hand-off is what the exit code reports; a Run that took nothing is a 0. */
+/**
+ * A hand-off is what the exit code reports, because it is the one outcome that
+ * asks a human for something. A Run that took nothing is a 0, and so is one
+ * that released what it took: the rate limit resets and a later Run resumes it.
+ */
 function exitCode(outcomes: TicketOutcome[]): number {
   return outcomes.some((outcome) => outcome.outcome === "handed-off") ? 1 : 0;
 }

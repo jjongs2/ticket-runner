@@ -46,7 +46,7 @@ Write issue titles in the glossary's words and keep them short. Describe behavio
 
 ## Worktrees and local state
 
-- Pipeline worktrees live under `.worktrees/ticket-<n>`; Run logs and state under `.agent-pipeline/`. Both are gitignored and safe to delete when no Ticket is handed off or resumable.
+- Pipeline worktrees live under `.worktrees/ticket-<n>`; Run logs and state under `.agent-pipeline/`, where a released Ticket's resume state is `.agent-pipeline/state/ticket-<n>.json` (ADR-0004). Both are gitignored and safe to delete when no Ticket is handed off or resumable.
 - Attended work also happens in a worktree when a Run may be active, so the main checkout stays clean for the pipeline to pull.
 
 ## Code

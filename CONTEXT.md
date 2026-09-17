@@ -86,6 +86,14 @@ _Avoid_: report, review result, score
 The single fix Stage a Ticket is allowed. A failing Check, an unmet criterion or a red CI spends it, and processing resumes at the Checks; a second failure of any kind is a hand-off.
 _Avoid_: retry budget, fix limit, second chance
 
+**Release**:
+What a rate-limited Stage does to a Ticket instead of handing it to a human: the Claim is undone, `ready-for-agent` goes back on, the branch and worktree stay, and a State file says where to resume. Nothing about the Ticket was wrong, so no Fix budget is spent and nobody is notified.
+_Avoid_: pause, defer, requeue, unclaim
+
+**State file**:
+What a released Ticket leaves under `.agent-pipeline/state/`: the state it reached, its branch, and whether the Fix budget was spent. Its presence is what makes a candidate resumable; it is removed on merge and on hand-off.
+_Avoid_: checkpoint, journal, resume file
+
 **Note**:
 A finding a Stage makes that belongs to another Ticket, or to no Ticket yet. Routed to that Ticket's comments or to a new needs-triage issue; never acted on in the current Ticket.
 _Avoid_: handoff, finding, TODO, side note

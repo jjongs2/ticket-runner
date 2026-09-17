@@ -7,7 +7,8 @@ headless `claude -p` session driving `/mattpocock-skills:implement`, runs the Ch
 itself, has a fresh session adversarially grade the Acceptance Criteria, opens a PR,
 waits for CI and squash-merges. One failure along the way buys a fix Stage and a
 second pass. Anything it still cannot finish is handed to a human with a draft PR, a
-comment and the worktree left in place.
+comment and the worktree left in place. A Stage the subscription rate limit stops is
+nobody's fault, so the Ticket is released instead and a later Run resumes it.
 
 Vocabulary is defined in [`CONTEXT.md`](CONTEXT.md), decisions in [`docs/adr/`](docs/adr/),
 conventions in [`CONTRIBUTING.md`](CONTRIBUTING.md).
@@ -30,14 +31,16 @@ npm run agent-pipeline -- ticket 3    # one named Ticket
 has claimed and whose native `blocked by` issues have all closed. It takes them one at a
 time, lowest number first, and recomputes the Frontier after each one, so a merge that
 closes a blocker puts the Ticket it unblocked into the same Run. A Ticket that fails is
-handed off and the Run carries on. The Run ends when nothing is left to pick — the
-Frontier is empty, or everything still on it is blocked — and prints a summary:
+handed off, one the rate limit stopped is released, and the Run carries on either way. The
+Run ends when nothing is left to pick — the Frontier is empty, or everything still on it is
+blocked — and prints a summary:
 
 ```
 agent-pipeline run 2026-09-17T09-00-00-000 · 84m
 
   merged   #4 Planning guards (PR #12)
   handed   #5 Fix Stage with a single retry · verify · 1 unmet
+  released #6 Rebase conflict resolution · rate limit at implement
   skipped  #7 no-criteria
   skipped  #9 blocked
 
@@ -106,6 +109,45 @@ line lands there before the Stage starts, and its output as the Stage prints it,
 killed mid-Stage still leaves behind what it had reached. A Ticket that spends its fix
 budget writes the fix Stage and the pass it bought to `<n>/retry/`, so the transcripts of
 the pass that failed survive alongside them.
+
+## Rate limits
+
+A Stage that comes back rate-limited has failed at nothing: the subscription ran out of
+room, and blaming the Ticket for it would spend its fix budget on a fix Stage that would
+be stopped in turn. So the Ticket is **released** rather than handed over. The Claim is
+undone — assignee off, `in-progress` off, `ready-for-agent` back on — and the branch and
+worktree stay exactly as the Stage left them. Nobody is notified, because nobody has
+anything to do about it: the `⏸ rate limited` row in the progress table is the whole
+report. A released Ticket does not change the exit code, so a Run that released every
+Ticket it took still exits `0`.
+
+What the release leaves behind is a **State file** at
+`.agent-pipeline/state/ticket-<n>.json`, naming the state the Ticket reached, its branch,
+whether the fix budget was already spent, and the pull request if one was open
+([ADR-0004](docs/adr/0004-resume-state-is-a-local-file.md)):
+
+```json
+{
+  "ticket": 8,
+  "branch": "agent/8-rate-limit-release-and-resume",
+  "stage": "implemented",
+  "fixUsed": false,
+  "runId": "2026-09-17T09-00-00-000",
+  "releasedAt": "2026-09-17T10:14:02.511Z"
+}
+```
+
+A Run started once the limit has reset finds the Ticket back on the Frontier, reads that
+file and carries on in the worktree and on the branch it names rather than creating new
+ones: `claimed` runs the implement Stage again, `implemented` goes straight to the Checks.
+The fix budget is resumed as it was recorded, so a Ticket that had already spent it is
+handed off at its next failure — resuming buys no second chances. The file is removed when
+the Ticket merges and when it is handed off, and ignored if the worktree it names has since
+been cleaned up, in which case the Ticket simply starts over.
+
+The Run the limit stops does not wait for it to reset and does not take the Ticket it
+released a second time; it carries on down the Frontier, releasing whatever the limit
+stops next.
 
 ## What a Ticket gets told
 

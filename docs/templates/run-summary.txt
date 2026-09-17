@@ -11,6 +11,11 @@ Frontier empty.
 The verb is padded to nine columns so the Ticket numbers line up. A Run that
 took no Ticket prints `  nothing to do` in place of the rows.
 
+`released` is a Ticket the subscription rate limit stopped mid-flight: its
+Claim was undone and a state file left behind, so the next Run resumes it from
+the state it reached. Nobody has to do anything about it, which is why it is not
+`handed`.
+
 `skipped` names why a candidate was passed over: `blocked` for one an open
 blocker held back all Run, and otherwise the guard reason that kept it from
 being claimed — `spec`, `no-criteria` or `body-only-blockers` for Planning a
