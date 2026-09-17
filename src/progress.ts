@@ -18,9 +18,9 @@ import { findMarkedComment } from "./templates.js";
 export const PROGRESS_MARKER = "<!-- agent-pipeline:progress -->";
 
 /**
- * What a row is about. Named after the lifecycle step rather than the Stage,
- * for the reason {@link import("./lifecycle.js").FailurePoint} is: the Checks,
- * CI and the merge each earn a row and none of them is an agent session.
+ * What a row is about. Named after the lifecycle step rather than the Stage, for
+ * the reason `FailurePoint` in `lifecycle.ts` is: the Checks, CI and the merge
+ * each earn a row, and none of them is an agent session.
  */
 export type ProgressPoint =
   | "implement"
@@ -47,7 +47,7 @@ const NO_ANSWER = "–";
 export interface ProgressCommentBody {
   runId: string;
   branch: string;
-  /** Every Stage that has finished, oldest first. */
+  /** Every row so far, oldest first. */
   rows: ProgressRow[];
 }
 
