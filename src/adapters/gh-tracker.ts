@@ -3,6 +3,7 @@ import type {
   CiOutcome,
   CreatePullRequest,
   Issue,
+  IssueComment,
   LabelSpec,
   PullRequestRef,
   SquashCommit,
@@ -29,7 +30,7 @@ interface RawIssue {
   body: string;
   labels: { name: string }[];
   assignees: { login: string }[];
-  comments: { body: string }[];
+  comments: { body: string; url: string }[];
   subIssuesSummary?: { total?: number };
   blockedBy?: { nodes: { number: number }[] };
 }
@@ -122,7 +123,10 @@ export class GhTracker implements Tracker {
       body: raw.body ?? "",
       labels: raw.labels.map((label) => label.name),
       assignees: raw.assignees.map((assignee) => assignee.login),
-      comments: raw.comments.map((comment) => comment.body),
+      comments: raw.comments.map((comment) => ({
+        id: commentId(comment.url),
+        body: comment.body,
+      })),
       ...relations(raw),
     };
   }
@@ -176,8 +180,31 @@ export class GhTracker implements Tracker {
     await this.editIssue(number, "--remove-label", label);
   }
 
-  async comment(number: number, body: string): Promise<void> {
-    await this.gh(["issue", "comment", String(number), "--body", body]);
+  /** `gh` prints the new comment's URL, which is the only handle it gives back. */
+  async comment(number: number, body: string): Promise<IssueComment> {
+    const { stdout } = await this.gh(["issue", "comment", String(number), "--body", body]);
+    return { id: commentId(stdout.trim().split("\n").at(-1) ?? ""), body };
+  }
+
+  /**
+   * Edit a comment in place.
+   *
+   * `gh` has no command for this, so it goes to the REST endpoint, which takes
+   * the numeric id {@link commentId} reads out of a comment URL.
+   */
+  async updateComment(id: string, body: string): Promise<void> {
+    await this.gh([
+      "api",
+      "--method",
+      "PATCH",
+      `repos/{owner}/{repo}/issues/comments/${id}`,
+      "-f",
+      `body=${body}`,
+    ]);
+  }
+
+  async updateIssueBody(number: number, body: string): Promise<void> {
+    await this.editIssue(number, "--body", body);
   }
 
   async createPullRequest(pr: CreatePullRequest): Promise<PullRequestRef> {
@@ -266,6 +293,24 @@ export class GhTracker implements Tracker {
     });
     return options.allowFailure ? result : throwOnFailure("gh", args, result);
   }
+}
+
+/** The numeric id a comment URL ends in, which is what the REST API edits by. */
+const COMMENT_ID = /#issuecomment-(\d+)\s*$/;
+
+/**
+ * A comment's id, read out of its URL.
+ *
+ * GitHub's REST API edits comments by a numeric id that `gh issue view` does not
+ * report — its `id` is the GraphQL node id — and `gh issue comment` reports
+ * nothing but a URL. The URL is the one handle both halves agree on, so both go
+ * through here, and a URL without an id in it is an error rather than a handle
+ * that fails later at the edit.
+ */
+function commentId(url: string): string {
+  const id = COMMENT_ID.exec(url);
+  if (!id) throw new Error(`could not read a comment id from: ${url || "(no url)"}`);
+  return id[1] as string;
 }
 
 /**

@@ -6,7 +6,7 @@
 import type { GuardReason } from "./guards.js";
 import type { FailurePoint } from "./lifecycle.js";
 import type { TicketOutcome } from "./orchestrator.js";
-import type { SquashCommit } from "./ports/tracker.js";
+import type { IssueComment, SquashCommit } from "./ports/tracker.js";
 import { type Criterion, type Verdict, countStatuses } from "./verdict.js";
 
 /** How the pipeline finds its own hand-off comment again. */
@@ -36,9 +36,9 @@ const GUARD_SENTENCES: Record<GuardReason, string> = {
  * The marker is the first line of every pipeline comment, which is the whole
  * point of it: this is how a second Run knows it has nothing new to say.
  */
-export function hasGuardWarning(comments: string[], reason: GuardReason): boolean {
+export function hasGuardWarning(comments: IssueComment[], reason: GuardReason): boolean {
   const marker = guardMarker(reason);
-  return comments.some((body) => body.trimStart().startsWith(marker));
+  return comments.some((comment) => comment.body.trimStart().startsWith(marker));
 }
 
 /** The one warning a skipped candidate gets. Two sentences: the reason, the fix. */

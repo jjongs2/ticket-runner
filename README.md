@@ -107,6 +107,33 @@ killed mid-Stage still leaves behind what it had reached. A Ticket that spends i
 budget writes the fix Stage and the pass it bought to `<n>/retry/`, so the transcripts of
 the pass that failed survive alongside them.
 
+## What a Ticket gets told
+
+A Run reports on a Ticket a dozen times, so it says almost all of it in one comment.
+The first Stage posts a **progress comment** carrying a hidden marker and a table, and
+every Stage after it rewrites that same comment in place — so the Ticket gets one
+notification, not a dozen, and the table reads top to bottom as the Run happened:
+
+```
+| Stage | Outcome | Turns | Duration |
+|---|---|---|---|
+| implement | ✅ committed | 46 | 21m |
+| checks | ❌ `npm test` failed | – | 2m |
+| fix | ✅ committed | 12 | 6m |
+| checks | ✅ passed | – | 2m |
+| verify | ✅ 6 met · 1 unverifiable | 9 | 4m |
+| ci | ✅ passed | – | 3m |
+| merge | ✅ #31 | – | – |
+```
+
+A later Run finds that comment by its marker and carries on in it rather than starting a
+second table. Details never go in a cell: a hand-off, its evidence and a guard warning
+stay comments of their own, because those are the ones worth a notification.
+
+When the Ticket merges, every criterion the Verdict marked `met` is ticked where it is
+written, in the body or in the comment triage posted it in. An `unverifiable` one is
+left unticked: nobody gathered the evidence that would justify the tick.
+
 ## Rebase conflicts
 
 A branch that will not replay onto `main` is not a defect in the branch: `main` moved on

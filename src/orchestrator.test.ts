@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Config } from "./config.js";
 import { processTicket } from "./orchestrator.js";
+import { PROGRESS_MARKER } from "./progress.js";
 import type { TicketOutcome } from "./orchestrator.js";
 import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./testing/fakes.js";
 
@@ -58,6 +59,12 @@ const MIXED_VERDICT = verdictResult([
 const UNMET_VERDICT = verdictResult([
   { text: "it works", status: "unmet", evidence: "npm test is red" },
 ]);
+
+/**
+ * The comments a human is notified about. The progress comment is not one of
+ * them after its first Stage, which is the whole point of editing it in place.
+ */
+const notices = () => tracker.comments.filter(({ body }) => !body.startsWith(PROGRESS_MARKER));
 
 let tracker: FakeTracker;
 let runner: FakeAgentRunner;
@@ -151,7 +158,7 @@ describe("the happy path", () => {
 
     expect(tracker.issue(TICKET).labels).toEqual([]);
     expect(tracker.issue(TICKET).assignees).toEqual(["pipeline-user"]);
-    expect(tracker.comments).toEqual([]);
+    expect(notices()).toEqual([]);
   });
 });
 
@@ -659,7 +666,7 @@ describe("failures the pipeline did not expect", () => {
 
     expect(outcome).toMatchObject({ outcome: "merged", pullRequest: 100 });
     expect(tracker.pullRequest(100).merged).toBe(true);
-    expect(tracker.comments).toEqual([]);
+    expect(notices()).toEqual([]);
     expect(tracker.issue(TICKET).labels).toEqual([]);
   });
 });
@@ -1054,7 +1061,7 @@ describe("the Planning guards", () => {
   it("takes the criteria a triage comment posted instead of the body", async () => {
     const issue = tracker.issue(TICKET);
     issue.body = "## What to build\n\nSomething good.";
-    issue.comments = ["Brief:\n\n- [ ] it works"];
+    issue.comments = [{ id: "c0", body: "Brief:\n\n- [ ] it works" }];
 
     const outcome = await run();
 
@@ -1095,7 +1102,9 @@ describe("the Planning guards", () => {
   it("warns again when a second guard has something else to say", async () => {
     const issue = tracker.issue(TICKET);
     issue.body = "## What to build\n\nSomething good.";
-    issue.comments = ["<!-- agent-pipeline:guard:body-only-blockers -->\n**Skipped by agent-pipeline.**"];
+    issue.comments = [
+      { id: "c0", body: "<!-- agent-pipeline:guard:body-only-blockers -->\n**Skipped.**" },
+    ];
 
     await run();
 
@@ -1144,6 +1153,193 @@ describe("an issue that is nobody\u0027s to take", () => {
     });
 
     expect(outcome).toMatchObject({ outcome: "skipped", reason: "not-ready" });
+  });
+});
+
+describe("the progress comment", () => {
+  /** The one comment the Stages share, as it stands on the Ticket now. */
+  function table(): string {
+    const progress = tracker.issue(TICKET).comments.filter(({ body }) =>
+      body.startsWith(PROGRESS_MARKER),
+    );
+    if (progress.length !== 1) {
+      throw new Error(`expected one progress comment, found ${progress.length}`);
+    }
+    return progress[0]?.body as string;
+  }
+
+  /** The Stage column, top to bottom. */
+  function rows(): string[] {
+    return [...table().matchAll(/^\| ([a-z]+) \|/gm)].map((row) => row[1] as string);
+  }
+
+  it("creates one comment on the first Stage of a Ticket", async () => {
+    runner.queue("implement", { ok: false, failure: "turn-capped" });
+
+    await run();
+
+    expect(tracker.comments.filter(({ body }) => body.startsWith(PROGRESS_MARKER))).toHaveLength(1);
+    expect(table()).toContain("| Stage | Outcome | Turns | Duration |");
+    expect(rows()).toEqual(["implement"]);
+  });
+
+  it("edits that comment on every later Stage rather than adding another", async () => {
+    await run();
+
+    expect(tracker.comments.filter(({ body }) => body.startsWith(PROGRESS_MARKER))).toHaveLength(1);
+    expect(rows()).toEqual(["implement", "checks", "verify", "ci", "merge"]);
+    expect(tracker.updatedComments.length).toBeGreaterThan(0);
+  });
+
+  it("reports what each Stage did, with its turns", async () => {
+    await run();
+
+    expect(table()).toContain("| implement | ✅ committed | 7 | 0m |");
+    expect(table()).toContain("| checks | ✅ passed | – | 0m |");
+    expect(table()).toContain("| verify | ✅ 1 met · 0 unverifiable | 7 | 0m |");
+    expect(table()).toContain("| merge | ✅ #100 | – | – |");
+  });
+
+  it("names the Run and the branch it is reporting on", async () => {
+    await run();
+
+    expect(table()).toContain(`run \`run-1\` · \`${BRANCH}\``);
+  });
+
+  it("adds a row per pass when the fix budget buys a second one", async () => {
+    workspace.failCheckOnce("npm test", "1 failing");
+
+    await run();
+
+    expect(rows()).toEqual([
+      "implement",
+      "checks",
+      "fix",
+      "checks",
+      "verify",
+      "ci",
+      "merge",
+    ]);
+    expect(table()).toContain("| checks | ❌ \`npm test\` failed | – | 0m |");
+  });
+
+  it("adds a conflict row and the Checks that re-grade what it resolved", async () => {
+    workspace.conflictOnce(CONFLICT);
+
+    await run();
+
+    expect(rows()).toEqual([
+      "implement",
+      "checks",
+      "verify",
+      "conflict",
+      "checks",
+      "ci",
+      "merge",
+    ]);
+    expect(table()).toContain("| conflict | ✅ rebased | 7 | 0m |");
+  });
+
+  it("reuses the comment an earlier Run left on the Ticket", async () => {
+    tracker.issue(TICKET).comments.push({
+      id: "99",
+      body: `${PROGRESS_MARKER}\n**agent-pipeline** · run \`run-0\` · \`${BRANCH}\`\n`,
+    });
+
+    await run();
+
+    expect(tracker.comments.filter(({ body }) => body.startsWith(PROGRESS_MARKER))).toEqual([]);
+    expect(tracker.updatedComments.every(({ id }) => id === "99")).toBe(true);
+    expect(table()).toContain("run \`run-1\`");
+  });
+
+  it("merges a Ticket the tracker would not take a progress comment for", async () => {
+    tracker.comment = async () => {
+      throw new Error("502 from GitHub");
+    };
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+  });
+});
+
+describe("what stays a separate comment", () => {
+  it("posts the hand-off and its evidence beside the table, not inside it", async () => {
+    workspace.failCheck("npm test", "1 failing · expected true to be false");
+
+    await run();
+
+    const handoff = tracker.comments.filter(({ body }) =>
+      body.startsWith("<!-- agent-pipeline:handoff -->"),
+    );
+    expect(handoff).toHaveLength(1);
+    expect(handoff[0]?.body).toContain("1 failing · expected true to be false");
+
+    const progress = tracker.issue(TICKET).comments.find(({ body }) =>
+      body.startsWith(PROGRESS_MARKER),
+    );
+    expect(progress?.body).toContain("| checks | ❌ \`npm test\` failed |");
+    expect(progress?.body).not.toContain("expected true to be false");
+  });
+
+  it("leaves a guard warning a comment of its own, with no table beside it", async () => {
+    tracker.issue(TICKET).body = "## What to build\n\nSomething good.";
+
+    await run();
+
+    expect(tracker.comments.map(({ body }) => body.split("\n")[0])).toEqual([
+      "<!-- agent-pipeline:guard:no-criteria -->",
+    ]);
+  });
+});
+
+describe("ticking the Acceptance Criteria a merge proved", () => {
+  const MIXED_BODY = "- [ ] it works\n- [ ] the docs say so\n";
+
+  beforeEach(() => {
+    tracker.issue(TICKET).body = MIXED_BODY;
+    runner.queue("verify", { result: MIXED_VERDICT });
+  });
+
+  it("ticks the met criteria in the body and leaves the unverifiable ones", async () => {
+    await run();
+
+    expect(tracker.issue(TICKET).body).toBe("- [x] it works\n- [ ] the docs say so\n");
+  });
+
+  it("ticks criteria a triage comment posted instead of the body", async () => {
+    tracker.issue(TICKET).body = "## What to build\n\nSomething good.";
+    tracker.issue(TICKET).comments.push({ id: "77", body: "Brief:\n\n- [ ] it works\n" });
+
+    await run();
+
+    expect(tracker.updatedComments).toContainEqual({
+      id: "77",
+      body: "Brief:\n\n- [x] it works\n",
+    });
+  });
+
+  it("leaves the body alone when the Verdict proved nothing that is in it", async () => {
+    tracker.issue(TICKET).body = "- [ ] something nobody graded\n";
+
+    await run();
+
+    expect(tracker.calls).not.toContain(`updateIssueBody:${TICKET}`);
+  });
+
+  it("ticks nothing until the Ticket has actually merged", async () => {
+    workspace.failCheck("npm test", "1 failing");
+
+    await run();
+
+    expect(tracker.issue(TICKET).body).toBe(MIXED_BODY);
+  });
+
+  it("reports a merged Ticket even when the tick cannot be written", async () => {
+    tracker.updateIssueBody = async () => {
+      throw new Error("issue is locked");
+    };
+
+    expect(await run()).toMatchObject({ outcome: "merged", pullRequest: 100 });
   });
 });
 

@@ -18,6 +18,7 @@ import type {
   CiOutcome,
   CreatePullRequest,
   Issue,
+  IssueComment,
   LabelSpec,
   PullRequestRef,
   SquashCommit,
@@ -44,6 +45,8 @@ export class FakeTracker implements Tracker {
   createdLabels: LabelSpec[] = [];
   issues = new Map<number, Issue>();
   comments: { issue: number; body: string }[] = [];
+  /** Every in-place comment edit, in order, as {@link updateComment} took it. */
+  updatedComments: { id: string; body: string }[] = [];
   pullRequests: FakePullRequest[] = [];
   ci: CiOutcome = { state: "passed" };
   /** Outcomes for the next CI waits, oldest first; `ci` answers once they run out. */
@@ -56,6 +59,7 @@ export class FakeTracker implements Tracker {
   onSquashMerge: ((pullRequest: number) => void) | undefined;
   ciWaits: { pullRequest: number; timeoutMs: number }[] = [];
   calls: string[] = [];
+  private nextCommentId = 1;
 
   addIssue(issue: Partial<Issue> & { number: number }): Issue {
     const full: Issue = {
@@ -134,12 +138,29 @@ export class FakeTracker implements Tracker {
     issue.labels = issue.labels.filter((l) => l !== label);
   }
 
-  async comment(number: number, body: string): Promise<void> {
+  async comment(number: number, body: string): Promise<IssueComment> {
     this.calls.push(`comment:${number}`);
     this.comments.push({ issue: number, body });
     // A comment is on the issue from now on, which is what the next getIssue
     // has to see: the pipeline finds its own comments again by marker.
-    this.issues.get(number)?.comments.push(body);
+    const posted: IssueComment = { id: `c${this.nextCommentId++}`, body };
+    this.issues.get(number)?.comments.push(posted);
+    return { ...posted };
+  }
+
+  async updateComment(id: string, body: string): Promise<void> {
+    this.calls.push(`updateComment:${id}`);
+    this.updatedComments.push({ id, body });
+    const comment = [...this.issues.values()]
+      .flatMap((issue) => issue.comments)
+      .find((candidate) => candidate.id === id);
+    if (!comment) throw new Error(`no such comment: ${id}`);
+    comment.body = body;
+  }
+
+  async updateIssueBody(number: number, body: string): Promise<void> {
+    this.calls.push(`updateIssueBody:${number}`);
+    this.issue(number).body = body;
   }
 
   async createPullRequest(pr: CreatePullRequest): Promise<PullRequestRef> {

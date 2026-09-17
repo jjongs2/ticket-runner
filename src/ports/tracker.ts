@@ -11,6 +11,19 @@ export interface LabelSpec {
   description: string;
 }
 
+/**
+ * One comment on an issue, carried with the id the pipeline edits it by.
+ *
+ * The pipeline writes comments it later has to find and change — the progress
+ * comment it edits every Stage, the Acceptance Criteria it ticks when a Ticket
+ * merges — so a body on its own is not enough to go on.
+ */
+export interface IssueComment {
+  /** GitHub's own id for the comment, as {@link Tracker.updateComment} takes it. */
+  id: string;
+  body: string;
+}
+
 export interface Issue {
   number: number;
   title: string;
@@ -18,7 +31,7 @@ export interface Issue {
   body: string;
   labels: string[];
   assignees: string[];
-  comments: string[];
+  comments: IssueComment[];
   /** How many native sub-issues it has; anything above zero is a Spec. */
   subIssues: number;
   /**
@@ -89,7 +102,17 @@ export interface Tracker {
   unassign(number: number, user: string): Promise<void>;
   addLabel(number: number, label: string): Promise<void>;
   removeLabel(number: number, label: string): Promise<void>;
-  comment(number: number, body: string): Promise<void>;
+  /** Post a comment, and say which one it is so it can be edited later. */
+  comment(number: number, body: string): Promise<IssueComment>;
+  /** Replace a comment's body, leaving it where it is in the thread. */
+  updateComment(id: string, body: string): Promise<void>;
+  /**
+   * Replace an issue's body.
+   *
+   * Only ever used to tick Acceptance Criteria a Verdict proved, so whatever
+   * else the body says is read first and written back unchanged.
+   */
+  updateIssueBody(number: number, body: string): Promise<void>;
   createPullRequest(pr: CreatePullRequest): Promise<PullRequestRef>;
   convertPullRequestToDraft(number: number): Promise<void>;
   /**

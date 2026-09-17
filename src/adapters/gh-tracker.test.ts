@@ -58,7 +58,12 @@ describe("reading", () => {
           body: "- [ ] it works",
           labels: [{ name: "ready-for-agent" }],
           assignees: [{ login: "octocat" }],
-          comments: [{ body: "extra criteria" }],
+          comments: [
+            {
+              body: "extra criteria",
+              url: "https://github.com/acme/repo/issues/2#issuecomment-5714903734",
+            },
+          ],
           subIssuesSummary: { total: 0, completed: 0, percentCompleted: 0 },
           blockedBy: { nodes: [{ number: 3 }, { number: 7 }], totalCount: 2 },
         }),
@@ -72,7 +77,7 @@ describe("reading", () => {
       body: "- [ ] it works",
       labels: ["ready-for-agent"],
       assignees: ["octocat"],
-      comments: ["extra criteria"],
+      comments: [{ id: "5714903734", body: "extra criteria" }],
       subIssues: 0,
       blockedBy: [3, 7],
     });
@@ -236,7 +241,10 @@ describe("writing", () => {
   });
 
   it("comments with the body as a single argument", async () => {
-    await tracker(ok("")).comment(2, "<!-- agent-pipeline:handoff -->\nline two");
+    await tracker(ok("https://github.com/acme/repo/issues/2#issuecomment-99\n")).comment(
+      2,
+      "<!-- agent-pipeline:handoff -->\nline two",
+    );
 
     expect(calls[0]).toEqual([
       "issue",
@@ -245,6 +253,37 @@ describe("writing", () => {
       "--body",
       "<!-- agent-pipeline:handoff -->\nline two",
     ]);
+  });
+
+  it("reports the id of the comment it just posted, for editing later", async () => {
+    const posted = await tracker(
+      ok("https://github.com/acme/repo/issues/2#issuecomment-5714903734\n"),
+    ).comment(2, "<!-- agent-pipeline:progress -->");
+
+    expect(posted).toEqual({ id: "5714903734", body: "<!-- agent-pipeline:progress -->" });
+  });
+
+  it("refuses a comment it was given no id for, rather than one that cannot be edited", async () => {
+    await expect(tracker(ok("")).comment(2, "body")).rejects.toThrow(/comment id/);
+  });
+
+  it("edits a comment in place through the REST endpoint", async () => {
+    await tracker(ok("")).updateComment("5714903734", "the table, one row longer");
+
+    expect(calls[0]).toEqual([
+      "api",
+      "--method",
+      "PATCH",
+      "repos/{owner}/{repo}/issues/comments/5714903734",
+      "-f",
+      "body=the table, one row longer",
+    ]);
+  });
+
+  it("replaces an issue body, which is where the criteria are ticked", async () => {
+    await tracker(ok("")).updateIssueBody(2, "- [x] it works");
+
+    expect(calls[0]).toEqual(["issue", "edit", "2", "--body", "- [x] it works"]);
   });
 });
 
