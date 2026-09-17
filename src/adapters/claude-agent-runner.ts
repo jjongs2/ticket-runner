@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type {
   AgentRunner,
@@ -40,16 +40,22 @@ export class ClaudeAgentRunner implements AgentRunner {
     this.runProcess = options.run ?? exec;
   }
 
-  private async spawn(request: StageRequest, args: string[]): Promise<Execution> {
+  private async spawn(
+    request: StageRequest,
+    args: string[],
+    log: StageLog,
+  ): Promise<Execution> {
     try {
       return await this.runProcess(this.binary, args, {
         cwd: request.cwd,
         timeoutMs: request.maxMinutes * 60_000,
         // The Stage mark the CLI refuses on, so the session cannot nest a Run.
         extraEnv: stageEnv(request),
+        onStdout: log.appendStdout,
+        onStderr: log.appendStderr,
       });
     } catch (error) {
-      return spawnFailure(error);
+      return spawnFailure(error, log);
     }
   }
 
@@ -58,10 +64,13 @@ export class ClaudeAgentRunner implements AgentRunner {
     const commandLine = quoteCommand(stageEnv(request), this.binary, args);
     const startedAt = Date.now();
 
-    const execution = await this.spawn(request, args);
+    // Opened before the child starts: a Run killed mid-Stage still leaves the
+    // command line and everything printed so far behind.
+    const log = openStageLog(request, commandLine);
+    const execution = await this.spawn(request, args, log);
 
     const events = parseEvents(execution.stdout);
-    const transcriptPath = save(request, commandLine, execution, events);
+    log.writeTranscript(events);
 
     const result = events.findLast(isResultEvent);
     const failure = classify(request, execution, result);
@@ -72,7 +81,7 @@ export class ClaudeAgentRunner implements AgentRunner {
       ...(failure === undefined ? {} : { failure }),
       ...(structured === undefined ? {} : { result: structured }),
       commandLine,
-      transcriptPath,
+      transcriptPath: log.transcriptPath,
       ...(result?.num_turns === undefined ? {} : { turns: result.num_turns }),
       durationMs: result?.duration_ms ?? Date.now() - startedAt,
     };
@@ -80,8 +89,9 @@ export class ClaudeAgentRunner implements AgentRunner {
 }
 
 /** A session that could not even start still has to leave a trace behind. */
-async function spawnFailure(error: unknown): Promise<Execution> {
+async function spawnFailure(error: unknown, log: StageLog): Promise<Execution> {
   const message = `agent-pipeline could not start the Stage: ${(error as Error).message}\n`;
+  log.appendStderr(message);
   return { exitCode: 1, stdout: "", stderr: message, output: message };
 }
 
@@ -113,25 +123,40 @@ function buildArgs(request: StageRequest): string[] {
   return args;
 }
 
-/** Write the command line, stdout, stderr and transcript for this Stage. */
-function save(
-  request: StageRequest,
-  commandLine: string,
-  execution: Execution,
-  events: unknown[],
-): string {
+/** This Stage's four files, open for the whole Stage. */
+interface StageLog {
+  transcriptPath: string;
+  appendStdout: (chunk: string) => void;
+  appendStderr: (chunk: string) => void;
+  writeTranscript: (events: unknown[]) => void;
+}
+
+/**
+ * Put the Stage's command line on disk and open its output files, before
+ * anything is spawned. Chunks are appended as they arrive rather than saved at
+ * the end, so the files hold what the session printed even if nobody is left
+ * alive to write them (#12). The transcript is the one derivation that has to
+ * wait: it is parsed out of the stdout the session has finished printing.
+ */
+function openStageLog(request: StageRequest, commandLine: string): StageLog {
   mkdirSync(request.logDir, { recursive: true });
-  const transcriptPath = join(request.logDir, `${request.stage}.transcript.jsonl`);
+  const path = (suffix: string) => join(request.logDir, `${request.stage}.${suffix}`);
 
-  writeFileSync(join(request.logDir, `${request.stage}.command`), `${commandLine}\n`);
-  writeFileSync(join(request.logDir, `${request.stage}.stdout`), execution.stdout);
-  writeFileSync(join(request.logDir, `${request.stage}.stderr`), execution.stderr);
-  writeFileSync(
-    transcriptPath,
-    events.map((event) => JSON.stringify(event)).join("\n") + (events.length ? "\n" : ""),
-  );
+  writeFileSync(path("command"), `${commandLine}\n`);
+  // Truncated up front, so a re-run of a Stage never appends to stale output.
+  writeFileSync(path("stdout"), "");
+  writeFileSync(path("stderr"), "");
 
-  return transcriptPath;
+  return {
+    transcriptPath: path("transcript.jsonl"),
+    appendStdout: (chunk) => appendFileSync(path("stdout"), chunk),
+    appendStderr: (chunk) => appendFileSync(path("stderr"), chunk),
+    writeTranscript: (events) =>
+      writeFileSync(
+        path("transcript.jsonl"),
+        events.map((event) => JSON.stringify(event)).join("\n") + (events.length ? "\n" : ""),
+      ),
+  };
 }
 
 function parseEvents(stdout: string): unknown[] {

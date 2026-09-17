@@ -15,6 +15,13 @@ export interface ExecOptions {
   timeoutMs?: number;
   /** Variables merged over the environment the child inherits, not replacing it. */
   extraEnv?: Record<string, string>;
+  /**
+   * Called with each chunk the child prints, as it arrives. What the caller
+   * does with a chunk is done before the child exits, so output survives a
+   * process that dies mid-run (#12).
+   */
+  onStdout?: (chunk: string) => void;
+  onStderr?: (chunk: string) => void;
 }
 
 /**
@@ -61,10 +68,12 @@ export function exec(
     child.stdout.on("data", (chunk: string) => {
       stdout += chunk;
       output += chunk;
+      options.onStdout?.(chunk);
     });
     child.stderr.on("data", (chunk: string) => {
       stderr += chunk;
       output += chunk;
+      options.onStderr?.(chunk);
     });
 
     child.on("error", (error) => {

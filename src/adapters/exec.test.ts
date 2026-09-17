@@ -42,3 +42,49 @@ describe("the child environment", () => {
     expect({ ...process.env }).toEqual(before);
   });
 });
+
+describe("streaming the child's output", () => {
+  /** Prints on one stream, then stays alive long enough to prove the point. */
+  function printThenLinger(stream: "stdout" | "stderr"): [string, string[]] {
+    return [
+      "node",
+      ["-e", `process.${stream}.write("early"); setTimeout(() => {}, 300);`],
+    ];
+  }
+
+  it("hands a stdout chunk to the caller while the child is still running", async () => {
+    let arrived!: (chunk: string) => void;
+    const chunk = new Promise<string>((resolve) => {
+      arrived = resolve;
+    });
+
+    const running = exec(...printThenLinger("stdout"), { onStdout: arrived });
+
+    await expect(Promise.race([chunk, running.then(() => "exited")])).resolves.toBe("early");
+    await running;
+  });
+
+  it("hands a stderr chunk over the same way", async () => {
+    let arrived!: (chunk: string) => void;
+    const chunk = new Promise<string>((resolve) => {
+      arrived = resolve;
+    });
+
+    const running = exec(...printThenLinger("stderr"), { onStderr: arrived });
+
+    await expect(Promise.race([chunk, running.then(() => "exited")])).resolves.toBe("early");
+    await running;
+  });
+
+  it("still returns the whole output the chunks add up to", async () => {
+    const seen: string[] = [];
+    const script = `process.stdout.write("one"); process.stdout.write("two");`;
+
+    const result = await exec("node", ["-e", script], {
+      onStdout: (chunk) => seen.push(chunk),
+    });
+
+    expect(seen.join("")).toBe("onetwo");
+    expect(result.stdout).toBe("onetwo");
+  });
+});

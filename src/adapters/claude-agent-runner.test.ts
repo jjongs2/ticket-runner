@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -34,7 +34,11 @@ function runner(result: Execution | ((args: string[]) => Execution)) {
   return new ClaudeAgentRunner({
     run: async (command, args, options) => {
       calls.push({ command, args, options });
-      return typeof result === "function" ? result(args) : result;
+      const execution = typeof result === "function" ? result(args) : result;
+      // A real child prints its output before it exits, not after.
+      if (execution.stdout !== "") options.onStdout?.(execution.stdout);
+      if (execution.stderr !== "") options.onStderr?.(execution.stderr);
+      return execution;
     },
   });
 }
@@ -135,6 +139,55 @@ describe("saved logs", () => {
     const lines = readFileSync(result.transcriptPath, "utf8").trim().split("\n");
     expect(lines).toHaveLength(3);
     expect(JSON.parse(lines[0] as string)).toMatchObject({ type: "system" });
+  });
+});
+
+describe("logs written while the Stage runs", () => {
+  /** Reads what is on disk at the moment the process runner is invoked. */
+  function probing(read: (path: (suffix: string) => string) => void) {
+    return new ClaudeAgentRunner({
+      run: async (_command, _args, options) => {
+        options.onStdout?.(SUCCESS);
+        options.onStderr?.("a warning\n");
+        read((suffix) => join(logDir, `implement.${suffix}`));
+        return execution({ stdout: SUCCESS, stderr: "a warning\n" });
+      },
+    });
+  }
+
+  it("has the command line on disk before the child is spawned", async () => {
+    let onDisk: string | undefined;
+    let transcriptExists = true;
+
+    await probing((path) => {
+      onDisk = readFileSync(path("command"), "utf8");
+      transcriptExists = existsSync(path("transcript.jsonl"));
+    }).run(request());
+
+    expect(onDisk).toContain("claude --print");
+    // The transcript is the one file that can only be written after the exit.
+    expect(transcriptExists).toBe(false);
+  });
+
+  it("appends stdout and stderr as the child prints them, not after it exits", async () => {
+    let stdout: string | undefined;
+    let stderr: string | undefined;
+
+    await probing((path) => {
+      stdout = readFileSync(path("stdout"), "utf8");
+      stderr = readFileSync(path("stderr"), "utf8");
+    }).run(request());
+
+    expect(stdout).toBe(SUCCESS);
+    expect(stderr).toBe("a warning\n");
+  });
+
+  it("starts each Stage from empty files rather than an earlier Stage's output", async () => {
+    await runner(execution({ stdout: SUCCESS, stderr: "first\n" })).run(request());
+    await runner(execution({ stdout: SUCCESS, stderr: "second\n" })).run(request());
+
+    expect(readFileSync(join(logDir, "implement.stderr"), "utf8")).toBe("second\n");
+    expect(readFileSync(join(logDir, "implement.stdout"), "utf8")).toBe(SUCCESS);
   });
 });
 
