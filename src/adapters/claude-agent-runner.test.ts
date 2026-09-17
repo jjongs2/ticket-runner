@@ -88,10 +88,10 @@ describe("the command line", () => {
 
   it("marks the child environment with the Stage, so it cannot start a nested Run", async () => {
     await runner(execution({ stdout: SUCCESS })).run(request());
-    expect(calls[0]?.options.env).toEqual({ AGENT_PIPELINE_STAGE: "implement" });
+    expect(calls[0]?.options.extraEnv).toEqual({ AGENT_PIPELINE_STAGE: "implement" });
 
     await runner(execution({ stdout: SUCCESS })).run(request({ stage: "verify" }));
-    expect(calls[1]?.options.env).toEqual({ AGENT_PIPELINE_STAGE: "verify" });
+    expect(calls[1]?.options.extraEnv).toEqual({ AGENT_PIPELINE_STAGE: "verify" });
   });
 
   it("passes the JSON schema only when the Stage asks for structured output", async () => {

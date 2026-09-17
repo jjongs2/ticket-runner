@@ -56,10 +56,10 @@ legitimately needs from this command:
 
 ```
 $ agent-pipeline ticket 13
-Refusing to start: AGENT_PIPELINE_STAGE=implement is set, so this shell belongs to the
-implement Stage of a Run that is already in progress. A Stage may not run the pipeline:
-doing so claims a Ticket on the live tracker, creates a second worktree and starts a
-nested Run. Exercise the pipeline through its tests and fakes instead.
+Refusing to start: AGENT_PIPELINE_STAGE is set to `implement`, so this shell belongs to
+the implement Stage of a Run that is already in progress. A Stage may not run the
+pipeline: doing so claims a Ticket on the live tracker, creates a second worktree and
+starts a nested Run. Exercise the pipeline through its tests and fakes instead.
 ```
 
 Exit code `2`, like every other Run that never started. The variable is a tripwire against

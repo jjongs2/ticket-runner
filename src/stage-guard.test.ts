@@ -26,9 +26,9 @@ describe("nestedRunRefusal", () => {
     );
   });
 
-  it("treats a blank value as a shell nobody marked", () => {
-    expect(nestedRunRefusal({ [STAGE_ENV_VAR]: "" })).toBeUndefined();
-    expect(nestedRunRefusal({ [STAGE_ENV_VAR]: "  " })).toBeUndefined();
+  it("refuses a blanked mark too, since only an unset variable is a human's shell", () => {
+    expect(nestedRunRefusal({ [STAGE_ENV_VAR]: "" })).toContain(STAGE_ENV_VAR);
+    expect(nestedRunRefusal({ [STAGE_ENV_VAR]: "  " })).toMatch(/belongs to a Stage/);
   });
 
   it("points the session at the tests and fakes instead", () => {

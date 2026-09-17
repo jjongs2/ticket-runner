@@ -16,7 +16,9 @@ describe("the child environment", () => {
   it("adds the extra variables the caller asked for", async () => {
     const [command, args] = printEnv("AGENT_PIPELINE_STAGE");
 
-    const result = await exec(command, args, { env: { AGENT_PIPELINE_STAGE: "implement" } });
+    const result = await exec(command, args, {
+      extraEnv: { AGENT_PIPELINE_STAGE: "implement" },
+    });
 
     expect(result.stdout).toBe("implement");
   });
@@ -24,15 +26,19 @@ describe("the child environment", () => {
   it("keeps the inherited environment underneath them", async () => {
     const [command, args] = printEnv("PATH");
 
-    const result = await exec(command, args, { env: { AGENT_PIPELINE_STAGE: "implement" } });
+    const result = await exec(command, args, {
+      extraEnv: { AGENT_PIPELINE_STAGE: "implement" },
+    });
 
     expect(result.stdout).toBe(process.env.PATH);
   });
 
   it("leaves this process's own environment alone", async () => {
+    const before = { ...process.env };
     const [command, args] = printEnv("AGENT_PIPELINE_STAGE");
-    await exec(command, args, { env: { AGENT_PIPELINE_STAGE: "implement" } });
 
-    expect(process.env.AGENT_PIPELINE_STAGE).toBeUndefined();
+    await exec(command, args, { extraEnv: { AGENT_PIPELINE_STAGE: "implement" } });
+
+    expect({ ...process.env }).toEqual(before);
   });
 });
