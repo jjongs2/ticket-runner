@@ -111,9 +111,16 @@ export async function processTicket(
   }
 
   // The Ticket is merged from here on, so nothing below may hand it off.
+  // The merge closes the issue; the label would otherwise outlive the work.
+  try {
+    await tracker.removeLabel(ticket, config.labels.inProgress);
+  } catch (error) {
+    log(`#${ticket} merged, but clearing in-progress failed: ${(error as Error).message}`);
+  }
   try {
     await workspace.pullMain();
     await workspace.removeWorktree({ path: worktree, branch });
+    await workspace.deleteRemoteBranch(branch);
   } catch (error) {
     log(`#${ticket} merged, but cleaning up failed: ${(error as Error).message}`);
   }

@@ -68,6 +68,10 @@ export class GitWorkspace implements Workspace {
     );
   }
 
+  async deleteRemoteBranch(branch: string): Promise<void> {
+    await this.git(["push", this.remote, "--delete", branch]);
+  }
+
   async pullMain(): Promise<void> {
     const { stdout } = await this.git(["rev-parse", "--abbrev-ref", "HEAD"]);
     if (stdout.trim() === this.mainBranch) {

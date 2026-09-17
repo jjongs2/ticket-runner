@@ -234,6 +234,10 @@ export class FakeWorkspace implements Workspace {
     this.pushes.push({ cwd, branch });
   }
 
+  async deleteRemoteBranch(branch: string): Promise<void> {
+    this.calls.push(`deleteRemoteBranch:${branch}`);
+  }
+
   async pullMain(): Promise<void> {
     this.calls.push("pullMain");
     this.pulledMain += 1;

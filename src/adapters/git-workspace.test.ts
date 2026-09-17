@@ -174,6 +174,17 @@ describe("push and pullMain", () => {
     expect(git(remote, "rev-parse", "agent/2-x")).toBe(git(path, "rev-parse", "HEAD"));
   });
 
+  it("deletes the branch on the remote", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    commit(path, "a.txt", "a\n", "feat: a (#2)");
+    await workspace.push(path, "agent/2-x");
+
+    await workspace.deleteRemoteBranch("agent/2-x");
+
+    expect(git(remote, "branch", "--list", "agent/2-x")).toBe("");
+  });
+
   it("force-pushes after a rebase rewrote the branch", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
     await workspace.createWorktree({ path, branch: "agent/2-x" });

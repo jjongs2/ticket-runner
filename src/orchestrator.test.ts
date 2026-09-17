@@ -107,11 +107,15 @@ describe("the happy path", () => {
     expect(runner.requests[0]?.cwd).toBe(WORKTREE);
   });
 
-  it("squash-merges, pulls main and cleans the worktree up", async () => {
+  it("squash-merges, pulls main and cleans the worktree and remote branch up", async () => {
     await run();
 
     expect(tracker.calls).toContain("squashMerge:100");
-    expect(workspace.calls.slice(-2)).toEqual(["pullMain", `removeWorktree:${BRANCH}`]);
+    expect(workspace.calls.slice(-3)).toEqual([
+      "pullMain",
+      `removeWorktree:${BRANCH}`,
+      `deleteRemoteBranch:${BRANCH}`,
+    ]);
   });
 
   it("opens a PR that closes the Ticket and summarises the Verdict", async () => {
@@ -125,10 +129,11 @@ describe("the happy path", () => {
     expect(pr.body).toContain("**Verdict:** 1 met · 0 unmet · 0 unverifiable");
   });
 
-  it("leaves the Ticket assigned and in-progress for the merge to close", async () => {
+  it("clears in-progress after the merge and keeps the assignee as the record", async () => {
     await run();
 
-    expect(tracker.issue(TICKET).labels).toEqual(["in-progress"]);
+    expect(tracker.issue(TICKET).labels).toEqual([]);
+    expect(tracker.issue(TICKET).assignees).toEqual(["pipeline-user"]);
     expect(tracker.comments).toEqual([]);
   });
 });
@@ -414,7 +419,7 @@ describe("failures the pipeline did not expect", () => {
     expect(outcome).toMatchObject({ outcome: "merged", pullRequest: 100 });
     expect(tracker.pullRequest(100).merged).toBe(true);
     expect(tracker.comments).toEqual([]);
-    expect(tracker.issue(TICKET).labels).toEqual(["in-progress"]);
+    expect(tracker.issue(TICKET).labels).toEqual([]);
   });
 });
 

@@ -30,5 +30,7 @@ export interface Workspace {
   discardChanges(cwd: string): Promise<void>;
   rebaseOnMain(cwd: string): Promise<RebaseOutcome>;
   push(cwd: string, branch: string): Promise<void>;
+  /** Delete `branch` on the remote; the PR is merged, so nothing references it. */
+  deleteRemoteBranch(branch: string): Promise<void>;
   pullMain(): Promise<void>;
 }
