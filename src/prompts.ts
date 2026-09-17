@@ -47,11 +47,21 @@ const FIX_INSTRUCTIONS = `You are the fix Stage of an unattended pipeline. The T
 - Stay inside this Ticket's Acceptance Criteria. Anything else you find belongs to another Ticket, not to this session.
 - Write commit subjects in the repo's commit convention. The pipeline re-runs the Checks and the verify Stage as soon as you finish.`;
 
+const CONFLICT_INSTRUCTIONS = `You are the conflict Stage of an unattended pipeline. The Ticket below is already implemented on the branch you are on, and rebasing it onto \`main\` stopped on a conflict. That rebase is still in progress in this worktree, and finishing it is the whole of your job.
+
+- Follow the skill. Resolve every hunk and carry the rebase through to the end; never \`git rebase --abort\`, and never rewind the branch to escape the conflict.
+- Where the two sides are compatible, keep both intents. Where they are not, keep the behaviour this Ticket's Acceptance Criteria ask for, and keep main's everywhere the Ticket is silent.
+- Resolve, do not redesign. Implement nothing new, and touch no file the conflict did not.
+- Leave no conflict marker behind in any file, committed or not.
+- Do not push, do not open pull requests, and do not close the Ticket. The pipeline runs the Checks again as soon as you finish, and a failure there spends this Ticket's fix budget.`;
+
 /** How the fix prompt announces each kind of failure. */
 const FAILURE_SENTENCES: Record<FailureKind, string> = {
   "failed-check": "a Check the pipeline runs itself failed",
   "unmet-criteria": "the verify Stage found unmet Acceptance Criteria",
   "failed-ci": "a pull request check failed after the branch was pushed",
+  "unresolved-conflict":
+    "the branch conflicts with main, and the session sent in to resolve the rebase did not finish it",
 };
 
 /** What went wrong, in the words the hand-off comment would have used. */
@@ -83,6 +93,22 @@ export function verifyPrompt(issueUrl: string, extraPrompt: string): string {
   ]);
 }
 
+/** `/mattpocock-skills:resolving-merge-conflicts`, then the conflict git reported. */
+export function conflictPrompt(
+  issueUrl: string,
+  conflict: string,
+  extraPrompt: string,
+): string {
+  return sections([
+    "/mattpocock-skills:resolving-merge-conflicts",
+    `Ticket: ${issueUrl}`,
+    CONFLICT_INSTRUCTIONS,
+    outputSection("## Where the rebase stopped", conflict),
+    SELF_HOSTING_GUIDANCE,
+    extraPrompt,
+  ]);
+}
+
 /** A fresh session with no plugin skill, given one failure and told to mend it. */
 export function fixPrompt(
   issueUrl: string,
@@ -98,16 +124,20 @@ export function fixPrompt(
   ]);
 }
 
-/**
- * The failure, its kind and its evidence. The evidence is fenced because it is
- * raw command output, which would otherwise be read as Markdown.
- */
+/** The failure, its kind and its evidence, under a heading naming the kind. */
 function failureSection({ kind, summary, evidence }: FixFailure): string {
-  const trimmed = evidence.trim();
+  return outputSection(`## The failure: ${FAILURE_SENTENCES[kind]}`, evidence, summary);
+}
+
+/**
+ * A heading, an optional line of prose, and raw command output. The output is
+ * fenced because it would otherwise be read as Markdown.
+ */
+function outputSection(heading: string, output: string, prose = ""): string {
+  const trimmed = output.trim();
   return [
-    `## The failure: ${FAILURE_SENTENCES[kind]}`,
-    "",
-    summary,
+    heading,
+    ...(prose === "" ? [] : ["", prose]),
     ...(trimmed === "" ? [] : ["", "```", trimmed, "```"]),
   ].join("\n");
 }

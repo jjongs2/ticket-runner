@@ -27,6 +27,7 @@ import type {
   CheckOutcome,
   WorktreeRef,
   RebaseOutcome,
+  RebaseState,
   Workspace,
 } from "../ports/workspace.js";
 
@@ -243,12 +244,23 @@ export class FakeWorkspace implements Workspace {
   checkQueue = new Map<string, CheckOutcome[]>();
   ranChecks: { command: string; cwd: string }[] = [];
   rebase: RebaseOutcome = { ok: true };
+  /** Outcomes for the next rebases, oldest first; `rebase` answers once they run out. */
+  rebaseQueue: RebaseOutcome[] = [];
+  /** What the worktree looks like once the conflict Stage has had its turn. */
+  rebaseStateAfterStage: RebaseState = { resolved: true };
+  aborts = 0;
   pushes: { cwd: string; branch: string }[] = [];
   pulledMain = 0;
 
   /** Fail `command` every time the pipeline runs it. */
   failCheck(command: string, output: string): this {
     this.checkOutcomes.set(command, { ok: false, output });
+    return this;
+  }
+
+  /** Conflict on the next rebase only: a conflict the conflict Stage then resolves. */
+  conflictOnce(conflict: string): this {
+    this.rebaseQueue.push({ ok: false, conflict });
     return this;
   }
 
@@ -295,7 +307,17 @@ export class FakeWorkspace implements Workspace {
 
   async rebaseOnMain(): Promise<RebaseOutcome> {
     this.calls.push("rebaseOnMain");
-    return this.rebase;
+    return this.rebaseQueue.shift() ?? this.rebase;
+  }
+
+  async rebaseState(): Promise<RebaseState> {
+    this.calls.push("rebaseState");
+    return this.rebaseStateAfterStage;
+  }
+
+  async abortRebase(): Promise<void> {
+    this.calls.push("abortRebase");
+    this.aborts += 1;
   }
 
   async push(cwd: string, branch: string): Promise<void> {

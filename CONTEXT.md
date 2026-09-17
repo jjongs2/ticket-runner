@@ -47,7 +47,7 @@ The PID file that stops two Runs, or a Run and a `ticket`, sharing one repo. Rep
 _Avoid_: mutex, pidfile
 
 **Stage**:
-One Claude Code session inside a Run with a single purpose: implement, verify, or fix.
+One Claude Code session inside a Run with a single purpose: implement, verify, fix, or resolve a rebase conflict.
 _Avoid_: step, phase, task
 
 **Stage mark**:
@@ -65,6 +65,10 @@ _Avoid_: validation, precondition, check (a Check gates a claimed Ticket, a Guar
 **Verify**:
 The Stage that adversarially tries to prove a Ticket's Acceptance Criteria are not met, and returns a Verdict.
 _Avoid_: review, QA, audit
+
+**Conflict Stage**:
+The Stage that resolves a rebase conflict, driving the resolving-merge-conflicts skill in the worktree where git stopped. What it left behind is judged by the worktree, not by how the session ended.
+_Avoid_: merge Stage, conflict resolution
 
 **Acceptance Criteria**:
 The checkbox list in a Ticket's body or comments (triage posts its brief as a comment). The only thing Verify grades.

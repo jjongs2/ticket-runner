@@ -8,6 +8,8 @@ const TICKET = 2;
 const BRANCH = "agent/2-skeleton-one-ticket-end-to-end";
 const WORKTREE = "/repo/.worktrees/ticket-2";
 const URL = "https://github.com/acme/repo/issues/2";
+const CONFLICT = "CONFLICT (content): Merge conflict in src/cli.ts";
+const UNRESOLVED = { resolved: false, unresolved: "a rebase is still in progress" } as const;
 
 function config(overrides: Partial<Config> = {}): Config {
   return {
@@ -17,6 +19,7 @@ function config(overrides: Partial<Config> = {}): Config {
       implement: { model: "claude-opus-5", maxTurns: 300, maxMinutes: 60, extraPrompt: "" },
       verify: { model: "claude-opus-5", maxTurns: 80, maxMinutes: 20, extraPrompt: "" },
       fix: { model: "claude-opus-5", maxTurns: 150, maxMinutes: 40, extraPrompt: "" },
+      conflict: { model: "claude-opus-5", maxTurns: 120, maxMinutes: 30, extraPrompt: "" },
     },
     permissionMode: "auto",
     ciTimeoutMinutes: 30,
@@ -442,13 +445,130 @@ describe("rebase", () => {
     );
   });
 
-  it("hands off on a conflict, with the conflicting paths as evidence", async () => {
-    workspace.rebase = { ok: false, conflict: "CONFLICT (content): src/cli.ts" };
+  it("sends no conflict Stage in when the branch rebases cleanly", async () => {
+    await run();
+
+    expect(runner.stages()).toEqual(["implement", "verify"]);
+    expect(workspace.calls).not.toContain("rebaseState");
+    expect(workspace.aborts).toBe(0);
+  });
+
+  it("sends one conflict Stage into the stopped rebase", async () => {
+    workspace.conflictOnce(CONFLICT);
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).toEqual(["implement", "verify", "conflict"]);
+  });
+
+  it("drives the skill, from the worktree, under the conflict Stage's own limits", async () => {
+    workspace.conflictOnce(CONFLICT);
+
+    await run();
+
+    const request = runner.requests.find((r) => r.stage === "conflict");
+    expect(request).toMatchObject({ cwd: WORKTREE, maxTurns: 120, maxMinutes: 30 });
+    expect(request?.prompt).toContain("/mattpocock-skills:resolving-merge-conflicts");
+    expect(request?.prompt).toContain(URL);
+    expect(request?.prompt).toContain(CONFLICT);
+  });
+
+  it("runs the Checks again on the resolution before the PR", async () => {
+    workspace.conflictOnce(CONFLICT);
+
+    await run();
+
+    expect(workspace.ranChecks.map((check) => check.command)).toEqual([
+      "npm test",
+      "npm run typecheck",
+      "npm test",
+      "npm run typecheck",
+    ]);
+    expect(workspace.calls.lastIndexOf("runCheck:npm run typecheck")).toBeLessThan(
+      workspace.calls.indexOf(`push:${BRANCH}`),
+    );
+  });
+
+  it("takes a Stage that finished the rebase and only then ran out of turns", async () => {
+    workspace.conflictOnce(CONFLICT);
+    runner.queue("conflict", { ok: false, failure: "turn-capped" });
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+  });
+
+  it("spends the fix budget when the conflict outlives the Stage", async () => {
+    workspace.rebase = { ok: false, conflict: CONFLICT };
+    workspace.rebaseStateAfterStage = UNRESOLVED;
 
     const outcome = await run();
 
     expect(outcome).toMatchObject({ outcome: "handed-off", stage: "rebase" });
-    expect(handoffBody()).toContain("CONFLICT (content): src/cli.ts");
+    expect(runner.stages()).toEqual([
+      "implement",
+      "verify",
+      "conflict",
+      "fix",
+      "verify",
+      "conflict",
+    ]);
+    expect(handoffBody()).toContain("after the fix budget was used");
+    expect(handoffBody()).toContain(CONFLICT);
+    expect(handoffBody()).toContain("a rebase is still in progress");
+  });
+
+  it("aborts the rebase it could not finish, so the worktree can be worked in", async () => {
+    workspace.conflictOnce(CONFLICT);
+    workspace.rebaseStateAfterStage = UNRESOLVED;
+
+    await run();
+
+    // The fix Stage runs between the abort and the pass it bought, so a
+    // Check running again after the abort is a worktree it could commit in.
+    expect(runner.stages()).toContain("fix");
+    expect(workspace.calls.indexOf("abortRebase")).toBeLessThan(
+      workspace.calls.lastIndexOf("runCheck:npm test"),
+    );
+    expect(workspace.aborts).toBe(1);
+  });
+
+  it("aborts the rebase even when the Stage itself could not be started", async () => {
+    workspace.conflictOnce(CONFLICT);
+    const run_ = runner.run.bind(runner);
+    runner.run = async (request) => {
+      if (request.stage === "conflict") throw new Error("claude: command not found");
+      return run_(request);
+    };
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "rebase" });
+    expect(workspace.aborts).toBe(1);
+    // Nothing a fix Stage could mend, so the budget is still there.
+    expect(handoffBody()).not.toMatch(/fix budget/i);
+  });
+
+  it("hands off naming the limit when the conflict Stage ran out of turns", async () => {
+    // A Check spends the budget first, so this conflict gets one Stage only.
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    workspace.rebase = { ok: false, conflict: CONFLICT };
+    workspace.rebaseStateAfterStage = UNRESOLVED;
+    runner.queue("conflict", { ok: false, failure: "turn-capped" });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "rebase" });
+    expect(handoffBody()).toContain("the conflict Stage hit its 120 turn limit");
+  });
+
+  it("does not spend the fix budget on a conflict it resolved", async () => {
+    workspace.conflictOnce(CONFLICT);
+    tracker.queueCi({ state: "failed", summary: "checks/build failed" });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).toEqual(["implement", "verify", "conflict", "fix", "verify"]);
   });
 });
 
@@ -809,11 +929,11 @@ describe("the fix budget", () => {
   });
 
   it("says nothing about the budget on a Ticket that never spent it", async () => {
-    workspace.rebase = { ok: false, conflict: "CONFLICT (content): src/cli.ts" };
+    runner.queue("verify", { ok: false, failure: "timed-out" });
 
     const outcome = await run();
 
-    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "rebase" });
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "verify" });
     expect(handoffBody()).not.toMatch(/fix budget/i);
   });
 });
@@ -852,12 +972,6 @@ describe("failures no fix Stage is offered", () => {
     });
 
     await expectNoFix("verify");
-  });
-
-  it("refuses to retry a rebase conflict", async () => {
-    workspace.rebase = { ok: false, conflict: "CONFLICT (content): src/cli.ts" };
-
-    await expectNoFix("rebase");
   });
 
   it("refuses to retry a branch that could not be pushed", async () => {

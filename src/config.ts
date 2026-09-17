@@ -32,6 +32,7 @@ const configSchema = z
         implement: stageSchema.optional(),
         verify: stageSchema.optional(),
         fix: stageSchema.optional(),
+        conflict: stageSchema.optional(),
       })
       .strict()
       .optional(),
@@ -70,7 +71,12 @@ export interface Labels {
 export interface Config {
   checks: string[];
   gates: { checks: boolean; ci: boolean };
-  stages: { implement: StageConfig; verify: StageConfig; fix: StageConfig };
+  stages: {
+    implement: StageConfig;
+    verify: StageConfig;
+    fix: StageConfig;
+    conflict: StageConfig;
+  };
   permissionMode: PermissionMode;
   ciTimeoutMinutes: number;
   labels: Labels;
@@ -80,6 +86,9 @@ const STAGE_DEFAULTS = {
   implement: { maxTurns: 300, maxMinutes: 60 },
   verify: { maxTurns: 80, maxMinutes: 20 },
   fix: { maxTurns: 150, maxMinutes: 40 },
+  // Resolving one rebase is narrower work than mending a defect, and the skill
+  // has the Checks to run before it finishes.
+  conflict: { maxTurns: 120, maxMinutes: 30 },
 } as const;
 
 const LABEL_DEFAULTS: Labels = {
@@ -120,6 +129,7 @@ export function loadConfig(repoRoot: string): Config {
       implement: stage(STAGE_DEFAULTS.implement, file.stages?.implement),
       verify: stage(STAGE_DEFAULTS.verify, file.stages?.verify),
       fix: stage(STAGE_DEFAULTS.fix, file.stages?.fix),
+      conflict: stage(STAGE_DEFAULTS.conflict, file.stages?.conflict),
     },
     permissionMode: file.permissionMode ?? "auto",
     ciTimeoutMinutes: file.ciTimeoutMinutes ?? 30,

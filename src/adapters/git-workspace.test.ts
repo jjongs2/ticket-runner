@@ -25,6 +25,18 @@ function commit(cwd: string, file: string, contents: string, message: string): v
   git(cwd, "commit", "-m", message);
 }
 
+/** A branch whose one commit edits the same line main went on to edit. */
+function conflictingWorktree(): string {
+  const path = join(repo, ".worktrees", "ticket-2");
+  execFileSync("git", ["worktree", "add", "-b", "agent/2-x", path, "main"], {
+    cwd: repo,
+    stdio: "ignore",
+  });
+  commit(path, "README.md", "branch version\n", "feat: branch edit (#2)");
+  commit(repo, "README.md", "main version\n", "feat: main edit (#1)");
+  return path;
+}
+
 beforeEach(() => {
   remote = mkdtempSync(join(tmpdir(), "agent-pipeline-remote-"));
   repo = mkdtempSync(join(tmpdir(), "agent-pipeline-repo-"));
@@ -187,19 +199,129 @@ describe("rebaseOnMain", () => {
     expect(await workspace.commitSubjects("agent/2-x")).toEqual(["feat: a (#2)"]);
   });
 
-  it("reports a conflict and leaves no rebase in progress", async () => {
-    const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
-    commit(path, "README.md", "branch version\n", "feat: branch edit (#2)");
-    commit(repo, "README.md", "main version\n", "feat: main edit (#1)");
+  it("reports a conflict and leaves the rebase in progress to be resolved", async () => {
+    const path = conflictingWorktree();
 
     const result = await workspace.rebaseOnMain(path);
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected a conflict");
     expect(result.conflict).toContain("README.md");
-    expect(existsSync(join(path, ".git", "rebase-merge"))).toBe(false);
+    expect(git(path, "status", "--porcelain")).toContain("UU README.md");
+    expect(readFileSync(join(path, "README.md"), "utf8")).toContain("branch version");
+  });
+
+  it("puts the worktree back when the rebase is aborted", async () => {
+    const path = conflictingWorktree();
+    await workspace.rebaseOnMain(path);
+
+    await workspace.abortRebase(path);
+
     expect(git(path, "status", "--porcelain")).toBe("");
+    expect(await workspace.rebaseState(path)).toEqual({
+      resolved: false,
+      unresolved: "the branch is not rebased onto main",
+    });
+  });
+
+  it("is happy to abort when no rebase is in progress", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" });
+
+    await expect(workspace.abortRebase(path)).resolves.toBeUndefined();
+  });
+});
+
+describe("rebaseState", () => {
+  it("calls a rebase that replayed every commit resolved", async () => {
+    const path = conflictingWorktree();
+    await workspace.rebaseOnMain(path);
+
+    writeFileSync(join(path, "README.md"), "both versions\n");
+    git(path, "add", "-A");
+    git(path, "-c", "core.editor=true", "rebase", "--continue");
+
+    expect(await workspace.rebaseState(path)).toEqual({ resolved: true });
+  });
+
+  it("reports the rebase git is still in the middle of, and what is unmerged", async () => {
+    const path = conflictingWorktree();
+    await workspace.rebaseOnMain(path);
+
+    const state = await workspace.rebaseState(path);
+
+    expect(state.resolved).toBe(false);
+    if (state.resolved) throw new Error("expected an unresolved rebase");
+    expect(state.unresolved).toContain("a rebase is still in progress");
+    expect(state.unresolved).toContain("unmerged paths: README.md");
+    expect(state.unresolved).toContain("conflict markers left in: README.md");
+  });
+
+  it("reports a rebase that was abandoned rather than finished", async () => {
+    const path = conflictingWorktree();
+    await workspace.rebaseOnMain(path);
+
+    git(path, "rebase", "--abort");
+
+    expect(await workspace.rebaseState(path)).toEqual({
+      resolved: false,
+      unresolved: "the branch is not rebased onto main",
+    });
+  });
+
+  it("reports conflict markers committed into a finished rebase", async () => {
+    const path = conflictingWorktree();
+    await workspace.rebaseOnMain(path);
+
+    // What a careless resolution looks like: the rebase finishes, the markers
+    // git wrote into the file are committed along with it.
+    git(path, "add", "-A");
+    git(path, "-c", "core.editor=true", "rebase", "--continue");
+
+    const state = await workspace.rebaseState(path);
+
+    expect(state.resolved).toBe(false);
+    if (state.resolved) throw new Error("expected unresolved conflict markers");
+    expect(state.unresolved).toBe("conflict markers left in: README.md");
+  });
+
+  it("sees a marker in a file nobody staged", async () => {
+    const path = conflictingWorktree();
+    await workspace.rebaseOnMain(path);
+    writeFileSync(join(path, "README.md"), "both versions\n");
+    git(path, "add", "-A");
+    git(path, "-c", "core.editor=true", "rebase", "--continue");
+    // Scratch the session wrote by hand and never staged.
+    writeFileSync(join(path, "notes.md"), `${"<".repeat(7)} HEAD\nmine\n`);
+
+    const state = await workspace.rebaseState(path);
+
+    expect(state.resolved).toBe(false);
+    if (state.resolved) throw new Error("expected an unresolved marker");
+    expect(state.unresolved).toBe("conflict markers left in: notes.md");
+  });
+
+  it("refuses a conflict that was merged in rather than rebased away", async () => {
+    const path = conflictingWorktree();
+    await workspace.rebaseOnMain(path);
+    await workspace.abortRebase(path);
+
+    git(path, "-c", "core.editor=true", "merge", "main", "--strategy-option=ours");
+
+    const state = await workspace.rebaseState(path);
+
+    expect(state.resolved).toBe(false);
+    if (state.resolved) throw new Error("expected the merge to be refused");
+    expect(state.unresolved).toContain("merged into the branch, not rebased");
+  });
+
+  it("does not mistake a marker quoted mid-line for a conflict", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    const quoted = `const marker = "${"<".repeat(7)} HEAD";\n`;
+    commit(path, "markers.ts", quoted, "feat: quote a marker (#2)");
+
+    expect(await workspace.rebaseState(path)).toEqual({ resolved: true });
   });
 });
 

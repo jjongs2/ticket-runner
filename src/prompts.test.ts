@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   SELF_HOSTING_GUIDANCE,
+  conflictPrompt,
   fixPrompt,
   implementPrompt,
   verifyPrompt,
 } from "./prompts.js";
 
 const url = "https://github.com/jjongs2/agent-pipeline/issues/2";
+
+const CONFLICT = "CONFLICT (content): Merge conflict in src/cli.ts";
 
 const FAILED_CHECK = {
   kind: "failed-check" as const,
@@ -80,7 +83,7 @@ describe("fixPrompt", () => {
     expect(prompt).toContain("FAIL src/a.test.ts");
   });
 
-  it("says which of the three kinds of failure this is", () => {
+  it("says which kind of failure this is", () => {
     expect(fixPrompt(url, FAILED_CHECK, "")).toMatch(/a Check .*failed/i);
     expect(fixPrompt(url, { ...FAILED_CHECK, kind: "unmet-criteria" }, "")).toMatch(
       /unmet Acceptance Criteria/i,
@@ -88,6 +91,9 @@ describe("fixPrompt", () => {
     expect(fixPrompt(url, { ...FAILED_CHECK, kind: "failed-ci" }, "")).toMatch(
       /pull request check failed/i,
     );
+    expect(
+      fixPrompt(url, { ...FAILED_CHECK, kind: "unresolved-conflict" }, ""),
+    ).toMatch(/conflicts with main/i);
   });
 
   it("asks for the regression test a gap the Verdict found should have had", () => {
@@ -110,6 +116,43 @@ describe("fixPrompt", () => {
   });
 });
 
+describe("conflictPrompt", () => {
+  it("begins with the skill that resolves an in-progress rebase", () => {
+    expect(conflictPrompt(url, CONFLICT, "").split("\n")[0]).toBe(
+      "/mattpocock-skills:resolving-merge-conflicts",
+    );
+  });
+
+  it("names the Ticket and fences what git printed when the rebase stopped", () => {
+    const prompt = conflictPrompt(url, CONFLICT, "");
+
+    expect(prompt).toContain(url);
+    expect(prompt).toContain(`\`\`\`\n${CONFLICT}\n\`\`\``);
+  });
+
+  it("forbids the two ways out that leave the branch unrebased", () => {
+    const prompt = conflictPrompt(url, CONFLICT, "");
+
+    expect(prompt).toMatch(/never .*rebase --abort/i);
+    expect(prompt).toMatch(/rewind the branch/i);
+  });
+
+  it("keeps the session inside the conflict, and out of the pipeline's work", () => {
+    const prompt = conflictPrompt(url, CONFLICT, "");
+
+    expect(prompt).toMatch(/implement nothing new/i);
+    expect(prompt).toMatch(/no conflict marker/i);
+    expect(prompt).toMatch(/do not push/i);
+    expect(prompt).toMatch(/do not open pull requests/i);
+  });
+
+  it("appends the configured extra prompt", () => {
+    expect(
+      conflictPrompt(url, CONFLICT, "Keep it small.").trimEnd().endsWith("Keep it small."),
+    ).toBe(true);
+  });
+});
+
 describe("the self-hosting guidance", () => {
   it("tells the session to exercise the pipeline through its tests and fakes only", () => {
     expect(SELF_HOSTING_GUIDANCE).toMatch(/tests? and fakes/i);
@@ -121,6 +164,7 @@ describe("the self-hosting guidance", () => {
     expect(implementPrompt(url, "")).toContain(SELF_HOSTING_GUIDANCE);
     expect(verifyPrompt(url, "")).toContain(SELF_HOSTING_GUIDANCE);
     expect(fixPrompt(url, FAILED_CHECK, "")).toContain(SELF_HOSTING_GUIDANCE);
+    expect(conflictPrompt(url, CONFLICT, "")).toContain(SELF_HOSTING_GUIDANCE);
   });
 
   it("stays ahead of the repo's own extra prompt", () => {

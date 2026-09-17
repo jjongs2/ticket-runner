@@ -1,11 +1,23 @@
-import { rmSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
+import { resolve } from "node:path";
 import type {
   CheckOutcome,
   WorktreeRef,
   RebaseOutcome,
+  RebaseState,
   Workspace,
 } from "../ports/workspace.js";
 import { exec, execOrThrow } from "./exec.js";
+
+/**
+ * The start of a line git only writes when it cannot merge two hunks itself.
+ * Anchored, so a marker quoted inside source or prose is not mistaken for one:
+ * a real marker is the whole line, label and all.
+ */
+const CONFLICT_MARKER = "^(<{7}|>{7}|\\|{7}) ";
+
+/** The two directories git keeps a rebase in, depending on which one it used. */
+const REBASE_DIRS = ["rebase-merge", "rebase-apply"];
 
 /**
  * The git-backed {@link Workspace}: one worktree per Ticket, branched from the
@@ -74,10 +86,94 @@ export class GitWorkspace implements Workspace {
     const result = await exec("git", ["rebase", this.mainBranch], { cwd });
     if (result.exitCode === 0) return { ok: true };
 
-    // Leave the worktree usable: a half-finished rebase would trap the human
-    // the Ticket is about to be handed to.
-    await exec("git", ["rebase", "--abort"], { cwd });
+    // The rebase is deliberately left where it stopped: the conflict Stage
+    // needs the conflicted tree, and the caller owes the worktree an
+    // `abortRebase` if it decides not to send one in.
     return { ok: false, conflict: result.output.trim() };
+  }
+
+  /**
+   * Every way a worktree can still be short of a finished rebase, gathered into
+   * one answer so nothing downstream has to ask git itself.
+   *
+   * The ancestry check is what catches the resolution nobody asked for: a
+   * session that gave up and ran `git rebase --abort` leaves a tree as clean as
+   * a finished rebase, on a branch that has never met the commits it conflicts
+   * with.
+   */
+  async rebaseState(cwd: string): Promise<RebaseState> {
+    const reasons: string[] = [];
+
+    if (await this.rebaseInProgress(cwd)) {
+      reasons.push("a rebase is still in progress");
+    } else if (!(await this.isRebasedOnMain(cwd))) {
+      reasons.push(`the branch is not rebased onto ${this.mainBranch}`);
+    } else {
+      // Being on top of main is not the same as having been replayed onto it:
+      // merging main in would satisfy the ancestry and put a merge commit on a
+      // branch whose every commit is about to be listed in a squash message.
+      const merges = await this.lines(cwd, [
+        "rev-list",
+        "--merges",
+        `${this.mainBranch}..HEAD`,
+      ]);
+      if (merges.length > 0) {
+        reasons.push(`the conflict was merged into the branch, not rebased onto ${this.mainBranch}`);
+      }
+    }
+
+    const unmerged = await this.lines(cwd, ["diff", "--name-only", "--diff-filter=U"]);
+    if (unmerged.length > 0) reasons.push(`unmerged paths: ${unmerged.join(", ")}`);
+
+    // --untracked, because a marker in a file nobody staged is still a marker
+    // in the tree; ignored files stay out, so node_modules is not searched.
+    // -I: a binary file that happens to hold those bytes is not a conflict.
+    const marked = await this.lines(cwd, [
+      "grep",
+      "--files-with-matches",
+      "--untracked",
+      "-I",
+      "-E",
+      CONFLICT_MARKER,
+    ]);
+    if (marked.length > 0) reasons.push(`conflict markers left in: ${marked.join(", ")}`);
+
+    return reasons.length === 0
+      ? { resolved: true }
+      : { resolved: false, unresolved: reasons.join("\n") };
+  }
+
+  async abortRebase(cwd: string): Promise<void> {
+    // Non-zero only when there was no rebase to abort, which is the outcome
+    // this asks for anyway.
+    await exec("git", ["rebase", "--abort"], { cwd });
+  }
+
+  private async rebaseInProgress(cwd: string): Promise<boolean> {
+    const paths = await this.lines(cwd, [
+      "rev-parse",
+      ...REBASE_DIRS.flatMap((dir) => ["--git-path", dir]),
+    ]);
+    // --git-path answers relative to the worktree it was asked in.
+    return paths.some((path) => existsSync(resolve(cwd, path)));
+  }
+
+  private async isRebasedOnMain(cwd: string): Promise<boolean> {
+    const result = await exec(
+      "git",
+      ["merge-base", "--is-ancestor", this.mainBranch, "HEAD"],
+      { cwd },
+    );
+    return result.exitCode === 0;
+  }
+
+  /** A git command whose output is one path per line, and none when it finds none. */
+  private async lines(cwd: string, args: string[]): Promise<string[]> {
+    const { stdout } = await exec("git", args, { cwd });
+    return stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line !== "");
   }
 
   async push(cwd: string, branch: string): Promise<void> {

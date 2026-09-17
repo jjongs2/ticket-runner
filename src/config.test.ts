@@ -27,6 +27,7 @@ describe("loadConfig", () => {
     });
     expect(config.stages.verify).toMatchObject({ maxTurns: 80, maxMinutes: 20 });
     expect(config.stages.fix).toMatchObject({ maxTurns: 150, maxMinutes: 40 });
+    expect(config.stages.conflict).toMatchObject({ maxTurns: 120, maxMinutes: 30 });
     expect(config.labels).toEqual({
       needsTriage: "needs-triage",
       needsInfo: "needs-info",
@@ -89,6 +90,19 @@ describe("loadConfig", () => {
       extraPrompt: "",
     });
     expect(config.gates).toEqual({ checks: true, ci: false });
+  });
+
+  it("takes limits for the conflict Stage like any other", () => {
+    const root = repoWith({
+      [CONFIG_FILENAME]: JSON.stringify({ stages: { conflict: { maxTurns: 40 } } }),
+    });
+
+    expect(loadConfig(root).stages.conflict).toEqual({
+      model: "claude-opus-5",
+      maxTurns: 40,
+      maxMinutes: 30,
+      extraPrompt: "",
+    });
   });
 
   it("rejects an invalid field with a message naming it", () => {

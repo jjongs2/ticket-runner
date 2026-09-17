@@ -13,6 +13,16 @@ export interface CheckOutcome {
 
 export type RebaseOutcome = { ok: true } | { ok: false; conflict: string };
 
+/**
+ * Whether the worktree holds a finished rebase, asked after a session has been
+ * sent in to resolve one.
+ *
+ * `unresolved` is what a human would have to be told: a rebase git is still in
+ * the middle of, paths it still calls unmerged, conflict markers left in a
+ * tracked file, or a branch that no longer sits on top of main at all.
+ */
+export type RebaseState = { resolved: true } | { resolved: false; unresolved: string };
+
 export interface WorktreeRef {
   path: string;
   branch: string;
@@ -40,7 +50,22 @@ export interface Workspace {
   runCheck(command: string, cwd: string): Promise<CheckOutcome>;
   /** Restore the worktree to its committed state, tracked and untracked. */
   discardChanges(cwd: string): Promise<void>;
+  /**
+   * Replay the branch onto main.
+   *
+   * A conflict is reported rather than thrown, and the rebase is left in
+   * progress: that stopped state is what a session sent in to resolve the
+   * conflict works on. Every caller that gets one therefore owes the worktree
+   * either a finished rebase or an {@link abortRebase}.
+   */
   rebaseOnMain(cwd: string): Promise<RebaseOutcome>;
+  /** What, if anything, still stands between the worktree and a finished rebase. */
+  rebaseState(cwd: string): Promise<RebaseState>;
+  /**
+   * Put the worktree back the way it was before the rebase started. A no-op
+   * when no rebase is in progress, so it is safe on any failure path.
+   */
+  abortRebase(cwd: string): Promise<void>;
   push(cwd: string, branch: string): Promise<void>;
   /** Delete `branch` on the remote; the PR is merged, so nothing references it. */
   deleteRemoteBranch(branch: string): Promise<void>;
