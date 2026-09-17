@@ -264,6 +264,10 @@ function ticketRow(outcome: TicketOutcome): string {
         outcome.ticket,
         `${outcome.title} · ${outcome.stage} · ${outcome.failure}`,
       );
+    case "released":
+      // Nothing for a human to do, so the row says only where the limit landed
+      // and leaves the rest to the Run that resumes the Ticket.
+      return row("released", outcome.ticket, `${outcome.title} · rate limit at ${outcome.stage}`);
     case "skipped":
       // The reason is the guard's own word for it, which is also the marker on
       // the warning comment the human is being pointed at.

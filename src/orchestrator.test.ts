@@ -1,13 +1,21 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Config } from "./config.js";
 import { processTicket } from "./orchestrator.js";
+import {
+  type TicketState,
+  readTicketState,
+  statePath,
+  writeTicketState,
+} from "./resume.js";
 import { PROGRESS_MARKER } from "./progress.js";
 import type { TicketOutcome } from "./orchestrator.js";
 import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./testing/fakes.js";
 
 const TICKET = 2;
 const BRANCH = "agent/2-skeleton-one-ticket-end-to-end";
-const WORKTREE = "/repo/.worktrees/ticket-2";
 const URL = "https://github.com/acme/repo/issues/2";
 const CONFLICT = "CONFLICT (content): Merge conflict in src/cli.ts";
 const UNRESOLVED = { resolved: false, unresolved: "a rebase is still in progress" } as const;
@@ -69,14 +77,27 @@ const notices = () => tracker.comments.filter(({ body }) => !body.startsWith(PRO
 let tracker: FakeTracker;
 let runner: FakeAgentRunner;
 let workspace: FakeWorkspace;
+/**
+ * A temporary repo root, because a released Ticket's State file is a real file
+ * (ADR-0004). The three ports are still fakes; only the local state is not.
+ */
+let repoRoot: string;
+/** Where this Ticket's Stages run, under the repo root the Run was given. */
+let worktree: string;
 
 beforeEach(() => {
+  repoRoot = mkdtempSync(join(tmpdir(), "agent-pipeline-ticket-"));
+  worktree = join(repoRoot, ".worktrees", `ticket-${TICKET}`);
   tracker = new FakeTracker();
   tracker.addIssue({ number: TICKET, title: "Skeleton: one Ticket end to end", url: URL });
   runner = new FakeAgentRunner({
     verify: stageResult({ result: PASSING_VERDICT }),
   });
   workspace = new FakeWorkspace();
+});
+
+afterEach(() => {
+  rmSync(repoRoot, { recursive: true, force: true });
 });
 
 function run(overrides: Partial<Config> = {}): Promise<TicketOutcome> {
@@ -86,7 +107,7 @@ function run(overrides: Partial<Config> = {}): Promise<TicketOutcome> {
       runner,
       workspace,
       config: config(overrides),
-      repoRoot: "/repo",
+      repoRoot,
       runId: "run-1",
     },
     TICKET,
@@ -128,7 +149,7 @@ describe("the happy path", () => {
     await run();
 
     expect(workspace.calls[0]).toBe(`createWorktree:${BRANCH}`);
-    expect(runner.requests[0]?.cwd).toBe(WORKTREE);
+    expect(runner.requests[0]?.cwd).toBe(worktree);
   });
 
   it("squash-merges, pulls main and cleans the worktree and remote branch up", async () => {
@@ -287,7 +308,7 @@ describe("Stage invocation", () => {
     await run();
 
     for (const request of runner.requests) {
-      expect(request.logDir).toBe(`/repo/.agent-pipeline/runs/run-1/${TICKET}`);
+      expect(request.logDir).toBe(`${repoRoot}/.agent-pipeline/runs/run-1/${TICKET}`);
     }
   });
 
@@ -328,13 +349,10 @@ describe("implement Stage failures", () => {
     expect(runner.stages()).toEqual(["implement"]);
   });
 
-  it("names a rate limit as the failure rather than hiding it", async () => {
+  it("releases the Ticket rather than blaming it for a rate limit", async () => {
     runner.queue("implement", { ok: false, failure: "rate-limited" });
 
-    const outcome = await run();
-
-    expect(outcome).toMatchObject({ outcome: "handed-off" });
-    expect(handoffBody()).toMatch(/rate limit/i);
+    expect(await run()).toMatchObject({ outcome: "released" });
   });
 
   it("treats a Stage that left no new commits as a failure", async () => {
@@ -353,8 +371,8 @@ describe("Checks", () => {
     await run();
 
     expect(workspace.ranChecks).toEqual([
-      { command: "npm test", cwd: WORKTREE },
-      { command: "npm run typecheck", cwd: WORKTREE },
+      { command: "npm test", cwd: worktree },
+      { command: "npm run typecheck", cwd: worktree },
     ]);
   });
 
@@ -376,7 +394,7 @@ describe("the verify Stage", () => {
   it("discards whatever the Stage left behind in the worktree", async () => {
     await run();
 
-    expect(workspace.calls).toContain(`discardChanges:${WORKTREE}`);
+    expect(workspace.calls).toContain(`discardChanges:${worktree}`);
   });
 
   it("discards scratch files even when the Stage failed", async () => {
@@ -384,7 +402,7 @@ describe("the verify Stage", () => {
 
     await run();
 
-    expect(workspace.calls).toContain(`discardChanges:${WORKTREE}`);
+    expect(workspace.calls).toContain(`discardChanges:${worktree}`);
   });
 
   it("ignores the agent's pass flag when a criterion is unmet", async () => {
@@ -475,7 +493,7 @@ describe("rebase", () => {
     await run();
 
     const request = runner.requests.find((r) => r.stage === "conflict");
-    expect(request).toMatchObject({ cwd: WORKTREE, maxTurns: 120, maxMinutes: 30 });
+    expect(request).toMatchObject({ cwd: worktree, maxTurns: 120, maxMinutes: 30 });
     expect(request?.prompt).toContain("/mattpocock-skills:resolving-merge-conflicts");
     expect(request?.prompt).toContain(URL);
     expect(request?.prompt).toContain(CONFLICT);
@@ -683,14 +701,14 @@ describe("hand-off", () => {
     expect(tracker.issue(TICKET).labels).toEqual(["ready-for-human"]);
     expect(tracker.issue(TICKET).assignees).toEqual([]);
     expect(handoffBody()).toContain(`Branch \`${BRANCH}\``);
-    expect(handoffBody()).toContain(`worktree \`${WORKTREE}\``);
+    expect(handoffBody()).toContain(`worktree \`${worktree}\``);
     expect(handoffBody()).toContain("PR #100 (draft)");
   });
 
   it("keeps the worktree and the branch for a human to pick up", async () => {
     await run();
 
-    expect(workspace.worktrees.get(WORKTREE)).toBe(BRANCH);
+    expect(workspace.worktrees.get(worktree)).toBe(BRANCH);
     expect(workspace.calls).not.toContain(`removeWorktree:${BRANCH}`);
   });
 
@@ -740,7 +758,7 @@ describe("the fix Stage", () => {
 
     expect(outcome).toMatchObject({ outcome: "merged" });
     expect(runner.stages()).toEqual(["implement", "fix", "verify"]);
-    expect(fixRequest().cwd).toBe(WORKTREE);
+    expect(fixRequest().cwd).toBe(worktree);
     expect(workspace.calls.filter((call) => call.startsWith("createWorktree"))).toEqual([
       `createWorktree:${BRANCH}`,
     ]);
@@ -853,7 +871,7 @@ describe("the fix Stage", () => {
   });
 
   it("logs the second pass beside the first rather than over it", async () => {
-    const ticketLogs = `/repo/.agent-pipeline/runs/run-1/${TICKET}`;
+    const ticketLogs = `${repoRoot}/.agent-pipeline/runs/run-1/${TICKET}`;
     runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
 
     await run();
@@ -999,6 +1017,375 @@ describe("failures no fix Stage is offered", () => {
     tracker.ci = { state: "none" };
 
     await expectNoFix("ci");
+  });
+});
+
+describe("releasing a rate-limited Ticket", () => {
+  /** The State file the release left, as a later Run would read it. */
+  const state = () => readTicketState(repoRoot, TICKET);
+
+  it("releases the Ticket rather than handing it to a human", async () => {
+    runner.queue("implement", { ok: false, failure: "rate-limited" });
+
+    const outcome = await run();
+
+    expect(outcome).toEqual({
+      outcome: "released",
+      ticket: TICKET,
+      title: "Skeleton: one Ticket end to end",
+      branch: BRANCH,
+      stage: "implement",
+    });
+  });
+
+  it("undoes the Claim, so the next Run may pick the Ticket up", async () => {
+    runner.queue("implement", { ok: false, failure: "rate-limited" });
+
+    await run();
+
+    expect(tracker.issue(TICKET).labels).toEqual(["ready-for-agent"]);
+    expect(tracker.issue(TICKET).assignees).toEqual([]);
+  });
+
+  it("takes the assignee off last, so no other Run sees an unclaimed Ticket first", async () => {
+    runner.queue("implement", { ok: false, failure: "rate-limited" });
+
+    await run();
+
+    expect(tracker.calls.slice(-3)).toEqual([
+      `addLabel:${TICKET}:ready-for-agent`,
+      `removeLabel:${TICKET}:in-progress`,
+      `unassign:${TICKET}:pipeline-user`,
+    ]);
+  });
+
+  it("keeps the branch and the worktree for the Run that resumes them", async () => {
+    runner.queue("implement", { ok: false, failure: "rate-limited" });
+
+    await run();
+
+    expect(workspace.worktrees.get(worktree)).toBe(BRANCH);
+    expect(workspace.calls).not.toContain(`removeWorktree:${BRANCH}`);
+    expect(workspace.calls).not.toContain(`deleteRemoteBranch:${BRANCH}`);
+  });
+
+  it("notifies nobody and merges nothing", async () => {
+    runner.queue("implement", { ok: false, failure: "rate-limited" });
+
+    await run();
+
+    expect(notices()).toEqual([]);
+    expect(tracker.pullRequests).toEqual([]);
+  });
+
+  it("records the state reached, the branch and the unspent fix budget", async () => {
+    runner.queue("implement", { ok: false, failure: "rate-limited" });
+
+    await run();
+
+    expect(state()).toMatchObject({
+      ticket: TICKET,
+      branch: BRANCH,
+      state: "claimed",
+      fixUsed: false,
+      runId: "run-1",
+    });
+  });
+
+  it("reads as a pause in the progress table, not a failure", async () => {
+    runner.queue("implement", { ok: false, failure: "rate-limited" });
+
+    await run();
+
+    expect(progressTable()).toContain("| implement | ⏸ rate limited | 7 | 0m |");
+  });
+
+  it("records the implement Stage's work when the verify Stage is stopped", async () => {
+    runner.queue("verify", { ok: false, failure: "rate-limited" });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "released", stage: "verify" });
+    expect(state()).toMatchObject({ state: "implemented", fixUsed: false });
+    expect(progressTable()).toContain("| verify | ⏸ rate limited |");
+  });
+
+  it("gives back the fix budget a stopped fix Stage never spent", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    runner.queue("fix", { ok: false, failure: "rate-limited" });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "released", stage: "fix" });
+    expect(state()).toMatchObject({ state: "implemented", fixUsed: false });
+  });
+
+  it("records a fix budget an earlier pass of this Run did spend", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    runner.queue("verify", { ok: false, failure: "rate-limited" });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "released", stage: "verify" });
+    expect(runner.stages()).toEqual(["implement", "fix", "verify"]);
+    expect(state()).toMatchObject({ state: "implemented", fixUsed: true });
+  });
+
+  it("records the pull request the Run had already opened", async () => {
+    tracker.queueCi({ state: "failed", summary: "checks/build failed" });
+    runner.queue("verify", stageResult({ result: PASSING_VERDICT }));
+    runner.queue("verify", { ok: false, failure: "rate-limited" });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "released" });
+    expect(state()).toMatchObject({ pullRequest: 100, fixUsed: true });
+    expect(tracker.pullRequest(100).draft).toBe(false);
+  });
+
+  it("aborts the rebase a stopped conflict Stage left behind", async () => {
+    workspace.rebase = { ok: false, conflict: CONFLICT };
+    workspace.rebaseStateAfterStage = UNRESOLVED;
+    runner.queue("conflict", { ok: false, failure: "rate-limited" });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "released", stage: "rebase" });
+    // No fix Stage: a rate limit spends nothing, and the conflict is still
+    // there for the Run that resumes the Ticket to rebase into.
+    expect(runner.stages()).toEqual(["implement", "verify", "conflict"]);
+    expect(workspace.aborts).toBe(1);
+    expect(state()).toMatchObject({ state: "implemented", fixUsed: false });
+    expect(progressTable()).toContain("| conflict | ⏸ rate limited |");
+  });
+
+  it("takes a conflict Stage that finished the rebase before the limit came", async () => {
+    workspace.conflictOnce(CONFLICT);
+    runner.queue("conflict", { ok: false, failure: "rate-limited" });
+
+    // The worktree decides the conflict Stage, as it decides the turn-capped
+    // one: nothing after the rebase needs an agent, so the Ticket can merge.
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(state()).toBeUndefined();
+    expect(progressTable()).toContain("| conflict | ✅ rebased |");
+  });
+
+  it("leaves no State file behind when the Ticket is handed off instead", async () => {
+    runner.queue("implement", { ok: false, failure: "turn-capped" });
+
+    expect(await run()).toMatchObject({ outcome: "handed-off" });
+    expect(state()).toBeUndefined();
+  });
+
+  it("leaves no State file behind when the Ticket merges", async () => {
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(state()).toBeUndefined();
+  });
+});
+
+describe("resuming a released Ticket", () => {
+  /** Leave behind exactly what a release leaves: a worktree, a branch, a State file. */
+  function released(overrides: Partial<TicketState> = {}): void {
+    const state: TicketState = {
+      ticket: TICKET,
+      branch: BRANCH,
+      state: "implemented",
+      fixUsed: false,
+      runId: "run-0",
+      releasedAt: "2026-09-17T09:00:00.000Z",
+      ...overrides,
+    };
+    workspace.worktrees.set(worktree, state.branch);
+    writeTicketState(repoRoot, state);
+  }
+
+  it("carries on at the Checks rather than implementing the Ticket again", async () => {
+    released();
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).toEqual(["verify"]);
+    expect(workspace.calls).not.toContain(`createWorktree:${BRANCH}`);
+    expect(workspace.ranChecks.map((check) => check.cwd)).toEqual([worktree, worktree]);
+  });
+
+  it("runs the implement Stage again when that is what the limit stopped", async () => {
+    released({ state: "claimed" });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).toEqual(["implement", "verify"]);
+    expect(workspace.calls).not.toContain(`createWorktree:${BRANCH}`);
+    expect(runner.requests[0]?.cwd).toBe(worktree);
+  });
+
+  it("works on the branch the State file names, whatever the Ticket is called now", async () => {
+    released({ branch: "agent/2-what-the-Ticket-was-called-then" });
+
+    await run();
+
+    expect(tracker.pullRequest(100).head).toBe("agent/2-what-the-Ticket-was-called-then");
+    expect(workspace.pushes.map((push) => push.branch)).toEqual([
+      "agent/2-what-the-Ticket-was-called-then",
+    ]);
+  });
+
+  it("claims the Ticket again before it does anything else", async () => {
+    released();
+
+    await run();
+
+    expect(tracker.calls.slice(0, 3)).toEqual([
+      `assign:${TICKET}:pipeline-user`,
+      `addLabel:${TICKET}:in-progress`,
+      `removeLabel:${TICKET}:ready-for-agent`,
+    ]);
+  });
+
+  it("honours a fix budget an earlier Run had already spent", async () => {
+    released({ fixUsed: true });
+    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "checks" });
+    expect(runner.stages()).toEqual([]);
+    expect(handoffBody()).toContain("after the fix budget was used");
+  });
+
+  it("still buys a fix Stage when the budget came back unspent", async () => {
+    released();
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).toEqual(["fix", "verify"]);
+  });
+
+  it("brings the pull request the earlier Run opened up to date", async () => {
+    tracker.pullRequests.push({
+      number: 100,
+      head: BRANCH,
+      title: "feat(cli): do the thing",
+      body: `Closes #${TICKET}`,
+      draft: false,
+      merged: false,
+    });
+    released({ pullRequest: 100 });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged", pullRequest: 100 });
+    expect(tracker.pullRequests).toHaveLength(1);
+    expect(tracker.calls).toContain("updatePullRequestBody:100");
+  });
+
+  it("clears the State file once the resumed Ticket merges", async () => {
+    released();
+
+    await run();
+
+    expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
+  });
+
+  it("clears the State file when the resumed Ticket is handed off", async () => {
+    released({ fixUsed: true });
+    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+
+    await run();
+
+    expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
+    expect(tracker.issue(TICKET).labels).toEqual(["ready-for-human"]);
+  });
+
+  it("starts the Ticket over when the worktree the State file named is gone", async () => {
+    writeTicketState(repoRoot, {
+      ticket: TICKET,
+      branch: BRANCH,
+      state: "implemented",
+      fixUsed: true,
+      runId: "run-0",
+      releasedAt: "2026-09-17T09:00:00.000Z",
+    });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(workspace.calls).toContain(`createWorktree:${BRANCH}`);
+    expect(runner.stages()).toEqual(["implement", "verify"]);
+    // And the State file nothing can resume from is gone, so the next Run is
+    // not asked the same question again.
+    expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
+  });
+});
+
+/**
+ * The release and the resume in one test, once per Stage a rate limit can land
+ * on: the second `run()` is the next Run meeting the Ticket the first one put
+ * back on the Frontier, with the limit reset.
+ */
+describe("a Ticket released and then resumed", () => {
+  /** Every Stage both Runs asked for, so the second Run's shortcuts are visible. */
+  const stages = () => runner.stages();
+
+  it("implements again when the limit stopped the implement Stage", async () => {
+    runner.queue("implement", { ok: false, failure: "rate-limited" });
+
+    expect(await run()).toMatchObject({ outcome: "released", stage: "implement" });
+    expect(await run()).toMatchObject({ outcome: "merged" });
+
+    expect(stages()).toEqual(["implement", "implement", "verify"]);
+    expect(workspace.calls.filter((call) => call.startsWith("createWorktree"))).toEqual([
+      `createWorktree:${BRANCH}`,
+    ]);
+  });
+
+  it("grades the work already on the branch when the limit stopped verify", async () => {
+    runner.queue("verify", { ok: false, failure: "rate-limited" });
+
+    expect(await run()).toMatchObject({ outcome: "released", stage: "verify" });
+    expect(await run()).toMatchObject({ outcome: "merged" });
+
+    expect(stages()).toEqual(["implement", "verify", "verify"]);
+  });
+
+  it("finds the failure again when the limit stopped the fix Stage", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    runner.queue("fix", { ok: false, failure: "rate-limited" });
+
+    expect(await run()).toMatchObject({ outcome: "released", stage: "fix" });
+    // The Check passes on the second Run, so the budget it got back is unspent
+    // and the fix Stage the limit stopped is not owed a second one.
+    expect(await run()).toMatchObject({ outcome: "merged" });
+
+    expect(stages()).toEqual(["implement", "fix", "verify"]);
+  });
+
+  it("rebases again when the limit stopped the conflict Stage", async () => {
+    workspace.rebase = { ok: false, conflict: CONFLICT };
+    workspace.rebaseStateAfterStage = UNRESOLVED;
+    runner.queue("conflict", { ok: false, failure: "rate-limited" });
+
+    expect(await run()).toMatchObject({ outcome: "released", stage: "rebase" });
+    workspace.rebaseStateAfterStage = { resolved: true };
+    expect(await run()).toMatchObject({ outcome: "merged" });
+
+    expect(stages()).toEqual(["implement", "verify", "conflict", "verify", "conflict"]);
+  });
+
+  it("carries on in the progress comment the released Run opened", async () => {
+    runner.queue("verify", { ok: false, failure: "rate-limited" });
+
+    await run();
+    await run();
+
+    // One table, rewritten by the Run that resumed the Ticket: the pause the
+    // first Run reported is not history the second one keeps.
+    expect(progressTable()).not.toContain("⏸");
+    expect(progressTable()).toContain("| merge | ✅ #100 |");
   });
 });
 
@@ -1157,20 +1544,9 @@ describe("an issue that is nobody\u0027s to take", () => {
 });
 
 describe("the progress comment", () => {
-  /** The one comment the Stages share, as it stands on the Ticket now. */
-  function table(): string {
-    const progress = tracker.issue(TICKET).comments.filter(({ body }) =>
-      body.startsWith(PROGRESS_MARKER),
-    );
-    if (progress.length !== 1) {
-      throw new Error(`expected one progress comment, found ${progress.length}`);
-    }
-    return progress[0]?.body as string;
-  }
-
   /** The Stage column, top to bottom. */
   function rows(): string[] {
-    return [...table().matchAll(/^\| ([a-z]+) \|/gm)].map((row) => row[1] as string);
+    return [...progressTable().matchAll(/^\| ([a-z]+) \|/gm)].map((row) => row[1] as string);
   }
 
   it("creates one comment on the first Stage of a Ticket", async () => {
@@ -1179,7 +1555,7 @@ describe("the progress comment", () => {
     await run();
 
     expect(tracker.comments.filter(({ body }) => body.startsWith(PROGRESS_MARKER))).toHaveLength(1);
-    expect(table()).toContain("| Stage | Outcome | Turns | Duration |");
+    expect(progressTable()).toContain("| Stage | Outcome | Turns | Duration |");
     expect(rows()).toEqual(["implement"]);
   });
 
@@ -1194,16 +1570,16 @@ describe("the progress comment", () => {
   it("reports what each Stage did, with its turns", async () => {
     await run();
 
-    expect(table()).toContain("| implement | ✅ committed | 7 | 0m |");
-    expect(table()).toContain("| checks | ✅ passed | – | 0m |");
-    expect(table()).toContain("| verify | ✅ 1 met · 0 unverifiable | 7 | 0m |");
-    expect(table()).toContain("| merge | ✅ #100 | – | – |");
+    expect(progressTable()).toContain("| implement | ✅ committed | 7 | 0m |");
+    expect(progressTable()).toContain("| checks | ✅ passed | – | 0m |");
+    expect(progressTable()).toContain("| verify | ✅ 1 met · 0 unverifiable | 7 | 0m |");
+    expect(progressTable()).toContain("| merge | ✅ #100 | – | – |");
   });
 
   it("names the Run and the branch it is reporting on", async () => {
     await run();
 
-    expect(table()).toContain(`run \`run-1\` · \`${BRANCH}\``);
+    expect(progressTable()).toContain(`run \`run-1\` · \`${BRANCH}\``);
   });
 
   it("adds a row per pass when the fix budget buys a second one", async () => {
@@ -1220,7 +1596,7 @@ describe("the progress comment", () => {
       "ci",
       "merge",
     ]);
-    expect(table()).toContain("| checks | ❌ \`npm test\` failed | – | 0m |");
+    expect(progressTable()).toContain("| checks | ❌ \`npm test\` failed | – | 0m |");
   });
 
   it("adds a conflict row and the Checks that re-grade what it resolved", async () => {
@@ -1237,7 +1613,7 @@ describe("the progress comment", () => {
       "ci",
       "merge",
     ]);
-    expect(table()).toContain("| conflict | ✅ rebased | 7 | 0m |");
+    expect(progressTable()).toContain("| conflict | ✅ rebased | 7 | 0m |");
   });
 
   it("reuses the comment an earlier Run left on the Ticket", async () => {
@@ -1250,7 +1626,7 @@ describe("the progress comment", () => {
 
     expect(tracker.comments.filter(({ body }) => body.startsWith(PROGRESS_MARKER))).toEqual([]);
     expect(tracker.updatedComments.every(({ id }) => id === "99")).toBe(true);
-    expect(table()).toContain("run \`run-1\`");
+    expect(progressTable()).toContain("run \`run-1\`");
   });
 
   it("merges a Ticket the tracker would not take a progress comment for", async () => {
@@ -1342,6 +1718,17 @@ describe("ticking the Acceptance Criteria a merge proved", () => {
     expect(await run()).toMatchObject({ outcome: "merged", pullRequest: 100 });
   });
 });
+
+/** The one comment the Stages share, as it stands on the Ticket now. */
+function progressTable(): string {
+  const progress = tracker
+    .issue(TICKET)
+    .comments.filter(({ body }) => body.startsWith(PROGRESS_MARKER));
+  if (progress.length !== 1) {
+    throw new Error(`expected one progress comment, found ${progress.length}`);
+  }
+  return progress[0]?.body as string;
+}
 
 function handoffBody(): string {
   const comment = tracker.comments.at(-1);

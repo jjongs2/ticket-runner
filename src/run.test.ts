@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Config } from "./config.js";
 import type { Pipeline } from "./orchestrator.js";
 import { processRun } from "./run.js";
@@ -36,12 +39,19 @@ let tracker: FakeTracker;
 let runner: FakeAgentRunner;
 let workspace: FakeWorkspace;
 let logged: string[];
+/** A temporary repo root, because a released Ticket's State file is a real file. */
+let repoRoot: string;
 
 beforeEach(() => {
+  repoRoot = mkdtempSync(join(tmpdir(), "agent-pipeline-run-"));
   tracker = new FakeTracker();
   runner = new FakeAgentRunner({ verify: stageResult({ result: PASSING_VERDICT }) });
   workspace = new FakeWorkspace();
   logged = [];
+});
+
+afterEach(() => {
+  rmSync(repoRoot, { recursive: true, force: true });
 });
 
 function pipeline(): Pipeline {
@@ -50,7 +60,7 @@ function pipeline(): Pipeline {
     runner,
     workspace,
     config: config(),
-    repoRoot: "/repo",
+    repoRoot,
     runId: "run-1",
     log: (line) => logged.push(line),
   };
@@ -241,6 +251,32 @@ describe("a Ticket that fails", () => {
 
     expect(processed()).toEqual([4, 5]);
     expect(result.outcomes).toHaveLength(2);
+  });
+});
+
+describe("a Ticket the rate limit released", () => {
+  beforeEach(() => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    // Only the first implement Stage is stopped, so #4 is released and #5 is not.
+    runner.queue("implement", { ok: false, failure: "rate-limited" });
+  });
+
+  it("does not stop the Run", async () => {
+    const result = await processRun(pipeline());
+
+    expect(processed()).toEqual([4, 5]);
+    expect(result.outcomes.map((outcome) => outcome.outcome)).toEqual(["released", "merged"]);
+  });
+
+  it("is not taken again by the Run that released it", async () => {
+    // The release puts the Ticket straight back on the Frontier, unassigned and
+    // labelled: without the Tickets it has taken, a Run would loop on it while
+    // the limit lasts.
+    const result = await processRun(pipeline());
+
+    expect(processed()).toEqual([4, 5]);
+    expect(result.outcomes).toHaveLength(2);
+    expect(tracker.issue(4).labels).toEqual(["ready-for-agent"]);
   });
 });
 

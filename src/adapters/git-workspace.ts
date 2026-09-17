@@ -41,6 +41,28 @@ export class GitWorkspace implements Workspace {
     await this.git(["branch", "-D", branch]);
   }
 
+  /**
+   * Both halves are asked, because either can go on its own: a human who
+   * deleted the directory leaves git listing the worktree until somebody prunes
+   * it, and a worktree moved onto another branch is no longer holding the work
+   * that was left there.
+   */
+  async hasWorktree({ path, branch }: WorktreeRef): Promise<boolean> {
+    if (!existsSync(path)) return false;
+
+    const { stdout } = await this.git(["worktree", "list", "--porcelain"]);
+    // One paragraph per worktree: its path, then the branch it is on unless it
+    // is detached. Paths are compared resolved, because the one git recorded
+    // and the one the pipeline composed need not be spelt the same.
+    for (const entry of stdout.split("\n\n")) {
+      const lines = entry.split("\n");
+      const listed = lines.find((line) => line.startsWith("worktree "))?.slice(9);
+      if (listed === undefined || resolve(listed) !== resolve(path)) continue;
+      return lines.includes(`branch refs/heads/${branch}`);
+    }
+    return false;
+  }
+
   async commitSubjects(branch: string): Promise<string[]> {
     // --reverse turns git's newest-first log into the order they were written.
     const { stdout } = await this.git([

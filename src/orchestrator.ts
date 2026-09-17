@@ -19,6 +19,13 @@ import {
   implementPrompt,
   verifyPrompt,
 } from "./prompts.js";
+import {
+  type ReachedState,
+  type TicketState,
+  clearTicketState,
+  readTicketState,
+  writeTicketState,
+} from "./resume.js";
 import { retryLogDir, stageLogDir } from "./run-log.js";
 import {
   draftPullRequestBody,
@@ -56,6 +63,14 @@ export type TicketOutcome =
       pullRequest?: number;
     }
   | {
+      outcome: "released";
+      ticket: number;
+      title: string;
+      branch: string;
+      /** Where the rate limit landed, which is all the summary says about it. */
+      stage: FailurePoint;
+    }
+  | {
       outcome: "skipped";
       ticket: number;
       title: string;
@@ -89,6 +104,25 @@ class TicketFailure extends Error {
   }
 }
 
+/**
+ * A Stage the subscription rate limit stopped.
+ *
+ * The one Stage failure that says nothing about the Ticket, so it is the one
+ * that neither ends it nor spends its Fix budget: the Claim is released and a
+ * State file is left for the next Run to resume from (ADR-0004). It is not a
+ * {@link TicketFailure} because every path that handles one of those would
+ * either hand the Ticket off or buy it a fix Stage, and this is neither.
+ */
+class RateLimited extends Error {
+  constructor(
+    readonly point: FailurePoint,
+    /** The state the Ticket reached, which is where a later Run picks it up. */
+    readonly state: ReachedState,
+  ) {
+    super(`the ${point} Stage hit the subscription rate limit`);
+  }
+}
+
 /** An error the pipeline did not raise itself, blamed on the step it was on. */
 function asTicketFailure(error: unknown, point: FailurePoint): TicketFailure {
   return error instanceof TicketFailure
@@ -107,6 +141,10 @@ function asTicketFailure(error: unknown, point: FailurePoint): TicketFailure {
  * Nothing ends in a merge that has not been through a green pass of the whole
  * gauntlet.
  *
+ * A Stage the subscription rate limit stopped ends none of that: the Ticket is
+ * released, and a Run started once the limit has reset resumes it from the state
+ * it had reached rather than from the top.
+ *
  * The guards come before the claim, so an issue the pipeline will not take is
  * never marked as taken. A Run has already dropped the claimed and the
  * untriaged from its Frontier; `ticket <n>` names an issue by hand and reaches
@@ -124,8 +162,12 @@ export async function processTicket(
   if (skip !== undefined) return await passOver(pipeline, issue, skip);
 
   const user = await tracker.currentUser();
-  const branch = branchName(ticket, issue.title);
   const worktree = worktreePath(repoRoot, ticket);
+  // What an earlier Run a rate limit stopped left behind, if anything. Its
+  // branch is the one the work is on, which the Ticket's title may no longer
+  // say anything about.
+  const resume = await resumable(pipeline, ticket, worktree);
+  const branch = resume?.branch ?? branchName(ticket, issue.title);
   // Built from the comments the Ticket already has, so a Run that comes back to
   // a Ticket an earlier Run reported on edits that table rather than opening a
   // second one. Nothing is written until the first Stage finishes.
@@ -143,16 +185,23 @@ export async function processTicket(
   await tracker.assign(ticket, user);
   await tracker.addLabel(ticket, config.labels.inProgress);
   await tracker.removeLabel(ticket, config.labels.readyForAgent);
-  log(`#${ticket} claimed · ${branch}`);
+  log(
+    resume === undefined
+      ? `#${ticket} claimed · ${branch}`
+      : `#${ticket} resumed from ${resume.state} · ${branch}`,
+  );
 
-  let pullRequest: number | undefined;
+  // A pull request the released Run had already opened: without it this Run
+  // would try to open a second one for the same branch.
+  let pullRequest: number | undefined = resume?.pullRequest;
   // Where an unexpected error would have happened, so the hand-off comment
   // names the step the human has to look at rather than guessing.
   let point: FailurePoint = "setup";
   // The fix budget, which is one per Ticket and spent by the first failure a
   // fix Stage is offered. Once it is gone the next failure of any kind — even a
-  // kind the fix Stage never touched — is a hand-off.
-  let fixUsed = false;
+  // kind the fix Stage never touched — is a hand-off. A resumed Ticket keeps the
+  // budget it had when it was released: resuming buys no second chances.
+  let fixUsed = resume?.fixUsed ?? false;
   // The pass behind a fix Stage logs beside the first one rather than over it.
   let logDir = stageLogDir(repoRoot, runId, ticket);
 
@@ -161,10 +210,15 @@ export async function processTicket(
   let verdict: Verdict;
 
   try {
-    await workspace.createWorktree({ path: worktree, branch });
-
-    point = "implement";
-    await implement(pipeline, issue, worktree, branch, logDir, progress);
+    // A released Ticket kept its worktree and branch, and the Stages that
+    // already succeeded on them are not paid for twice.
+    if (resume === undefined) {
+      await workspace.createWorktree({ path: worktree, branch });
+    }
+    if (resume === undefined || resume.state === "claimed") {
+      point = "implement";
+      await implement(pipeline, issue, worktree, branch, logDir, progress);
+    }
 
     let commits: string[];
     let coAuthors: string[];
@@ -208,6 +262,9 @@ export async function processTicket(
         await requireGreenCi(pipeline, pullRequest, progress);
         break;
       } catch (error) {
+        // A rate limit is nobody's defect, so the fix budget does not answer
+        // for it: the Ticket is released, whole, further up.
+        if (error instanceof RateLimited) throw error;
         const failure = asTicketFailure(error, point);
         if (fixUsed || failure.kind === undefined) throw failure;
         fixUsed = true;
@@ -231,6 +288,18 @@ export async function processTicket(
     );
     await progress.record({ point: "merge", outcome: `✅ #${pullRequest}` });
   } catch (error) {
+    if (error instanceof RateLimited) {
+      return release(pipeline, {
+        issue,
+        user,
+        branch,
+        limit: error,
+        // A fix Stage the limit stopped before it ran spends nothing: the
+        // budget is still there for the Run that resumes the Ticket.
+        fixUsed: fixUsed && error.point !== "fix",
+        ...(pullRequest === undefined ? {} : { pullRequest }),
+      });
+    }
     return handOff(pipeline, {
       issue,
       user,
@@ -243,6 +312,13 @@ export async function processTicket(
   }
 
   // The Ticket is merged from here on, so nothing below may hand it off.
+  // The State file goes first: a merged Ticket must not look resumable to the
+  // next Run, whatever else below fails.
+  try {
+    clearTicketState(repoRoot, ticket);
+  } catch (error) {
+    log(`#${ticket} merged, but clearing its State file failed: ${(error as Error).message}`);
+  }
   try {
     await tickMetCriteria(tracker, ticket, verdict, log);
   } catch (error) {
@@ -264,6 +340,33 @@ export async function processTicket(
   log(`#${ticket} merged · PR #${pullRequest}`);
 
   return { outcome: "merged", ticket, title: issue.title, branch, pullRequest };
+}
+
+/**
+ * The state an earlier Run left for this Ticket, if a Run can still resume it.
+ *
+ * The State file only names where the work is; whether the work is still there
+ * is the Workspace's answer. A human who has removed the worktree, or moved it
+ * onto another branch, has thrown the resume away with it — so the file goes too
+ * and the Ticket is taken from the top. That is the safe reading of a worktree
+ * nobody can be sure of, not a free one: the branch may still exist, and then
+ * creating the worktree fails and the Ticket is handed over with the failure
+ * naming it. Better that than resuming into a worktree that is not there.
+ */
+async function resumable(
+  pipeline: Pipeline,
+  ticket: number,
+  worktree: string,
+): Promise<TicketState | undefined> {
+  const state = readTicketState(pipeline.repoRoot, ticket);
+  if (state === undefined) return undefined;
+  if (await pipeline.workspace.hasWorktree({ path: worktree, branch: state.branch })) {
+    return state;
+  }
+
+  clearTicketState(pipeline.repoRoot, ticket);
+  pipeline.log?.(`#${ticket} was resumable, but ${state.branch} is not in ${worktree}`);
+  return undefined;
 }
 
 /**
@@ -320,6 +423,49 @@ function runStage(
   });
 }
 
+/**
+ * Report a Stage the rate limit stopped, and raise the Ticket's release.
+ *
+ * The one place the pause is composed, because the conflict Stage reaches it by
+ * another road: the row reads as a pause rather than a cross, and the error
+ * carries the state a later Run resumes the Ticket from. Only the implement
+ * Stage can leave a Ticket short of `implemented`; every other Stage runs on
+ * work that is already on the branch.
+ */
+async function releasedStage(
+  progress: Progress,
+  stage: StageName,
+  point: FailurePoint,
+  result: StageResult,
+): Promise<RateLimited> {
+  await progress.record(stageRow(stage, result, "⏸ rate limited"));
+  return new RateLimited(point, stage === "implement" ? "claimed" : "implemented");
+}
+
+/**
+ * Report a Stage that did not come back, and say what it costs the Ticket.
+ *
+ * The rate limit is the one Stage failure the Ticket did nothing to earn, so it
+ * releases the Ticket instead of ending it. Every other failure is the Stage's
+ * own, and its caller decides whether the fix budget can buy another.
+ */
+async function stageDidNotFinish(
+  pipeline: Pipeline,
+  progress: Progress,
+  stage: "implement" | "verify" | "fix",
+  result: StageResult,
+): Promise<TicketFailure | RateLimited> {
+  if (result.failure === "rate-limited") {
+    return await releasedStage(progress, stage, stage, result);
+  }
+
+  await progress.record(stageRow(stage, result, `❌ ${stageFailureCell(result)}`));
+  return new TicketFailure(
+    stage,
+    describeStageFailure(stage, pipeline.config.stages[stage], result),
+  );
+}
+
 async function implement(
   pipeline: Pipeline,
   issue: Issue,
@@ -334,13 +480,13 @@ async function implement(
     cwd: worktree,
     logDir,
   });
-  if (!result.ok) {
-    await progress.record(stageRow("implement", result, `❌ ${stageFailureCell(result)}`));
-    throw new TicketFailure("implement", describeStageFailure("implement", stage, result));
-  }
+  if (!result.ok) throw await stageDidNotFinish(pipeline, progress, "implement", result);
 
   // An agent that gave up silently leaves a clean branch behind. That is a
-  // failure, not something to verify.
+  // failure, not something to verify. A resumed Ticket's branch is not clean —
+  // it carries what the Stage the rate limit stopped had committed — so this
+  // asks the same question there: is there anything at all to grade. Whether it
+  // is enough is the Verdict's business, not this guard's.
   if ((await pipeline.workspace.commitSubjects(branch)).length === 0) {
     await progress.record(stageRow("implement", result, "❌ no commits"));
     throw new TicketFailure(
@@ -401,10 +547,7 @@ async function verify(
   // verify is allowed to write throwaway tests; none of them reach the PR.
   await pipeline.workspace.discardChanges(worktree);
 
-  if (!result.ok) {
-    await progress.record(stageRow("verify", result, `❌ ${stageFailureCell(result)}`));
-    throw new TicketFailure("verify", describeStageFailure("verify", stage, result));
-  }
+  if (!result.ok) throw await stageDidNotFinish(pipeline, progress, "verify", result);
 
   let verdict: Verdict;
   try {
@@ -469,10 +612,7 @@ async function fix(
     cwd: worktree,
     logDir,
   });
-  if (!result.ok) {
-    await progress.record(stageRow("fix", result, `❌ ${stageFailureCell(result)}`));
-    throw new TicketFailure("fix", describeStageFailure("fix", stage, result));
-  }
+  if (!result.ok) throw await stageDidNotFinish(pipeline, progress, "fix", result);
 
   await progress.record(stageRow("fix", result, "✅ committed"));
 }
@@ -489,6 +629,10 @@ async function fix(
  * that finished the rebase and then ran out of turns has done the job; one that
  * came back clean because it quietly abandoned the rebase has not, and only the
  * worktree can tell the difference.
+ *
+ * A Stage the rate limit stopped is read the same way, and only then released:
+ * one that had already finished the rebase leaves nothing that needs an agent
+ * session, so the Ticket carries on to the Checks, the pull request and CI.
  */
 async function resolveConflict(
   pipeline: Pipeline,
@@ -525,7 +669,7 @@ async function conflictStage(
   logDir: string,
   conflict: string,
   progress: Progress,
-): Promise<TicketFailure | undefined> {
+): Promise<TicketFailure | RateLimited | undefined> {
   const stage = pipeline.config.stages.conflict;
   try {
     const result = await runStage(pipeline, "conflict", {
@@ -535,13 +679,22 @@ async function conflictStage(
     });
 
     const state = await pipeline.workspace.rebaseState(worktree);
-    // The worktree decides the row, as it decides the outcome: a Stage that ran
-    // out of turns after finishing the rebase did the job it was sent to do.
-    await progress.record(
-      stageRow("conflict", result, state.resolved ? "✅ rebased" : "❌ unresolved"),
-    );
-    if (state.resolved) return undefined;
+    if (state.resolved) {
+      // The worktree decides the row, as it decides the outcome: a Stage that
+      // ran out of turns, or into the rate limit, after finishing the rebase
+      // did the job it was sent to do.
+      await progress.record(stageRow("conflict", result, "✅ rebased"));
+      return undefined;
+    }
 
+    // A rate limit left the conflict exactly as it found it: nothing for a fix
+    // Stage to mend and nothing to blame the Ticket for. The caller still owes
+    // the worktree its abort, so the branch the resumed Run rebases is clean.
+    if (result.failure === "rate-limited") {
+      return await releasedStage(progress, "conflict", "rebase", result);
+    }
+
+    await progress.record(stageRow("conflict", result, "❌ unresolved"));
     return new TicketFailure(
       "rebase",
       result.ok
@@ -643,6 +796,54 @@ async function requireGreenCi(
   }
 }
 
+interface Release {
+  issue: Issue;
+  user: string;
+  branch: string;
+  limit: RateLimited;
+  /** Whether the Fix budget was spent by a failure of the Ticket's own. */
+  fixUsed: boolean;
+  pullRequest?: number;
+}
+
+/**
+ * Release the Ticket: undo the Claim and leave a State file behind.
+ *
+ * The opposite of a hand-off, and deliberately quiet. Nothing about the Ticket
+ * failed, nobody has to look at it, and the work already on its branch is worth
+ * keeping — so the branch and the worktree stay, no comment is posted, no draft
+ * pull request is opened, and the Ticket goes back on the Frontier for a Run
+ * started after the limit has reset.
+ */
+async function release(
+  pipeline: Pipeline,
+  { issue, user, branch, limit, fixUsed, pullRequest }: Release,
+): Promise<TicketOutcome> {
+  const { tracker, config, repoRoot } = pipeline;
+  const ticket = issue.number;
+
+  // Written before the Claim comes off: a Ticket back on the Frontier without a
+  // State file is one the next Run would start again from nothing.
+  writeTicketState(repoRoot, {
+    ticket,
+    branch,
+    state: limit.state,
+    fixUsed,
+    ...(pullRequest === undefined ? {} : { pullRequest }),
+    runId: pipeline.runId,
+    releasedAt: new Date().toISOString(),
+  });
+
+  // The claim, undone in the order it was made, so the assignee — which is what
+  // another Run reads to tell a taken Ticket from a free one — comes off last.
+  await tracker.addLabel(ticket, config.labels.readyForAgent);
+  await tracker.removeLabel(ticket, config.labels.inProgress);
+  await tracker.unassign(ticket, user);
+  pipeline.log?.(`#${ticket} released at ${limit.point} · rate limit · ${branch}`);
+
+  return { outcome: "released", ticket, title: issue.title, branch, stage: limit.point };
+}
+
 interface HandOff {
   issue: Issue;
   user: string;
@@ -664,6 +865,18 @@ async function handOff(
 ): Promise<TicketOutcome> {
   const { tracker, workspace, config } = pipeline;
   const ticket = issue.number;
+
+  // The Ticket is a human's from here on, so nothing may leave it looking
+  // resumable: the next Run must not pick up what somebody else is holding.
+  // Wrapped because the hand-off itself — the draft PR, the comment, the labels
+  // — is what a human is waiting for, and no file is worth losing it over.
+  try {
+    clearTicketState(pipeline.repoRoot, ticket);
+  } catch (error) {
+    pipeline.log?.(
+      `#${ticket} handed off, but clearing its State file failed: ${(error as Error).message}`,
+    );
+  }
 
   if (pullRequest !== undefined) {
     await tracker.convertPullRequestToDraft(pullRequest);
@@ -773,6 +986,10 @@ const STAGE_FAILURES: Record<
 > = {
   "rate-limited": {
     cell: "rate limited",
+    // The cell is all any path reads today: a rate-limited Stage releases the
+    // Ticket rather than ending it, so no hand-off comment is written about one.
+    // The sentence is kept true rather than dropped, because the table is one
+    // entry per failure and the next path to need it must not have to invent it.
     sentence: () => "hit the subscription rate limit",
   },
   "timed-out": {

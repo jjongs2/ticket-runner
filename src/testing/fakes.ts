@@ -298,6 +298,11 @@ export class FakeWorkspace implements Workspace {
     this.worktrees.set(path, branch);
   }
 
+  async hasWorktree({ path, branch }: WorktreeRef): Promise<boolean> {
+    this.calls.push(`hasWorktree:${branch}`);
+    return this.worktrees.get(path) === branch;
+  }
+
   async removeWorktree({ path, branch }: WorktreeRef): Promise<void> {
     this.calls.push(`removeWorktree:${branch}`);
     this.worktrees.delete(path);

@@ -79,6 +79,58 @@ describe("worktrees", () => {
   });
 });
 
+describe("hasWorktree", () => {
+  it("recognises the worktree it created, on the branch it created it on", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" });
+
+    expect(await workspace.hasWorktree({ path, branch: "agent/2-x" })).toBe(true);
+  });
+
+  it("says no about a Ticket that never had one", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+
+    expect(await workspace.hasWorktree({ path, branch: "agent/2-x" })).toBe(false);
+  });
+
+  it("says no once the worktree has been removed", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.removeWorktree({ path, branch: "agent/2-x" });
+
+    expect(await workspace.hasWorktree({ path, branch: "agent/2-x" })).toBe(false);
+  });
+
+  it("says no about a directory a human deleted but git still lists", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    // `rm -rf .worktrees` without a prune, which is how a human cleans up.
+    rmSync(path, { recursive: true, force: true });
+
+    expect(git(repo, "worktree", "list", "--porcelain")).toContain(path);
+    expect(await workspace.hasWorktree({ path, branch: "agent/2-x" })).toBe(false);
+  });
+
+  it("says no when the worktree is on another branch than the one asked about", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    git(path, "checkout", "-b", "agent/2-something-else");
+
+    expect(await workspace.hasWorktree({ path, branch: "agent/2-x" })).toBe(false);
+    expect(await workspace.hasWorktree({ path, branch: "agent/2-something-else" })).toBe(true);
+  });
+
+  it("tells one Ticket's worktree from another's", async () => {
+    const mine = join(repo, ".worktrees", "ticket-2");
+    const theirs = join(repo, ".worktrees", "ticket-3");
+    await workspace.createWorktree({ path: mine, branch: "agent/2-x" });
+    await workspace.createWorktree({ path: theirs, branch: "agent/3-y" });
+
+    expect(await workspace.hasWorktree({ path: mine, branch: "agent/3-y" })).toBe(false);
+    expect(await workspace.hasWorktree({ path: theirs, branch: "agent/3-y" })).toBe(true);
+  });
+});
+
 describe("commitSubjects", () => {
   it("reads only the commits main does not have, oldest first", async () => {
     const path = join(repo, ".worktrees", "ticket-2");

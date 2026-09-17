@@ -35,21 +35,29 @@ notifies; this one is edited in place and notifies nobody after the first Stage.
 ## Outcome cells
 
 An icon and a handful of words. `✅` passed, `❌` ended the Ticket or spent its
-fix budget, `⚠️` was tolerated by a gate that is switched off.
+fix budget, `⚠️` was tolerated by a gate that is switched off, `⏸` released the
+Ticket for a later Run to resume.
 
 | Stage | Outcome |
 |---|---|
-| implement | `✅ committed`, `❌ no commits`, `❌ <why the Stage did not finish>` |
-| fix | `✅ committed`, `❌ <why the Stage did not finish>` |
+| implement | `✅ committed`, `❌ no commits`, `⏸ rate limited`, `❌ <why the Stage did not finish>` |
+| fix | `✅ committed`, `⏸ rate limited`, `❌ <why the Stage did not finish>` |
 | checks | `✅ passed`, ``❌ `<command>` failed`` |
-| verify | `✅ <k> met · <u> unverifiable`, `❌ <k> unmet`, `❌ no evidence`, `❌ no Verdict`, `❌ <why the Stage did not finish>` |
-| conflict | `✅ rebased`, `❌ unresolved`, `❌ unknown` |
+| verify | `✅ <k> met · <u> unverifiable`, `❌ <k> unmet`, `❌ no evidence`, `❌ no Verdict`, `⏸ rate limited`, `❌ <why the Stage did not finish>` |
+| conflict | `✅ rebased`, `❌ unresolved`, `⏸ rate limited`, `❌ unknown` |
 | ci | `✅ passed`, `❌ failed`, `❌ no checks`, `⚠️ no checks`, `❌ timed out` |
 | merge | `✅ #<pr>` |
 
-`<why the Stage did not finish>` is the short form of a Stage failure: `rate
-limited`, `timed out`, `turn capped`, `exited non-zero`, `invalid result`, or
-`failed` when the Stage came back without saying which.
+`<why the Stage did not finish>` is the short form of a Stage failure: `timed
+out`, `turn capped`, `exited non-zero`, `invalid result`, or `failed` when the
+Stage came back without saying which. The subscription rate limit is the one
+Stage failure that is nothing about the Ticket, so it reads `⏸ rate limited`
+and is the last row of the table: the Ticket is released there, and the Run that
+resumes it writes its own table over this one.
+
+A `conflict` Stage that came back rate-limited is still read as `✅ rebased`
+when it had finished the rebase first: the worktree decides that row, so a
+Stage that did the job and only then ran into the limit is not released.
 
 `conflict` is the one row that can say `❌ unknown`: the worktree decides whether
 the rebase was finished, so a worktree git could not be asked about leaves the
