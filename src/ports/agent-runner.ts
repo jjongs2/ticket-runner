@@ -5,7 +5,7 @@
  * must respect; the adapter owns the child process and the transcript on disk.
  */
 
-export type StageName = "implement" | "verify" | "fix";
+export type StageName = "implement" | "verify" | "fix" | "conflict";
 
 /**
  * The permission modes a Stage can run under. Only the modes that can actually

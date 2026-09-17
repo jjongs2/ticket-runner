@@ -76,11 +76,12 @@ reproducing a Stage by hand reproduces its environment too.
 3. implement Stage
 4. the configured Checks, run by the pipeline itself
 5. verify Stage, graded against the Ticket's Acceptance Criteria
-6. rebase on `main`, open a PR that closes the Ticket, wait for CI
+6. rebase on `main`, resolving a conflict if one comes up, open a PR that closes the
+   Ticket, wait for CI
 7. squash-merge, pull `main`, remove the worktree
 
-A failing Check, a Verdict with an `unmet` criterion, or a red CI spends the Ticket's
-**fix budget** rather than ending it. A fresh session runs in the same worktree on the
+A failing Check, a Verdict with an `unmet` criterion, a red CI, or a rebase conflict the
+conflict Stage could not resolve spends the Ticket's **fix budget** rather than ending it. A fresh session runs in the same worktree on the
 same branch, given the kind of failure and the evidence that was captured — the failing
 Check's output, the unmet criteria with theirs, or the CI summary — and asked for the
 regression test a gap the Verdict found should have had. Step 4 then starts again, so
@@ -88,9 +89,9 @@ the fix is graded by every gate from the Checks onwards. The budget is one per T
 a second failure of any kind, including a kind the fix Stage never touched, is a
 hand-off, and the comment says the budget had already been used.
 
-Nothing else spends the budget. A rebase conflict, a Stage that never came back, a Verdict
-with no evidence in it, CI that timed out or never ran — none of these is a defect in
-the code a fresh session could go and mend.
+Nothing else spends the budget. A Stage that never came back, a Verdict with no evidence in
+it, CI that timed out or never ran — none of these is a defect in the code a fresh session
+could go and mend.
 
 A failure the fix budget cannot cover hands the Ticket over instead: `ready-for-human`,
 unassigned, draft PR, branch and worktree preserved. Exit code is `0` when nothing was
@@ -104,6 +105,25 @@ line lands there before the Stage starts, and its output as the Stage prints it,
 killed mid-Stage still leaves behind what it had reached. A Ticket that spends its fix
 budget writes the fix Stage and the pass it bought to `<n>/retry/`, so the transcripts of
 the pass that failed survive alongside them.
+
+## Rebase conflicts
+
+A branch that will not replay onto `main` is not a defect in the branch: `main` moved on
+while the Ticket was being implemented. So the rebase is left where git stopped it and one
+**conflict Stage** runs in the worktree, driving
+`/mattpocock-skills:resolving-merge-conflicts` with the Ticket and git's own output. It has
+its own turn and wall-clock limits, and it does not spend the fix budget.
+
+The worktree decides whether it worked, not how the session ended: the rebase has to be
+finished, `main` an ancestor of the branch, nothing left unmerged and no conflict marker
+left in a tracked file. A Stage that ran out of turns having already finished the rebase has
+still done the job; one that came back clean because it quietly abandoned the rebase has not.
+The Checks then run again, because the resolution is code no gate has seen yet, and only then
+does the pull request open.
+
+A conflict that outlives the Stage is aborted back out of the worktree — a half-finished
+rebase would trap whoever works there next — and follows the ordinary failure path: the fix
+Stage if the budget is unspent, a hand-off if it is not.
 
 ## Guards
 
@@ -138,14 +158,16 @@ untriaged one.
   "gates": { "checks": true, "ci": true },
 
   "stages": {
-    // Defaults: implement 300 turns / 60 min, verify 80 / 20, fix 150 / 40.
+    // Defaults: implement 300 turns / 60 min, verify 80 / 20, fix 150 / 40,
+    // conflict 120 / 30.
     "implement": {
       "model": "claude-opus-5",
       "maxTurns": 300,
       "maxMinutes": 60,
       "extraPrompt": "Repo-specific instructions appended to the Stage prompt."
     },
-    "fix": { "model": "claude-opus-5", "maxTurns": 150, "maxMinutes": 40 }
+    "fix": { "model": "claude-opus-5", "maxTurns": 150, "maxMinutes": 40 },
+    "conflict": { "model": "claude-opus-5", "maxTurns": 120, "maxMinutes": 30 }
   },
 
   // Passed to every Stage, which also always runs with `--permission-prompts none`.

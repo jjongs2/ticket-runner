@@ -10,7 +10,13 @@ import type {
 } from "./ports/agent-runner.js";
 import type { Issue, Tracker } from "./ports/tracker.js";
 import type { Workspace } from "./ports/workspace.js";
-import { type FixFailure, fixPrompt, implementPrompt, verifyPrompt } from "./prompts.js";
+import {
+  type FixFailure,
+  conflictPrompt,
+  fixPrompt,
+  implementPrompt,
+  verifyPrompt,
+} from "./prompts.js";
 import { retryLogDir, stageLogDir } from "./run-log.js";
 import {
   draftPullRequestBody,
@@ -67,7 +73,7 @@ export interface Pipeline {
 
 /**
  * A failure that ends the Ticket, unless the fix budget can still buy it a
- * second try. `kind` is set on exactly the three failures a fix Stage is given:
+ * second try. `kind` is set on exactly the failures a fix Stage is given:
  * everything else is a hand-off the moment it is thrown.
  */
 class TicketFailure extends Error {
@@ -93,10 +99,11 @@ function asTicketFailure(error: unknown, point: FailurePoint): TicketFailure {
  *
  * The happy path is: guards → claim → worktree and branch → implement Stage →
  * Checks → verify Stage → rebase → PR → CI → squash merge → cleanup. A failing
- * Check, an unmet criterion or a red CI spends the Ticket's fix budget and
- * starts again at the Checks; every other failure, and every second failure,
- * ends in a hand-off. Nothing ends in a merge that has not been through a green
- * pass of the whole gauntlet.
+ * Check, an unmet criterion, a red CI or a rebase conflict the conflict Stage
+ * could not resolve spends the Ticket's fix budget and starts again at the
+ * Checks; every other failure, and every second failure, ends in a hand-off.
+ * Nothing ends in a merge that has not been through a green pass of the whole
+ * gauntlet.
  *
  * The guards come before the claim, so an issue the pipeline will not take is
  * never marked as taken. A Run has already dropped the claimed and the
@@ -159,11 +166,13 @@ export async function processTicket(
         point = "rebase";
         const rebase = await workspace.rebaseOnMain(worktree);
         if (!rebase.ok) {
-          throw new TicketFailure(
-            "rebase",
-            "the branch does not rebase onto main",
-            rebase.conflict,
-          );
+          await resolveConflict(pipeline, issue, worktree, logDir, rebase.conflict);
+          // The resolution is code nothing has graded: the Checks passed on one
+          // side of the conflict and CI on the other. The Verdict is not asked
+          // for again, because the conflict Stage is told to change no
+          // behaviour the Acceptance Criteria are about.
+          point = "checks";
+          await runChecks(pipeline, worktree);
         }
 
         point = "pr";
@@ -406,6 +415,51 @@ async function fix(
   if (!result.ok) {
     throw new TicketFailure("fix", describeStageFailure("fix", stage, result));
   }
+}
+
+/**
+ * Send one session into the stopped rebase to resolve it.
+ *
+ * It is not what the fix budget buys and it does not spend it: a conflict is
+ * main moving on underneath a branch, not a defect in the branch, and a Ticket
+ * that hits one has done nothing wrong yet. The budget covers what is left if
+ * this fails.
+ *
+ * The tree decides whether it worked, not the session's exit status. A Stage
+ * that finished the rebase and then ran out of turns has done the job; one that
+ * came back clean because it quietly abandoned the rebase has not, and only the
+ * worktree can tell the difference.
+ */
+async function resolveConflict(
+  pipeline: Pipeline,
+  issue: Issue,
+  worktree: string,
+  logDir: string,
+  conflict: string,
+): Promise<void> {
+  const stage = pipeline.config.stages.conflict;
+  pipeline.log?.(`#${issue.number} resolving a rebase conflict`);
+
+  const result = await runStage(pipeline, "conflict", {
+    prompt: conflictPrompt(issue.url, conflict, stage.extraPrompt),
+    cwd: worktree,
+    logDir,
+  });
+
+  const state = await pipeline.workspace.rebaseState(worktree);
+  if (state.resolved) return;
+
+  // Nothing downstream may run inside a half-finished rebase, least of all the
+  // fix Stage the budget may still buy: it has to have a branch to commit on.
+  await pipeline.workspace.abortRebase(worktree);
+  throw new TicketFailure(
+    "rebase",
+    result.ok
+      ? "the conflict Stage did not finish the rebase onto main"
+      : describeStageFailure("conflict", stage, result),
+    [conflict, state.unresolved].join("\n\n"),
+    "unresolved-conflict",
+  );
 }
 
 interface PullRequestSubject {
