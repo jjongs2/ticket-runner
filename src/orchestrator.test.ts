@@ -1086,7 +1086,7 @@ describe("releasing a rate-limited Ticket", () => {
     expect(state()).toMatchObject({
       ticket: TICKET,
       branch: BRANCH,
-      stage: "claimed",
+      state: "claimed",
       fixUsed: false,
       runId: "run-1",
     });
@@ -1106,7 +1106,7 @@ describe("releasing a rate-limited Ticket", () => {
     const outcome = await run();
 
     expect(outcome).toMatchObject({ outcome: "released", stage: "verify" });
-    expect(state()).toMatchObject({ stage: "implemented", fixUsed: false });
+    expect(state()).toMatchObject({ state: "implemented", fixUsed: false });
     expect(progressTable()).toContain("| verify | ⏸ rate limited |");
   });
 
@@ -1117,7 +1117,7 @@ describe("releasing a rate-limited Ticket", () => {
     const outcome = await run();
 
     expect(outcome).toMatchObject({ outcome: "released", stage: "fix" });
-    expect(state()).toMatchObject({ stage: "implemented", fixUsed: false });
+    expect(state()).toMatchObject({ state: "implemented", fixUsed: false });
   });
 
   it("records a fix budget an earlier pass of this Run did spend", async () => {
@@ -1128,7 +1128,7 @@ describe("releasing a rate-limited Ticket", () => {
 
     expect(outcome).toMatchObject({ outcome: "released", stage: "verify" });
     expect(runner.stages()).toEqual(["implement", "fix", "verify"]);
-    expect(state()).toMatchObject({ stage: "implemented", fixUsed: true });
+    expect(state()).toMatchObject({ state: "implemented", fixUsed: true });
   });
 
   it("records the pull request the Run had already opened", async () => {
@@ -1155,7 +1155,7 @@ describe("releasing a rate-limited Ticket", () => {
     // there for the Run that resumes the Ticket to rebase into.
     expect(runner.stages()).toEqual(["implement", "verify", "conflict"]);
     expect(workspace.aborts).toBe(1);
-    expect(state()).toMatchObject({ stage: "implemented", fixUsed: false });
+    expect(state()).toMatchObject({ state: "implemented", fixUsed: false });
     expect(progressTable()).toContain("| conflict | ⏸ rate limited |");
   });
 
@@ -1189,7 +1189,7 @@ describe("resuming a released Ticket", () => {
     const state: TicketState = {
       ticket: TICKET,
       branch: BRANCH,
-      stage: "implemented",
+      state: "implemented",
       fixUsed: false,
       runId: "run-0",
       releasedAt: "2026-09-17T09:00:00.000Z",
@@ -1211,7 +1211,7 @@ describe("resuming a released Ticket", () => {
   });
 
   it("runs the implement Stage again when that is what the limit stopped", async () => {
-    released({ stage: "claimed" });
+    released({ state: "claimed" });
 
     const outcome = await run();
 
@@ -1305,7 +1305,7 @@ describe("resuming a released Ticket", () => {
     writeTicketState(repoRoot, {
       ticket: TICKET,
       branch: BRANCH,
-      stage: "implemented",
+      state: "implemented",
       fixUsed: true,
       runId: "run-0",
       releasedAt: "2026-09-17T09:00:00.000Z",

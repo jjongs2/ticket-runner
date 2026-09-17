@@ -18,24 +18,26 @@ import { z } from "zod";
  */
 
 /**
- * How far a released Ticket got, in the states of the lifecycle rather than the
- * Stages: `claimed` is a Ticket the implement Stage never finished, and
- * `implemented` one with the work on its branch but no merge behind it.
+ * How far a released Ticket got: `claimed` is one the implement Stage never
+ * finished, `implemented` one carrying that Stage's work on its branch with no
+ * merge behind it.
  *
- * Only the states a Stage can be rate-limited out of are here, because only
- * those can be released: the Checks, the rebase, the pull request, CI and the
- * merge run no agent session, so no rate limit can land on them.
+ * A state of the lifecycle, not a Stage — a Stage is a session (CONTEXT.md), and
+ * what a release records is what the Ticket has, not what was running. Only the
+ * two states a rate limit can leave a Ticket in are here: the Checks, the
+ * rebase, the pull request, CI and the merge run no session for one to land on.
  */
-export const TICKET_STAGES = ["claimed", "implemented"] as const;
+export const REACHED_STATES = ["claimed", "implemented"] as const;
 
-export type TicketStage = (typeof TICKET_STAGES)[number];
+export type ReachedState = (typeof REACHED_STATES)[number];
 
 export interface TicketState {
   /** Carried in the file as well as its name, so the file reads on its own. */
   ticket: number;
   /** The branch the work is on, which the resuming Run uses rather than deriving. */
   branch: string;
-  stage: TicketStage;
+  /** The state the Ticket had reached, which is where a later Run picks it up. */
+  state: ReachedState;
   /**
    * Whether the Fix budget was already spent when the rate limit came. Resuming
    * must not hand the Ticket a second fix Stage it never earned.
@@ -55,7 +57,7 @@ export interface TicketState {
 const stateSchema = z.object({
   ticket: z.number().int().positive(),
   branch: z.string().min(1),
-  stage: z.enum(TICKET_STAGES),
+  state: z.enum(REACHED_STATES),
   fixUsed: z.boolean(),
   pullRequest: z.number().int().positive().optional(),
   runId: z.string(),

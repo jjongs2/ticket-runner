@@ -18,7 +18,7 @@ function state(overrides: Partial<TicketState> = {}): TicketState {
   return {
     ticket: TICKET,
     branch: "agent/8-rate-limit-release-and-resume",
-    stage: "implemented",
+    state: "implemented",
     fixUsed: false,
     runId: "run-1",
     releasedAt: "2026-09-17T09:00:00.000Z",
@@ -41,7 +41,7 @@ afterEach(() => {
 });
 
 describe("writeTicketState", () => {
-  it("writes one file per Ticket under the run directory", () => {
+  it("writes one file per Ticket under the pipeline's state directory", () => {
     writeTicketState(repoRoot, state());
 
     expect(statePath(repoRoot, TICKET)).toBe(
@@ -59,20 +59,20 @@ describe("writeTicketState", () => {
   });
 
   it("replaces the state a release before it left", () => {
-    writeTicketState(repoRoot, state({ stage: "claimed" }));
-    writeTicketState(repoRoot, state({ stage: "implemented", fixUsed: true }));
+    writeTicketState(repoRoot, state({ state: "claimed" }));
+    writeTicketState(repoRoot, state({ state: "implemented", fixUsed: true }));
 
     expect(readTicketState(repoRoot, TICKET)).toEqual(
-      state({ stage: "implemented", fixUsed: true }),
+      state({ state: "implemented", fixUsed: true }),
     );
   });
 });
 
 describe("readTicketState", () => {
   it("reads back what the release recorded", () => {
-    writeTicketState(repoRoot, state({ stage: "claimed", fixUsed: true }));
+    writeTicketState(repoRoot, state({ state: "claimed", fixUsed: true }));
 
-    expect(readTicketState(repoRoot, TICKET)).toEqual(state({ stage: "claimed", fixUsed: true }));
+    expect(readTicketState(repoRoot, TICKET)).toEqual(state({ state: "claimed", fixUsed: true }));
   });
 
   it("has nothing to say about a Ticket that was never released", () => {
@@ -86,7 +86,7 @@ describe("readTicketState", () => {
   });
 
   it("ignores a file that is missing what resuming needs", () => {
-    writeRaw(JSON.stringify({ ticket: TICKET, stage: "implemented" }));
+    writeRaw(JSON.stringify({ ticket: TICKET, state: "implemented" }));
 
     expect(readTicketState(repoRoot, TICKET)).toBeUndefined();
   });
@@ -97,8 +97,8 @@ describe("readTicketState", () => {
     expect(readTicketState(repoRoot, TICKET)).toBeUndefined();
   });
 
-  it("ignores a stage no Run knows how to resume from", () => {
-    writeRaw(JSON.stringify({ ...state(), stage: "merged" }));
+  it("ignores a state no Run knows how to resume from", () => {
+    writeRaw(JSON.stringify({ ...state(), state: "merged" }));
 
     expect(readTicketState(repoRoot, TICKET)).toBeUndefined();
   });

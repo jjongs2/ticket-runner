@@ -130,7 +130,7 @@ whether the fix budget was already spent, and the pull request if one was open
 {
   "ticket": 8,
   "branch": "agent/8-rate-limit-release-and-resume",
-  "stage": "implemented",
+  "state": "implemented",
   "fixUsed": false,
   "runId": "2026-09-17T09-00-00-000",
   "releasedAt": "2026-09-17T10:14:02.511Z"
@@ -143,7 +143,8 @@ ones: `claimed` runs the implement Stage again, `implemented` goes straight to t
 The fix budget is resumed as it was recorded, so a Ticket that had already spent it is
 handed off at its next failure — resuming buys no second chances. The file is removed when
 the Ticket merges and when it is handed off, and ignored if the worktree it names has since
-been cleaned up, in which case the Ticket simply starts over.
+been cleaned up — the Ticket is then taken from the top, which is handed over at `setup` if
+the branch is still lying about.
 
 The Run the limit stops does not wait for it to reset and does not take the Ticket it
 released a second time; it carries on down the Frontier, releasing whatever the limit
