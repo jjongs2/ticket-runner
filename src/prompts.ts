@@ -4,6 +4,7 @@
  * (ADR-0002).
  */
 
+import type { FailureKind } from "./lifecycle.js";
 import { STAGE_ENV_VAR } from "./stage-guard.js";
 
 /**
@@ -38,6 +39,30 @@ const VERIFY_INSTRUCTIONS = `You are the verify Stage of an unattended pipeline.
 - Mark a criterion \`unverifiable\` only when no evidence can be gathered, never as a substitute for looking.
 - End by emitting the Verdict: one entry per criterion with its status and the evidence you actually gathered.`;
 
+const FIX_INSTRUCTIONS = `You are the fix Stage of an unattended pipeline. The Ticket below is already implemented on the branch you are on, one gate failed, and you get exactly one attempt at it: a second failure of any kind hands the Ticket to a human.
+
+- Commit your fix on the branch you are on, in this worktree. Do not create a branch, do not open pull requests, and do not close the Ticket.
+- Start from the evidence: reproduce the failure, find what actually causes it, and fix that rather than the symptom.
+- Where the failure is an unmet Acceptance Criterion, add the regression test that would have caught it and commit it with the fix.
+- Stay inside this Ticket's Acceptance Criteria. Anything else you find belongs to another Ticket, not to this session.
+- Write commit subjects in the repo's commit convention. The pipeline re-runs the Checks and the verify Stage as soon as you finish.`;
+
+/** How the fix prompt announces each kind of failure. */
+const FAILURE_SENTENCES: Record<FailureKind, string> = {
+  "failed-check": "a Check the pipeline runs itself failed",
+  "unmet-criteria": "the verify Stage found unmet Acceptance Criteria",
+  "failed-ci": "a pull request check failed after the branch was pushed",
+};
+
+/** What went wrong, in the words the hand-off comment would have used. */
+export interface FixFailure {
+  kind: FailureKind;
+  /** The one line a human would have read in a notification. */
+  summary: string;
+  /** Failing Check output, the unmet criteria with their evidence, or a CI excerpt. */
+  evidence: string;
+}
+
 /** `/mattpocock-skills:implement <url>`, then the corrections, then config. */
 export function implementPrompt(issueUrl: string, extraPrompt: string): string {
   return sections([
@@ -56,6 +81,35 @@ export function verifyPrompt(issueUrl: string, extraPrompt: string): string {
     SELF_HOSTING_GUIDANCE,
     extraPrompt,
   ]);
+}
+
+/** A fresh session with no plugin skill, given one failure and told to mend it. */
+export function fixPrompt(
+  issueUrl: string,
+  failure: FixFailure,
+  extraPrompt: string,
+): string {
+  return sections([
+    `Ticket: ${issueUrl}`,
+    FIX_INSTRUCTIONS,
+    failureSection(failure),
+    SELF_HOSTING_GUIDANCE,
+    extraPrompt,
+  ]);
+}
+
+/**
+ * The failure, its kind and its evidence. The evidence is fenced because it is
+ * raw command output, which would otherwise be read as Markdown.
+ */
+function failureSection({ kind, summary, evidence }: FixFailure): string {
+  const trimmed = evidence.trim();
+  return [
+    `## The failure: ${FAILURE_SENTENCES[kind]}`,
+    "",
+    summary,
+    ...(trimmed === "" ? [] : ["", "```", trimmed, "```"]),
+  ].join("\n");
 }
 
 function sections(parts: string[]): string {

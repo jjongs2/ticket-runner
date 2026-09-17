@@ -1,11 +1,11 @@
 import { branchName, worktreePath } from "./branch.js";
 import type { Config } from "./config.js";
 import { type SkipReason, isGuardReason, skipReason } from "./guards.js";
-import type { FailurePoint } from "./lifecycle.js";
+import type { FailureKind, FailurePoint } from "./lifecycle.js";
 import type { AgentRunner, StageFailure, StageResult } from "./ports/agent-runner.js";
 import type { Issue, Tracker } from "./ports/tracker.js";
 import type { Workspace } from "./ports/workspace.js";
-import { implementPrompt, verifyPrompt } from "./prompts.js";
+import { type FixFailure, fixPrompt, implementPrompt, verifyPrompt } from "./prompts.js";
 import { stageLogDir } from "./run-log.js";
 import {
   draftPullRequestBody,
@@ -60,23 +60,38 @@ export interface Pipeline {
   log?: (line: string) => void;
 }
 
-/** A failure that ends the Ticket. The skeleton has no fix Stage, so every one of these is a hand-off. */
+/**
+ * A failure that ends the Ticket, unless the fix budget can still buy it a
+ * second try. `kind` is set on exactly the three failures a fix Stage is given:
+ * everything else is a hand-off the moment it is thrown.
+ */
 class TicketFailure extends Error {
   constructor(
     readonly point: FailurePoint,
     readonly summary: string,
     readonly evidence: string = "",
+    readonly kind?: FailureKind,
   ) {
     super(summary);
   }
+}
+
+/** An error the pipeline did not raise itself, blamed on the step it was on. */
+function asTicketFailure(error: unknown, point: FailurePoint): TicketFailure {
+  return error instanceof TicketFailure
+    ? error
+    : new TicketFailure(point, (error as Error).message);
 }
 
 /**
  * Take one Ticket from claimed to merged, hand it to a human, or pass it over.
  *
  * The happy path is: guards → claim → worktree and branch → implement Stage →
- * Checks → verify Stage → rebase → PR → CI → squash merge → cleanup. Any
- * failure along the way ends in a hand-off, never in a merge.
+ * Checks → verify Stage → rebase → PR → CI → squash merge → cleanup. A failing
+ * Check, an unmet criterion or a red CI spends the Ticket's fix budget and
+ * starts again at the Checks; every other failure, and every second failure,
+ * ends in a hand-off. Nothing ends in a merge that has not been through a green
+ * pass of the whole gauntlet.
  *
  * The guards come before the claim, so an issue the pipeline will not take is
  * never marked as taken. A Run has already dropped the claimed and the
@@ -109,31 +124,66 @@ export async function processTicket(
   // Where an unexpected error would have happened, so the hand-off comment
   // names the step the human has to look at rather than guessing.
   let point: FailurePoint = "setup";
+  // The fix budget, which is one per Ticket and spent by the first failure a
+  // fix Stage is offered. Once it is gone the next failure of any kind — even a
+  // kind the fix Stage never touched — is a hand-off.
+  let fixUsed = false;
 
   try {
     await workspace.createWorktree({ path: worktree, branch });
 
     point = "implement";
     await implement(pipeline, issue, worktree, branch);
-    point = "checks";
-    await runChecks(pipeline, worktree);
-    point = "verify";
-    const verdict = await verify(pipeline, issue, worktree);
 
-    point = "rebase";
-    const rebase = await workspace.rebaseOnMain(worktree);
-    if (!rebase.ok) {
-      throw new TicketFailure("rebase", "the branch does not rebase onto main", rebase.conflict);
+    let verdict: Verdict;
+    let commits: string[];
+    let coAuthors: string[];
+    let title: string;
+
+    // Checks through CI, run again from the top when the fix budget buys a
+    // second pass: a fix earns no shortcut, so every gate grades it afresh.
+    for (;;) {
+      try {
+        point = "checks";
+        await runChecks(pipeline, worktree);
+        point = "verify";
+        verdict = await verify(pipeline, issue, worktree);
+
+        point = "rebase";
+        const rebase = await workspace.rebaseOnMain(worktree);
+        if (!rebase.ok) {
+          throw new TicketFailure(
+            "rebase",
+            "the branch does not rebase onto main",
+            rebase.conflict,
+          );
+        }
+
+        point = "pr";
+        // Read after the rebase, because these are the commits that land on main.
+        commits = await workspace.commitSubjects(branch);
+        coAuthors = await workspace.coAuthors(branch);
+        title = pullRequestTitle(commits, issue.title);
+        pullRequest = await publishPullRequest(
+          pipeline,
+          { issue, branch, worktree, verdict, title },
+          pullRequest,
+        );
+        point = "ci";
+        await requireGreenCi(pipeline, pullRequest);
+        break;
+      } catch (error) {
+        const failure = asTicketFailure(error, point);
+        if (fixUsed || failure.kind === undefined) throw failure;
+        fixUsed = true;
+        point = "fix";
+        await fix(pipeline, issue, worktree, {
+          kind: failure.kind,
+          summary: failure.summary,
+          evidence: failure.evidence,
+        });
+      }
     }
-
-    point = "pr";
-    // Read after the rebase, because these are the commits that land on main.
-    const commits = await workspace.commitSubjects(branch);
-    const coAuthors = await workspace.coAuthors(branch);
-    const title = pullRequestTitle(commits, issue.title);
-    pullRequest = await openPullRequest(pipeline, issue, branch, worktree, verdict, title);
-    point = "ci";
-    await requireGreenCi(pipeline, pullRequest);
 
     point = "merge";
     await tracker.squashMerge(
@@ -141,11 +191,15 @@ export async function processTicket(
       squashCommit({ ticket, pullRequest, title, verdict, commits, coAuthors }),
     );
   } catch (error) {
-    const failure =
-      error instanceof TicketFailure
-        ? error
-        : new TicketFailure(point, (error as Error).message);
-    return handOff(pipeline, { issue, user, branch, worktree, pullRequest, failure });
+    return handOff(pipeline, {
+      issue,
+      user,
+      branch,
+      worktree,
+      pullRequest,
+      failure: asTicketFailure(error, point),
+      fixUsed,
+    });
   }
 
   // The Ticket is merged from here on, so nothing below may hand it off.
@@ -232,7 +286,12 @@ async function runChecks(pipeline: Pipeline, worktree: string): Promise<void> {
   for (const command of pipeline.config.checks) {
     const result = await pipeline.workspace.runCheck(command, worktree);
     if (!result.ok) {
-      throw new TicketFailure("checks", `Check \`${command}\` failed`, result.output);
+      throw new TicketFailure(
+        "checks",
+        `Check \`${command}\` failed`,
+        result.output,
+        "failed-check",
+      );
     }
   }
 }
@@ -287,6 +346,7 @@ async function verify(
       "verify",
       `${unmet.length} of ${verdict.criteria.length} criteria unmet`,
       unmet.map((c) => `- ${c.text} — ${c.evidence}`).join("\n"),
+      "unmet-criteria",
     );
   }
 
@@ -297,15 +357,55 @@ async function verify(
   return verdict;
 }
 
-async function openPullRequest(
+/**
+ * The one retry a Ticket gets: a fresh session on the same branch in the same
+ * worktree, handed the failure and its evidence and nothing else to do.
+ *
+ * It drives no plugin skill. The implement skill would re-read the Ticket and
+ * start over, where what is wanted here is one concrete defect mended.
+ */
+async function fix(
   pipeline: Pipeline,
   issue: Issue,
-  branch: string,
   worktree: string,
-  verdict: Verdict,
-  title: string,
+  failure: FixFailure,
+): Promise<void> {
+  const stage = pipeline.config.stages.fix;
+  pipeline.log?.(`#${issue.number} fixing · ${failure.summary}`);
+
+  const result = await pipeline.runner.run({
+    stage: "fix",
+    prompt: fixPrompt(issue.url, failure, stage.extraPrompt),
+    cwd: worktree,
+    logDir: stageLogDir(pipeline.repoRoot, pipeline.runId, issue.number),
+    permissionMode: pipeline.config.permissionMode,
+    model: stage.model,
+    maxTurns: stage.maxTurns,
+    maxMinutes: stage.maxMinutes,
+  });
+  if (!result.ok) {
+    throw new TicketFailure("fix", describeStageFailure("fix", stage, result));
+  }
+}
+
+interface PullRequestSubject {
+  issue: Issue;
+  branch: string;
+  worktree: string;
+  verdict: Verdict;
+  title: string;
+}
+
+async function publishPullRequest(
+  pipeline: Pipeline,
+  { issue, branch, worktree, verdict, title }: PullRequestSubject,
+  existing: number | undefined,
 ): Promise<number> {
   await pipeline.workspace.push(worktree, branch);
+  // A second pass comes back to a pull request that is already open, and the
+  // push is all it needs: GitHub re-runs the checks on the new head commits.
+  if (existing !== undefined) return existing;
+
   const pr = await pipeline.tracker.createPullRequest({
     head: branch,
     title,
@@ -333,7 +433,12 @@ async function requireGreenCi(pipeline: Pipeline, pullRequest: number): Promise<
     case "passed":
       return;
     case "failed":
-      throw new TicketFailure("ci", "a pull request check failed", outcome.summary);
+      throw new TicketFailure(
+        "ci",
+        "a pull request check failed",
+        outcome.summary,
+        "failed-ci",
+      );
     case "timed-out":
       throw new TicketFailure(
         "ci",
@@ -355,6 +460,8 @@ interface HandOff {
   worktree: string;
   pullRequest: number | undefined;
   failure: TicketFailure;
+  /** Whether the Ticket's one fix Stage had already run when this failure came. */
+  fixUsed: boolean;
 }
 
 /**
@@ -363,7 +470,7 @@ interface HandOff {
  */
 async function handOff(
   pipeline: Pipeline,
-  { issue, user, branch, worktree, pullRequest, failure }: HandOff,
+  { issue, user, branch, worktree, pullRequest, failure, fixUsed }: HandOff,
 ): Promise<TicketOutcome> {
   const { tracker, workspace, config } = pipeline;
   const ticket = issue.number;
@@ -400,6 +507,7 @@ async function handOff(
       branch,
       worktree,
       evidence: failure.evidence,
+      fixUsed,
       ...(pullRequest === undefined ? {} : { pullRequest }),
     }),
   );
