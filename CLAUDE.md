@@ -13,3 +13,7 @@ Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-
 ### Domain docs
 
 Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+### Conventions
+
+Branch, commit, PR, issue and worktree conventions: `CONTRIBUTING.md`. Read it before committing, opening a PR, or creating an issue.
