@@ -14,6 +14,8 @@ export interface GhTrackerOptions {
   cwd?: string;
   baseBranch?: string;
   pollIntervalMs?: number;
+  /** How long "no checks yet" counts as pending after the wait starts. */
+  checksGraceMs?: number;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
 }
@@ -48,6 +50,7 @@ export class GhTracker implements Tracker {
   private readonly cwd: string | undefined;
   private readonly baseBranch: string;
   private readonly pollIntervalMs: number;
+  private readonly checksGraceMs: number;
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly now: () => number;
 
@@ -56,6 +59,7 @@ export class GhTracker implements Tracker {
     this.cwd = options.cwd;
     this.baseBranch = options.baseBranch ?? "main";
     this.pollIntervalMs = options.pollIntervalMs ?? 15_000;
+    this.checksGraceMs = options.checksGraceMs ?? 120_000;
     this.sleep =
       options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.now = options.now ?? Date.now;
@@ -195,9 +199,15 @@ export class GhTracker implements Tracker {
   /**
    * Poll the PR's CI until it settles or the timeout runs out. A PR with no
    * checks is reported as such, never as a pass.
+   *
+   * Right after a PR opens, GitHub answers "no checks" for a while before the
+   * workflow's check run exists, so "no checks" only counts once the grace
+   * period has passed.
    */
   async waitForCi(number: number, timeoutMs: number): Promise<CiOutcome> {
-    const deadline = this.now() + timeoutMs;
+    const startedAt = this.now();
+    const deadline = startedAt + timeoutMs;
+    const graceUntil = startedAt + Math.min(this.checksGraceMs, timeoutMs);
 
     for (;;) {
       const result = await this.gh(
@@ -206,8 +216,10 @@ export class GhTracker implements Tracker {
       );
 
       const outcome = readCi(result);
-      if (outcome !== "pending") return outcome;
-      if (this.now() >= deadline) return { state: "timed-out" };
+      const stillRegistering = outcome !== "pending" && outcome.state === "none" && this.now() < graceUntil;
+      if (outcome !== "pending" && !stillRegistering) return outcome;
+      // Checks that never appeared are "none", not a timeout: nothing was ever pending.
+      if (this.now() >= deadline) return outcome === "pending" ? { state: "timed-out" } : outcome;
       await this.sleep(this.pollIntervalMs);
     }
   }

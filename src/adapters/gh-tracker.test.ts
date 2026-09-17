@@ -10,6 +10,14 @@ function ok(stdout: string, extra: Partial<Execution> = {}): Execution {
 }
 
 function tracker(...queued: Execution[]) {
+  return trackerWith({}, ...queued);
+}
+
+/** A tracker whose clock is whatever the test hands it; grace is off unless asked for. */
+function trackerWith(
+  options: { now?: () => number; checksGraceMs?: number },
+  ...queued: Execution[]
+) {
   responses = [...queued];
   return new GhTracker({
     run: async (_command: string, args: string[], _options: ExecOptions) => {
@@ -18,6 +26,8 @@ function tracker(...queued: Execution[]) {
     },
     sleep: async () => {},
     pollIntervalMs: 0,
+    checksGraceMs: 0,
+    ...options,
   });
 }
 
@@ -263,6 +273,55 @@ describe("waiting for CI", () => {
 
   it("reports an empty check list as no checks", async () => {
     expect(await tracker(ok("[]")).waitForCi(12, 60_000)).toEqual({ state: "none" });
+  });
+
+  const noChecks = (): Execution => ({
+    exitCode: 1,
+    stdout: "",
+    stderr: "no checks reported on the 'agent/2-x' branch",
+    output: "",
+  });
+
+  /** A clock that advances by `stepMs` every time it is read. */
+  const ticking = (stepMs: number) => {
+    let t = 0;
+    return () => (t += stepMs);
+  };
+
+  it("keeps waiting while GitHub has not registered the checks yet", async () => {
+    const outcome = await trackerWith(
+      { now: ticking(1_000), checksGraceMs: 120_000 },
+      noChecks(),
+      noChecks(),
+      ok(checks("pass")),
+    ).waitForCi(12, 60_000 * 30);
+
+    expect(outcome).toEqual({ state: "passed" });
+    expect(calls).toHaveLength(3);
+  });
+
+  it("reports no checks once the grace period has passed", async () => {
+    const outcome = await trackerWith(
+      { now: ticking(50_000), checksGraceMs: 120_000 },
+      noChecks(),
+      noChecks(),
+      noChecks(),
+      noChecks(),
+    ).waitForCi(12, 60_000 * 30);
+
+    expect(outcome).toEqual({ state: "none" });
+    expect(calls.length).toBeGreaterThan(1);
+    expect(calls.length).toBeLessThan(4);
+  });
+
+  it("never lets the grace period outlive the CI timeout", async () => {
+    const outcome = await trackerWith(
+      { now: ticking(1_000), checksGraceMs: 120_000 },
+      noChecks(),
+      noChecks(),
+    ).waitForCi(12, 1_500);
+
+    expect(outcome).toEqual({ state: "none" });
   });
 
   it("gives up when the checks stay pending past the timeout", async () => {
