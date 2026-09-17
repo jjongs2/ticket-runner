@@ -1,7 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { SELF_HOSTING_GUIDANCE, implementPrompt, verifyPrompt } from "./prompts.js";
+import {
+  SELF_HOSTING_GUIDANCE,
+  fixPrompt,
+  implementPrompt,
+  verifyPrompt,
+} from "./prompts.js";
 
 const url = "https://github.com/jjongs2/agent-pipeline/issues/2";
+
+const FAILED_CHECK = {
+  kind: "failed-check" as const,
+  summary: "Check `npm test` failed",
+  evidence: "FAIL src/a.test.ts",
+};
 
 describe("implementPrompt", () => {
   it("begins with the skill invocation and the full issue URL", () => {
@@ -56,6 +67,49 @@ describe("verifyPrompt", () => {
   });
 });
 
+describe("fixPrompt", () => {
+  it("invokes no plugin skill: the failure is the whole brief", () => {
+    expect(fixPrompt(url, FAILED_CHECK, "")).not.toContain("/mattpocock-skills:");
+  });
+
+  it("names the Ticket, the failure and the evidence that was captured", () => {
+    const prompt = fixPrompt(url, FAILED_CHECK, "");
+
+    expect(prompt).toContain(url);
+    expect(prompt).toContain("Check `npm test` failed");
+    expect(prompt).toContain("FAIL src/a.test.ts");
+  });
+
+  it("says which of the three kinds of failure this is", () => {
+    expect(fixPrompt(url, FAILED_CHECK, "")).toMatch(/a Check .*failed/i);
+    expect(fixPrompt(url, { ...FAILED_CHECK, kind: "unmet-criteria" }, "")).toMatch(
+      /unmet Acceptance Criteria/i,
+    );
+    expect(fixPrompt(url, { ...FAILED_CHECK, kind: "failed-ci" }, "")).toMatch(
+      /pull request check failed/i,
+    );
+  });
+
+  it("asks for the regression test a gap the Verdict found should have had", () => {
+    expect(fixPrompt(url, { ...FAILED_CHECK, kind: "unmet-criteria" }, "")).toMatch(
+      /regression test/i,
+    );
+  });
+
+  it("tells the session to commit where it is and to open nothing", () => {
+    const prompt = fixPrompt(url, FAILED_CHECK, "");
+
+    expect(prompt).toMatch(/commit .*on the .*branch|branch you are on/i);
+    expect(prompt).toMatch(/do not open pull requests/i);
+  });
+
+  it("appends the configured extra prompt", () => {
+    expect(fixPrompt(url, FAILED_CHECK, "Keep it small.").trimEnd().endsWith("Keep it small.")).toBe(
+      true,
+    );
+  });
+});
+
 describe("the self-hosting guidance", () => {
   it("tells the session to exercise the pipeline through its tests and fakes only", () => {
     expect(SELF_HOSTING_GUIDANCE).toMatch(/tests? and fakes/i);
@@ -66,6 +120,7 @@ describe("the self-hosting guidance", () => {
   it("is carried verbatim by every Stage prompt, from one place", () => {
     expect(implementPrompt(url, "")).toContain(SELF_HOSTING_GUIDANCE);
     expect(verifyPrompt(url, "")).toContain(SELF_HOSTING_GUIDANCE);
+    expect(fixPrompt(url, FAILED_CHECK, "")).toContain(SELF_HOSTING_GUIDANCE);
   });
 
   it("stays ahead of the repo's own extra prompt", () => {

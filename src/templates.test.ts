@@ -143,6 +143,17 @@ describe("handoffComment", () => {
   it("omits the details block when there is no evidence", () => {
     expect(handoffComment({ ...base, evidence: "" })).not.toContain("<details>");
   });
+
+  it("says so when the Ticket had already spent its fix budget", () => {
+    expect(handoffComment({ ...base, fixUsed: true })).toContain(
+      "Failed at **verify**, after the fix budget was used.",
+    );
+  });
+
+  it("says nothing about the budget when no fix Stage ran", () => {
+    expect(handoffComment(base)).toContain("Failed at **verify**.");
+    expect(handoffComment(base)).not.toMatch(/fix budget/i);
+  });
 });
 
 describe("guardComment", () => {

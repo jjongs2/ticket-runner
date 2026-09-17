@@ -45,6 +45,8 @@ export class FakeTracker implements Tracker {
   comments: { issue: number; body: string }[] = [];
   pullRequests: FakePullRequest[] = [];
   ci: CiOutcome = { state: "passed" };
+  /** Outcomes for the next CI waits, oldest first; `ci` answers once they run out. */
+  ciQueue: CiOutcome[] = [];
   /** Open blockers per issue number; anything unlisted has none. */
   openBlockers = new Map<number, number>();
   /** Issue numbers closed by a merge, which drop out of the candidate list. */
@@ -151,10 +153,21 @@ export class FakeTracker implements Tracker {
     this.pullRequest(number).draft = true;
   }
 
+  async updatePullRequestBody(number: number, body: string): Promise<void> {
+    this.calls.push(`updatePullRequestBody:${number}`);
+    this.pullRequest(number).body = body;
+  }
+
+  /** Queue the outcome of the next CI wait, overriding {@link ci} once. */
+  queueCi(outcome: CiOutcome): this {
+    this.ciQueue.push(outcome);
+    return this;
+  }
+
   async waitForCi(number: number, timeoutMs: number): Promise<CiOutcome> {
     this.calls.push(`waitForCi:${number}`);
     this.ciWaits.push({ pullRequest: number, timeoutMs });
-    return this.ci;
+    return this.ciQueue.shift() ?? this.ci;
   }
 
   async squashMerge(number: number, commit: SquashCommit): Promise<void> {
@@ -224,15 +237,26 @@ export class FakeWorkspace implements Workspace {
   /** The branch's commit subjects, oldest first, as an implement Stage leaves them. */
   commits = ["feat(cli): do the thing (#2)", "test(cli): cover the thing (#2)"];
   coAuthorList: string[] = [];
-  /** Per-command Check outcomes; anything unlisted passes. */
+  /** Check outcomes that stick, per command; a command with none always passes. */
   checkOutcomes = new Map<string, CheckOutcome>();
+  /** Outcomes for the next runs of a command; `checkOutcomes` answers once they run out. */
+  checkQueue = new Map<string, CheckOutcome[]>();
   ranChecks: { command: string; cwd: string }[] = [];
   rebase: RebaseOutcome = { ok: true };
   pushes: { cwd: string; branch: string }[] = [];
   pulledMain = 0;
 
+  /** Fail `command` every time the pipeline runs it. */
   failCheck(command: string, output: string): this {
     this.checkOutcomes.set(command, { ok: false, output });
+    return this;
+  }
+
+  /** Fail `command` on its next run only: a Check a fix Stage then mends. */
+  failCheckOnce(command: string, output: string): this {
+    const queued = this.checkQueue.get(command) ?? [];
+    queued.push({ ok: false, output });
+    this.checkQueue.set(command, queued);
     return this;
   }
 
@@ -259,7 +283,10 @@ export class FakeWorkspace implements Workspace {
   async runCheck(command: string, cwd: string): Promise<CheckOutcome> {
     this.calls.push(`runCheck:${command}`);
     this.ranChecks.push({ command, cwd });
-    return this.checkOutcomes.get(command) ?? { ok: true, output: "" };
+    return (
+      this.checkQueue.get(command)?.shift() ??
+      this.checkOutcomes.get(command) ?? { ok: true, output: "" }
+    );
   }
 
   async discardChanges(cwd: string): Promise<void> {

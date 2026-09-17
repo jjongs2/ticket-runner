@@ -5,8 +5,9 @@ Humans plan, the pipeline executes.
 `agent-pipeline` owns Execution: it claims a Ticket, runs the implement Stage as a
 headless `claude -p` session driving `/mattpocock-skills:implement`, runs the Checks
 itself, has a fresh session adversarially grade the Acceptance Criteria, opens a PR,
-waits for CI and squash-merges. Anything it cannot finish is handed to a human with a
-draft PR, a comment and the worktree left in place.
+waits for CI and squash-merges. One failure along the way buys a fix Stage and a
+second pass. Anything it still cannot finish is handed to a human with a draft PR, a
+comment and the worktree left in place.
 
 Vocabulary is defined in [`CONTEXT.md`](CONTEXT.md), decisions in [`docs/adr/`](docs/adr/),
 conventions in [`CONTRIBUTING.md`](CONTRIBUTING.md).
@@ -78,15 +79,31 @@ reproducing a Stage by hand reproduces its environment too.
 6. rebase on `main`, open a PR that closes the Ticket, wait for CI
 7. squash-merge, pull `main`, remove the worktree
 
-Any failure hands the Ticket over instead: `ready-for-human`, unassigned, draft PR,
-branch and worktree preserved. Exit code is `0` when nothing was handed off, `1` when
-something was, and `2` when nothing was taken at all — the Run never started, or a
-guard refused the issue named. A `run` that skipped every candidate still exits `0`.
+A failing Check, a Verdict with an `unmet` criterion, or a red CI spends the Ticket's
+**fix budget** rather than ending it. A fresh session runs in the same worktree on the
+same branch, given the kind of failure and the evidence that was captured — the failing
+Check's output, the unmet criteria with theirs, or the CI summary — and asked for the
+regression test a gap the Verdict found should have had. Step 4 then starts again, so
+the fix is graded by every gate from the Checks onwards. The budget is one per Ticket:
+a second failure of any kind, including a kind the fix Stage never touched, is a
+hand-off, and the comment says the budget had already been used.
+
+Nothing else spends the budget. A rebase conflict, a Stage that never came back, a Verdict
+with no evidence in it, CI that timed out or never ran — none of these is a defect in
+the code a fresh session could go and mend.
+
+A failure the fix budget cannot cover hands the Ticket over instead: `ready-for-human`,
+unassigned, draft PR, branch and worktree preserved. Exit code is `0` when nothing was
+handed off, `1` when something was, and `2` when nothing was taken at all — the Run
+never started, or a guard refused the issue named. A `run` that skipped every candidate
+still exits `0`.
 
 Every Stage writes its exact command line, stdout, stderr and stream-json transcript to
 `.agent-pipeline/runs/<runId>/<n>/`, so any Stage can be reproduced by hand. The command
 line lands there before the Stage starts, and its output as the Stage prints it, so a Run
-killed mid-Stage still leaves behind what it had reached.
+killed mid-Stage still leaves behind what it had reached. A Ticket that spends its fix
+budget writes the fix Stage and the pass it bought to `<n>/retry/`, so the transcripts of
+the pass that failed survive alongside them.
 
 ## Guards
 
@@ -127,7 +144,8 @@ untriaged one.
       "maxTurns": 300,
       "maxMinutes": 60,
       "extraPrompt": "Repo-specific instructions appended to the Stage prompt."
-    }
+    },
+    "fix": { "model": "claude-opus-5", "maxTurns": 150, "maxMinutes": 40 }
   },
 
   // Passed to every Stage, which also always runs with `--permission-prompts none`.

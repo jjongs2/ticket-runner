@@ -92,6 +92,14 @@ export interface Tracker {
   comment(number: number, body: string): Promise<void>;
   createPullRequest(pr: CreatePullRequest): Promise<PullRequestRef>;
   convertPullRequestToDraft(number: number): Promise<void>;
+  /**
+   * Replace the body of an open pull request.
+   *
+   * A Ticket that spends its fix budget is graded twice, and the body carries
+   * the Verdict a human reads; without this it would keep the Verdict that
+   * failed while the squash commit carried the one that passed.
+   */
+  updatePullRequestBody(number: number, body: string): Promise<void>;
   waitForCi(number: number, timeoutMs: number): Promise<CiOutcome>;
   squashMerge(number: number, commit: SquashCommit): Promise<void>;
 }

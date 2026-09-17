@@ -169,6 +169,8 @@ export interface HandoffComment {
   pullRequest?: number;
   /** Failing Check output, unmet criteria, or a CI log excerpt. */
   evidence: string;
+  /** Whether the Ticket's fix budget had already been spent when this failure came. */
+  fixUsed?: boolean;
 }
 
 export function handoffComment(handoff: HandoffComment): string {
@@ -178,9 +180,13 @@ export function handoffComment(handoff: HandoffComment): string {
     ...(handoff.pullRequest === undefined ? [] : [`PR #${handoff.pullRequest} (draft)`]),
   ].join(" · ");
 
+  // The budget clause is the difference between one bad Stage and a Ticket the
+  // pipeline already had a second go at, which is what a human needs to know.
+  const budget = handoff.fixUsed ? ", after the fix budget was used" : "";
+
   const lines = [
     HANDOFF_MARKER,
-    `**Handed off.** Failed at **${handoff.stage}**.`,
+    `**Handed off.** Failed at **${handoff.stage}**${budget}.`,
     "",
     `- Failure: ${handoff.failure}`,
     `- ${location}`,

@@ -52,6 +52,10 @@ const MIXED_VERDICT = verdictResult([
   },
 ]);
 
+const UNMET_VERDICT = verdictResult([
+  { text: "it works", status: "unmet", evidence: "npm test is red" },
+]);
+
 let tracker: FakeTracker;
 let runner: FakeAgentRunner;
 let workspace: FakeWorkspace;
@@ -350,9 +354,11 @@ describe("Checks", () => {
     const outcome = await run();
 
     expect(outcome).toMatchObject({ outcome: "handed-off", stage: "checks" });
-    expect(workspace.ranChecks.map((c) => c.command)).toEqual(["npm test"]);
+    // Neither the first pass nor the one behind the fix Stage reached the
+    // typecheck: the Checks stop at the first command that fails.
+    expect(workspace.ranChecks.map((c) => c.command)).toEqual(["npm test", "npm test"]);
     expect(handoffBody()).toContain("FAIL src/a.test.ts");
-    expect(runner.stages()).toEqual(["implement"]);
+    expect(runner.stages()).toEqual(["implement", "fix"]);
   });
 });
 
@@ -372,15 +378,17 @@ describe("the verify Stage", () => {
   });
 
   it("ignores the agent's pass flag when a criterion is unmet", async () => {
-    runner.queue("verify", {
-      result: verdictResult(
-        [
-          { text: "it works", status: "met", evidence: "green" },
-          { text: "it is documented", status: "unmet", evidence: "no docs" },
-        ],
-        true,
-      ),
-    });
+    const claimsToPass = verdictResult(
+      [
+        { text: "it works", status: "met", evidence: "green" },
+        { text: "it is documented", status: "unmet", evidence: "no docs" },
+      ],
+      true,
+    );
+    // Both passes, so the fix budget runs out on the same Verdict the agent
+    // called a pass; the decision under test is the pipeline's, not the agent's.
+    runner.queue("verify", { result: claimsToPass });
+    runner.queue("verify", { result: claimsToPass });
 
     const outcome = await run();
 
@@ -587,6 +595,289 @@ describe("hand-off", () => {
 
     expect(tracker.pullRequest(100).merged).toBe(false);
     expect(workspace.pulledMain).toBe(0);
+  });
+});
+
+describe("the fix Stage", () => {
+  /** The one fix request a Ticket makes, which every test here expects to exist. */
+  const fixRequest = () => {
+    const request = runner.requests.find((r) => r.stage === "fix");
+    if (!request) throw new Error("no fix Stage ran");
+    return request;
+  };
+
+  it("retries a failing Check in the same worktree and merges on the second pass", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).toEqual(["implement", "fix", "verify"]);
+    expect(fixRequest().cwd).toBe(WORKTREE);
+    expect(workspace.calls.filter((call) => call.startsWith("createWorktree"))).toEqual([
+      `createWorktree:${BRANCH}`,
+    ]);
+  });
+
+  it("resumes at the Checks, running every one of them again", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+
+    await run();
+
+    expect(workspace.ranChecks.map((check) => check.command)).toEqual([
+      "npm test",
+      "npm test",
+      "npm run typecheck",
+    ]);
+  });
+
+  it("gives the fix Stage the failing Check and its output", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+
+    await run();
+
+    expect(runner.prompts("fix")[0]).toMatch(/a Check .*failed/i);
+    expect(runner.prompts("fix")[0]).toContain("Check `npm test` failed");
+    expect(runner.prompts("fix")[0]).toContain("FAIL src/a.test.ts");
+  });
+
+  it("retries an unmet criterion and merges on the second Verdict", async () => {
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).toEqual(["implement", "verify", "fix", "verify"]);
+  });
+
+  it("gives the fix Stage the unmet criteria with their evidence", async () => {
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
+
+    await run();
+
+    expect(runner.prompts("fix")[0]).toMatch(/unmet Acceptance Criteria/i);
+    expect(runner.prompts("fix")[0]).toContain("it works — npm test is red");
+    expect(runner.prompts("fix")[0]).toMatch(/regression test/i);
+  });
+
+  it("retries a red CI without opening a second pull request", async () => {
+    tracker.queueCi({ state: "failed", summary: "checks/build failed" });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged", pullRequest: 100 });
+    expect(tracker.pullRequests).toHaveLength(1);
+    expect(runner.stages()).toEqual(["implement", "verify", "fix", "verify"]);
+    expect(runner.prompts("fix")[0]).toMatch(/pull request check failed/i);
+    expect(runner.prompts("fix")[0]).toContain("checks/build failed");
+  });
+
+  it("pushes the fixed branch and waits for CI a second time", async () => {
+    tracker.queueCi({ state: "failed", summary: "checks/build failed" });
+
+    await run();
+
+    expect(workspace.pushes).toHaveLength(2);
+    expect(tracker.ciWaits.map((wait) => wait.pullRequest)).toEqual([100, 100]);
+  });
+
+  it("merges the Verdict of the pass that succeeded, not the one that failed", async () => {
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
+    runner.queue("verify", stageResult({ result: MIXED_VERDICT }));
+
+    await run();
+
+    expect(tracker.pullRequest(100).squashCommit?.body).toContain(
+      "Verdict: 1 met · 0 unmet · 1 unverifiable",
+    );
+  });
+
+  it("takes its own model, turn and time limits, and its own extra prompt", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+
+    await run({
+      stages: {
+        ...config().stages,
+        fix: {
+          model: "claude-sonnet-5",
+          maxTurns: 12,
+          maxMinutes: 9,
+          extraPrompt: "Keep the diff small.",
+        },
+      },
+    });
+
+    expect(fixRequest()).toMatchObject({
+      stage: "fix",
+      model: "claude-sonnet-5",
+      maxTurns: 12,
+      maxMinutes: 9,
+      permissionMode: "auto",
+    });
+    expect(runner.prompts("fix")[0]).toContain("Keep the diff small.");
+  });
+
+  it("asks the fix Stage for no structured output", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+
+    await run();
+
+    expect(fixRequest().jsonSchema).toBeUndefined();
+  });
+
+  it("logs the second pass beside the first rather than over it", async () => {
+    const ticketLogs = `/repo/.agent-pipeline/runs/run-1/${TICKET}`;
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
+
+    await run();
+
+    // The Stage's files are named after the Stage, so the failing Verdict's
+    // transcript would otherwise be overwritten by the one that passed.
+    expect(runner.requests.map((request) => [request.stage, request.logDir])).toEqual([
+      ["implement", ticketLogs],
+      ["verify", ticketLogs],
+      ["fix", `${ticketLogs}/retry`],
+      ["verify", `${ticketLogs}/retry`],
+    ]);
+  });
+
+  it("rewrites the pull request body with the Verdict the second pass reached", async () => {
+    tracker.queueCi({ state: "failed", summary: "checks/build failed" });
+    runner.queue("verify", stageResult({ result: MIXED_VERDICT }));
+    runner.queue("verify", stageResult({ result: PASSING_VERDICT }));
+
+    await run();
+
+    // The merge carries the second Verdict, so the PR a human reads must too.
+    expect(tracker.calls).toContain("updatePullRequestBody:100");
+    expect(tracker.pullRequest(100).body).toContain(
+      "**Verdict:** 1 met · 0 unmet · 0 unverifiable",
+    );
+  });
+
+  it("leaves the pull request body alone when there was no second pass", async () => {
+    await run();
+
+    expect(tracker.calls).not.toContain("updatePullRequestBody:100");
+  });
+});
+
+describe("the fix budget", () => {
+  it("is one: a Check that fails twice is handed off", async () => {
+    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "checks" });
+    expect(runner.stages()).toEqual(["implement", "fix"]);
+    expect(handoffBody()).toContain("after the fix budget was used");
+    expect(handoffBody()).toContain("FAIL src/a.test.ts");
+  });
+
+  it("is spent by the first failure, whatever kind the second one is", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "verify" });
+    expect(runner.stages()).toEqual(["implement", "fix", "verify"]);
+    expect(handoffBody()).toContain("after the fix budget was used");
+    expect(handoffBody()).toContain("1 of 1 criteria unmet");
+  });
+
+  it("is spent by an unmet criterion that a red CI then follows", async () => {
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
+    tracker.ci = { state: "failed", summary: "checks/build failed" };
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "ci" });
+    expect(runner.stages()).toEqual(["implement", "verify", "fix", "verify"]);
+    expect(handoffBody()).toContain("after the fix budget was used");
+  });
+
+  it("hands the Ticket off at fix when the fix Stage itself fails", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    runner.queue("fix", { ok: false, failure: "turn-capped" });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "fix" });
+    expect(handoffBody()).toContain("the fix Stage hit its 150 turn limit");
+    expect(handoffBody()).toContain("after the fix budget was used");
+  });
+
+  it("says nothing about the budget on a Ticket that never spent it", async () => {
+    workspace.rebase = { ok: false, conflict: "CONFLICT (content): src/cli.ts" };
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "rebase" });
+    expect(handoffBody()).not.toMatch(/fix budget/i);
+  });
+});
+
+describe("failures no fix Stage is offered", () => {
+  /** Handed off where it stood, with the budget still unspent. */
+  async function expectNoFix(stage: string): Promise<void> {
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage });
+    expect(runner.stages()).not.toContain("fix");
+    expect(handoffBody()).not.toMatch(/fix budget/i);
+  }
+
+  it("refuses to retry an implement Stage that failed", async () => {
+    runner.queue("implement", { ok: false, failure: "nonzero-exit" });
+
+    await expectNoFix("implement");
+  });
+
+  it("refuses to retry a verify Stage that returned no usable Verdict", async () => {
+    runner.queue("verify", { result: { nonsense: true } });
+
+    await expectNoFix("verify");
+  });
+
+  it("refuses to retry a verify Stage that never returned", async () => {
+    runner.queue("verify", { ok: false, failure: "timed-out" });
+
+    await expectNoFix("verify");
+  });
+
+  it("refuses to retry a Verdict of nothing but unverifiable criteria", async () => {
+    runner.queue("verify", {
+      result: verdictResult([{ text: "it reads well", status: "unverifiable", evidence: "taste" }]),
+    });
+
+    await expectNoFix("verify");
+  });
+
+  it("refuses to retry a rebase conflict", async () => {
+    workspace.rebase = { ok: false, conflict: "CONFLICT (content): src/cli.ts" };
+
+    await expectNoFix("rebase");
+  });
+
+  it("refuses to retry a branch that could not be pushed", async () => {
+    workspace.push = async () => {
+      throw new Error("remote rejected");
+    };
+
+    await expectNoFix("pr");
+  });
+
+  it("refuses to retry CI that never finished", async () => {
+    tracker.ci = { state: "timed-out" };
+
+    await expectNoFix("ci");
+  });
+
+  it("refuses to retry a pull request that has no checks at all", async () => {
+    tracker.ci = { state: "none" };
+
+    await expectNoFix("ci");
   });
 });
 

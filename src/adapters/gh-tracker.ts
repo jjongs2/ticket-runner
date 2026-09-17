@@ -208,6 +208,10 @@ export class GhTracker implements Tracker {
     await this.gh(["pr", "ready", String(number), "--undo"]);
   }
 
+  async updatePullRequestBody(number: number, body: string): Promise<void> {
+    await this.gh(["pr", "edit", String(number), "--body", body]);
+  }
+
   /**
    * Poll the PR's CI until it settles or the timeout runs out. A PR with no
    * checks is reported as such, never as a pass.
