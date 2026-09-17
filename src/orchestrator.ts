@@ -1,5 +1,6 @@
 import { branchName, worktreePath } from "./branch.js";
 import type { Config } from "./config.js";
+import { tickMetCriteria } from "./criteria.js";
 import { type SkipReason, isGuardReason, skipReason } from "./guards.js";
 import type { FailureKind, FailurePoint } from "./lifecycle.js";
 import type {
@@ -10,6 +11,7 @@ import type {
 } from "./ports/agent-runner.js";
 import type { Issue, Tracker } from "./ports/tracker.js";
 import type { Workspace } from "./ports/workspace.js";
+import { Progress, type ProgressPoint, type ProgressRow } from "./progress.js";
 import {
   type FixFailure,
   conflictPrompt,
@@ -124,6 +126,17 @@ export async function processTicket(
   const user = await tracker.currentUser();
   const branch = branchName(ticket, issue.title);
   const worktree = worktreePath(repoRoot, ticket);
+  // Built from the comments the Ticket already has, so a Run that comes back to
+  // a Ticket an earlier Run reported on edits that table rather than opening a
+  // second one. Nothing is written until the first Stage finishes.
+  const progress = new Progress({
+    tracker,
+    ticket,
+    runId,
+    branch,
+    comments: issue.comments,
+    log,
+  });
 
   // The claim is the first write: the board shows what the pipeline holds
   // before anything else can go wrong.
@@ -143,13 +156,16 @@ export async function processTicket(
   // The pass behind a fix Stage logs beside the first one rather than over it.
   let logDir = stageLogDir(repoRoot, runId, ticket);
 
+  // Declared out here because ticking the Acceptance Criteria it proved happens
+  // after the merge, where a failure may no longer hand the Ticket off.
+  let verdict: Verdict;
+
   try {
     await workspace.createWorktree({ path: worktree, branch });
 
     point = "implement";
-    await implement(pipeline, issue, worktree, branch, logDir);
+    await implement(pipeline, issue, worktree, branch, logDir, progress);
 
-    let verdict: Verdict;
     let commits: string[];
     let coAuthors: string[];
     let title: string;
@@ -159,9 +175,9 @@ export async function processTicket(
     for (;;) {
       try {
         point = "checks";
-        await runChecks(pipeline, worktree);
+        await runChecks(pipeline, worktree, progress);
         point = "verify";
-        verdict = await verify(pipeline, issue, worktree, logDir);
+        verdict = await verify(pipeline, issue, worktree, logDir, progress);
 
         point = "rebase";
         const rebase = await workspace.rebaseOnMain(worktree);
@@ -169,13 +185,13 @@ export async function processTicket(
           // Once per conflict, not once per Ticket: a pass the fix budget
           // bought meets a branch the fix Stage has changed, so the conflict it
           // rebases into is a new one.
-          await resolveConflict(pipeline, issue, worktree, logDir, rebase.conflict);
+          await resolveConflict(pipeline, issue, worktree, logDir, rebase.conflict, progress);
           // The resolution is code nothing has graded: the Checks passed on one
           // side of the conflict and CI on the other. The Verdict is not asked
           // for again, because the conflict Stage is told to change no
           // behaviour the Acceptance Criteria are about.
           point = "checks";
-          await runChecks(pipeline, worktree);
+          await runChecks(pipeline, worktree, progress);
         }
 
         point = "pr";
@@ -189,7 +205,7 @@ export async function processTicket(
           pullRequest,
         );
         point = "ci";
-        await requireGreenCi(pipeline, pullRequest);
+        await requireGreenCi(pipeline, pullRequest, progress);
         break;
       } catch (error) {
         const failure = asTicketFailure(error, point);
@@ -197,11 +213,14 @@ export async function processTicket(
         fixUsed = true;
         point = "fix";
         logDir = retryLogDir(repoRoot, runId, ticket);
-        await fix(pipeline, issue, worktree, logDir, {
-          kind: failure.kind,
-          summary: failure.summary,
-          evidence: failure.evidence,
-        });
+        await fix(
+          pipeline,
+          issue,
+          worktree,
+          logDir,
+          { kind: failure.kind, summary: failure.summary, evidence: failure.evidence },
+          progress,
+        );
       }
     }
 
@@ -210,6 +229,7 @@ export async function processTicket(
       pullRequest,
       squashCommit({ ticket, pullRequest, title, verdict, commits, coAuthors }),
     );
+    await progress.record({ point: "merge", outcome: `✅ #${pullRequest}` });
   } catch (error) {
     return handOff(pipeline, {
       issue,
@@ -223,6 +243,11 @@ export async function processTicket(
   }
 
   // The Ticket is merged from here on, so nothing below may hand it off.
+  try {
+    await tickMetCriteria(tracker, ticket, verdict, log);
+  } catch (error) {
+    log(`#${ticket} merged, but ticking its criteria failed: ${(error as Error).message}`);
+  }
   // The merge closes the issue; the label would otherwise outlive the work.
   try {
     await tracker.removeLabel(ticket, config.labels.inProgress);
@@ -301,6 +326,7 @@ async function implement(
   worktree: string,
   branch: string,
   logDir: string,
+  progress: Progress,
 ): Promise<void> {
   const stage = pipeline.config.stages.implement;
   const result = await runStage(pipeline, "implement", {
@@ -309,23 +335,39 @@ async function implement(
     logDir,
   });
   if (!result.ok) {
+    await progress.record(stageRow("implement", result, `❌ ${stageFailureCell(result)}`));
     throw new TicketFailure("implement", describeStageFailure("implement", stage, result));
   }
 
   // An agent that gave up silently leaves a clean branch behind. That is a
   // failure, not something to verify.
   if ((await pipeline.workspace.commitSubjects(branch)).length === 0) {
+    await progress.record(stageRow("implement", result, "❌ no commits"));
     throw new TicketFailure(
       "implement",
       "the implement Stage left no new commits on the branch",
     );
   }
+
+  await progress.record(stageRow("implement", result, "✅ committed"));
 }
 
-async function runChecks(pipeline: Pipeline, worktree: string): Promise<void> {
+async function runChecks(
+  pipeline: Pipeline,
+  worktree: string,
+  progress: Progress,
+): Promise<void> {
+  // One row for the whole gate, however many commands it is made of: which
+  // command failed is the outcome, and its output is the hand-off's business.
+  const startedAt = Date.now();
   for (const command of pipeline.config.checks) {
     const result = await pipeline.workspace.runCheck(command, worktree);
     if (!result.ok) {
+      await progress.record({
+        point: "checks",
+        outcome: `❌ \`${command}\` failed`,
+        durationMs: Date.now() - startedAt,
+      });
       throw new TicketFailure(
         "checks",
         `Check \`${command}\` failed`,
@@ -334,6 +376,11 @@ async function runChecks(pipeline: Pipeline, worktree: string): Promise<void> {
       );
     }
   }
+  await progress.record({
+    point: "checks",
+    outcome: "✅ passed",
+    durationMs: Date.now() - startedAt,
+  });
 }
 
 async function verify(
@@ -341,6 +388,7 @@ async function verify(
   issue: Issue,
   worktree: string,
   logDir: string,
+  progress: Progress,
 ): Promise<Verdict> {
   const stage = pipeline.config.stages.verify;
   const result = await runStage(pipeline, "verify", {
@@ -354,6 +402,7 @@ async function verify(
   await pipeline.workspace.discardChanges(worktree);
 
   if (!result.ok) {
+    await progress.record(stageRow("verify", result, `❌ ${stageFailureCell(result)}`));
     throw new TicketFailure("verify", describeStageFailure("verify", stage, result));
   }
 
@@ -361,6 +410,7 @@ async function verify(
   try {
     verdict = parseVerdict(result.result);
   } catch (error) {
+    await progress.record(stageRow("verify", result, "❌ no Verdict"));
     throw new TicketFailure(
       "verify",
       "the verify Stage did not return a usable Verdict",
@@ -368,16 +418,20 @@ async function verify(
     );
   }
 
+  const counts = countStatuses(verdict);
+
   // The agent's own `pass` is advisory; this is the decision that counts.
   if (!passes(verdict)) {
     const unmet = unmetCriteria(verdict);
     if (unmet.length === 0) {
+      await progress.record(stageRow("verify", result, "❌ no evidence"));
       throw new TicketFailure(
         "verify",
         "every criterion came back unverifiable, so there is no evidence to merge on",
         verdict.criteria.map((c) => `- ${c.text} — ${c.evidence}`).join("\n"),
       );
     }
+    await progress.record(stageRow("verify", result, `❌ ${unmet.length} unmet`));
     throw new TicketFailure(
       "verify",
       `${unmet.length} of ${verdict.criteria.length} criteria unmet`,
@@ -386,10 +440,9 @@ async function verify(
     );
   }
 
-  const counts = countStatuses(verdict);
-  pipeline.log?.(
-    `#${issue.number} verified · ${counts.met} met · ${counts.unverifiable} unverifiable`,
-  );
+  const summary = `${counts.met} met · ${counts.unverifiable} unverifiable`;
+  await progress.record(stageRow("verify", result, `✅ ${summary}`));
+  pipeline.log?.(`#${issue.number} verified · ${summary}`);
   return verdict;
 }
 
@@ -406,6 +459,7 @@ async function fix(
   worktree: string,
   logDir: string,
   failure: FixFailure,
+  progress: Progress,
 ): Promise<void> {
   const stage = pipeline.config.stages.fix;
   pipeline.log?.(`#${issue.number} fixing · ${failure.summary}`);
@@ -416,8 +470,11 @@ async function fix(
     logDir,
   });
   if (!result.ok) {
+    await progress.record(stageRow("fix", result, `❌ ${stageFailureCell(result)}`));
     throw new TicketFailure("fix", describeStageFailure("fix", stage, result));
   }
+
+  await progress.record(stageRow("fix", result, "✅ committed"));
 }
 
 /**
@@ -439,10 +496,11 @@ async function resolveConflict(
   worktree: string,
   logDir: string,
   conflict: string,
+  progress: Progress,
 ): Promise<void> {
   pipeline.log?.(`#${issue.number} resolving a rebase conflict`);
 
-  const failure = await conflictStage(pipeline, issue, worktree, logDir, conflict);
+  const failure = await conflictStage(pipeline, issue, worktree, logDir, conflict, progress);
   if (failure === undefined) return;
 
   // Nothing may leave this function with a rebase still in the worktree, least
@@ -466,6 +524,7 @@ async function conflictStage(
   worktree: string,
   logDir: string,
   conflict: string,
+  progress: Progress,
 ): Promise<TicketFailure | undefined> {
   const stage = pipeline.config.stages.conflict;
   try {
@@ -476,6 +535,11 @@ async function conflictStage(
     });
 
     const state = await pipeline.workspace.rebaseState(worktree);
+    // The worktree decides the row, as it decides the outcome: a Stage that ran
+    // out of turns after finishing the rebase did the job it was sent to do.
+    await progress.record(
+      stageRow("conflict", result, state.resolved ? "✅ rebased" : "❌ unresolved"),
+    );
     if (state.resolved) return undefined;
 
     return new TicketFailure(
@@ -489,6 +553,8 @@ async function conflictStage(
   } catch (error) {
     // The Stage never ran, or git could not be asked what it left behind.
     // Neither is a defect in the branch, so no fix Stage is offered for it.
+    // Nothing read the worktree, so nothing here knows what the Stage left.
+    await progress.record({ point: "conflict", outcome: "❌ unknown" });
     return asTicketFailure(error, "rebase");
   }
 }
@@ -534,16 +600,25 @@ async function publishPullRequest(
  * A red or unfinished pull request is a failure whatever the gates say. Turning
  * `gates.ci` off only tolerates a pull request that has no checks at all.
  */
-async function requireGreenCi(pipeline: Pipeline, pullRequest: number): Promise<void> {
+async function requireGreenCi(
+  pipeline: Pipeline,
+  pullRequest: number,
+  progress: Progress,
+): Promise<void> {
+  const startedAt = Date.now();
   const outcome = await pipeline.tracker.waitForCi(
     pullRequest,
     pipeline.config.ciTimeoutMinutes * 60_000,
   );
+  const record = (cell: string) =>
+    progress.record({ point: "ci", outcome: cell, durationMs: Date.now() - startedAt });
 
   switch (outcome.state) {
     case "passed":
+      await record("✅ passed");
       return;
     case "failed":
+      await record("❌ failed");
       throw new TicketFailure(
         "ci",
         "a pull request check failed",
@@ -551,11 +626,15 @@ async function requireGreenCi(pipeline: Pipeline, pullRequest: number): Promise<
         "failed-ci",
       );
     case "timed-out":
+      await record("❌ timed out");
       throw new TicketFailure(
         "ci",
         `the pull request checks did not finish within ${pipeline.config.ciTimeoutMinutes} minutes`,
       );
     case "none":
+      // A gate switched off is worth a row of its own: the Ticket merged on
+      // nobody's word but the pipeline's own Checks.
+      await record(pipeline.config.gates.ci ? "❌ no checks" : "⚠️ no checks");
       if (!pipeline.config.gates.ci) return;
       throw new TicketFailure(
         "ci",
@@ -658,18 +737,75 @@ function pullRequestTitle(commits: string[], ticketTitle: string): string {
   return CONVENTIONAL_SUBJECT.test(first) ? first : ticketTitle;
 }
 
+/**
+ * One Stage's row, with the turns and wall-clock the runner reported.
+ *
+ * A Stage the runner could not put a turn count on gets no count rather than a
+ * zero: nothing ran is not the same as nothing was needed.
+ */
+function stageRow(
+  stage: ProgressPoint,
+  result: StageResult,
+  outcome: string,
+): ProgressRow {
+  return {
+    point: stage,
+    outcome,
+    ...(result.turns === undefined ? {} : { turns: result.turns }),
+    durationMs: result.durationMs,
+  };
+}
+
+/** The limits a Stage was given, which are half of what its failure means. */
+interface StageLimits {
+  maxTurns: number;
+  maxMinutes: number;
+}
+
+/**
+ * Why a Stage did not finish, said twice: the words a hand-off comment reads in
+ * and the two the progress table has room for. Kept in one entry per failure so
+ * a new one cannot be given a sentence and left without a cell.
+ */
+const STAGE_FAILURES: Record<
+  StageFailure,
+  { cell: string; sentence: (limits: StageLimits) => string }
+> = {
+  "rate-limited": {
+    cell: "rate limited",
+    sentence: () => "hit the subscription rate limit",
+  },
+  "timed-out": {
+    cell: "timed out",
+    sentence: (limits) => `ran past its ${limits.maxMinutes} minute limit`,
+  },
+  "turn-capped": {
+    cell: "turn capped",
+    sentence: (limits) => `hit its ${limits.maxTurns} turn limit`,
+  },
+  "nonzero-exit": { cell: "exited non-zero", sentence: () => "exited non-zero" },
+  "invalid-result": {
+    cell: "invalid result",
+    sentence: () => "returned output the Verdict schema rejected",
+  },
+};
+
+/** A Stage that came back without saying why gets the one word that is true. */
+const UNEXPLAINED = { cell: "failed", sentence: () => "failed" } as const;
+
+function stageFailure(result: StageResult) {
+  return result.failure ? STAGE_FAILURES[result.failure] : UNEXPLAINED;
+}
+
 function describeStageFailure(
   stage: string,
-  limits: { maxTurns: number; maxMinutes: number },
+  limits: StageLimits,
   result: StageResult,
 ): string {
-  const reasons: Record<StageFailure, string> = {
-    "rate-limited": "hit the subscription rate limit",
-    "timed-out": `ran past its ${limits.maxMinutes} minute limit`,
-    "turn-capped": `hit its ${limits.maxTurns} turn limit`,
-    "nonzero-exit": "exited non-zero",
-    "invalid-result": "returned output the Verdict schema rejected",
-  };
-  const reason = result.failure ? reasons[result.failure] : "failed";
-  return `the ${stage} Stage ${reason}`;
+  return `the ${stage} Stage ${stageFailure(result).sentence(limits)}`;
+}
+
+/** The same failure, short enough for a table cell. */
+function stageFailureCell(result: StageResult): string {
+  return stageFailure(result).cell;
 }

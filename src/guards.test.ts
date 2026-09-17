@@ -4,7 +4,11 @@ import type { Issue } from "./ports/tracker.js";
 
 const READY = "ready-for-agent";
 
-function issue(overrides: Partial<Issue> = {}): Issue {
+/** Comment bodies are what these tests are about; the ids are the port's business. */
+type IssueOverrides = Partial<Omit<Issue, "comments">> & { comments?: string[] };
+
+function issue(overrides: IssueOverrides = {}): Issue {
+  const { comments, ...rest } = overrides;
   return {
     number: 4,
     title: "Planning guards",
@@ -12,14 +16,14 @@ function issue(overrides: Partial<Issue> = {}): Issue {
     body: "- [ ] it works",
     labels: [READY],
     assignees: [],
-    comments: [],
     subIssues: 0,
     blockedBy: [],
-    ...overrides,
+    ...rest,
+    comments: (comments ?? []).map((body, index) => ({ id: String(index), body })),
   };
 }
 
-const guard = (overrides: Partial<Issue> = {}) => skipReason(issue(overrides), READY);
+const guard = (overrides: IssueOverrides = {}) => skipReason(issue(overrides), READY);
 
 describe("a Ticket Planning got right", () => {
   it("passes every guard", () => {

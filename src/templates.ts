@@ -6,7 +6,7 @@
 import type { GuardReason } from "./guards.js";
 import type { FailurePoint } from "./lifecycle.js";
 import type { TicketOutcome } from "./orchestrator.js";
-import type { SquashCommit } from "./ports/tracker.js";
+import type { IssueComment, SquashCommit } from "./ports/tracker.js";
 import { type Criterion, type Verdict, countStatuses } from "./verdict.js";
 
 /** How the pipeline finds its own hand-off comment again. */
@@ -31,14 +31,22 @@ const GUARD_SENTENCES: Record<GuardReason, string> = {
 };
 
 /**
- * Whether one of these comments is already on the issue.
+ * The comment carrying `marker`, if the issue has one.
  *
- * The marker is the first line of every pipeline comment, which is the whole
- * point of it: this is how a second Run knows it has nothing new to say.
+ * The marker is the first line of every pipeline comment and never changes,
+ * which is the whole point of it: this is how the pipeline finds what it has
+ * already written rather than writing it again.
  */
-export function hasGuardWarning(comments: string[], reason: GuardReason): boolean {
-  const marker = guardMarker(reason);
-  return comments.some((body) => body.trimStart().startsWith(marker));
+export function findMarkedComment(
+  comments: IssueComment[],
+  marker: string,
+): IssueComment | undefined {
+  return comments.find((comment) => comment.body.trimStart().startsWith(marker));
+}
+
+/** Whether a candidate has already been warned about this. */
+export function hasGuardWarning(comments: IssueComment[], reason: GuardReason): boolean {
+  return findMarkedComment(comments, guardMarker(reason)) !== undefined;
 }
 
 /** The one warning a skipped candidate gets. Two sentences: the reason, the fix. */

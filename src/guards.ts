@@ -60,7 +60,9 @@ const UNCHECKED_BOX = /^[ \t]*[-*+] \[ \]/m;
 
 /** Triage posts its brief as a comment, so criteria are not always in the body. */
 function hasCriteria(issue: Issue): boolean {
-  return [issue.body, ...issue.comments].some((text) => UNCHECKED_BOX.test(text));
+  return [issue.body, ...issue.comments.map((comment) => comment.body)].some((text) =>
+    UNCHECKED_BOX.test(text),
+  );
 }
 
 /**
