@@ -124,6 +124,7 @@ describe("the happy path", () => {
       title: "Skeleton: one Ticket end to end",
       branch: BRANCH,
       pullRequest: 100,
+      notes: [],
     });
     expect(tracker.pullRequest(100).merged).toBe(true);
   });
@@ -331,11 +332,15 @@ describe("Stage invocation", () => {
     expect(runner.prompts("implement")[0]).toContain("Use table-driven tests.");
   });
 
-  it("asks the verify Stage for structured output and nothing else does", async () => {
+  it("makes the verify Stage's structured output the one it cannot do without", async () => {
     await run();
 
-    expect(runner.requests[0]?.jsonSchema).toBeUndefined();
+    // implement is asked for a schema too, but only to carry Notes: a session
+    // that emitted none has still implemented the Ticket.
+    expect(runner.requests[0]?.jsonSchema).toBeDefined();
+    expect(runner.requests[0]?.resultRequired).toBe(false);
     expect(runner.requests[1]?.jsonSchema).toBeDefined();
+    expect(runner.requests[1]?.resultRequired).toBeUndefined();
   });
 });
 
@@ -862,12 +867,13 @@ describe("the fix Stage", () => {
     expect(runner.prompts("fix")[0]).toContain("Keep the diff small.");
   });
 
-  it("asks the fix Stage for no structured output", async () => {
+  it("asks the fix Stage for structured output it may leave empty", async () => {
     workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
 
     await run();
 
-    expect(fixRequest().jsonSchema).toBeUndefined();
+    expect(fixRequest().jsonSchema).toBeDefined();
+    expect(fixRequest().resultRequired).toBe(false);
   });
 
   it("logs the second pass beside the first rather than over it", async () => {
@@ -1035,6 +1041,7 @@ describe("releasing a rate-limited Ticket", () => {
       title: "Skeleton: one Ticket end to end",
       branch: BRANCH,
       stage: "implement",
+      notes: [],
     });
   });
 
@@ -1729,6 +1736,137 @@ function progressTable(): string {
   }
   return progress[0]?.body as string;
 }
+
+describe("Notes a Stage makes", () => {
+  const OTHER = 7;
+  const noteResult = (notes: unknown[]) => stageResult({ result: { notes } });
+
+  beforeEach(() => {
+    tracker.addIssue({ number: OTHER, title: "Progress comment" });
+  });
+
+  it("posts a Note on the Ticket it names", async () => {
+    runner.queue("implement", noteResult([{ ticket: OTHER, note: "the help drifts" }]));
+
+    await run();
+
+    expect(tracker.comments).toContainEqual({
+      issue: OTHER,
+      body: "<!-- agent-pipeline:note -->\nFrom #2 implement\n\nthe help drifts\n",
+    });
+  });
+
+  it("opens a needs-triage issue for a Note that names no Ticket", async () => {
+    runner.queue("implement", noteResult([{ note: "Nothing cleans up worktrees." }]));
+
+    await run();
+
+    expect(tracker.createdIssues).toEqual([
+      {
+        title: "Nothing cleans up worktrees",
+        body: "From #2 implement\n\nNothing cleans up worktrees.\n",
+        labels: ["needs-triage"],
+      },
+    ]);
+  });
+
+  it("opens it under the label this repo calls needs-triage", async () => {
+    runner.queue("implement", noteResult([{ note: "no cleanup" }]));
+
+    await run({
+      labels: { ...config().labels, needsTriage: "inbox" },
+    });
+
+    expect(tracker.createdIssues[0]?.labels).toEqual(["inbox"]);
+  });
+
+  it("escapes a checkbox so the guards never read a Note as criteria", async () => {
+    runner.queue("implement", noteResult([{ ticket: OTHER, note: "- [ ] rename the flag" }]));
+
+    await run();
+
+    const note = tracker.issue(OTHER).comments.at(-1)?.body as string;
+    expect(note).toContain("- \\[ \\] rename the flag");
+    expect(/^[ \t]*[-*+] \[ \]/m.test(note)).toBe(false);
+  });
+
+  it("reports every Note it routed, with where it went", async () => {
+    runner.queue(
+      "implement",
+      noteResult([{ ticket: OTHER, note: "the help drifts" }, { note: "no cleanup" }]),
+    );
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({
+      outcome: "merged",
+      notes: [
+        { origin: TICKET, stage: "implement", issue: OTHER, opened: false, note: "the help drifts" },
+        { origin: TICKET, stage: "implement", issue: 200, opened: true, note: "no cleanup" },
+      ],
+    });
+  });
+
+  it("routes the fix Stage's Notes too", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    runner.queue("fix", noteResult([{ ticket: OTHER, note: "found while fixing" }]));
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({
+      notes: [{ origin: TICKET, stage: "fix", issue: OTHER, note: "found while fixing" }],
+    });
+  });
+
+  it("routes a failed Stage's Notes before handing the Ticket off", async () => {
+    runner.queue("implement", {
+      ...noteResult([{ ticket: OTHER, note: "noticed before I died" }]),
+      ok: false,
+      failure: "turn-capped",
+    });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({
+      outcome: "handed-off",
+      stage: "implement",
+      notes: [{ issue: OTHER, note: "noticed before I died" }],
+    });
+  });
+
+  it("does not fail the Stage over a Note the tracker refused", async () => {
+    runner.queue("implement", noteResult([{ ticket: 404, note: "lost" }]));
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged", notes: [] });
+  });
+});
+
+describe("a Stage with no Notes", () => {
+  it("merges the Ticket writing nothing but the usual", async () => {
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged", notes: [] });
+    expect(tracker.createdIssues).toEqual([]);
+    expect(notices()).toEqual([]);
+  });
+
+  it("is not failed for emitting no structured output at all", async () => {
+    runner.queue("implement", stageResult({ result: undefined }));
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+  });
+
+  it("writes nothing for an empty notes list", async () => {
+    runner.queue("implement", stageResult({ result: { notes: [] } }));
+
+    await run();
+
+    expect(tracker.createdIssues).toEqual([]);
+    expect(notices()).toEqual([]);
+  });
+});
 
 function handoffBody(): string {
   const comment = tracker.comments.at(-1);

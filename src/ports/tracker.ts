@@ -78,6 +78,21 @@ export interface PullRequestRef {
   url: string;
 }
 
+/**
+ * A new issue the pipeline opens itself. Only ever a Note nobody had a Ticket
+ * for, so it arrives untriaged: labelled `needs-triage` and nothing else.
+ */
+export interface CreateIssue {
+  title: string;
+  body: string;
+  labels: string[];
+}
+
+export interface IssueRef {
+  number: number;
+  url: string;
+}
+
 export interface CreatePullRequest {
   head: string;
   title: string;
@@ -103,6 +118,8 @@ export interface Tracker {
   listLabels(): Promise<string[]>;
   createLabel(label: LabelSpec): Promise<void>;
   getIssue(number: number): Promise<Issue>;
+  /** Open an issue, and say which one it is so a summary can name it. */
+  createIssue(issue: CreateIssue): Promise<IssueRef>;
   /** Every open issue carrying `label`, in no particular order. */
   listCandidates(label: string): Promise<Candidate[]>;
   assign(number: number, user: string): Promise<void>;

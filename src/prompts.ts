@@ -30,6 +30,19 @@ const IMPLEMENT_GUIDANCE = `This session is unattended. Follow this guidance as 
 - Do not open pull requests and do not close the issue; the pipeline does both.
 - Commit all of your work to the branch that is already checked out.`;
 
+/**
+ * Appended to the two Stages that write code, which are the two that meet
+ * things this Ticket is not about. Nothing here changes what the Stage is for:
+ * it is the channel that stops a finding becoming either scope creep or a lost
+ * paragraph in a transcript.
+ */
+const NOTES_GUIDANCE = `Notes for other Tickets: if you discover something that belongs to another Ticket, or to no Ticket yet, do not act on it here and do not widen this Ticket to cover it.
+
+- Record it as a Note instead. Your structured output carries a \`notes\` list, and the pipeline posts each entry where a human will meet it.
+- Set \`ticket\` to the issue number the Note belongs to, and leave it out when you are not sure which one: a Note with no number opens an issue for triage, where a wrong number lands on somebody else's Ticket.
+- Write each \`note\` as plain sentences. No checkboxes: they would read as Acceptance Criteria.
+- Emit \`"notes": []\` when you found nothing. That is the ordinary case and costs you nothing.`;
+
 const VERIFY_INSTRUCTIONS = `You are the verify Stage of an unattended pipeline. Your job is adversarial: try to prove each Acceptance Criterion is NOT met.
 
 - Read the Ticket's Acceptance Criteria from its body and from its comments; the checkbox list may live in either.
@@ -44,7 +57,7 @@ const FIX_INSTRUCTIONS = `You are the fix Stage of an unattended pipeline. The T
 - Commit your fix on the branch you are on, in this worktree. Do not create a branch, do not open pull requests, and do not close the Ticket.
 - Start from the evidence: reproduce the failure, find what actually causes it, and fix that rather than the symptom.
 - Where the failure is an unmet Acceptance Criterion, add the regression test that would have caught it and commit it with the fix.
-- Stay inside this Ticket's Acceptance Criteria. Anything else you find belongs to another Ticket, not to this session.
+- Stay inside this Ticket's Acceptance Criteria. Anything else you find belongs to another Ticket, not to this session; record it as a Note rather than mending it.
 - Write commit subjects in the repo's commit convention. The pipeline re-runs the Checks and the verify Stage as soon as you finish.`;
 
 const CONFLICT_INSTRUCTIONS = `You are the conflict Stage of an unattended pipeline. The Ticket below is already implemented on the branch you are on, and rebasing it onto \`main\` stopped on a conflict. That rebase is still in progress in this worktree, and finishing it is the whole of your job.
@@ -79,6 +92,7 @@ export function implementPrompt(issueUrl: string, extraPrompt: string): string {
     `/mattpocock-skills:implement ${issueUrl}`,
     IMPLEMENT_GUIDANCE,
     SELF_HOSTING_GUIDANCE,
+    NOTES_GUIDANCE,
     extraPrompt,
   ]);
 }
@@ -120,6 +134,7 @@ export function fixPrompt(
     FIX_INSTRUCTIONS,
     failureSection(failure),
     SELF_HOSTING_GUIDANCE,
+    NOTES_GUIDANCE,
     extraPrompt,
   ]);
 }

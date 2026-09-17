@@ -301,6 +301,7 @@ describe("a Ticket that throws", () => {
         branch: "agent/4-ticket-4",
         stage: "setup",
         failure: "gh: connection reset",
+        notes: [],
       },
       expect.objectContaining({ outcome: "merged", ticket: 5 }),
     ]);

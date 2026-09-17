@@ -39,6 +39,7 @@ blocked — and prints a summary:
 agent-pipeline run 2026-09-17T09-00-00-000 · 84m
 
   merged   #4 Planning guards (PR #12)
+  noted    #8 comment · from #4 implement · the CLI help drifts
   handed   #5 Fix Stage with a single retry · verify · 1 unmet
   released #6 Rebase conflict resolution · rate limit at implement
   skipped  #7 no-criteria
@@ -176,6 +177,32 @@ stay comments of their own, because those are the ones worth a notification.
 When the Ticket merges, every criterion the Verdict marked `met` is ticked where it is
 written, in the body or in the comment triage posted it in. An `unverifiable` one is
 left unticked: nobody gathered the evidence that would justify the tick.
+
+## Notes for other Tickets
+
+A Stage sent to implement one Ticket keeps meeting things that are not it: a
+defect in code it only had to read, a gap nothing tracks yet. Fixing them widens
+the Ticket past the criteria verify grades, and ignoring them loses them in a
+transcript nobody opens.
+
+So the implement and fix Stages end with a list of **Notes**, and the pipeline
+routes each one out of the session:
+
+- a Note that names a Ticket becomes a comment on it, saying which Ticket and
+  Stage it came from
+- a Note that names none opens an issue labelled `needs-triage`, which is where
+  the triage on-ramp starts
+
+A Note is never acted on where it was found, and never changes the current
+Ticket's scope. Checkboxes in one are escaped before it is posted: `- [ ]` is
+Acceptance Criteria to everything that reads a Ticket, and a Note is not asking
+for any. The Run summary lists every Note with the issue it reached, so a night
+of work says what it noticed as well as what it merged.
+
+Routing a Note can never cost a Ticket. A number the Stage invented, or a
+tracker that refuses the write, loses that one Note and nothing else — and a
+Stage that fails still has its Notes routed, because a session that ran out of
+turns still noticed whatever it noticed.
 
 ## Rebase conflicts
 

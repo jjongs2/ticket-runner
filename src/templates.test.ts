@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   HANDOFF_MARKER,
+  NOTE_MARKER,
   guardComment,
   guardMarker,
   handoffComment,
+  noteComment,
+  noteIssue,
   pullRequestBody,
   runSummary,
   squashCommit,
@@ -191,6 +194,7 @@ describe("runSummary", () => {
     title: "Run: drain the Frontier",
     branch: "agent/3-run-drain-the-frontier",
     pullRequest: 12,
+    notes: [],
   };
   const handed = {
     outcome: "handed-off" as const,
@@ -199,6 +203,7 @@ describe("runSummary", () => {
     branch: "agent/5-fix-stage",
     stage: "verify" as const,
     failure: "1 unmet",
+    notes: [],
   };
 
   it("heads the summary with the Run and how long it took", () => {
@@ -231,6 +236,7 @@ describe("runSummary", () => {
           title: "Rebase conflict resolution",
           branch: "agent/6-rebase-conflict-resolution",
           stage: "implement",
+          notes: [],
         },
       ],
       blocked: [],
@@ -277,5 +283,132 @@ describe("runSummary", () => {
     expect(summary.trimEnd().split("\n").at(-1)).toBe(
       "  merged   #3 Run: drain the Frontier (PR #12)",
     );
+  });
+});
+
+describe("noteComment", () => {
+  const subject = { origin: 10, stage: "implement" as const, note: "the help text drifts" };
+
+  it("opens with the marker, then where the Note came from", () => {
+    expect(noteComment(subject).split("\n").slice(0, 2)).toEqual([
+      NOTE_MARKER,
+      "From #10 implement",
+    ]);
+  });
+
+  it("carries the Note under it", () => {
+    expect(noteComment(subject)).toBe(
+      `${NOTE_MARKER}\nFrom #10 implement\n\nthe help text drifts\n`,
+    );
+  });
+
+  it("defuses a checkbox so no guard reads it as Acceptance Criteria", () => {
+    const comment = noteComment({ ...subject, note: "- [ ] rename the flag" });
+
+    expect(comment).toContain("- \\[ \\] rename the flag");
+    expect(/^[ \t]*[-*+] \[ \]/m.test(comment)).toBe(false);
+  });
+});
+
+describe("noteIssue", () => {
+  const subject = {
+    origin: 10,
+    stage: "fix" as const,
+    note: "Nothing cleans up abandoned worktrees. A Run leaks one per hand-off.",
+  };
+
+  it("titles the issue with the Note's first sentence", () => {
+    expect(noteIssue(subject).title).toBe("Nothing cleans up abandoned worktrees");
+  });
+
+  it("names the origin Ticket and Stage above the Note", () => {
+    expect(noteIssue(subject).body).toBe(
+      "From #10 fix\n\nNothing cleans up abandoned worktrees. A Run leaks one per hand-off.\n",
+    );
+  });
+
+  it("carries no marker, since nothing looks an issue up by one", () => {
+    expect(noteIssue(subject).body).not.toContain(NOTE_MARKER);
+  });
+
+  it("defuses a checkbox in the body too", () => {
+    const issue = noteIssue({ ...subject, note: "worktrees\n- [ ] remove them" });
+
+    expect(issue.body).toContain("- \\[ \\] remove them");
+  });
+
+  it("falls back to naming the origin when the Note is all decoration", () => {
+    expect(noteIssue({ ...subject, note: "###" }).title).toBe("Note from #10 fix");
+  });
+});
+
+describe("Notes in a Run summary", () => {
+  const merged = {
+    outcome: "merged" as const,
+    ticket: 3,
+    title: "Run: drain the Frontier",
+    branch: "agent/3-run-drain-the-frontier",
+    pullRequest: 12,
+    notes: [],
+  };
+  const handed = {
+    outcome: "handed-off" as const,
+    ticket: 5,
+    title: "Fix Stage with a single retry",
+    branch: "agent/5-fix-stage",
+    stage: "verify" as const,
+    failure: "1 unmet",
+    notes: [],
+  };
+  const note = {
+    origin: 3,
+    stage: "implement" as const,
+    issue: 8,
+    opened: false,
+    note: "the CLI help drifts from the README",
+  };
+
+  it("follows the row of the Ticket whose Stage made it", () => {
+    const summary = runSummary({
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [{ ...merged, notes: [note] }, handed],
+    });
+
+    expect(summary.split("\n").slice(2, 5)).toEqual([
+      "  merged   #3 Run: drain the Frontier (PR #12)",
+      "  noted    #8 comment · from #3 implement · the CLI help drifts from the README",
+      "  handed   #5 Fix Stage with a single retry · verify · 1 unmet",
+    ]);
+  });
+
+  it("says when the Note opened an issue of its own", () => {
+    const summary = runSummary({
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [{ ...merged, notes: [{ ...note, issue: 31, opened: true, note: "no cleanup" }] }],
+    });
+
+    expect(summary).toContain("  noted    #31 new · from #3 implement · no cleanup");
+  });
+
+  it("trims a long Note to one line", () => {
+    const long = `worktrees ${"pile ".repeat(40)}up`;
+    const summary = runSummary({
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [{ ...merged, notes: [{ ...note, note: long }] }],
+    });
+
+    const row = summary.split("\n").find((line) => line.includes("noted")) as string;
+    expect(row).not.toContain(long);
+    expect(row.length).toBeLessThan(90);
+    expect(row.endsWith("\u2026")).toBe(true);
+  });
+
+  it("says nothing extra for a Ticket whose Stages found nothing", () => {
+    const summary = runSummary({ runId: "r1", durationMs: 0, outcomes: [merged] });
+
+    expect(summary).not.toContain("noted");
   });
 });

@@ -68,6 +68,9 @@ async function take(pipeline: Pipeline, candidate: Candidate): Promise<TicketOut
       branch: branchName(candidate.number, candidate.title),
       stage: "setup",
       failure,
+      // Whatever it routed before it fell over went with the exception. The
+      // Notes are on GitHub either way; only the summary line is lost.
+      notes: [],
     };
   }
 }
