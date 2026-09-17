@@ -301,6 +301,29 @@ describe("reading the outcome", () => {
     expect(result).toMatchObject({ ok: false, failure: "rate-limited" });
   });
 
+  it("does not mistake a successful session that talks about rate limits for a rate limit", async () => {
+    const stdout = transcript({
+      type: "result",
+      subtype: "success",
+      is_error: false,
+      num_turns: 85,
+      result: "Implemented the rate-limited release path; the rate limit is now handled.",
+    });
+
+    const result = await runner(execution({ stdout })).run(request());
+
+    expect(result).toMatchObject({ ok: true });
+    expect(result.failure).toBeUndefined();
+  });
+
+  it("reads the rate limit from stderr when the session died without a result", async () => {
+    const result = await runner(
+      execution({ exitCode: 1, stdout: "", stderr: "Claude AI usage limit reached" }),
+    ).run(request());
+
+    expect(result).toMatchObject({ ok: false, failure: "rate-limited" });
+  });
+
   it("leaves a trace and fails when the session could not be started at all", async () => {
     const broken = new ClaudeAgentRunner({
       run: async () => {
