@@ -6,6 +6,7 @@ import type {
   StageRequest,
   StageResult,
 } from "../ports/agent-runner.js";
+import { STAGE_ENV_VAR } from "../stage-guard.js";
 import { type Execution, type RunProcess, exec } from "./exec.js";
 
 export interface ClaudeAgentRunnerOptions {
@@ -44,6 +45,8 @@ export class ClaudeAgentRunner implements AgentRunner {
       return await this.runProcess(this.binary, args, {
         cwd: request.cwd,
         timeoutMs: request.maxMinutes * 60_000,
+        // The mark the CLI refuses on, so the session cannot start a nested Run.
+        env: stageEnv(request),
       });
     } catch (error) {
       return spawnFailure(error);
@@ -52,7 +55,7 @@ export class ClaudeAgentRunner implements AgentRunner {
 
   async run(request: StageRequest): Promise<StageResult> {
     const args = buildArgs(request);
-    const commandLine = quoteCommand(this.binary, args);
+    const commandLine = quoteCommand(request, this.binary, args);
     const startedAt = Date.now();
 
     const execution = await this.spawn(request, args);
@@ -80,6 +83,11 @@ export class ClaudeAgentRunner implements AgentRunner {
 async function spawnFailure(error: unknown): Promise<Execution> {
   const message = `agent-pipeline could not start the Stage: ${(error as Error).message}\n`;
   return { exitCode: 1, stdout: "", stderr: message, output: message };
+}
+
+/** What the Stage's shell carries beyond the environment it inherits. */
+function stageEnv(request: StageRequest): Record<string, string> {
+  return { [STAGE_ENV_VAR]: request.stage };
 }
 
 function buildArgs(request: StageRequest): string[] {
@@ -192,9 +200,13 @@ function structuredOutput(result: ResultEvent | undefined): unknown {
   }
 }
 
-/** Shell-quote the command so a human can paste it back into a terminal. */
-function quoteCommand(binary: string, args: string[]): string {
-  return [binary, ...args]
+/**
+ * Shell-quote the command so a human can paste it back into a terminal, with
+ * the Stage's environment in front of it so the reproduction is exact.
+ */
+function quoteCommand(request: StageRequest, binary: string, args: string[]): string {
+  const env = Object.entries(stageEnv(request)).map(([name, value]) => `${name}=${value}`);
+  return [...env, binary, ...args]
     .map((part) => (/^[\w./:=-]+$/.test(part) ? part : `'${part.replaceAll("'", `'\\''`)}'`))
     .join(" ");
 }

@@ -13,6 +13,8 @@ export interface ExecOptions {
   /** Run through the shell, for user-supplied Check commands. */
   shell?: boolean;
   timeoutMs?: number;
+  /** Extra variables, merged over the environment the child inherits. */
+  env?: Record<string, string>;
 }
 
 /**
@@ -34,6 +36,7 @@ export function exec(
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+      ...(options.env === undefined ? {} : { env: { ...process.env, ...options.env } }),
       shell: options.shell ?? false,
       stdio: ["ignore", "pipe", "pipe"],
     });

@@ -86,6 +86,14 @@ describe("the command line", () => {
     expect(calls[0]?.options.timeoutMs).toBe(20 * 60_000);
   });
 
+  it("marks the child environment with the Stage, so it cannot start a nested Run", async () => {
+    await runner(execution({ stdout: SUCCESS })).run(request());
+    expect(calls[0]?.options.env).toEqual({ AGENT_PIPELINE_STAGE: "implement" });
+
+    await runner(execution({ stdout: SUCCESS })).run(request({ stage: "verify" }));
+    expect(calls[1]?.options.env).toEqual({ AGENT_PIPELINE_STAGE: "verify" });
+  });
+
   it("passes the JSON schema only when the Stage asks for structured output", async () => {
     await runner(execution({ stdout: SUCCESS })).run(request());
     expect(calls[0]?.args).not.toContain("--json-schema");
@@ -100,7 +108,7 @@ describe("the command line", () => {
   it("reports the exact command line a human could paste", async () => {
     const result = await runner(execution({ stdout: SUCCESS })).run(request());
 
-    expect(result.commandLine).toContain("claude --print");
+    expect(result.commandLine).toMatch(/^AGENT_PIPELINE_STAGE=implement claude --print/);
     expect(result.commandLine).toContain("'/mattpocock-skills:implement https://example.com/issues/2'");
   });
 });

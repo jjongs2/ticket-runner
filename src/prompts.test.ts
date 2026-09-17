@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { implementPrompt, verifyPrompt } from "./prompts.js";
+import { SELF_HOSTING_GUIDANCE, implementPrompt, verifyPrompt } from "./prompts.js";
 
 const url = "https://github.com/jjongs2/agent-pipeline/issues/2";
 
@@ -50,6 +50,27 @@ describe("verifyPrompt", () => {
   it("appends the configured extra prompt", () => {
     expect(verifyPrompt(url, "Ignore formatting.").trimEnd().endsWith("Ignore formatting.")).toBe(
       true,
+    );
+  });
+});
+
+describe("the self-hosting guidance", () => {
+  it("tells the session to exercise the pipeline through its tests and fakes only", () => {
+    expect(SELF_HOSTING_GUIDANCE).toMatch(/tests? and fakes/i);
+    expect(SELF_HOSTING_GUIDANCE).toMatch(/never run .*against this repository/is);
+    expect(SELF_HOSTING_GUIDANCE).toMatch(/never kill .*process/is);
+  });
+
+  it("is carried verbatim by every Stage prompt, from one place", () => {
+    expect(implementPrompt(url, "")).toContain(SELF_HOSTING_GUIDANCE);
+    expect(verifyPrompt(url, "")).toContain(SELF_HOSTING_GUIDANCE);
+  });
+
+  it("stays ahead of the repo's own extra prompt", () => {
+    const prompt = implementPrompt(url, "Prefer table-driven tests.");
+
+    expect(prompt.indexOf(SELF_HOSTING_GUIDANCE)).toBeLessThan(
+      prompt.indexOf("Prefer table-driven tests."),
     );
   });
 });

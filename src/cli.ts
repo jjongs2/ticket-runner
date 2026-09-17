@@ -10,6 +10,7 @@ import type { Pipeline, TicketOutcome } from "./orchestrator.js";
 import { processTicket } from "./orchestrator.js";
 import { newRunId } from "./run-log.js";
 import { processRun } from "./run.js";
+import { nestedRunRefusal } from "./stage-guard.js";
 import { startupMessages } from "./startup.js";
 import { runSummary } from "./templates.js";
 
@@ -24,6 +25,14 @@ Options:
 
 /** Exit codes: 0 nothing handed off, 1 at least one hand-off, 2 the Run never started. */
 async function main(argv: string[]): Promise<number> {
+  // First, before the repo, the config, `gh` or even `--help`: a Stage's shell
+  // may not start a Run of the pipeline it is working on.
+  const nested = nestedRunRefusal(process.env);
+  if (nested !== undefined) {
+    console.error(nested);
+    return 2;
+  }
+
   const { positionals, values } = parseArgs({
     args: argv,
     options: { help: { type: "boolean", short: "h" } },
