@@ -1,0 +1,3 @@
+# Humans plan, the pipeline executes
+
+The project name suggests automating the whole mattpocock-skills chain, but the planning half (grilling, to-spec, to-tickets, triage) stays human-driven and only Execution (from picking a Ticket to merging it) runs unattended. We rejected having an agent answer grilling questions on the human's behalf: the `grilling` skill exists precisely to stop agents from answering their own questions, and a wrong assumption made there hardens into a spec, tickets, and merged code with no gate left to catch it. The trade-off is that Planning output quality (labels, blocking edges, acceptance criteria) is a human responsibility; the pipeline only adds cheap guards and refuses Tickets it cannot trust.

@@ -1,0 +1,3 @@
+# Trust only GitHub-native issue relations
+
+The Frontier is computed from GitHub's native blocking dependencies and sub-issues only. `to-tickets` sometimes writes `Blocked by: #n` into the issue body instead of creating a native edge (a known plugin defect), and the plugin documents the body text as a fallback for trackers without native edges. We deliberately do not parse it: a Ticket whose body mentions blockers that have no native edge is skipped with a warning comment, not implemented. Reading two sources of truth would let a stale body silently unblock or block work; one source keeps the Frontier query auditable in the GitHub UI. The cost is that humans must ensure native edges exist during Planning.
