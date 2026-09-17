@@ -88,7 +88,7 @@ the fix is graded by every gate from the Checks onwards. The budget is one per T
 a second failure of any kind, including a kind the fix Stage never touched, is a
 hand-off, and the comment says the budget had already been used.
 
-Nothing else is retried. A rebase conflict, a Stage that never came back, a Verdict
+Nothing else spends the budget. A rebase conflict, a Stage that never came back, a Verdict
 with no evidence in it, CI that timed out or never ran — none of these is a defect in
 the code a fresh session could go and mend.
 
@@ -101,7 +101,9 @@ still exits `0`.
 Every Stage writes its exact command line, stdout, stderr and stream-json transcript to
 `.agent-pipeline/runs/<runId>/<n>/`, so any Stage can be reproduced by hand. The command
 line lands there before the Stage starts, and its output as the Stage prints it, so a Run
-killed mid-Stage still leaves behind what it had reached.
+killed mid-Stage still leaves behind what it had reached. A Ticket that spends its fix
+budget writes the fix Stage and the pass it bought to `<n>/retry/`, so the transcripts of
+the pass that failed survive alongside them.
 
 ## Guards
 

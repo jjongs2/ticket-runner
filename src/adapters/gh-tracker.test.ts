@@ -289,6 +289,12 @@ describe("pull requests", () => {
     expect(calls[0]).toEqual(["pr", "ready", "12", "--undo"]);
   });
 
+  it("rewrites the body of a PR a second pass re-graded", async () => {
+    await tracker(ok("")).updatePullRequestBody(12, "Closes #2\n\n**Verdict:** 2 met");
+
+    expect(calls[0]).toEqual(["pr", "edit", "12", "--body", "Closes #2\n\n**Verdict:** 2 met"]);
+  });
+
   it("squash-merges with the subject and body the pipeline composed", async () => {
     await tracker(ok("")).squashMerge(12, {
       subject: "feat(cli): add a flag",

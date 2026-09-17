@@ -39,7 +39,7 @@ const VERIFY_INSTRUCTIONS = `You are the verify Stage of an unattended pipeline.
 - Mark a criterion \`unverifiable\` only when no evidence can be gathered, never as a substitute for looking.
 - End by emitting the Verdict: one entry per criterion with its status and the evidence you actually gathered.`;
 
-const FIX_INSTRUCTIONS = `You are the fix Stage of an unattended pipeline. The Ticket below is already implemented on the branch you are on, one gate failed, and you get exactly one attempt at it: a second failure of any kind hands the Ticket to a human.
+const FIX_INSTRUCTIONS = `You are the fix Stage of an unattended pipeline. The Ticket below is already implemented on the branch you are on, and one gate failed. You are what its fix budget bought, and the budget is spent: a second failure of any kind hands the Ticket to a human.
 
 - Commit your fix on the branch you are on, in this worktree. Do not create a branch, do not open pull requests, and do not close the Ticket.
 - Start from the evidence: reproduce the failure, find what actually causes it, and fix that rather than the symptom.

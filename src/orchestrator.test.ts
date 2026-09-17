@@ -717,13 +717,48 @@ describe("the fix Stage", () => {
     expect(runner.prompts("fix")[0]).toContain("Keep the diff small.");
   });
 
-  it("asks the fix Stage for no structured output, and logs it beside the others", async () => {
+  it("asks the fix Stage for no structured output", async () => {
     workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
 
     await run();
 
     expect(fixRequest().jsonSchema).toBeUndefined();
-    expect(fixRequest().logDir).toBe(`/repo/.agent-pipeline/runs/run-1/${TICKET}`);
+  });
+
+  it("logs the second pass beside the first rather than over it", async () => {
+    const ticketLogs = `/repo/.agent-pipeline/runs/run-1/${TICKET}`;
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
+
+    await run();
+
+    // The Stage's files are named after the Stage, so the failing Verdict's
+    // transcript would otherwise be overwritten by the one that passed.
+    expect(runner.requests.map((request) => [request.stage, request.logDir])).toEqual([
+      ["implement", ticketLogs],
+      ["verify", ticketLogs],
+      ["fix", `${ticketLogs}/retry`],
+      ["verify", `${ticketLogs}/retry`],
+    ]);
+  });
+
+  it("rewrites the pull request body with the Verdict the second pass reached", async () => {
+    tracker.queueCi({ state: "failed", summary: "checks/build failed" });
+    runner.queue("verify", stageResult({ result: MIXED_VERDICT }));
+    runner.queue("verify", stageResult({ result: PASSING_VERDICT }));
+
+    await run();
+
+    // The merge carries the second Verdict, so the PR a human reads must too.
+    expect(tracker.calls).toContain("updatePullRequestBody:100");
+    expect(tracker.pullRequest(100).body).toContain(
+      "**Verdict:** 1 met · 0 unmet · 0 unverifiable",
+    );
+  });
+
+  it("leaves the pull request body alone when there was no second pass", async () => {
+    await run();
+
+    expect(tracker.calls).not.toContain("updatePullRequestBody:100");
   });
 });
 

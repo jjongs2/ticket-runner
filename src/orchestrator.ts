@@ -2,11 +2,16 @@ import { branchName, worktreePath } from "./branch.js";
 import type { Config } from "./config.js";
 import { type SkipReason, isGuardReason, skipReason } from "./guards.js";
 import type { FailureKind, FailurePoint } from "./lifecycle.js";
-import type { AgentRunner, StageFailure, StageResult } from "./ports/agent-runner.js";
+import type {
+  AgentRunner,
+  StageFailure,
+  StageName,
+  StageResult,
+} from "./ports/agent-runner.js";
 import type { Issue, Tracker } from "./ports/tracker.js";
 import type { Workspace } from "./ports/workspace.js";
 import { type FixFailure, fixPrompt, implementPrompt, verifyPrompt } from "./prompts.js";
-import { stageLogDir } from "./run-log.js";
+import { retryLogDir, stageLogDir } from "./run-log.js";
 import {
   draftPullRequestBody,
   guardComment,
@@ -102,7 +107,7 @@ export async function processTicket(
   pipeline: Pipeline,
   ticket: number,
 ): Promise<TicketOutcome> {
-  const { tracker, workspace, config, repoRoot } = pipeline;
+  const { tracker, workspace, config, repoRoot, runId } = pipeline;
   const log = pipeline.log ?? (() => {});
 
   const issue = await tracker.getIssue(ticket);
@@ -128,12 +133,14 @@ export async function processTicket(
   // fix Stage is offered. Once it is gone the next failure of any kind — even a
   // kind the fix Stage never touched — is a hand-off.
   let fixUsed = false;
+  // The pass behind a fix Stage logs beside the first one rather than over it.
+  let logDir = stageLogDir(repoRoot, runId, ticket);
 
   try {
     await workspace.createWorktree({ path: worktree, branch });
 
     point = "implement";
-    await implement(pipeline, issue, worktree, branch);
+    await implement(pipeline, issue, worktree, branch, logDir);
 
     let verdict: Verdict;
     let commits: string[];
@@ -147,7 +154,7 @@ export async function processTicket(
         point = "checks";
         await runChecks(pipeline, worktree);
         point = "verify";
-        verdict = await verify(pipeline, issue, worktree);
+        verdict = await verify(pipeline, issue, worktree, logDir);
 
         point = "rebase";
         const rebase = await workspace.rebaseOnMain(worktree);
@@ -177,7 +184,8 @@ export async function processTicket(
         if (fixUsed || failure.kind === undefined) throw failure;
         fixUsed = true;
         point = "fix";
-        await fix(pipeline, issue, worktree, {
+        logDir = retryLogDir(repoRoot, runId, ticket);
+        await fix(pipeline, issue, worktree, logDir, {
           kind: failure.kind,
           summary: failure.summary,
           evidence: failure.evidence,
@@ -251,22 +259,42 @@ async function passOver(
   return { outcome: "skipped", ticket: issue.number, title: issue.title, reason };
 }
 
+/**
+ * Start one Stage under the model, turn and wall-clock limits its own config
+ * names. Everything a Stage differs in is the prompt, where it runs and where
+ * it logs; the limits come from one place so no Stage can quietly skip them.
+ */
+function runStage(
+  pipeline: Pipeline,
+  stage: StageName,
+  request: { prompt: string; cwd: string; logDir: string; jsonSchema?: unknown },
+): Promise<StageResult> {
+  const limits = pipeline.config.stages[stage];
+  return pipeline.runner.run({
+    stage,
+    prompt: request.prompt,
+    cwd: request.cwd,
+    logDir: request.logDir,
+    permissionMode: pipeline.config.permissionMode,
+    model: limits.model,
+    maxTurns: limits.maxTurns,
+    maxMinutes: limits.maxMinutes,
+    ...(request.jsonSchema === undefined ? {} : { jsonSchema: request.jsonSchema }),
+  });
+}
+
 async function implement(
   pipeline: Pipeline,
   issue: Issue,
   worktree: string,
   branch: string,
+  logDir: string,
 ): Promise<void> {
   const stage = pipeline.config.stages.implement;
-  const result = await pipeline.runner.run({
-    stage: "implement",
+  const result = await runStage(pipeline, "implement", {
     prompt: implementPrompt(issue.url, stage.extraPrompt),
     cwd: worktree,
-    logDir: stageLogDir(pipeline.repoRoot, pipeline.runId, issue.number),
-    permissionMode: pipeline.config.permissionMode,
-    model: stage.model,
-    maxTurns: stage.maxTurns,
-    maxMinutes: stage.maxMinutes,
+    logDir,
   });
   if (!result.ok) {
     throw new TicketFailure("implement", describeStageFailure("implement", stage, result));
@@ -300,17 +328,13 @@ async function verify(
   pipeline: Pipeline,
   issue: Issue,
   worktree: string,
+  logDir: string,
 ): Promise<Verdict> {
   const stage = pipeline.config.stages.verify;
-  const result = await pipeline.runner.run({
-    stage: "verify",
+  const result = await runStage(pipeline, "verify", {
     prompt: verifyPrompt(issue.url, stage.extraPrompt),
     cwd: worktree,
-    logDir: stageLogDir(pipeline.repoRoot, pipeline.runId, issue.number),
-    permissionMode: pipeline.config.permissionMode,
-    model: stage.model,
-    maxTurns: stage.maxTurns,
-    maxMinutes: stage.maxMinutes,
+    logDir,
     jsonSchema: VERDICT_JSON_SCHEMA,
   });
 
@@ -358,7 +382,7 @@ async function verify(
 }
 
 /**
- * The one retry a Ticket gets: a fresh session on the same branch in the same
+ * What the fix budget buys: a fresh session on the same branch in the same
  * worktree, handed the failure and its evidence and nothing else to do.
  *
  * It drives no plugin skill. The implement skill would re-read the Ticket and
@@ -368,20 +392,16 @@ async function fix(
   pipeline: Pipeline,
   issue: Issue,
   worktree: string,
+  logDir: string,
   failure: FixFailure,
 ): Promise<void> {
   const stage = pipeline.config.stages.fix;
   pipeline.log?.(`#${issue.number} fixing · ${failure.summary}`);
 
-  const result = await pipeline.runner.run({
-    stage: "fix",
+  const result = await runStage(pipeline, "fix", {
     prompt: fixPrompt(issue.url, failure, stage.extraPrompt),
     cwd: worktree,
-    logDir: stageLogDir(pipeline.repoRoot, pipeline.runId, issue.number),
-    permissionMode: pipeline.config.permissionMode,
-    model: stage.model,
-    maxTurns: stage.maxTurns,
-    maxMinutes: stage.maxMinutes,
+    logDir,
   });
   if (!result.ok) {
     throw new TicketFailure("fix", describeStageFailure("fix", stage, result));
@@ -396,24 +416,30 @@ interface PullRequestSubject {
   title: string;
 }
 
+/**
+ * Push the branch, then open the pull request or bring the open one up to date.
+ *
+ * A second pass comes back to a pull request that already exists: the push is
+ * what GitHub re-runs its checks on, and the body is rewritten so the Verdict a
+ * human reads there is the one that will reach main.
+ */
 async function publishPullRequest(
   pipeline: Pipeline,
   { issue, branch, worktree, verdict, title }: PullRequestSubject,
   existing: number | undefined,
 ): Promise<number> {
   await pipeline.workspace.push(worktree, branch);
-  // A second pass comes back to a pull request that is already open, and the
-  // push is all it needs: GitHub re-runs the checks on the new head commits.
-  if (existing !== undefined) return existing;
+  const body = pullRequestBody({ ticket: issue.number, verdict, runId: pipeline.runId });
+
+  if (existing !== undefined) {
+    await pipeline.tracker.updatePullRequestBody(existing, body);
+    return existing;
+  }
 
   const pr = await pipeline.tracker.createPullRequest({
     head: branch,
     title,
-    body: pullRequestBody({
-      ticket: issue.number,
-      verdict,
-      runId: pipeline.runId,
-    }),
+    body,
     draft: false,
   });
   return pr.number;
@@ -460,7 +486,7 @@ interface HandOff {
   worktree: string;
   pullRequest: number | undefined;
   failure: TicketFailure;
-  /** Whether the Ticket's one fix Stage had already run when this failure came. */
+  /** Whether the Ticket's fix budget had already been spent when this failure came. */
   fixUsed: boolean;
 }
 

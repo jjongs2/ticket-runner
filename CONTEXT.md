@@ -76,7 +76,7 @@ _Avoid_: report, review result, score
 
 **Fix budget**:
 The single fix Stage a Ticket is allowed. A failing Check, an unmet criterion or a red CI spends it, and processing resumes at the Checks; a second failure of any kind is a hand-off.
-_Avoid_: retry, attempt, second chance
+_Avoid_: retry budget, fix limit, second chance
 
 **Note**:
 A finding a Stage makes that belongs to another Ticket, or to no Ticket yet. Routed to that Ticket's comments or to a new needs-triage issue; never acted on in the current Ticket.

@@ -169,7 +169,7 @@ export interface HandoffComment {
   pullRequest?: number;
   /** Failing Check output, unmet criteria, or a CI log excerpt. */
   evidence: string;
-  /** Whether a fix Stage had already had its one attempt when this failure came. */
+  /** Whether the Ticket's fix budget had already been spent when this failure came. */
   fixUsed?: boolean;
 }
 
