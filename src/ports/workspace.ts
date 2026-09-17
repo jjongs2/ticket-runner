@@ -31,6 +31,12 @@ export interface Workspace {
    * in the order they were written.
    */
   commitSubjects(branch: string): Promise<string[]>;
+  /**
+   * The unique `Co-authored-by` trailer values across the branch's commits, in
+   * the order first seen. GitHub adds these to a default squash message; the
+   * pipeline composes its own, so it has to carry them itself.
+   */
+  coAuthors(branch: string): Promise<string[]>;
   runCheck(command: string, cwd: string): Promise<CheckOutcome>;
   /** Restore the worktree to its committed state, tracked and untracked. */
   discardChanges(cwd: string): Promise<void>;

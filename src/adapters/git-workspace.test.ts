@@ -86,6 +86,19 @@ describe("commitSubjects", () => {
     ]);
   });
 
+  it("collects each co-author once, in the order first seen, ignoring the key's case", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    commit(path, "a.txt", "a\n", "feat: a (#2)\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>");
+    commit(path, "b.txt", "b\n", "test: b (#2)\n\nCo-authored-by: Pat <pat@example.com>\nCo-authored-by: Claude Opus 5 <noreply@anthropic.com>");
+    commit(path, "c.txt", "c\n", "docs: c (#2)");
+
+    expect(await workspace.coAuthors("agent/2-x")).toEqual([
+      "Claude Opus 5 <noreply@anthropic.com>",
+      "Pat <pat@example.com>",
+    ]);
+  });
+
   it("keeps a commit whose subject is empty, so the order does not shift", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
     await workspace.createWorktree({ path, branch: "agent/2-x" });

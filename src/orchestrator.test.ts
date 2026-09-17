@@ -168,14 +168,24 @@ describe("the pull request title and the squash commit", () => {
     expect(tracker.pullRequest(100).title).toBe("Skeleton: one Ticket end to end");
   });
 
-  it("merges with the PR title as the subject", async () => {
+  it("merges with the PR title plus the PR number as the subject", async () => {
     workspace.commits = ["fix(cli): stop double-counting (#2)"];
 
     await run();
     const pr = tracker.pullRequest(100);
 
-    expect(pr.squashCommit?.subject).toBe(pr.title);
-    expect(pr.squashCommit?.subject).toBe("fix(cli): stop double-counting");
+    expect(pr.title).toBe("fix(cli): stop double-counting");
+    expect(pr.squashCommit?.subject).toBe("fix(cli): stop double-counting (#100)");
+  });
+
+  it("carries the branch's co-authors into the squash commit", async () => {
+    workspace.coAuthorList = ["Claude Opus 5 <noreply@anthropic.com>"];
+
+    await run();
+
+    expect(tracker.pullRequest(100).squashCommit?.body).toContain(
+      "\nCo-authored-by: Claude Opus 5 <noreply@anthropic.com>\n",
+    );
   });
 
   it("composes a body of Closes, the Verdict counts and every branch commit in order", async () => {

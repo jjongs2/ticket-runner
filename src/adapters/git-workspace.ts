@@ -44,6 +44,21 @@ export class GitWorkspace implements Workspace {
     return subjects;
   }
 
+  async coAuthors(branch: string): Promise<string[]> {
+    const { stdout } = await this.git([
+      "log",
+      "--reverse",
+      "--format=%(trailers:key=Co-authored-by,valueonly)",
+      `${this.mainBranch}..${branch}`,
+    ]);
+    const seen = new Set<string>();
+    for (const line of stdout.split("\n")) {
+      const value = line.trim();
+      if (value !== "") seen.add(value);
+    }
+    return [...seen];
+  }
+
   async runCheck(command: string, cwd: string): Promise<CheckOutcome> {
     const result = await exec(command, [], { cwd, shell: true });
     return { ok: result.exitCode === 0, output: result.output };

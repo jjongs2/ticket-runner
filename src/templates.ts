@@ -79,11 +79,15 @@ export function draftPullRequestBody({
 
 export interface SquashCommitMessage {
   ticket: number;
+  /** The pull request number, appended to the subject as GitHub would. */
+  pullRequest: number;
   /** The pull request title, which is the subject that lands on main. */
   title: string;
   verdict: Verdict;
   /** The branch's commit subjects, oldest first. */
   commits: string[];
+  /** Unique `Co-authored-by` values from the branch, carried as trailers. */
+  coAuthors: string[];
 }
 
 /**
@@ -95,12 +99,16 @@ export interface SquashCommitMessage {
  */
 export function squashCommit({
   ticket,
+  pullRequest,
   title,
   verdict,
   commits,
+  coAuthors,
 }: SquashCommitMessage): SquashCommit {
+  // What GitHub's default message would have carried, now carried by hand.
+  const trailers = coAuthors.map((author) => `Co-authored-by: ${author}`);
   return {
-    subject: title,
+    subject: `${title} (#${pullRequest})`,
     body: [
       `Closes #${ticket}`,
       "",
@@ -108,6 +116,7 @@ export function squashCommit({
       "",
       ...commits.map((subject) => `- ${subject}`),
       "",
+      ...(trailers.length === 0 ? [] : [...trailers, ""]),
     ].join("\n"),
   };
 }

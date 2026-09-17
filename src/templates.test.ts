@@ -47,13 +47,36 @@ describe("squashCommit", () => {
   const commit = () =>
     squashCommit({
       ticket: 2,
+      pullRequest: 100,
       title: "feat(cli): add a flag",
       verdict,
       commits: ["feat(cli): add a flag (#2)", "docs: write it down (#2)"],
+      coAuthors: [],
     });
 
-  it("uses the pull request title as the subject, with nothing appended", () => {
-    expect(commit().subject).toBe("feat(cli): add a flag");
+  it("uses the pull request title as the subject and appends the PR number as GitHub would", () => {
+    expect(commit().subject).toBe("feat(cli): add a flag (#100)");
+  });
+
+  it("carries the branch's co-authors as trailers at the end of the body", () => {
+    const body = squashCommit({
+      ticket: 2,
+      pullRequest: 100,
+      title: "feat(cli): add a flag",
+      verdict,
+      commits: ["feat(cli): add a flag (#2)"],
+      coAuthors: ["Claude Opus 5 <noreply@anthropic.com>", "Pat <pat@example.com>"],
+    }).body;
+
+    expect(body.endsWith(
+      [
+        "- feat(cli): add a flag (#2)",
+        "",
+        "Co-authored-by: Claude Opus 5 <noreply@anthropic.com>",
+        "Co-authored-by: Pat <pat@example.com>",
+        "",
+      ].join("\n"),
+    )).toBe(true);
   });
 
   it("opens the body with Closes, then the Verdict counts, then the branch commits in order", () => {
