@@ -24,7 +24,7 @@ function issue(overrides: IssueOverrides = {}): Issue {
   };
 }
 
-const guard = (overrides: IssueOverrides = {}) => skipReason(issue(overrides), READY);
+const guard = (overrides: IssueOverrides = {}) => skipReason(issue(overrides), READY, false);
 
 /** The same issue, offered as a Ticket this checkout is already holding. */
 const strandedGuard = (overrides: IssueOverrides = {}) =>

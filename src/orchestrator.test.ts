@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -1253,6 +1253,22 @@ describe("the State file a claimed Ticket keeps", () => {
     ]);
   });
 
+  it("is not moved on until the implement Stage's commits have been counted", async () => {
+    let atCount: TicketState | undefined;
+    const commitSubjects = workspace.commitSubjects.bind(workspace);
+    workspace.commitSubjects = async (branch) => {
+      atCount ??= readTicketState(repoRoot, TICKET);
+      return commitSubjects(branch);
+    };
+
+    await run();
+
+    // The first read is the implement Stage's own "did it commit anything", and
+    // the state is still claimed there: a Stage that left a clean branch never
+    // reaches implemented.
+    expect(atCount).toMatchObject({ state: "claimed" });
+  });
+
   it("stays at claimed when the implement Stage left nothing on the branch", async () => {
     workspace.commits = [];
     const seen = stateAtEachStage();
@@ -1261,6 +1277,19 @@ describe("the State file a claimed Ticket keeps", () => {
     // and there is none, because a branch with no commits buys no fix Stage.
     expect(await run()).toMatchObject({ outcome: "handed-off", stage: "implement" });
     expect(seen.map(({ state }) => state?.state)).toEqual(["claimed"]);
+  });
+
+  it("fails the Ticket at setup rather than claiming what it cannot record", async () => {
+    // A file where the state directory has to go, so the very first write fails.
+    mkdirSync(join(repoRoot, ".agent-pipeline"), { recursive: true });
+    writeFileSync(join(repoRoot, ".agent-pipeline", "state"), "not a directory");
+
+    await expect(run()).rejects.toThrow();
+
+    // Nothing was claimed, so there is no Claim for a later Run to be stuck on.
+    expect(tracker.issue(TICKET).assignees).toEqual([]);
+    expect(tracker.issue(TICKET).labels).toEqual(["ready-for-agent"]);
+    expect(runner.requests).toEqual([]);
   });
 
   it("names the pull request once it is open", async () => {

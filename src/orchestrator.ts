@@ -205,14 +205,13 @@ export async function processTicket(
   // First of the two, because a Claim no State file names is the one thing this
   // has to rule out: a crash between the writes then leaves a Ticket nobody has
   // claimed with state beside it, which is a released Ticket and resumes itself.
-  const record = new ResumeRecord(pipeline, {
+  const record = ResumeRecord.claim(pipeline, {
     ticket,
     branch,
     state: resume?.state ?? "claimed",
     fixUsed: resume?.fixUsed ?? false,
     ...(resume?.pullRequest === undefined ? {} : { pullRequest: resume.pullRequest }),
   });
-  record.advance();
 
   // The claim is the first write on the board: it shows what the pipeline holds
   // before anything else can go wrong. A stranded Ticket is resumed in place,
@@ -223,13 +222,7 @@ export async function processTicket(
     await tracker.addLabel(ticket, config.labels.inProgress);
     await tracker.removeLabel(ticket, config.labels.readyForAgent);
   }
-  log(
-    resume !== undefined
-      ? `#${ticket} resumed from ${resume.state} · ${branch}`
-      : stranded
-        ? `#${ticket} taken from the top, still claimed · ${branch}`
-        : `#${ticket} claimed · ${branch}`,
-  );
+  log(`#${ticket} ${howItWasTaken(resume, stranded)} · ${branch}`);
 
   // A pull request an earlier Run had already opened: without it this Run would
   // try to open a second one for the same branch.
@@ -426,6 +419,17 @@ async function resumable(
   return undefined;
 }
 
+/**
+ * How this Run came by the Ticket, for the one line it logs about it: resumed
+ * from a recorded state, taken from the top, or claimed outright. A stranded
+ * Ticket with nothing left to resume into is the middle one — it is started
+ * again, but the Claim it is started under is the one it already had.
+ */
+function howItWasTaken(resume: TicketState | undefined, stranded: boolean): string {
+  if (resume !== undefined) return `resumed from ${resume.state}`;
+  return stranded ? "taken from the top, still claimed" : "claimed";
+}
+
 /** What the Ticket itself has reached, which is all a resume needs to be told. */
 type Reached = Omit<TicketState, "runId" | "updatedAt">;
 
@@ -449,27 +453,55 @@ class ResumeRecord {
   /** What the Ticket has; the Run and the time are what each write adds to it. */
   private readonly reached: Reached;
 
-  constructor(
+  private constructor(
     private readonly pipeline: Pipeline,
     reached: Reached,
   ) {
     this.reached = { ...reached };
   }
 
-  /** Move the record on, and put it where the next Run will look for it. */
-  advance(reached: Advance = {}): void {
+  /**
+   * Record what the Claim is about to make true, and hand back the record that
+   * keeps it current.
+   *
+   * The one write that is allowed to fail the Ticket. It runs before the Claim,
+   * so a disk that will not take the file costs nothing at all: the Ticket ends
+   * at setup with nothing claimed, where carrying on would put a Claim on the
+   * board that no later Run could ever resume — which is the state this record
+   * exists to rule out.
+   */
+  static claim(pipeline: Pipeline, reached: Reached): ResumeRecord {
+    const record = new ResumeRecord(pipeline, reached);
+    writeTicketState(pipeline.repoRoot, record.file());
+    return record;
+  }
+
+  /**
+   * Move the record on, and put it where the next Run will look for it.
+   *
+   * A write that does not land here is logged and nothing more: what is on disk
+   * is an earlier state of the same Ticket, so resuming from further back costs
+   * a Stage rather than being wrong — where failing a Ticket mid-flight over a
+   * local file would throw away the Stages that have already succeeded.
+   */
+  advance(reached: Advance): void {
     Object.assign(this.reached, reached);
     try {
-      writeTicketState(this.pipeline.repoRoot, {
-        ...this.reached,
-        runId: this.pipeline.runId,
-        updatedAt: new Date().toISOString(),
-      });
+      writeTicketState(this.pipeline.repoRoot, this.file());
     } catch (error) {
       this.pipeline.log?.(
         `#${this.reached.ticket} could not record its state: ${(error as Error).message}`,
       );
     }
+  }
+
+  /** The Run and the time belong to the write, not to what the Ticket reached. */
+  private file(): TicketState {
+    return {
+      ...this.reached,
+      runId: this.pipeline.runId,
+      updatedAt: new Date().toISOString(),
+    };
   }
 }
 

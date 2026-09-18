@@ -56,8 +56,11 @@ export function skipReason(
    * assignee is this very user and `ready-for-agent` came off when the Claim was
    * made — so it passes them and is resumed rather than refused. The Planning
    * guards below still grade it: they are about the issue, not about who has it.
+   *
+   * Required rather than defaulted, so no caller can forget to answer it and
+   * quietly have a stranded Ticket refused as somebody else's.
    */
-  stranded = false,
+  stranded: boolean,
 ): SkipReason | undefined {
   if (!stranded) {
     if (issue.assignees.length > 0) return "claimed";
