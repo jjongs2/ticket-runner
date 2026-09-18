@@ -54,6 +54,10 @@ _Avoid_: session, batch, loop
 The PID file that stops two Runs, or a Run and a `ticket`, sharing one Target. Target-wide and held for the whole Run, where a Claim is per-Ticket and lives on GitHub.
 _Avoid_: mutex, pidfile
 
+**Target readiness**:
+What `agent-pipeline init` must have left in a Target before a Run may start: the two gitignored directories, the conventions document, a `CLAUDE.md` pointing at it, and the six triage labels. Asked for presence, never content. A Run that finds one missing refuses the Target and names `init`, rather than putting it there itself.
+_Avoid_: preflight, setup check, validation, guard (a Guard rejects a Candidate, readiness rejects the Target)
+
 **Stage**:
 One Claude Code session inside a Run with a single purpose: implement, verify, fix, or resolve a rebase conflict.
 _Avoid_: step, phase, task
