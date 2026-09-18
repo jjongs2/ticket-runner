@@ -8,7 +8,8 @@ itself, has a fresh session adversarially grade the Acceptance Criteria, opens a
 waits for CI and squash-merges. One failure along the way buys a fix Stage and a
 second pass. Anything it still cannot finish is handed to a human with a draft PR, a
 comment and the worktree left in place. A Stage the subscription rate limit stops is
-nobody's fault, so the Ticket is released instead and a later Run resumes it.
+nobody's fault, so the Ticket is released instead, the Run ends there, and a later Run
+resumes it.
 
 Vocabulary is defined in [`CONTEXT.md`](CONTEXT.md), decisions in [`docs/adr/`](docs/adr/),
 conventions in [`CONTRIBUTING.md`](CONTRIBUTING.md).
@@ -31,9 +32,9 @@ npm run agent-pipeline -- ticket 3    # one named Ticket
 has claimed and whose native `blocked by` issues have all closed. It takes them one at a
 time, lowest number first, and recomputes the Frontier after each one, so a merge that
 closes a blocker puts the Ticket it unblocked into the same Run. A Ticket that fails is
-handed off, one the rate limit stopped is released, and the Run carries on either way. The
-Run ends when nothing is left to pick — the Frontier is empty, or everything still on it is
-blocked — and prints a summary:
+handed off and the Run carries on; one the rate limit stopped is released and ends the Run
+there. Otherwise the Run ends when nothing is left to pick — the Frontier is empty, or
+everything still on it is blocked — and prints a summary:
 
 ```
 agent-pipeline run 2026-09-17T09-00-00-000 · 84m
@@ -41,7 +42,6 @@ agent-pipeline run 2026-09-17T09-00-00-000 · 84m
   merged   #4 Planning guards (PR #12)
   noted    #8 comment · from #4 implement · the CLI help drifts
   handed   #5 Fix Stage with a single retry · verify · 1 unmet
-  released #6 Rebase conflict resolution · rate limit at implement
   skipped  #7 no-criteria
   skipped  #9 blocked
 
@@ -120,8 +120,8 @@ be stopped in turn. So the Ticket is **released** rather than handed over. The C
 undone — assignee off, `in-progress` off, `ready-for-agent` back on — and the branch and
 worktree stay exactly as the Stage left them. Nobody is notified, because nobody has
 anything to do about it: the `⏸ rate limited` row in the progress table is the whole
-report. A released Ticket does not change the exit code, so a Run that released every
-Ticket it took still exits `0`.
+report. A released Ticket does not change the exit code, so a Run the limit stopped still
+exits `0`.
 
 What the release leaves behind is the **State file** the Ticket has been keeping since it
 was claimed, at `.agent-pipeline/state/ticket-<n>.json`, naming the state it reached, its
@@ -159,9 +159,13 @@ its branch, and a handed-off Ticket relabelled with its worktree untouched — t
 failure names the worktree the branch is checked out in, since a branch git is holding is
 not one `git branch -D` can take.
 
-The Run the limit stops does not wait for it to reset and does not take the Ticket it
-released a second time; it carries on down the Frontier, releasing whatever the limit
-stops next.
+The Run the limit stops ends at that Release. It does not wait for the limit to reset, and
+it takes nothing else: the limit that stopped one Stage would stop the next, so walking the
+rest of the Frontier would spend a Claim, a worktree and a doomed Stage per Ticket to learn
+what the first Release already said. Its summary ends with `Rate limited.` instead of
+`Frontier empty.`, and says nothing about the Tickets it never reached — a released one is
+back on the Frontier, an unreached stranded one still wears its Claim, and the Run started
+once the limit has reset picks up both.
 
 ## A Run that did not come back
 

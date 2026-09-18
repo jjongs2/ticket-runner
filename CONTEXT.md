@@ -39,7 +39,7 @@ _Avoid_: lock, checkout
 ### Pipeline
 
 **Run**:
-One invocation of the pipeline command. Drains the Frontier one Ticket at a time.
+One invocation of the pipeline command. Drains the Frontier one Ticket at a time. Ends when the Frontier is empty, when every Ticket left on it is blocked, or at the first Ticket it releases.
 _Avoid_: session, batch, loop
 
 **Run lock**:
@@ -87,7 +87,7 @@ The single fix Stage a Ticket is allowed. A failing Check, an unmet criterion or
 _Avoid_: retry budget, fix limit, second chance
 
 **Release**:
-What a rate-limited Stage does to a Ticket instead of handing it to a human: the Claim is undone, `ready-for-agent` goes back on, the branch and worktree stay, and a State file says where to resume. Nothing about the Ticket was wrong, so no Fix budget is spent and nobody is notified.
+What a rate-limited Stage does to a Ticket instead of handing it to a human: the Claim is undone, `ready-for-agent` goes back on, the branch and worktree stay, and a State file says where to resume. Nothing about the Ticket was wrong, so no Fix budget is spent and nobody is notified. It also ends the Run that made it, because the limit that stopped one Stage will stop the next.
 _Avoid_: pause, defer, requeue, unclaim
 
 **State file**:

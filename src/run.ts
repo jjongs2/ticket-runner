@@ -6,13 +6,28 @@ import { strandedTickets } from "./stranded.js";
 
 /**
  * What a Run has to show for itself: every Ticket it took, in the order it took
- * them, and the candidates it never got to reach.
+ * them, and why it stopped taking them.
  */
 export interface RunResult {
   outcomes: TicketOutcome[];
-  /** Candidates still held back by an open blocker when the Run ended. */
-  blocked: number[];
+  stop: RunStop;
 }
+
+/**
+ * Why a Run ended.
+ *
+ * A Run that drained the Frontier carries what was left held back; one the rate
+ * limit stopped carries nothing, because it ended before it could say a
+ * candidate was held back all Run. That is why this is a choice rather than a
+ * flag beside the list: the two stops do not report the same things.
+ */
+export type RunStop =
+  | {
+      reason: "frontier";
+      /** Candidates still held back by an open blocker when the Run ended. */
+      blocked: number[];
+    }
+  | { reason: "rate-limited" };
 
 /**
  * Drain the Frontier: take Tickets one at a time until nothing is left to pick.
@@ -21,6 +36,11 @@ export interface RunResult {
  * merge that closes a blocker puts the Ticket it unblocked into the same Run. A
  * Ticket that fails is handed off and the Run moves on: one bad Ticket must not
  * cost the rest of the night.
+ *
+ * A Release is the one outcome that ends the Run where it stands. Nothing is
+ * wrong with the Ticket — the subscription ran out of room — so the next Ticket
+ * would be stopped by the same limit, and claiming it would spend a Claim, a
+ * worktree and a doomed Stage to learn what the first one already said.
  *
  * Before any of that, the Tickets a Run that never came back left claimed are
  * resumed. They are not on the Frontier and never will be — the Claim they still
@@ -33,10 +53,8 @@ export async function processRun(pipeline: Pipeline): Promise<RunResult> {
   const outcomes: TicketOutcome[] = [];
   // Every Ticket this Run has taken. A Ticket normally leaves the candidate
   // list by being closed or relabelled; this is what stops a Run spinning on
-  // one when that write does not land — a resumed Ticket the rate limit releases
-  // included, which lands straight back on the Frontier.
+  // one when that write does not land.
   const taken = new Set<number>();
-  let blocked: number[] = [];
 
   const stranded = await strandedTickets({
     tracker,
@@ -46,29 +64,44 @@ export async function processRun(pipeline: Pipeline): Promise<RunResult> {
   });
   for (const ticket of stranded) {
     taken.add(ticket.number);
-    outcomes.push(await take(pipeline, ticket));
+    const outcome = await take(pipeline, ticket);
+    outcomes.push(outcome);
+    // Before the Frontier is so much as asked for: the stranded Tickets left
+    // keep their Claim, and the next Run sweeps them up as this one found them.
+    if (endsTheRun(pipeline, outcome)) return { outcomes, stop: { reason: "rate-limited" } };
   }
 
   for (;;) {
     const selection = selectFrontier(
       await tracker.listCandidates(config.labels.readyForAgent),
     );
-    blocked = selection.blocked.map((candidate) => candidate.number);
+    const blocked = selection.blocked.map((candidate) => candidate.number);
 
     const next = selection.frontier.find((candidate) => !taken.has(candidate.number));
-    if (next === undefined) break;
+    if (next === undefined) return { outcomes, stop: { reason: "frontier", blocked } };
 
     taken.add(next.number);
-    outcomes.push(
-      await take(pipeline, {
-        number: next.number,
-        title: next.title,
-        branch: branchName(next.number, next.title),
-      }),
-    );
+    const outcome = await take(pipeline, {
+      number: next.number,
+      title: next.title,
+      branch: branchName(next.number, next.title),
+    });
+    outcomes.push(outcome);
+    if (endsTheRun(pipeline, outcome)) return { outcomes, stop: { reason: "rate-limited" } };
   }
+}
 
-  return { outcomes, blocked };
+/**
+ * Whether this outcome is the Release that ends the Run, said out loud.
+ *
+ * The Ticket's own release is already logged where it happened; this is the
+ * line that says the Run goes no further, so a transcript shows the Frontier
+ * was left alone rather than found empty.
+ */
+function endsTheRun(pipeline: Pipeline, outcome: TicketOutcome): boolean {
+  if (outcome.outcome !== "released") return false;
+  pipeline.log?.(`run stopped after #${outcome.ticket} · rate limit`);
+  return true;
 }
 
 /**

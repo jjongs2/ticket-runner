@@ -4,7 +4,6 @@ agent-pipeline run <runId> · <duration>
   noted    #8 comment · from #3 implement · the CLI help drifts from the README
   handed   #5 Fix Stage with a single retry · verify · 1 unmet
   noted    #31 new · from #5 fix · nothing cleans up abandoned worktrees
-  released #6 Rebase conflict resolution · rate limit at implement
   skipped  #7 no-criteria
   skipped  #9 blocked
 
@@ -16,7 +15,14 @@ took no Ticket prints `  nothing to do` in place of the rows.
 `released` is a Ticket the subscription rate limit stopped mid-flight: its Claim
 was undone, and the State file it has been keeping since it was claimed says
 where the next Run resumes it from. Nobody has to do anything about it, which is
-why it is not `handed`.
+why it is not `handed`. It is the last row of its Run, which ends there:
+
+agent-pipeline run <runId> · <duration>
+
+  merged   #3 Run: drain the Frontier (PR #12)
+  released #6 Rebase conflict resolution · rate limit at implement
+
+Rate limited.
 
 A Ticket a Run resumed has no row of its own, released or stranded: it merges,
 is handed off, or is released again like any other, and the header already names
@@ -37,7 +43,13 @@ a `needs-triage` issue of its own. The note itself is trimmed to one line; the
 whole of it is on GitHub.
 
 The last line says why the Run stopped: `Frontier empty.` when nothing is left,
-`Frontier blocked.` when every remaining candidate has an open blocker.
+`Frontier blocked.` when every remaining candidate has an open blocker, and
+`Rate limited.` when a Release ended the Run.
+
+A Run the limit stopped prints no `skipped  #<n> blocked` rows and no rows for
+the Frontier Tickets it never reached: it stopped before it could say a
+candidate was held back all Run. The `released` row and the last line are the
+whole report.
 
 `ticket <n>` prints the same header and its one row, and stops there: it drains
 no Frontier, so it says nothing about one.
