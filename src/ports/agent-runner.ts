@@ -63,6 +63,33 @@ export interface StageResult {
   durationMs: number;
 }
 
+/**
+ * The plugin whose skills the Stages drive (ADR-0002). A Target whose machine
+ * does not have it installed gets an implement Stage with no skill behind it.
+ */
+export const SKILLS_PLUGIN = "mattpocock-skills";
+
+/**
+ * What `init` can find out about the agent side of a Target's machine without
+ * starting a Stage. Both are reported to the human and neither is repaired:
+ * installing a CLI and a plugin is the one part of setup only they can do.
+ */
+export interface AgentPreflight {
+  /** Whether the agent CLI could be run at all. */
+  runs: boolean;
+  /**
+   * Whether {@link SKILLS_PLUGIN} is installed. False whenever the CLI could
+   * not be asked, since an answer nobody could get is not a yes.
+   */
+  plugin: boolean;
+}
+
 export interface AgentRunner {
   run(request: StageRequest): Promise<StageResult>;
+  /**
+   * Ask the agent CLI about itself. Reports rather than throws: every way it
+   * can go wrong — no binary, a CLI that cannot list its plugins — is a line
+   * in the `init` report and never an error that stops setup.
+   */
+  preflight(): Promise<AgentPreflight>;
 }

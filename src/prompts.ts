@@ -4,6 +4,7 @@
  * (ADR-0002).
  */
 
+import { CONVENTIONS_PATH } from "./conventions.js";
 import type { FailureKind } from "./lifecycle.js";
 import { STAGE_ENV_VAR } from "./stage-guard.js";
 
@@ -25,7 +26,7 @@ const implementGuidance = (base: string) => `This session is unattended. Follow 
 
 - Confirm the Ticket title matches what you are about to build before you start.
 - Make an initial commit before running code-review, so the reviewed diff is not empty.
-- Your first commit's subject becomes the pull request title and the squash commit on \`${base}\`, so write it in the repo's commit convention and make it summarise the whole Ticket, not just that first commit.
+- Your first commit's subject becomes the pull request title and the squash commit on \`${base}\`, so write it in the convention \`${CONVENTIONS_PATH}\` states and make it summarise the whole Ticket, not just that first commit.
 - Do not spawn nested review agents beyond what the skill itself does.
 - Do not open pull requests and do not close the issue; the pipeline does both.
 - Commit all of your work to the branch that is already checked out.`;
@@ -58,7 +59,7 @@ const FIX_INSTRUCTIONS = `You are the fix Stage of an unattended pipeline. The T
 - Start from the evidence: reproduce the failure, find what actually causes it, and fix that rather than the symptom.
 - Where the failure is an unmet Acceptance Criterion, add the regression test that would have caught it and commit it with the fix.
 - Stay inside this Ticket's Acceptance Criteria. Anything else you find belongs to another Ticket, not to this session; record it as a Note rather than mending it.
-- Write commit subjects in the repo's commit convention. The pipeline re-runs the Checks and the verify Stage as soon as you finish.`;
+- Write commit subjects in the convention \`${CONVENTIONS_PATH}\` states. The pipeline re-runs the Checks and the verify Stage as soon as you finish.`;
 
 const conflictInstructions = (base: string) => `You are the conflict Stage of an unattended pipeline. The Ticket below is already implemented on the branch you are on, and rebasing it onto \`${base}\` stopped on a conflict. That rebase is still in progress in this worktree, and finishing it is the whole of your job.
 

@@ -36,6 +36,32 @@ beforeEach(() => {
 });
 
 describe("reading", () => {
+  it("reads authentication off the exit code of `gh auth status`", async () => {
+    expect(await tracker(ok("Logged in to github.com as octocat")).authenticated()).toBe(true);
+    expect(calls[0]).toEqual(["auth", "status"]);
+  });
+
+  it("answers that gh is not authenticated rather than throwing", async () => {
+    const gh = tracker({
+      exitCode: 1,
+      stdout: "",
+      stderr: "You are not logged into any GitHub hosts.",
+      output: "You are not logged into any GitHub hosts.",
+    });
+
+    expect(await gh.authenticated()).toBe(false);
+  });
+
+  it("answers that gh is not authenticated when gh itself cannot be run", async () => {
+    const gh = trackerWith({
+      run: async () => {
+        throw new Error("spawn gh ENOENT");
+      },
+    });
+
+    expect(await gh.authenticated()).toBe(false);
+  });
+
   it("asks gh who the current user is", async () => {
     expect(await tracker(ok("octocat\n")).currentUser()).toBe("octocat");
     expect(calls[0]).toEqual(["api", "user", "--jq", ".login"]);
@@ -267,6 +293,20 @@ describe("reading", () => {
 });
 
 describe("writing", () => {
+  it("enables squash merging and names no other merge setting", async () => {
+    await tracker(ok("")).enableSquashMerge();
+
+    expect(calls[0]).toEqual([
+      "api",
+      "--method",
+      "PATCH",
+      "repos/{owner}/{repo}",
+      "-F",
+      "allow_squash_merge=true",
+    ]);
+    expect(calls[0]?.join(" ")).not.toMatch(/merge_commit|rebase_merge|delete_branch/);
+  });
+
   it("creates a label with its colour and description", async () => {
     await tracker(ok("")).createLabel({
       name: "in-progress",

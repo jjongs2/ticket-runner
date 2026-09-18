@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CONVENTIONS_PATH } from "./conventions.js";
 import {
   SELF_HOSTING_GUIDANCE,
   conflictPrompt,
@@ -37,6 +38,13 @@ describe("implementPrompt", () => {
     expect(prompt).toMatch(/nested review agents|additional review agents/i);
     expect(prompt).toMatch(/do not open pull requests/i);
     expect(prompt).toMatch(/do not close/i);
+  });
+
+  it("names the conventions document rather than \"the repo's commit convention\"", () => {
+    const prompt = implementPrompt(url, BASE, "");
+
+    expect(prompt).toContain(CONVENTIONS_PATH);
+    expect(prompt).not.toMatch(/the repo's commit convention/);
   });
 
   it("appends the configured extra prompt after the guidance", () => {
@@ -97,6 +105,13 @@ describe("fixPrompt", () => {
     expect(
       fixPrompt(url, { ...FAILED_CHECK, kind: "unresolved-conflict" }, BASE, ""),
     ).toMatch(/conflicts with main/i);
+  });
+
+  it("names the conventions document rather than \"the repo's commit convention\"", () => {
+    const prompt = fixPrompt(url, FAILED_CHECK, BASE, "");
+
+    expect(prompt).toContain(CONVENTIONS_PATH);
+    expect(prompt).not.toMatch(/the repo's commit convention/);
   });
 
   it("asks for the regression test a gap the Verdict found should have had", () => {

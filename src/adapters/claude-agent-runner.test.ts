@@ -69,6 +69,66 @@ beforeEach(() => {
   calls = [];
 });
 
+describe("the preflight", () => {
+  const VERSION = "2.0.31 (Claude Code)\n";
+  const PLUGINS = "mattpocock-skills@1.2.3 (enabled)\nother-plugin@0.1.0 (enabled)\n";
+
+  /** A runner that answers each preflight question with its own output. */
+  function asked(version: Execution, plugins: Execution) {
+    return runner((args) => (args[0] === "--version" ? version : plugins));
+  }
+
+  it("asks claude for its version and then for its plugins", async () => {
+    const preflight = await asked(
+      execution({ stdout: VERSION }),
+      execution({ stdout: PLUGINS }),
+    ).preflight();
+
+    expect(calls.map((call) => call.args)).toEqual([["--version"], ["plugin", "list"]]);
+    expect(calls[0]?.command).toBe("claude");
+    expect(preflight).toEqual({ runs: true, plugin: true });
+  });
+
+  it("reports the plugin as missing when claude lists other plugins", async () => {
+    const preflight = await asked(
+      execution({ stdout: VERSION }),
+      execution({ stdout: "other-plugin@0.1.0 (enabled)\n" }),
+    ).preflight();
+
+    expect(preflight).toEqual({ runs: true, plugin: false });
+  });
+
+  it("reports the plugin as missing when claude cannot list its plugins", async () => {
+    const preflight = await asked(
+      execution({ stdout: VERSION }),
+      execution({ exitCode: 1, stderr: "unknown command `plugin`" }),
+    ).preflight();
+
+    expect(preflight).toEqual({ runs: true, plugin: false });
+  });
+
+  it("asks nothing further when claude cannot be run at all", async () => {
+    const missing = new ClaudeAgentRunner({
+      run: async (command, args, options) => {
+        calls.push({ command, args, options });
+        throw new Error("spawn claude ENOENT");
+      },
+    });
+
+    expect(await missing.preflight()).toEqual({ runs: false, plugin: false });
+    expect(calls.map((call) => call.args)).toEqual([["--version"]]);
+  });
+
+  it("reports claude as unrunnable when it exits non-zero on its own version", async () => {
+    const preflight = await asked(
+      execution({ exitCode: 1, stderr: "not installed" }),
+      execution({ stdout: PLUGINS }),
+    ).preflight();
+
+    expect(preflight).toEqual({ runs: false, plugin: false });
+  });
+});
+
 describe("the command line", () => {
   it("runs headless with the prompt, model, limits and permission settings", async () => {
     await runner(execution({ stdout: SUCCESS })).run(request());

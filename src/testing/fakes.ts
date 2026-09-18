@@ -8,6 +8,7 @@
  */
 
 import type {
+  AgentPreflight,
   AgentRunner,
   StageName,
   StageRequest,
@@ -43,6 +44,10 @@ export interface FakePullRequest extends CreatePullRequest {
 
 export class FakeTracker implements Tracker {
   user = "pipeline-user";
+  /** Whether `gh` is logged in, as `init` reports it. */
+  isAuthenticated = true;
+  /** Whether squash merging is allowed, which `init` turns on. */
+  squashMergeEnabled = false;
   /** What GitHub calls this Target's default branch; the Run resolves from it. */
   defaultBranchName = "main";
   labels = new Set<string>();
@@ -93,6 +98,11 @@ export class FakeTracker implements Tracker {
     return issue;
   }
 
+  // Not in `calls`: a read, and one nothing about the Target changes over.
+  async authenticated(): Promise<boolean> {
+    return this.isAuthenticated;
+  }
+
   async currentUser(): Promise<string> {
     return this.user;
   }
@@ -111,6 +121,11 @@ export class FakeTracker implements Tracker {
     this.calls.push(`createLabel:${label.name}`);
     this.createdLabels.push(label);
     this.labels.add(label.name);
+  }
+
+  async enableSquashMerge(): Promise<void> {
+    this.calls.push("enableSquashMerge");
+    this.squashMergeEnabled = true;
   }
 
   async getIssue(number: number): Promise<Issue> {
@@ -245,6 +260,10 @@ export class FakeTracker implements Tracker {
 
 export class FakeAgentRunner implements AgentRunner {
   requests: StageRequest[] = [];
+  /** What the preflight answers; a Target with everything installed by default. */
+  preflightAnswer: AgentPreflight = { runs: true, plugin: true };
+  /** How many times `init` asked, so a test can say it asked once. */
+  preflights = 0;
   /** Queued results per Stage; the last one is reused once the queue drains. */
   private queued = new Map<StageName, StageResult[]>();
   /** What each Stage leaves behind besides its result; see {@link leaves}. */
@@ -277,6 +296,11 @@ export class FakeAgentRunner implements AgentRunner {
 
   stages(): StageName[] {
     return this.requests.map((request) => request.stage);
+  }
+
+  async preflight(): Promise<AgentPreflight> {
+    this.preflights += 1;
+    return this.preflightAnswer;
   }
 
   async run(request: StageRequest): Promise<StageResult> {

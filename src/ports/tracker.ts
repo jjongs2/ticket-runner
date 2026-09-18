@@ -138,6 +138,13 @@ export type CiOutcome =
   | { state: "timed-out" };
 
 export interface Tracker {
+  /**
+   * Whether `gh` can speak to GitHub as somebody.
+   *
+   * Only `init` asks, and only to report the answer: every other operation of
+   * this port fails loudly when it is false, which is all a Run needs to know.
+   */
+  authenticated(): Promise<boolean>;
   currentUser(): Promise<string>;
   /**
    * The branch GitHub calls the Target's default.
@@ -149,6 +156,14 @@ export interface Tracker {
   defaultBranch(): Promise<string>;
   listLabels(): Promise<string[]>;
   createLabel(label: LabelSpec): Promise<void>;
+  /**
+   * Allow squash merging on the Target, and change no other merge setting.
+   *
+   * The pipeline merges no other way, so a Target with squash merging off
+   * refuses the merge at the end of every Ticket. Whether the Target also
+   * allows merge commits or rebase merging is the Target's own policy.
+   */
+  enableSquashMerge(): Promise<void>;
   getIssue(number: number): Promise<Issue>;
   /** Open an issue, and say which one it is so a summary can name it. */
   createIssue(issue: CreateIssue): Promise<IssueRef>;

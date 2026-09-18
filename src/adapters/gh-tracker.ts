@@ -94,6 +94,22 @@ export class GhTracker implements Tracker {
     this.now = options.now ?? Date.now;
   }
 
+  /**
+   * Whether `gh` is logged in, which is what `gh auth status` exits zero for.
+   *
+   * The failure is the answer here, so this is the one call that does not
+   * throw on one: `init` reports it as a line rather than as a crash.
+   */
+  async authenticated(): Promise<boolean> {
+    try {
+      const { exitCode } = await this.gh(["auth", "status"], { allowFailure: true });
+      return exitCode === 0;
+    } catch {
+      // `gh` itself is not on the PATH, which is as unauthenticated as it gets.
+      return false;
+    }
+  }
+
   async currentUser(): Promise<string> {
     const { stdout } = await this.gh(["api", "user", "--jq", ".login"]);
     return stdout.trim();
@@ -128,6 +144,23 @@ export class GhTracker implements Tracker {
       label.color,
       "--description",
       label.description,
+    ]);
+  }
+
+  /**
+   * Turn squash merging on, naming that one field and no other.
+   *
+   * The repository's own PATCH endpoint takes each merge method separately, so
+   * a repository that also allows merge commits keeps allowing them.
+   */
+  async enableSquashMerge(): Promise<void> {
+    await this.gh([
+      "api",
+      "--method",
+      "PATCH",
+      "repos/{owner}/{repo}",
+      "-F",
+      "allow_squash_merge=true",
     ]);
   }
 

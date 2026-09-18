@@ -1,19 +1,18 @@
 # Contributing
 
-Conventions for humans and agents working in this repo. Vocabulary is defined in `CONTEXT.md`; decisions in `docs/adr/`. Anything a config file or `--help` already answers is left out here on purpose.
+Conventions for humans and agents working in this repo. Vocabulary is defined in `CONTEXT.md`; decisions in `docs/adr/`. What the pipeline requires of any Target, this repository included, is in [`docs/agents/pipeline-conventions.md`](docs/agents/pipeline-conventions.md), which `agent-pipeline init` writes; this guide adds what is only ours and points at that document for the rest. Anything a config file or `--help` already answers is left out here on purpose.
 
 ## Branches
 
 - `main` receives squash merges from pull requests only. Nobody commits to it directly. Bootstrap exception: Planning documents written before the first Ticket merged landed on `main` directly, because no CI existed to gate a PR.
-- `agent/<n>-<slug>` is reserved for pipeline Runs. `<n>` is the Ticket number, `<slug>` is the Ticket title in lowercase kebab-case, at most 40 characters.
+- `agent/<n>-<slug>` belongs to the pipeline, as the conventions document states. `<slug>` is the Ticket title in lowercase kebab-case, at most 40 characters.
 - `human/<n>-<slug>` for attended work on a Ticket. Create it before running `/implement`, which commits to whatever branch is checked out.
 - Branches are updated by rebasing on `main`. Merge commits do not appear in history.
 - A branch is deleted when its PR merges. A handed-off Ticket keeps its branch and worktree until a human finishes or abandons it.
 
 ## Commits
 
-- Subject: `<type>(<scope>): <summary> (#<n>)`. Imperative mood, at most 72 characters.
-- `<n>` is the Ticket number. The `#<n>` reference is how code-review finds the Ticket to grade against, so it appears on every commit.
+- Subject shape, and the Ticket number every commit carries: the conventions document. That reference is also how code-review finds the Ticket to grade against. On top of the shape, here: imperative mood, at most 72 characters.
 - Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`.
 - Scopes: `cli`, `orchestrator`, `config`, `tracker`, `agent-runner`, `workspace`. Omit the scope when a change spans several.
 - Commit early and often on the branch; the PR squashes, so branch history is scratch. Commit work in progress instead of stashing: `refs/stash` is shared across worktrees.

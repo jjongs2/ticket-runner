@@ -17,6 +17,7 @@ Humans read all of these, so each stays short: one line of status, details folde
 | `draft-pr-body.md` | a hand-off opens the PR as a draft, so no Verdict exists | none (PR body) |
 | `squash-commit.txt` | the PR is squash-merged | none (commit message) |
 | `run-summary.txt` | a Run ends (terminal) | none |
+| `init-report.txt` | `agent-pipeline init` finishes (terminal) | none |
 
 Markers are how the pipeline finds its own comment again. A marker is the first line of the comment and never changes. `note-comment.md` carries one without ever looking it up: nothing about a Note is edited or posted twice, but a human meeting it on an unrelated Ticket can tell what wrote it.
 
