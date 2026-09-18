@@ -117,9 +117,7 @@ export class GitWorkspace implements Workspace {
   async runCheck(command: string, cwd: string, timeoutMs: number): Promise<CheckOutcome> {
     const result = await exec(command, [], { cwd, shell: true, timeoutMs });
     if (result.exitCode === 0) return { ok: true, output: result.output };
-    // Asked of the run rather than read off the exit code: a Check is free to
-    // exit 124 itself, and only `exec` knows whether it was killed.
-    return { ok: false, output: result.output, timedOut: result.timedOut === true };
+    return { ok: false, output: result.output, timedOut: result.timedOut };
   }
 
   async discardChanges(cwd: string): Promise<void> {

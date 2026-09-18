@@ -6,7 +6,7 @@ let calls: string[][];
 let responses: Execution[];
 
 function ok(stdout: string, extra: Partial<Execution> = {}): Execution {
-  return { exitCode: 0, stdout, stderr: "", output: stdout, ...extra };
+  return { exitCode: 0, stdout, stderr: "", output: stdout, timedOut: false, ...extra };
 }
 
 function tracker(...queued: Execution[]) {
@@ -47,6 +47,7 @@ describe("reading", () => {
       stdout: "",
       stderr: "You are not logged into any GitHub hosts.",
       output: "You are not logged into any GitHub hosts.",
+      timedOut: false,
     });
 
     expect(await gh.authenticated()).toBe(false);
@@ -639,7 +640,13 @@ describe("waiting for CI", () => {
   it("still reports the failure when the log cannot be fetched", async () => {
     const outcome = await tracker(
       ok(checks("fail"), { exitCode: 1 }),
-      { exitCode: 1, stdout: "", stderr: "could not find any workflow run", output: "" },
+      {
+        exitCode: 1,
+        stdout: "",
+        stderr: "could not find any workflow run",
+        output: "",
+        timedOut: false,
+      },
     ).waitForCi(12, 60_000);
 
     expect(outcome).toEqual({ state: "failed", summary: "check-0 failed", excerpt: "" });
@@ -732,26 +739,22 @@ describe("waiting for CI", () => {
     expect(calls.map((args) => args[0])).toEqual(["pr", "pr", "run"]);
   });
 
+  const noChecks = (): Execution => ({
+    exitCode: 1,
+    stdout: "",
+    stderr: "no checks reported on the 'agent/2-x' branch",
+    output: "",
+    timedOut: false,
+  });
+
   it("reports a PR with no checks rather than treating it as green", async () => {
-    const outcome = await tracker({
-      exitCode: 1,
-      stdout: "",
-      stderr: "no checks reported on the 'agent/2-x' branch",
-      output: "",
-    }).waitForCi(12, 60_000);
+    const outcome = await tracker(noChecks()).waitForCi(12, 60_000);
 
     expect(outcome).toEqual({ state: "none" });
   });
 
   it("reports an empty check list as no checks", async () => {
     expect(await tracker(ok("[]")).waitForCi(12, 60_000)).toEqual({ state: "none" });
-  });
-
-  const noChecks = (): Execution => ({
-    exitCode: 1,
-    stdout: "",
-    stderr: "no checks reported on the 'agent/2-x' branch",
-    output: "",
   });
 
   /** A clock that advances by `stepMs` every time it is read. */

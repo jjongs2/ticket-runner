@@ -140,7 +140,7 @@ function countTurns(results: ResultEvent[]): number | undefined {
 /** A session that could not even start still has to leave a trace behind. */
 async function spawnFailure(error: unknown): Promise<Execution> {
   const message = `agent-pipeline could not start the Stage: ${(error as Error).message}\n`;
-  return { exitCode: 1, stdout: "", stderr: message, output: message };
+  return { exitCode: 1, stdout: "", stderr: message, output: message, timedOut: false };
 }
 
 /** What a Stage's shell carries beyond the environment it inherits. */
@@ -261,10 +261,7 @@ function classify(
   // for why the last event is not where the rest of the answer is.
   const result = results.at(-1);
 
-  // `Execution.timedOut` is the flag `exec` sets when it was the one that
-  // killed the Stage. The exit code alone cannot say so: a session is free to
-  // exit with the very code a kill is reported as.
-  if (execution.timedOut === true) return "timed-out";
+  if (execution.timedOut) return "timed-out";
 
   if (result?.subtype === "error_max_turns") return "turn-capped";
 
