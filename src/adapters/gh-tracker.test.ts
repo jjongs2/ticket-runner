@@ -385,6 +385,61 @@ describe("pull requests", () => {
     ).rejects.toThrow("could not read an issue number");
   });
 
+  it("refuses a last line that starts with digits but is not a URL", async () => {
+    await expect(
+      tracker(ok("3 files changed\n")).createIssue({ title: "t", body: "b", labels: [] }),
+    ).rejects.toThrow("could not read an issue number");
+    await expect(
+      tracker(ok("3 files changed\n")).createPullRequest({
+        head: "agent/2-skeleton",
+        title: "Skeleton (#2)",
+        body: "Closes #2",
+        draft: false,
+      }),
+    ).rejects.toThrow("could not read a pull request number");
+  });
+
+  it("refuses a URL whose path is not an issue's or a pull request's", async () => {
+    await expect(
+      tracker(ok("https://github.com/acme/repo/issues/9/issues/31\n")).createIssue({
+        title: "t",
+        body: "b",
+        labels: [],
+      }),
+    ).rejects.toThrow("could not read an issue number");
+  });
+
+  it("refuses a URL the last line carries trailing text after", async () => {
+    await expect(
+      tracker(ok("https://github.com/acme/repo/issues/31 (draft)\n")).createIssue({
+        title: "t",
+        body: "b",
+        labels: [],
+      }),
+    ).rejects.toThrow("could not read an issue number");
+    await expect(
+      tracker(ok("https://github.com/acme/repo/pull/12 (draft)\n")).createPullRequest({
+        head: "agent/2-skeleton",
+        title: "Skeleton (#2)",
+        body: "Closes #2",
+        draft: false,
+      }),
+    ).rejects.toThrow("could not read a pull request number");
+  });
+
+  it("reads the number off the last line when gh printed something before it", async () => {
+    const pr = await tracker(
+      ok("Creating pull request into main\nhttps://github.com/acme/repo/pull/12\n"),
+    ).createPullRequest({
+      head: "agent/2-skeleton",
+      title: "Skeleton (#2)",
+      body: "Closes #2",
+      draft: false,
+    });
+
+    expect(pr).toEqual({ number: 12, url: "https://github.com/acme/repo/pull/12" });
+  });
+
   it("opens a draft PR when the Ticket is being handed off", async () => {
     await tracker(ok("https://github.com/acme/repo/pull/12\n")).createPullRequest({
       head: "agent/2-skeleton",
