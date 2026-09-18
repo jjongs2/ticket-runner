@@ -26,6 +26,14 @@ export interface ExecOptions {
 }
 
 /**
+ * How long a child's pipes are read after the child itself is gone. A
+ * descendant that inherited them can hold them open for as long as it likes,
+ * so what the child printed has to be collected on a clock rather than waited
+ * for. Long enough that a pipe's worth of buffered output always arrives.
+ */
+const DRAIN_MS = 100;
+
+/**
  * How a child process is run. Adapters take one so tests can hand them
  * recorded output instead of spawning anything.
  */
@@ -54,15 +62,51 @@ export function exec(
     let stdout = "";
     let stderr = "";
     let output = "";
-    let timedOut = false;
+    let killed = false;
+    let settled = false;
+    let limit: NodeJS.Timeout | undefined;
+    let drain: NodeJS.Timeout | undefined;
 
-    const timer =
-      options.timeoutMs === undefined
-        ? undefined
-        : setTimeout(() => {
-            timedOut = true;
-            child.kill("SIGKILL");
-          }, options.timeoutMs);
+    /** The child itself is gone. Only a descendant can still hold its pipes. */
+    const hasExited = () =>
+      child.exitCode !== null || child.signalCode !== null;
+
+    /** Let go of the clocks, and of read ends nobody may ever close. */
+    const stopWaiting = () => {
+      settled = true;
+      clearTimeout(limit);
+      clearTimeout(drain);
+      child.stdout.destroy();
+      child.stderr.destroy();
+    };
+
+    const finish = () => {
+      if (settled) return;
+      stopWaiting();
+      resolve({
+        exitCode: killed ? 124 : (child.exitCode ?? 1),
+        stdout,
+        stderr,
+        output,
+      });
+    };
+
+    /** Keep reading for a moment, then stop waiting on the pipes for good. */
+    const drainThenFinish = () => {
+      drain ??= setTimeout(finish, DRAIN_MS);
+    };
+
+    if (options.timeoutMs !== undefined) {
+      limit = setTimeout(() => {
+        // A child that already exited is past killing: only its pipes are
+        // still open, and its own exit code is the honest one to report.
+        if (hasExited()) drainThenFinish();
+        else {
+          killed = true;
+          child.kill("SIGKILL");
+        }
+      }, options.timeoutMs);
+    }
 
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
@@ -78,18 +122,15 @@ export function exec(
     });
 
     child.on("error", (error) => {
-      if (timer) clearTimeout(timer);
+      if (settled) return;
+      stopWaiting();
       reject(error);
     });
-    child.on("close", (code) => {
-      if (timer) clearTimeout(timer);
-      resolve({
-        exitCode: timedOut ? 124 : (code ?? 1),
-        stdout,
-        stderr,
-        output,
-      });
+    child.on("exit", () => {
+      if (killed) drainThenFinish();
     });
+    // The usual ending: the child exited and its pipes are drained and closed.
+    child.on("close", finish);
   });
 }
 

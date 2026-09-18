@@ -88,3 +88,38 @@ describe("streaming the child's output", () => {
     expect(result.stdout).toBe("onetwo");
   });
 });
+
+describe("the wall-clock limit", () => {
+  /**
+   * Leaves a descendant holding the stdout pipe, the way a session that starts
+   * a background process does. The descendant outlives the test that spawns it.
+   */
+  const leaveDescendantHoldingStdout = `
+    const { spawn } = require("node:child_process");
+    const descendant = spawn("/bin/sh", ["-c", "sleep 5"], { stdio: "inherit" });
+    process.stdout.write("early");
+  `;
+
+  it("settles once the child is dead, with what it printed before the kill", async () => {
+    const script = `${leaveDescendantHoldingStdout} setTimeout(() => {}, 5_000);`;
+    const startedAt = Date.now();
+
+    const result = await exec("node", ["-e", script], { timeoutMs: 200 });
+
+    expect(Date.now() - startedAt).toBeLessThan(2_000);
+    expect(result.exitCode).toBe(124);
+    expect(result.stdout).toBe("early");
+    expect(result.output).toBe("early");
+  });
+
+  it("reports the child's own exit code when it beat the limit on its own", async () => {
+    const script = `${leaveDescendantHoldingStdout} descendant.unref(); process.exitCode = 3;`;
+    const startedAt = Date.now();
+
+    const result = await exec("node", ["-e", script], { timeoutMs: 1_000 });
+
+    expect(Date.now() - startedAt).toBeLessThan(3_000);
+    expect(result.exitCode).toBe(3);
+    expect(result.stdout).toBe("early");
+  });
+});
