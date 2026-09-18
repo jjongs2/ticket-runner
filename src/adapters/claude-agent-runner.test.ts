@@ -366,9 +366,25 @@ describe("reading the outcome", () => {
   });
 
   it("classifies a wall-clock kill as a timeout", async () => {
-    const result = await runner(execution({ exitCode: 124, stdout: "" })).run(request());
+    const result = await runner(
+      execution({ exitCode: 124, stdout: "", timedOut: true }),
+    ).run(request());
 
     expect(result).toMatchObject({ ok: false, failure: "timed-out" });
+  });
+
+  it("classifies a kill the child beat to its own exit code", async () => {
+    const result = await runner(
+      execution({ exitCode: 143, stdout: "", timedOut: true }),
+    ).run(request());
+
+    expect(result).toMatchObject({ ok: false, failure: "timed-out" });
+  });
+
+  it("does not mistake a session that exited 124 on its own for a Stage past its limit", async () => {
+    const result = await runner(execution({ exitCode: 124, stdout: "" })).run(request());
+
+    expect(result).toMatchObject({ ok: false, failure: "nonzero-exit" });
   });
 
   it("classifies the turn cap from the result event", async () => {

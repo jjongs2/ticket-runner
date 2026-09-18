@@ -226,8 +226,10 @@ function classify(
   // for why the last event is not where the rest of the answer is.
   const result = results.at(-1);
 
-  // 124 is what the wall-clock kill in `exec` reports.
-  if (execution.exitCode === 124) return "timed-out";
+  // `Execution.timedOut` is the flag `exec` sets when it was the one that
+  // killed the Stage. The exit code alone cannot say so: a session is free to
+  // exit with the very code a kill is reported as.
+  if (execution.timedOut === true) return "timed-out";
 
   if (result?.subtype === "error_max_turns") return "turn-capped";
 
