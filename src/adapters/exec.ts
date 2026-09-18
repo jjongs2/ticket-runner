@@ -9,8 +9,7 @@ export interface Execution {
   /**
    * Whether `timeoutMs` killed the child, which the exit code alone cannot
    * say: 124 is what the kill is reported as, and a command is free to exit
-   * 124 on its own. Asking the run is the only honest answer, so every caller
-   * that cares reads this flag rather than the code.
+   * 124 on its own. Asking the run is the only honest answer.
    */
   timedOut: boolean;
 }
