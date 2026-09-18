@@ -79,7 +79,7 @@ let tracker: FakeTracker;
 let runner: FakeAgentRunner;
 let workspace: FakeWorkspace;
 /**
- * A temporary repo root, because a released Ticket's State file is a real file
+ * A temporary repo root, because a claimed Ticket's State file is a real file
  * (ADR-0004). The three ports are still fakes; only the local state is not.
  */
 let repoRoot: string;

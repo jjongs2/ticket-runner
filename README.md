@@ -164,15 +164,15 @@ A Ticket left like that is a **stranded Ticket**: state recorded locally, and th
 still on the board. No Frontier can offer one — it is claimed — so before a `run` computes
 the Frontier at all it sweeps the local State files and resumes every stranded Ticket, in
 ascending number, in the worktree and on the branch it already has. The Claim stays exactly
-as it is: nothing is re-assigned, nothing is relabelled, and nobody is notified. `ticket
-<n>` naming a stranded Ticket resumes it too, where it would otherwise refuse it as
-claimed.
+as it is: nothing is re-assigned, nothing is relabelled, and nobody is notified.
+`ticket <n>` naming a stranded Ticket resumes it too, where it would otherwise refuse it
+as claimed.
 
 Nothing records a process id. One Run at a time holds the lock for a checkout and the State
 file is local to that checkout, so a Run that holds the lock and finds a Ticket still
 wearing this checkout's Claim knows the Run that claimed it is gone.
 
-The sweep is careful about the files it did not write:
+Not everything the sweep finds is stranded, and it resumes nothing else:
 
 - a Ticket whose Claim has come off is a released Ticket, and is left to the Frontier
 - a Ticket that has closed has nothing left to resume, so its State file is removed
