@@ -17,3 +17,7 @@ Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/
 ### Conventions
 
 Branch, commit, PR, issue and worktree conventions: `CONTRIBUTING.md`. Read it before committing, opening a PR, or creating an issue.
+
+## Pipeline conventions
+
+`agent-pipeline` runs unattended sessions in this repository. What it requires of a commit, a branch, a Stage and a Ticket: `docs/agents/pipeline-conventions.md`. Read it before committing, opening a pull request or creating an issue.

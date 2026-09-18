@@ -1,10 +1,12 @@
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type {
-  AgentRunner,
-  StageFailure,
-  StageRequest,
-  StageResult,
+import {
+  type AgentPreflight,
+  type AgentRunner,
+  SKILLS_PLUGIN,
+  type StageFailure,
+  type StageRequest,
+  type StageResult,
 } from "../ports/agent-runner.js";
 import { STAGE_ENV_VAR } from "../stage-guard.js";
 import { type Execution, type RunProcess, exec } from "./exec.js";
@@ -13,6 +15,13 @@ export interface ClaudeAgentRunnerOptions {
   binary?: string;
   run?: RunProcess;
 }
+
+/**
+ * How long one preflight question may take. Generous for a CLI printing its
+ * own version, and short enough that `init` cannot hang on a binary that never
+ * answers.
+ */
+const PREFLIGHT_TIMEOUT_MS = 60_000;
 
 /** The final `result` event of a stream-json run, as far as we rely on it. */
 interface ResultEvent {
@@ -37,6 +46,32 @@ export class ClaudeAgentRunner implements AgentRunner {
   constructor(options: ClaudeAgentRunnerOptions = {}) {
     this.binary = options.binary ?? "claude";
     this.runProcess = options.run ?? exec;
+  }
+
+  /**
+   * What `claude` says about itself: that it can be run at all, and that the
+   * plugin the Stages drive is installed.
+   *
+   * Every failure is an answer rather than an error — no binary, a CLI too old
+   * to list its plugins, a non-zero exit — because the whole point of asking is
+   * to put a line in the `init` report for the human who has to fix it.
+   */
+  async preflight(): Promise<AgentPreflight> {
+    const version = await this.ask(["--version"]);
+    if (version?.exitCode !== 0) return { runs: false, plugin: false };
+
+    const plugins = await this.ask(["plugin", "list"]);
+    const listed = plugins?.exitCode === 0 && plugins.stdout.includes(SKILLS_PLUGIN);
+    return { runs: true, plugin: listed };
+  }
+
+  /** One preflight question, or nothing when `claude` could not be started. */
+  private async ask(args: string[]): Promise<Execution | undefined> {
+    try {
+      return await this.runProcess(this.binary, args, { timeoutMs: PREFLIGHT_TIMEOUT_MS });
+    } catch {
+      return undefined;
+    }
   }
 
   private async spawn(

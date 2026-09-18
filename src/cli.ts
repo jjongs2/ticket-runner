@@ -5,6 +5,7 @@ import { GitWorkspace } from "./adapters/git-workspace.js";
 import { findRepoRoot } from "./adapters/repo-root.js";
 import { resolveBaseBranch } from "./base-branch.js";
 import { type Config, ConfigError, loadConfig } from "./config.js";
+import { initTarget } from "./init.js";
 import { ensureLabels } from "./labels.js";
 import { acquireLock, lockHeldMessage } from "./lock.js";
 import type { Pipeline, TicketOutcome } from "./orchestrator.js";
@@ -18,6 +19,7 @@ import { runSummary } from "./templates.js";
 const USAGE = `agent-pipeline — humans plan, the pipeline executes.
 
 Usage:
+  agent-pipeline init          Set this Target up, and report what only you can.
   agent-pipeline run           Drain the Frontier, one Ticket at a time.
   agent-pipeline ticket <n>    Take one Ticket from claimed to merged.
 
@@ -27,7 +29,8 @@ Options:
 /**
  * Exit codes: 0 nothing handed off, 1 at least one hand-off, 2 nothing was
  * taken at all — the Run never started, or `ticket <n>` named an issue a guard
- * refused.
+ * refused. `init` reads them as its own: 0 every reported item passed, 1 one of
+ * them is the human's to put right, 2 a Stage's shell was refused.
  */
 async function main(argv: string[]): Promise<number> {
   // First, before the repo, the config, `gh` or even `--help`: a Stage's shell
@@ -50,9 +53,21 @@ async function main(argv: string[]): Promise<number> {
   }
 
   const [command, ...rest] = positionals;
-  if (command !== "ticket" && command !== "run") {
+  if (command !== "ticket" && command !== "run" && command !== "init") {
     console.error(`Unknown command \`${command}\`.\n\n${USAGE}`);
     return 2;
+  }
+
+  if (command === "init") {
+    const root = await findRepoRoot();
+    // No Run lock, because no Ticket is claimed, and no startup refusal: the
+    // missing Checks it would refuse over are one of the things `init` reports.
+    return initTarget({
+      repoRoot: root,
+      config: loadConfig(root),
+      tracker: new GhTracker({ cwd: root }),
+      runner: new ClaudeAgentRunner(),
+    });
   }
 
   let work: Work = { command: "run" };

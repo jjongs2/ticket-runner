@@ -1,0 +1,39 @@
+agent-pipeline init · <repo root>
+
+Wrote:
+  .gitignore: added `.worktrees/` and `.agent-pipeline/`
+  agent-pipeline.json: created, with every setting left at its default
+  docs/agents/pipeline-conventions.md: written
+  CLAUDE.md: created, pointing at docs/agents/pipeline-conventions.md
+
+GitHub:
+  labels: created needs-triage, needs-info, ready-for-agent
+  merges: squash merging is on, and no other merge setting was touched
+
+Checked:
+  ✓ `gh` is authenticated
+  ✓ `claude` runs
+  ✗ the `mattpocock-skills` plugin is not installed — an implement Stage has no skill without it
+  ✓ a CI workflow is present in `.github/workflows`
+  ✓ a Check is configured or inferable: npm test, npm run typecheck
+
+Not ready: 1 item is yours to put right.
+
+Three groups, always in this order and always all three, however little each has
+to say.
+
+`Wrote:` has one line per file that changed, and `  nothing to write` when the
+Target already had everything — which is what a second `init` prints. The
+conventions document is the one file rewritten rather than left alone, and says
+so: `overwritten, because the copy here said something else`.
+
+`GitHub:` says which labels were created, or that every one of them was already
+there, and that squash merging is on. Where GitHub could not be asked at all,
+its one line is: nothing done: `gh` is not authenticated.
+
+`Checked:` is one line per item only the human can put right, each marked `✓` or
+`✗`, in a fixed order: `gh`, `claude`, the plugin, a CI workflow, a Check.
+
+The last line is the exit code in words: `Ready: everything a Run expects of
+this Target is in place.` for 0, and `Not ready: <n> items are yours to put
+right.` for 1.
