@@ -321,7 +321,7 @@ export class FakeWorkspace implements Workspace {
 
   /** Fail `command` every time the pipeline runs it. */
   failCheck(command: string, output: string): this {
-    this.checkOutcomes.set(command, { ok: false, output });
+    this.checkOutcomes.set(command, { ok: false, output, timedOut: false });
     return this;
   }
 
@@ -333,7 +333,7 @@ export class FakeWorkspace implements Workspace {
 
   /** Fail `command` on its next run only: a Check a fix Stage then mends. */
   failCheckOnce(command: string, output: string): this {
-    return this.queueCheck(command, { ok: false, output });
+    return this.queueCheck(command, { ok: false, output, timedOut: false });
   }
 
   /** Time `command` out every time the pipeline runs it. */

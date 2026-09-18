@@ -749,18 +749,15 @@ async function runChecks(
       // A Check that hung and one that failed are the same failure to the fix
       // budget and the hand-off; they are told apart only in what they say, so
       // that a fix Stage knows whether it is mending a hang or an assertion.
-      const timedOut = result.timedOut === true;
       await progress.record({
         point: "checks",
-        outcome: `❌ \`${command}\` ${timedOut ? "timed out" : "failed"}`,
+        outcome: `❌ \`${command}\` ${result.timedOut ? "timed out" : "failed"}`,
         durationMs: Date.now() - startedAt,
       });
       throw new TicketFailure(
         "checks",
-        timedOut
-          ? `Check \`${command}\` timed out after ${minutes} ${plural(minutes, "minute")}`
-          : `Check \`${command}\` failed`,
-        timedOut ? timedOutEvidence(command, result.output, minutes) : result.output,
+        `Check \`${command}\` ${result.timedOut ? "timed out" : "failed"}`,
+        result.timedOut ? killedEvidence(command, result.output, minutes) : result.output,
         "failed-check",
       );
     }
@@ -777,15 +774,11 @@ async function runChecks(
  * what ended it. A fix Stage is given the evidence and little else, so the
  * output alone would read as a suite that simply stopped mid-run.
  */
-function timedOutEvidence(command: string, output: string, minutes: number): string {
-  const trailer = `\`${command}\` was killed after ${minutes} ${plural(minutes, "minute")} at the Check wall-clock limit: it hung rather than failing, and everything above is what it had printed by then.`;
+function killedEvidence(command: string, output: string, minutes: number): string {
+  const unit = minutes === 1 ? "minute" : "minutes";
+  const trailer = `\`${command}\` was killed after ${minutes} ${unit} at the Check wall-clock limit: it hung rather than failing, and everything above is what it had printed by then.`;
   const printed = output.trimEnd();
   return printed === "" ? trailer : `${printed}\n\n${trailer}`;
-}
-
-/** `1 minute`, `15 minutes`: the limit is a number a human reads in a sentence. */
-function plural(count: number, noun: string): string {
-  return count === 1 ? noun : `${noun}s`;
 }
 
 async function verify(

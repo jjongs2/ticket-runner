@@ -49,8 +49,8 @@ Ticket for a later Run to resume.
 | merge | `✅ #<pr>` |
 
 A `checks` row tells a command that exited non-zero from one the wall-clock
-limit killed, because the two are mended differently: a hang is not a failing
-assertion. Both are the same failure to the fix budget and the hand-off.
+limit killed: both are the same failure to the fix budget, but a hang is not a
+failing assertion, and a fix Stage is told which it is mending.
 
 `<why the Stage did not finish>` is the short form of a Stage failure: `timed
 out`, `turn capped`, `exited non-zero`, `invalid result`, or `failed` when the

@@ -5,17 +5,15 @@
  * never touched and a failed Ticket leaves something to inspect.
  */
 
-export interface CheckOutcome {
-  ok: boolean;
+/**
+ * How one Check command ended. A failed Check says whether the wall-clock limit
+ * killed it, because that is the difference between a Check that hung and one
+ * that failed, and a fix Stage is told which it is mending.
+ */
+export type CheckOutcome =
   /** stdout and stderr combined, as a human would see them in a terminal. */
-  output: string;
-  /**
-   * Set when the wall-clock limit killed the command rather than the command
-   * exiting on its own. Both are a failed Check; only this one is a Check that
-   * hung, and a fix Stage is told which it is mending.
-   */
-  timedOut?: boolean;
-}
+  | { ok: true; output: string }
+  | { ok: false; output: string; timedOut: boolean };
 
 export type RebaseOutcome = { ok: true } | { ok: false; conflict: string };
 

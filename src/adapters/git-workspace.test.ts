@@ -248,8 +248,7 @@ describe("runCheck", () => {
   it("reports a failing command and captures stderr", async () => {
     const result = await workspace.runCheck("echo boom >&2; exit 3", repo, LIMIT_MS);
 
-    expect(result.ok).toBe(false);
-    expect(result.timedOut).toBeFalsy();
+    expect(result).toMatchObject({ ok: false, timedOut: false });
     expect(result.output).toContain("boom");
   });
 
@@ -267,12 +266,11 @@ describe("runCheck", () => {
 
     const result = await workspace.runCheck("echo starting; sleep 30", repo, 300);
 
-    expect(result.ok).toBe(false);
-    expect(result.timedOut).toBe(true);
+    expect(result).toMatchObject({ ok: false, timedOut: true });
     expect(result.output).toContain("starting");
     // The point of the limit: the call settles on its own clock rather than on
     // the command's, which here would have been a hundred times longer.
-    expect(Date.now() - startedAt).toBeLessThan(5_000);
+    expect(Date.now() - startedAt).toBeLessThan(2_000);
   });
 });
 
