@@ -75,7 +75,7 @@ The Stage that resolves a rebase conflict, driving the resolving-merge-conflicts
 _Avoid_: merge Stage, conflict resolution
 
 **Acceptance Criteria**:
-The checkbox list in a Ticket's body or comments (triage posts its brief as a comment). The only thing Verify grades.
+The checkbox list in a Ticket's body or comments (triage posts its brief as a comment). One criterion is an unticked task list item at the head of a line — indent, a `-`, `*` or `+` bullet, then `[ ]` — and nothing else is one, however much it reads like a promise. The only thing Verify grades.
 _Avoid_: requirements, definition of done
 
 **Verdict**:
