@@ -125,7 +125,7 @@ async function execute(work: Work, { repoRoot, config, runId }: Setup): Promise<
 
   const startedAt = Date.now();
   console.log(
-    `agent-pipeline run ${runId}${work.command === "run" ? "" : ` · #${work.ticket}`} · ${baseBranch}`,
+    `agent-pipeline run ${runId}${work.command === "run" ? "" : ` · #${work.ticket}`}`,
   );
   const summary = (outcomes: TicketOutcome[], stop?: RunStop) =>
     runSummary({

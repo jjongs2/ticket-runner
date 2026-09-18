@@ -325,6 +325,12 @@ export class FakeWorkspace implements Workspace {
   branchedFrom: string[] = [];
   /** The branch each rebase replayed onto, in order. */
   rebasedOnto: string[] = [];
+  /**
+   * Every base branch the pipeline handed any operation, in order — the reads
+   * that only compute a range included, so a test can say the whole Ticket was
+   * worked against one branch and nothing quietly kept its own `main`.
+   */
+  basesGiven: string[] = [];
   /** What the worktree looks like once the conflict Stage has had its turn. */
   rebaseStateAfterStage: RebaseState = { resolved: true };
   aborts = 0;
@@ -370,6 +376,7 @@ export class FakeWorkspace implements Workspace {
   async createWorktree({ path, branch }: WorktreeRef, base: string): Promise<void> {
     this.calls.push(`createWorktree:${branch}`);
     this.branchedFrom.push(base);
+    this.basesGiven.push(base);
     this.worktrees.set(path, branch);
     this.branches.add(branch);
   }
@@ -390,13 +397,15 @@ export class FakeWorkspace implements Workspace {
     this.branches.delete(branch);
   }
 
-  async commitSubjects(branch: string, _base: string): Promise<string[]> {
+  async commitSubjects(branch: string, base: string): Promise<string[]> {
     this.calls.push(`commitSubjects:${branch}`);
+    this.basesGiven.push(base);
     return [...this.commits];
   }
 
-  async coAuthors(branch: string, _base: string): Promise<string[]> {
+  async coAuthors(branch: string, base: string): Promise<string[]> {
     this.calls.push(`coAuthors:${branch}`);
+    this.basesGiven.push(base);
     return [...this.coAuthorList];
   }
 
@@ -416,11 +425,13 @@ export class FakeWorkspace implements Workspace {
   async rebase(_cwd: string, base: string): Promise<RebaseOutcome> {
     this.calls.push("rebase");
     this.rebasedOnto.push(base);
+    this.basesGiven.push(base);
     return this.rebaseQueue.shift() ?? this.rebaseOutcome;
   }
 
-  async rebaseState(): Promise<RebaseState> {
+  async rebaseState(_cwd: string, base: string): Promise<RebaseState> {
     this.calls.push("rebaseState");
+    this.basesGiven.push(base);
     return this.rebaseStateAfterStage;
   }
 
@@ -447,5 +458,6 @@ export class FakeWorkspace implements Workspace {
   async pullBase(base: string): Promise<void> {
     this.calls.push("pullBase");
     this.pulledBase.push(base);
+    this.basesGiven.push(base);
   }
 }

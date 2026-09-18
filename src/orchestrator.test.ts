@@ -239,6 +239,17 @@ describe("the Target's base branch", () => {
     expect(workspace.pulledBase).toEqual(["master"]);
   });
 
+  it("hands every operation that names a branch the one branch it resolved", async () => {
+    tracker.defaultBranchName = "master";
+    workspace.conflictOnce(CONFLICT);
+
+    await run();
+
+    // The reads that only compute a range included: the commits the pull
+    // request title and the squash body are taken from are `master..branch`.
+    expect([...new Set(workspace.basesGiven)]).toEqual(["master"]);
+  });
+
   it("lets the config file's baseBranch win over the Target's default", async () => {
     tracker.defaultBranchName = "master";
 

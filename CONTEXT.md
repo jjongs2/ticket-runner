@@ -42,6 +42,10 @@ _Avoid_: lock, checkout
 The repository a Run claims Tickets from and merges into, the one whose working directory the command was started in. The pipeline's own repository is a Target only when the command ran there.
 _Avoid_: project, host repo, workspace, target repo, cwd
 
+**Base branch**:
+The branch of the Target a Run works against: what it branches a Ticket from, rebases it onto, targets its pull request at, and pulls the main checkout to once it merges. The Target's default branch on GitHub unless the config file names another, and resolved once at the start of a Run.
+_Avoid_: default branch, trunk, main, integration branch
+
 **Run**:
 One invocation of the pipeline command. Drains the Frontier one Ticket at a time. Ends when the Frontier is empty, when every Ticket left on it is blocked, or at the first Ticket it releases.
 _Avoid_: session, batch, loop

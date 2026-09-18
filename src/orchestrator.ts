@@ -258,10 +258,10 @@ export async function processTicket(
     // succeeded on them are not paid for twice.
     if (resume === undefined) {
       // The branch is asked about before it is branched: `createWorktree`
-      // branches fresh from the base branch and fails on a name that is taken, and a
-      // branch nobody can account for is not reused (ADR-0004). Refusing here
-      // is what turns git's `fatal: a branch named ... already exists` into a
-      // hand-off that says whose branch it is and what to do with it.
+      // branches fresh from the base branch and fails on a name that is taken,
+      // and a branch nobody can account for is not reused (ADR-0004). Refusing
+      // here is what turns git's `fatal: a branch named ... already exists`
+      // into a hand-off that says whose branch it is and what to do with it.
       if (await workspace.hasBranch(branch)) {
         // Where the branch is decides what the human is asked to do about it:
         // a hand-off keeps the worktree and the branch while clearing the State
@@ -706,6 +706,15 @@ async function collectNotes(
   );
 }
 
+/**
+ * How many commits the branch carries that the base branch does not, which is
+ * how both code Stages are asked whether they committed anything.
+ */
+async function commitCount(pipeline: Pipeline, branch: string): Promise<number> {
+  const subjects = await pipeline.workspace.commitSubjects(branch, pipeline.baseBranch);
+  return subjects.length;
+}
+
 async function implement(
   pipeline: Pipeline,
   issue: Issue,
@@ -733,7 +742,7 @@ async function implement(
   // it carries what the Stage the rate limit stopped had committed — so this
   // asks the same question there: is there anything at all to grade. Whether it
   // is enough is the Verdict's business, not this guard's.
-  if ((await pipeline.workspace.commitSubjects(branch, pipeline.baseBranch)).length === 0) {
+  if ((await commitCount(pipeline, branch)) === 0) {
     await progress.record(stageRow("implement", result, "❌ no commits"));
     throw new TicketFailure(
       "implement",
@@ -874,9 +883,7 @@ async function fix(
   // Read before the Stage runs, because the implement Stage's work is already
   // on the branch: what this asks afterwards is whether the branch grew, not
   // whether it has anything on it at all.
-  const commitsBefore = (
-    await pipeline.workspace.commitSubjects(branch, pipeline.baseBranch)
-  ).length;
+  const commitsBefore = await commitCount(pipeline, branch);
 
   const result = await runStage(pipeline, "fix", {
     prompt: fixPrompt(issue.url, failure, pipeline.baseBranch, stage.extraPrompt),
@@ -897,10 +904,7 @@ async function fix(
   // A branch that grew is the whole signal, which is not the same as one that
   // changed: a session that squashed the branch shorter, or amended in place,
   // is read here as having committed nothing.
-  const commitsAfter = (
-    await pipeline.workspace.commitSubjects(branch, pipeline.baseBranch)
-  ).length;
-  if (commitsAfter <= commitsBefore) {
+  if ((await commitCount(pipeline, branch)) <= commitsBefore) {
     await progress.record(stageRow("fix", result, "❌ no commits"));
     throw new TicketFailure("fix", "the fix Stage left no new commits on the branch");
   }
@@ -912,9 +916,9 @@ async function fix(
  * Send one session into the stopped rebase to resolve it.
  *
  * It is not what the fix budget buys and it does not spend it: a conflict is
- * the base branch moving on underneath a branch, not a defect in the branch, and a Ticket
- * that hits one has done nothing wrong yet. The budget covers what is left if
- * this fails.
+ * the base branch moving on underneath a branch, not a defect in the branch,
+ * and a Ticket that hits one has done nothing wrong yet. The budget covers what
+ * is left if this fails.
  *
  * The tree decides whether it worked, not the session's exit status. A Stage
  * that finished the rebase and then ran out of turns has done the job; one that
@@ -1251,8 +1255,8 @@ const TICKET_REFERENCE = /\s*\(#\d+\)$/;
  * The implement Stage is told its first commit must summarise the whole Ticket
  * in the commit convention, so that subject is the one line written about the
  * branch as a whole. A subject that ignored the convention is not worth putting
- * on the base branch, and neither is a Ticket the Stage left no commits on: the Ticket
- * title says at least as much.
+ * on the base branch, and neither is a Ticket the Stage left no commits on: the
+ * Ticket title says at least as much.
  */
 function pullRequestTitle(commits: string[], ticketTitle: string): string {
   const first = (commits[0] ?? "").replace(TICKET_REFERENCE, "");

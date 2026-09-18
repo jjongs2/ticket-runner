@@ -6,10 +6,10 @@ Humans plan, the pipeline executes.
 in: it claims a Ticket, runs the implement Stage as a headless `claude -p` session driving
 `/mattpocock-skills:implement`, runs the Checks itself, has a fresh session adversarially
 grade the Acceptance Criteria, opens a PR, waits for CI and squash-merges. One failure
-along the way buys a fix Stage and a second pass. Anything it still cannot finish is handed
-to a human with a draft PR, a comment and the worktree left in place. A Stage the subscription rate limit stops is
-nobody's fault, so the Ticket is released instead, the Run ends there, and a later Run
-resumes it.
+along the way buys a fix Stage and a second pass. Anything it still cannot finish is
+handed to a human with a draft PR, a comment and the worktree left in place. A Stage the
+subscription rate limit stops is nobody's fault, so the Ticket is released instead, the
+Run ends there, and a later Run resumes it.
 
 Vocabulary is defined in [`CONTEXT.md`](CONTEXT.md), decisions in [`docs/adr/`](docs/adr/),
 conventions in [`CONTRIBUTING.md`](CONTRIBUTING.md).
@@ -266,8 +266,8 @@ because a session that ran out of turns still noticed whatever it noticed.
 ## Rebase conflicts
 
 A branch that will not replay onto the base branch is not a defect in the branch: the base
-branch moved on while the Ticket was being implemented. So the rebase is left where git stopped it and one
-**conflict Stage** runs in the worktree, driving
+branch moved on while the Ticket was being implemented. So the rebase is left where git
+stopped it and one **conflict Stage** runs in the worktree, driving
 `/mattpocock-skills:resolving-merge-conflicts` with the Ticket and git's own output. It has
 its own turn and wall-clock limits, and it does not spend the fix budget.
 
