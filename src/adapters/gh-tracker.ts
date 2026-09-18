@@ -300,10 +300,10 @@ export class GhTracker implements Tracker {
 
       const reading = readCi(result);
       const stillRegistering = reading !== "pending" && reading.state === "none" && this.now() < graceUntil;
-      if (reading !== "pending" && !stillRegistering) return this.settle(reading);
+      if (reading !== "pending" && !stillRegistering) return this.withEvidence(reading);
       // Checks that never appeared are "none", not a timeout: nothing was ever pending.
       if (this.now() >= deadline) {
-        return reading === "pending" ? { state: "timed-out" } : this.settle(reading);
+        return reading === "pending" ? { state: "timed-out" } : this.withEvidence(reading);
       }
       await this.sleep(this.pollIntervalMs);
     }
@@ -315,7 +315,7 @@ export class GhTracker implements Tracker {
    * The one place a job log is fetched, so it happens once per wait and never
    * while a check is still pending.
    */
-  private async settle(reading: CiReading): Promise<CiOutcome> {
+  private async withEvidence(reading: CiReading): Promise<CiOutcome> {
     if (reading.state !== "failed") return reading;
     return {
       state: "failed",
@@ -331,21 +331,27 @@ export class GhTracker implements Tracker {
    * really is red has a failure to report whether or not a log came back, so
    * every way this can go wrong — a check that is not an Actions job, a `gh`
    * that fails or is not there, an empty log — yields no excerpt rather than
-   * an error. Only the first {@link MAX_LOG_JOBS} jobs are asked for, which is
-   * what keeps a whole matrix of red checks out of a prompt.
+   * an error.
+   *
+   * The cap counts the jobs a log could be fetched for, not the red checks: a
+   * PR whose external checks went red alongside one Actions job still gets the
+   * one log there is. What it keeps out of a prompt is a whole matrix failing
+   * a leg at a time, each leg with the same log.
    */
   private async failedJobLogs(failed: CiCheck[]): Promise<string> {
+    const jobs = failed
+      .map((check) => ({ name: check.name, job: actionsJobId(check.link) }))
+      .filter((check): check is { name: string; job: string } => check.job !== undefined);
+
     const logs: string[] = [];
-    for (const check of failed.slice(0, MAX_LOG_JOBS)) {
-      const job = actionsJobId(check.link);
-      if (job === undefined) continue;
+    for (const { name, job } of jobs.slice(0, MAX_LOG_JOBS)) {
       try {
         const result = await this.gh(["run", "view", "--job", job, "--log-failed"], {
           allowFailure: true,
         });
         if (result.exitCode !== 0) continue;
         const log = result.stdout.trim();
-        if (log !== "") logs.push(`${check.name}\n${tail(log)}`);
+        if (log !== "") logs.push(`${name}\n${tail(log)}`);
       } catch {
         // `gh` itself could not be run. The failure still stands; the log does not.
       }
@@ -386,6 +392,24 @@ const COMMENT_ID = /#issuecomment-(\d+)\s*$/;
 
 /** The URL `gh issue create` and `gh pr create` print, and the number it ends in. */
 const ISSUE_OR_PR_URL = /^https?:\/\/[^\s/]+\/[^\s/]+\/[^\s/]+\/(?:issues|pull)\/(\d+)$/;
+
+/** The Actions job a check's link points at: `.../actions/runs/<run>/job/<job>`. */
+const ACTIONS_JOB_URL = /\/actions\/runs\/\d+\/job\/(\d+)(?:[?#]|$)/;
+
+/**
+ * How many failing Actions jobs a single wait fetches a log for.
+ *
+ * A matrix build fails a leg at a time with the same log each time, and the
+ * prompt and the hand-off comment both have to stay readable, so the excerpt
+ * is bounded by this times {@link MAX_LOG_LINES} rather than by the build.
+ */
+const MAX_LOG_JOBS = 3;
+
+/** Lines kept from the tail of one job's log. */
+const MAX_LOG_LINES = 40;
+
+/** Characters kept from the tail of one job's log, for lines long enough to need it. */
+const MAX_LOG_CHARS = 4_000;
 
 /** The one line of `gh` output that carries the handle it gives back. */
 function lastLine(stdout: string): string {
@@ -507,25 +531,6 @@ function readCi(result: Execution): CiReading | "pending" {
   return { state: "passed" };
 }
 
-
-/**
- * How many failing checks a single wait fetches a log for.
- *
- * A red matrix job fails once per leg with the same log each time, and the
- * prompt and the hand-off comment both have to stay readable, so the excerpt
- * is bounded by this times {@link MAX_LOG_LINES} rather than by the build.
- */
-const MAX_LOG_JOBS = 3;
-
-/** Lines kept from the tail of one job's log. */
-const MAX_LOG_LINES = 40;
-
-/** Characters kept from the tail of one job's log, for lines long enough to need it. */
-const MAX_LOG_CHARS = 4_000;
-
-/** The Actions job a check's link points at: `.../actions/runs/<run>/job/<job>`. */
-const ACTIONS_JOB_URL = /\/actions\/runs\/\d+\/job\/(\d+)(?:[?#]|$)/;
-
 /**
  * The Actions job id behind a check's link, or nothing when the check does not
  * report from one. An external app's check has a link of its own shape and no
@@ -549,8 +554,12 @@ function tail(log: string): string {
 
   const text = kept.join("\n");
   const omitted = lines.length - kept.length;
-  // One line longer than the whole cap is still worth its own tail, and the
-  // count of dropped lines would say nothing about what was cut out of it.
-  if (text.length > MAX_LOG_CHARS) return `… (earlier output omitted)\n${text.slice(-MAX_LOG_CHARS)}`;
+
+  // A single line longer than the whole cap keeps its own tail: the error is at
+  // the end of it. Its own start is cut too, which the count alone would not say.
+  if (text.length > MAX_LOG_CHARS) {
+    const earlier = omitted > 0 ? `${omitted} earlier lines and the start of this one` : "the start of this line";
+    return `… (${earlier} omitted)\n${text.slice(-MAX_LOG_CHARS)}`;
+  }
   return omitted > 0 ? `… (${omitted} earlier lines omitted)\n${text}` : text;
 }

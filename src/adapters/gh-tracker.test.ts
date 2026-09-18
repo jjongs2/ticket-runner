@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { GhTracker } from "./gh-tracker.js";
-import type { ExecOptions, Execution } from "./exec.js";
+import type { ExecOptions, Execution, RunProcess } from "./exec.js";
 
 let calls: string[][];
 let responses: Execution[];
@@ -15,7 +15,7 @@ function tracker(...queued: Execution[]) {
 
 /** A tracker whose clock is whatever the test hands it; grace is off unless asked for. */
 function trackerWith(
-  options: { now?: () => number; checksGraceMs?: number },
+  options: { now?: () => number; checksGraceMs?: number; run?: RunProcess },
   ...queued: Execution[]
 ) {
   responses = [...queued];
@@ -585,24 +585,58 @@ describe("waiting for CI", () => {
   });
 
   it("still reports the failure when fetching the log throws", async () => {
-    responses = [ok(checks("fail"), { exitCode: 1 })];
-    const failing = new GhTracker({
-      run: async (_command: string, args: string[]) => {
-        calls.push(args);
-        const next = responses.shift();
-        if (next === undefined) throw new Error("gh: not found");
-        return next;
+    const failing = trackerWith(
+      {
+        run: async (_command: string, args: string[]) => {
+          calls.push(args);
+          const next = responses.shift();
+          if (next === undefined) throw new Error("gh: not found");
+          return next;
+        },
       },
-      sleep: async () => {},
-      pollIntervalMs: 0,
-      checksGraceMs: 0,
-    });
+      ok(checks("fail"), { exitCode: 1 }),
+    );
 
     expect(await failing.waitForCi(12, 60_000)).toEqual({
       state: "failed",
       summary: "check-0 failed",
       excerpt: "",
     });
+  });
+
+  it("fetches the Actions job's log past checks that have none", async () => {
+    const outcome = await tracker(
+      ok(
+        JSON.stringify([
+          { name: "vercel", bucket: "fail", state: "fail", link: "https://vercel.com/x/y" },
+          { name: "codecov", bucket: "fail", state: "fail", link: "https://codecov.io/x/y" },
+          { name: "netlify", bucket: "fail", state: "fail", link: "https://netlify.com/x/y" },
+          {
+            name: "build",
+            bucket: "fail",
+            state: "fail",
+            link: "https://github.com/acme/repo/actions/runs/99/job/7",
+          },
+        ]),
+        { exitCode: 1 },
+      ),
+      ok("boom"),
+    ).waitForCi(12, 60_000);
+
+    expect((outcome as { excerpt: string }).excerpt).toBe("build\nboom");
+    expect(calls[1]).toEqual(["run", "view", "--job", "7", "--log-failed"]);
+  });
+
+  it("keeps the tail of one line too long to carry whole", async () => {
+    const outcome = await tracker(
+      ok(checks("fail"), { exitCode: 1 }),
+      ok(`${"x".repeat(5_000)}assertion failed`),
+    ).waitForCi(12, 60_000);
+
+    const excerpt = (outcome as { excerpt: string }).excerpt;
+    expect(excerpt).toContain("(the start of this line omitted)");
+    expect(excerpt).toMatch(/assertion failed$/);
+    expect(excerpt.length).toBeLessThan(4_100);
   });
 
   it("reports a cancelled check as a failure, with whatever log it has", async () => {
