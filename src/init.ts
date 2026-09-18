@@ -9,6 +9,7 @@ import {
   SKILLS_PLUGIN,
 } from "./ports/agent-runner.js";
 import type { Tracker } from "./ports/tracker.js";
+import { CLAUDE_FILENAME, IGNORED, ignorePattern } from "./readiness.js";
 import { nestedRunRefusal } from "./stage-guard.js";
 
 /**
@@ -35,17 +36,8 @@ import { nestedRunRefusal } from "./stage-guard.js";
  * is how the local state under `.agent-pipeline/` is already tested (ADR-0004).
  */
 
-/** The file every agent session in a Target reads first. */
-const CLAUDE_FILENAME = "CLAUDE.md";
-
 /** Where GitHub Actions keeps a Target's workflows. */
 const WORKFLOWS_DIR = join(".github", "workflows");
-
-/** The pipeline's own directories, with the comment each is ignored under. */
-const IGNORED = [
-  { comment: "# Pipeline worktrees, one per Ticket.", line: ".worktrees/" },
-  { comment: "# Run logs, transcripts and state.", line: ".agent-pipeline/" },
-] as const;
 
 const PASS = "✓";
 const FAIL = "✗";
@@ -151,15 +143,6 @@ function ensureGitignore(repoRoot: string): string | undefined {
   const additions = missing.map((entry) => `${entry.comment}\n${entry.line}\n`).join("\n");
   writeFileSync(path, `${existing}${separator(existing)}${additions}`);
   return `.gitignore: added ${missing.map((entry) => `\`${entry.line}\``).join(" and ")}`;
-}
-
-/**
- * What a gitignore line means, whatever it was punctuated as: `.worktrees`,
- * `.worktrees/` and `/.worktrees/` all keep the same directory out of a commit,
- * and a Target that already says one of them is not missing the others.
- */
-function ignorePattern(line: string): string {
-  return line.trim().replace(/^\//, "").replace(/\/$/, "");
 }
 
 /**

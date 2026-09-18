@@ -15,8 +15,11 @@ const LABEL_SPECS: Record<keyof Labels, Omit<LabelSpec, "name">> = {
 };
 
 /**
- * Create whatever the triage state machine needs and the repo does not have
- * yet, so a fresh repo works without manual label setup.
+ * Create whatever the triage state machine needs and the Target does not have
+ * yet, so a fresh Target works without manual label setup.
+ *
+ * `agent-pipeline init` is the only caller: a Run that finds a label missing
+ * refuses the Target rather than creating it, so setup lives in one command.
  *
  * Returns the names it created; labels that already exist are left untouched,
  * colour and description included.

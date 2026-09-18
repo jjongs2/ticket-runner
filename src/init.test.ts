@@ -109,6 +109,9 @@ describe("what init writes into the Target", () => {
     await init();
 
     expect(tracker.createdLabels.map((label) => label.name)).toEqual(ALL_LABELS);
+    // Each carries the colour and the meaning a human reads off the board.
+    expect(tracker.createdLabels.every((label) => /^[0-9a-f]{6}$/.test(label.color))).toBe(true);
+    expect(tracker.createdLabels.every((label) => label.description !== "")).toBe(true);
     expect(tracker.squashMergeEnabled).toBe(true);
   });
 

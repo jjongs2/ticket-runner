@@ -16,17 +16,82 @@ conventions in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Requirements
 
+What a Target needs before the pipeline can work in it:
+
 - Node 22 or newer
-- `git`, the [`gh`](https://cli.github.com/) CLI authenticated for the repo, and `claude`
-- A repo whose Tickets follow the [Planning conventions](CONTRIBUTING.md#issues)
+- `git`, the [`gh`](https://cli.github.com/) CLI authenticated for the Target, and `claude`
+  with the `mattpocock-skills` plugin installed
+- A GitHub repository whose Tickets follow the [Planning conventions](CONTRIBUTING.md#issues)
+- A CI workflow, and a Check the pipeline can run itself — `test` and `typecheck` scripts in
+  `package.json`, or commands named in the config file
+
+## Install
+
+Once, globally, from GitHub. The same line updates it:
+
+```bash
+npm install -g github:jjongs2/agent-pipeline
+```
+
+## Set a Target up
+
+```bash
+cd ~/code/acme
+agent-pipeline init
+```
+
+`init` puts in place everything a Run expects to find in the Target and reports on
+everything only a human can put there. Running it twice is running it once: every write asks
+first whether the Target already has the thing. It commits nothing, so what it wrote reaches
+the Target's history through whatever process that repository uses, and it takes no Run lock,
+because it claims no Ticket.
+
+It writes the two gitignore lines for `.worktrees/` and `.agent-pipeline/`, an empty
+`agent-pipeline.json`, the pipeline's conventions document at
+[`docs/agents/pipeline-conventions.md`](docs/agents/pipeline-conventions.md), and a section
+in `CLAUDE.md` pointing at it. The files a human owns only ever gain lines; the conventions
+document is the pipeline's own text, so a Target carrying an older copy is rewritten and told
+that it was. On GitHub it creates whichever of the six triage labels are missing and turns
+squash merging on, touching no other merge setting.
+
+Then it reports one line per item that is yours — whether `gh` is authenticated, `claude`
+runs, the `mattpocock-skills` plugin is installed, a CI workflow exists under
+`.github/workflows`, and a Check is configured or inferable:
+
+```
+Checked:
+  ✓ `gh` is authenticated
+  ✓ `claude` runs
+  ✓ the `mattpocock-skills` plugin is installed
+  ✗ no CI workflow in `.github/workflows` — a pull request with no checks is never merged
+  ✓ a Check is configured or inferable: npm test, npm run typecheck
+
+Not ready: 1 item is yours to put right.
+```
+
+Exit code is `1` while any reported item is failing and `0` once none is, so
+`agent-pipeline init && agent-pipeline run` stops before a doomed Run.
 
 ## Usage
 
 ```bash
-npm install
-npm run agent-pipeline -- run         # drain the Frontier
-npm run agent-pipeline -- ticket 3    # one named Ticket
+agent-pipeline run         # drain the Frontier
+agent-pipeline ticket 3    # one named Ticket
 ```
+
+Both refuse a Target `init` has not set up rather than repairing it. A gitignore missing one
+of the two directories, a missing triage label, no conventions document, or a `CLAUDE.md`
+that does not point at one: whichever comes first is a refusal with exit code `2` that names
+the item and the command that puts it right.
+
+```
+$ agent-pipeline run
+This Target is not set up: `.gitignore` does not ignore `.worktrees/`. Run
+`agent-pipeline init` here and start again; a Run puts nothing in place itself.
+```
+
+The check is presence, never content: a Target carrying an older copy of the conventions
+document starts, and the next `init` brings it up to date.
 
 `run` drains the **Frontier**: the open Tickets labelled `ready-for-agent` that nobody
 has claimed and whose native `blocked by` issues have all closed. It takes them one at a
@@ -353,13 +418,20 @@ pulls once they merge — is asked of GitHub once at the start of a Run, so a Ta
 ```
 
 With `gates.checks` on and no Check command configured or inferable, the command refuses
-to start rather than merging unverified code. Missing labels are created on every Run.
+to start rather than merging unverified code. The triage labels are `init`'s to create; a
+Run that finds one missing refuses too.
 
 ## Development
 
+Working on the pipeline itself runs it out of this checkout rather than off the global
+install:
+
 ```bash
-npm test          # vitest
-npm run typecheck # tsc --noEmit
+npm install
+npm run agent-pipeline -- run         # drain the Frontier
+npm run agent-pipeline -- ticket 3    # one named Ticket
+npm test                              # vitest
+npm run typecheck                     # tsc --noEmit
 ```
 
 The orchestrator depends only on the three ports — `Tracker`, `AgentRunner` and
