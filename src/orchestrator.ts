@@ -426,8 +426,11 @@ async function resumable(
   return undefined;
 }
 
-/** What one write moves the Ticket's State file on by. */
-type Advance = Partial<Pick<TicketState, "state" | "fixUsed" | "pullRequest">>;
+/** What the Ticket itself has reached, which is all a resume needs to be told. */
+type Reached = Omit<TicketState, "runId" | "updatedAt">;
+
+/** What one write moves that on by. */
+type Advance = Partial<Pick<Reached, "state" | "fixUsed" | "pullRequest">>;
 
 /**
  * The State file a claimed Ticket keeps, and the one place a Ticket writes it.
@@ -443,24 +446,28 @@ type Advance = Partial<Pick<TicketState, "state" | "fixUsed" | "pullRequest">>;
  * would throw away the work the Stages have already done.
  */
 class ResumeRecord {
-  private readonly state: TicketState;
+  /** What the Ticket has; the Run and the time are what each write adds to it. */
+  private readonly reached: Reached;
 
   constructor(
     private readonly pipeline: Pipeline,
-    reached: Omit<TicketState, "runId" | "updatedAt">,
+    reached: Reached,
   ) {
-    this.state = { ...reached, runId: pipeline.runId, updatedAt: "" };
+    this.reached = { ...reached };
   }
 
   /** Move the record on, and put it where the next Run will look for it. */
   advance(reached: Advance = {}): void {
-    Object.assign(this.state, reached);
-    this.state.updatedAt = new Date().toISOString();
+    Object.assign(this.reached, reached);
     try {
-      writeTicketState(this.pipeline.repoRoot, this.state);
+      writeTicketState(this.pipeline.repoRoot, {
+        ...this.reached,
+        runId: this.pipeline.runId,
+        updatedAt: new Date().toISOString(),
+      });
     } catch (error) {
       this.pipeline.log?.(
-        `#${this.state.ticket} could not record its state: ${(error as Error).message}`,
+        `#${this.reached.ticket} could not record its state: ${(error as Error).message}`,
       );
     }
   }
