@@ -38,12 +38,16 @@ _Avoid_: lock, checkout
 
 ### Pipeline
 
+**Target**:
+The repository a Run claims Tickets from and merges into, the one whose working directory the command was started in. The pipeline's own repository is a Target only when the command ran there.
+_Avoid_: project, host repo, workspace, target repo, cwd
+
 **Run**:
 One invocation of the pipeline command. Drains the Frontier one Ticket at a time. Ends when the Frontier is empty, when every Ticket left on it is blocked, or at the first Ticket it releases.
 _Avoid_: session, batch, loop
 
 **Run lock**:
-The PID file that stops two Runs, or a Run and a `ticket`, sharing one repo. Repo-wide and held for the whole Run, where a Claim is per-Ticket and lives on GitHub.
+The PID file that stops two Runs, or a Run and a `ticket`, sharing one Target. Target-wide and held for the whole Run, where a Claim is per-Ticket and lives on GitHub.
 _Avoid_: mutex, pidfile
 
 **Stage**:
@@ -95,7 +99,7 @@ What a claimed Ticket keeps under `.agent-pipeline/state/`: the state it reached
 _Avoid_: checkpoint, journal, resume file
 
 **Stranded Ticket**:
-A Ticket whose State file is still there while the Ticket still carries this checkout's Claim — the Run that claimed it was killed and released nothing. No Frontier can offer one, because it is claimed, so a Run resumes every one of them in place before it computes the Frontier.
+A Ticket whose State file is still there while the Ticket still carries this Target's Claim — the Run that claimed it was killed and released nothing. No Frontier can offer one, because it is claimed, so a Run resumes every one of them in place before it computes the Frontier.
 _Avoid_: orphan, zombie, abandoned Ticket, crashed Ticket, dead Ticket
 
 **Note**:

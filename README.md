@@ -2,12 +2,12 @@
 
 Humans plan, the pipeline executes.
 
-`agent-pipeline` owns Execution: it claims a Ticket, runs the implement Stage as a
-headless `claude -p` session driving `/mattpocock-skills:implement`, runs the Checks
-itself, has a fresh session adversarially grade the Acceptance Criteria, opens a PR,
-waits for CI and squash-merges. One failure along the way buys a fix Stage and a
-second pass. Anything it still cannot finish is handed to a human with a draft PR, a
-comment and the worktree left in place. A Stage the subscription rate limit stops is
+`agent-pipeline` owns Execution in the **Target**, the repository the command was started
+in: it claims a Ticket, runs the implement Stage as a headless `claude -p` session driving
+`/mattpocock-skills:implement`, runs the Checks itself, has a fresh session adversarially
+grade the Acceptance Criteria, opens a PR, waits for CI and squash-merges. One failure
+along the way buys a fix Stage and a second pass. Anything it still cannot finish is handed
+to a human with a draft PR, a comment and the worktree left in place. A Stage the subscription rate limit stops is
 nobody's fault, so the Ticket is released instead, the Run ends there, and a later Run
 resumes it.
 
@@ -51,7 +51,7 @@ Frontier blocked.
 Body text is never read for blockers: only GitHub's native dependencies count
 ([ADR-0003](docs/adr/0003-github-native-relations-only.md)).
 
-One Run at a time per repo. A second `run`, or a `ticket` started while a `run` holds the
+One Run at a time per Target. A second `run`, or a `ticket` started while a `run` holds the
 lock, exits immediately naming the holder. The lock is a PID file at
 `.agent-pipeline/lock.json`, so a Run that was killed does not block the next one.
 
@@ -76,14 +76,14 @@ reproducing a Stage by hand reproduces its environment too.
 `ticket <n>` takes exactly one Ticket from claimed to merged:
 
 1. run the guards, then assign it and swap `ready-for-agent` for `in-progress`
-2. create `agent/<n>-<slug>` from `main` in a worktree under `.worktrees/`, refusing the
-   Ticket if that branch already exists
+2. create `agent/<n>-<slug>` from the base branch in a worktree under `.worktrees/`,
+   refusing the Ticket if that branch already exists
 3. implement Stage
 4. the configured Checks, run by the pipeline itself
 5. verify Stage, graded against the Ticket's Acceptance Criteria
-6. rebase on `main`, resolving a conflict if one comes up, open a PR that closes the
-   Ticket, wait for CI
-7. squash-merge, pull `main`, remove the worktree
+6. rebase on the base branch, resolving a conflict if one comes up, open a PR that closes
+   the Ticket, wait for CI
+7. squash-merge, pull the base branch, remove the worktree
 
 A failing Check, a Check killed at its wall-clock limit, a Verdict with an `unmet`
 criterion, a red CI, or a rebase conflict the conflict Stage could not resolve spends the
@@ -265,15 +265,16 @@ because a session that ran out of turns still noticed whatever it noticed.
 
 ## Rebase conflicts
 
-A branch that will not replay onto `main` is not a defect in the branch: `main` moved on
-while the Ticket was being implemented. So the rebase is left where git stopped it and one
+A branch that will not replay onto the base branch is not a defect in the branch: the base
+branch moved on while the Ticket was being implemented. So the rebase is left where git stopped it and one
 **conflict Stage** runs in the worktree, driving
 `/mattpocock-skills:resolving-merge-conflicts` with the Ticket and git's own output. It has
 its own turn and wall-clock limits, and it does not spend the fix budget.
 
 The worktree decides whether it worked, not how the session ended: the rebase has to be
-finished with no merge commit standing in for it, `main` an ancestor of the branch, nothing
-left unmerged and no conflict marker left in any file the tree carries, staged or not. A
+finished with no merge commit standing in for it, the base branch an ancestor of the
+branch, nothing left unmerged and no conflict marker left in any file the tree carries,
+staged or not. A
 Stage that ran out of turns having already finished the rebase has still done the job; one
 that came back clean because it quietly abandoned the rebase has not.
 The Checks then run again, because the resolution is code no gate has seen yet, and only then
@@ -304,10 +305,18 @@ untriaged one.
 
 ## Configuration
 
-`agent-pipeline.json` at the repo root. Every field is optional.
+`agent-pipeline.json` at the Target's root. Every field is optional.
+
+The base branch — what a Run branches from, rebases onto, targets its pull requests at and
+pulls once they merge — is asked of GitHub once at the start of a Run, so a Target on
+`master` needs no config file at all.
 
 ```jsonc
 {
+  // The branch a Run merges into.
+  // Default: whatever GitHub calls the Target's default branch.
+  "baseBranch": "main",
+
   // Commands run in the worktree after implement.
   // Default: `npm test` and `npm run typecheck`, whichever package.json defines.
   "checks": ["npm test", "npm run typecheck"],

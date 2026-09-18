@@ -37,19 +37,28 @@ function conflictingWorktree(): string {
   return path;
 }
 
-beforeEach(() => {
-  remote = mkdtempSync(join(tmpdir(), "agent-pipeline-remote-"));
-  repo = mkdtempSync(join(tmpdir(), "agent-pipeline-repo-"));
+/**
+ * A bare remote and a checkout of it, both starting on `base`, with one commit
+ * pushed. The branch name is a parameter because nothing in the workspace is
+ * allowed to assume `main`.
+ */
+function setUpRepo(base: string): { remote: string; repo: string } {
+  const remote = mkdtempSync(join(tmpdir(), "agent-pipeline-remote-"));
+  const repo = mkdtempSync(join(tmpdir(), "agent-pipeline-repo-"));
   created.push(remote, repo);
 
-  git(remote, "init", "--bare", "--initial-branch=main", ".");
-  git(repo, "init", "--initial-branch=main", ".");
+  git(remote, "init", "--bare", `--initial-branch=${base}`, ".");
+  git(repo, "init", `--initial-branch=${base}`, ".");
   git(repo, "config", "user.email", "pipeline@example.com");
   git(repo, "config", "user.name", "agent-pipeline");
   git(repo, "remote", "add", "origin", remote);
   commit(repo, "README.md", "hello\n", "docs: initial commit (#1)");
-  git(repo, "push", "-u", "origin", "main");
+  git(repo, "push", "-u", "origin", base);
+  return { remote, repo };
+}
 
+beforeEach(() => {
+  ({ remote, repo } = setUpRepo("main"));
   workspace = new GitWorkspace(repo);
 });
 
@@ -60,7 +69,7 @@ afterEach(() => {
 describe("worktrees", () => {
   it("creates a worktree on a fresh branch from main", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
 
     expect(existsSync(join(path, "README.md"))).toBe(true);
     expect(git(path, "rev-parse", "--abbrev-ref", "HEAD")).toBe("agent/2-x");
@@ -69,7 +78,7 @@ describe("worktrees", () => {
 
   it("removes the worktree and its branch", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
     commit(path, "a.txt", "a\n", "feat: a (#2)");
 
     await workspace.removeWorktree({ path, branch: "agent/2-x" });
@@ -82,14 +91,14 @@ describe("worktrees", () => {
 describe("hasBranch", () => {
   it("says yes about a branch that is checked out in a worktree", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
 
     expect(await workspace.hasBranch("agent/2-x")).toBe(true);
   });
 
   it("says yes about the branch a removed worktree left behind", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
     // `git worktree remove` without the `git branch -D` that follows it here:
     // how a human cleans up after finishing a handed-off Ticket by hand.
     git(repo, "worktree", "remove", "--force", path);
@@ -104,7 +113,7 @@ describe("hasBranch", () => {
 
   it("says no once the branch has been deleted with its worktree", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
     await workspace.removeWorktree({ path, branch: "agent/2-x" });
 
     expect(await workspace.hasBranch("agent/2-x")).toBe(false);
@@ -112,7 +121,7 @@ describe("hasBranch", () => {
 
   it("says no about a branch that exists only on the remote", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
     commit(path, "a.txt", "a\n", "feat: a (#2)");
     await workspace.push(path, "agent/2-x");
     await workspace.removeWorktree({ path, branch: "agent/2-x" });
@@ -131,7 +140,7 @@ describe("hasBranch", () => {
 describe("hasWorktree", () => {
   it("recognises the worktree it created, on the branch it created it on", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
 
     expect(await workspace.hasWorktree({ path, branch: "agent/2-x" })).toBe(true);
   });
@@ -144,7 +153,7 @@ describe("hasWorktree", () => {
 
   it("says no once the worktree has been removed", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
     await workspace.removeWorktree({ path, branch: "agent/2-x" });
 
     expect(await workspace.hasWorktree({ path, branch: "agent/2-x" })).toBe(false);
@@ -152,7 +161,7 @@ describe("hasWorktree", () => {
 
   it("says no about a directory a human deleted but git still lists", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
     // `rm -rf .worktrees` without a prune, which is how a human cleans up.
     rmSync(path, { recursive: true, force: true });
 
@@ -162,7 +171,7 @@ describe("hasWorktree", () => {
 
   it("says no when the worktree is on another branch than the one asked about", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
     git(path, "checkout", "-b", "agent/2-something-else");
 
     expect(await workspace.hasWorktree({ path, branch: "agent/2-x" })).toBe(false);
@@ -172,8 +181,8 @@ describe("hasWorktree", () => {
   it("tells one Ticket's worktree from another's", async () => {
     const mine = join(repo, ".worktrees", "ticket-2");
     const theirs = join(repo, ".worktrees", "ticket-3");
-    await workspace.createWorktree({ path: mine, branch: "agent/2-x" });
-    await workspace.createWorktree({ path: theirs, branch: "agent/3-y" });
+    await workspace.createWorktree({ path: mine, branch: "agent/2-x" }, "main");
+    await workspace.createWorktree({ path: theirs, branch: "agent/3-y" }, "main");
 
     expect(await workspace.hasWorktree({ path: mine, branch: "agent/3-y" })).toBe(false);
     expect(await workspace.hasWorktree({ path: theirs, branch: "agent/3-y" })).toBe(true);
@@ -183,16 +192,16 @@ describe("hasWorktree", () => {
 describe("commitSubjects", () => {
   it("reads only the commits main does not have, oldest first", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
 
-    expect(await workspace.commitSubjects("agent/2-x")).toEqual([]);
+    expect(await workspace.commitSubjects("agent/2-x", "main")).toEqual([]);
 
     commit(path, "a.txt", "a\n", "feat: a (#2)");
     commit(path, "b.txt", "b\n", "test: b (#2)");
     commit(path, "c.txt", "c\n", "docs: c (#2)");
 
     // Not main's own "docs: initial commit (#1)", and not git's newest-first order.
-    expect(await workspace.commitSubjects("agent/2-x")).toEqual([
+    expect(await workspace.commitSubjects("agent/2-x", "main")).toEqual([
       "feat: a (#2)",
       "test: b (#2)",
       "docs: c (#2)",
@@ -201,12 +210,12 @@ describe("commitSubjects", () => {
 
   it("collects each co-author once, in the order first seen, ignoring the key's case", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
     commit(path, "a.txt", "a\n", "feat: a (#2)\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>");
     commit(path, "b.txt", "b\n", "test: b (#2)\n\nCo-authored-by: Pat <pat@example.com>\nCo-authored-by: Claude Opus 5 <noreply@anthropic.com>");
     commit(path, "c.txt", "c\n", "docs: c (#2)");
 
-    expect(await workspace.coAuthors("agent/2-x")).toEqual([
+    expect(await workspace.coAuthors("agent/2-x", "main")).toEqual([
       "Claude Opus 5 <noreply@anthropic.com>",
       "Pat <pat@example.com>",
     ]);
@@ -214,23 +223,23 @@ describe("commitSubjects", () => {
 
   it("keeps a commit whose subject is empty, so the order does not shift", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
     writeFileSync(join(path, "a.txt"), "a\n");
     git(path, "add", "-A");
     git(path, "commit", "--allow-empty-message", "-m", "");
     commit(path, "b.txt", "b\n", "feat: b (#2)");
 
-    expect(await workspace.commitSubjects("agent/2-x")).toEqual(["", "feat: b (#2)"]);
+    expect(await workspace.commitSubjects("agent/2-x", "main")).toEqual(["", "feat: b (#2)"]);
   });
 
   it("reads the subject only, never the body", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
     writeFileSync(join(path, "a.txt"), "a\n");
     git(path, "add", "-A");
     git(path, "commit", "-m", "feat: a (#2)", "-m", "A body\n\nwith blank lines.");
 
-    expect(await workspace.commitSubjects("agent/2-x")).toEqual(["feat: a (#2)"]);
+    expect(await workspace.commitSubjects("agent/2-x", "main")).toEqual(["feat: a (#2)"]);
   });
 });
 
@@ -254,7 +263,7 @@ describe("runCheck", () => {
 
   it("runs the command in the directory it is given", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
 
     const result = await workspace.runCheck("pwd", path, LIMIT_MS);
 
@@ -277,7 +286,7 @@ describe("runCheck", () => {
 describe("discardChanges", () => {
   it("restores tracked files and deletes scratch files", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
     writeFileSync(join(path, "README.md"), "vandalised\n");
     writeFileSync(join(path, "scratch.test.ts"), "throwaway\n");
 
@@ -289,7 +298,7 @@ describe("discardChanges", () => {
 
   it("leaves gitignored files alone", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
     writeFileSync(join(path, ".gitignore"), "keep.txt\n");
     git(path, "add", "-A");
     git(path, "commit", "-m", "chore: ignore keep.txt (#2)");
@@ -301,24 +310,24 @@ describe("discardChanges", () => {
   });
 });
 
-describe("rebaseOnMain", () => {
+describe("rebase", () => {
   it("replays the branch onto a main that moved on", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
     commit(path, "a.txt", "a\n", "feat: a (#2)");
     commit(repo, "main.txt", "main\n", "feat: main moved (#1)");
 
-    const result = await workspace.rebaseOnMain(path);
+    const result = await workspace.rebase(path, "main");
 
     expect(result.ok).toBe(true);
     expect(existsSync(join(path, "main.txt"))).toBe(true);
-    expect(await workspace.commitSubjects("agent/2-x")).toEqual(["feat: a (#2)"]);
+    expect(await workspace.commitSubjects("agent/2-x", "main")).toEqual(["feat: a (#2)"]);
   });
 
   it("reports a conflict and leaves the rebase in progress to be resolved", async () => {
     const path = conflictingWorktree();
 
-    const result = await workspace.rebaseOnMain(path);
+    const result = await workspace.rebase(path, "main");
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error("expected a conflict");
@@ -329,12 +338,12 @@ describe("rebaseOnMain", () => {
 
   it("puts the worktree back when the rebase is aborted", async () => {
     const path = conflictingWorktree();
-    await workspace.rebaseOnMain(path);
+    await workspace.rebase(path, "main");
 
     await workspace.abortRebase(path);
 
     expect(git(path, "status", "--porcelain")).toBe("");
-    expect(await workspace.rebaseState(path)).toEqual({
+    expect(await workspace.rebaseState(path, "main")).toEqual({
       resolved: false,
       unresolved: "the branch is not rebased onto main",
     });
@@ -342,7 +351,7 @@ describe("rebaseOnMain", () => {
 
   it("is happy to abort when no rebase is in progress", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
 
     await expect(workspace.abortRebase(path)).resolves.toBeUndefined();
   });
@@ -351,20 +360,20 @@ describe("rebaseOnMain", () => {
 describe("rebaseState", () => {
   it("calls a rebase that replayed every commit resolved", async () => {
     const path = conflictingWorktree();
-    await workspace.rebaseOnMain(path);
+    await workspace.rebase(path, "main");
 
     writeFileSync(join(path, "README.md"), "both versions\n");
     git(path, "add", "-A");
     git(path, "-c", "core.editor=true", "rebase", "--continue");
 
-    expect(await workspace.rebaseState(path)).toEqual({ resolved: true });
+    expect(await workspace.rebaseState(path, "main")).toEqual({ resolved: true });
   });
 
   it("reports the rebase git is still in the middle of, and what is unmerged", async () => {
     const path = conflictingWorktree();
-    await workspace.rebaseOnMain(path);
+    await workspace.rebase(path, "main");
 
-    const state = await workspace.rebaseState(path);
+    const state = await workspace.rebaseState(path, "main");
 
     expect(state.resolved).toBe(false);
     if (state.resolved) throw new Error("expected an unresolved rebase");
@@ -375,11 +384,11 @@ describe("rebaseState", () => {
 
   it("reports a rebase that was abandoned rather than finished", async () => {
     const path = conflictingWorktree();
-    await workspace.rebaseOnMain(path);
+    await workspace.rebase(path, "main");
 
     git(path, "rebase", "--abort");
 
-    expect(await workspace.rebaseState(path)).toEqual({
+    expect(await workspace.rebaseState(path, "main")).toEqual({
       resolved: false,
       unresolved: "the branch is not rebased onto main",
     });
@@ -387,14 +396,14 @@ describe("rebaseState", () => {
 
   it("reports conflict markers committed into a finished rebase", async () => {
     const path = conflictingWorktree();
-    await workspace.rebaseOnMain(path);
+    await workspace.rebase(path, "main");
 
     // What a careless resolution looks like: the rebase finishes, the markers
     // git wrote into the file are committed along with it.
     git(path, "add", "-A");
     git(path, "-c", "core.editor=true", "rebase", "--continue");
 
-    const state = await workspace.rebaseState(path);
+    const state = await workspace.rebaseState(path, "main");
 
     expect(state.resolved).toBe(false);
     if (state.resolved) throw new Error("expected unresolved conflict markers");
@@ -403,14 +412,14 @@ describe("rebaseState", () => {
 
   it("sees a marker in a file nobody staged", async () => {
     const path = conflictingWorktree();
-    await workspace.rebaseOnMain(path);
+    await workspace.rebase(path, "main");
     writeFileSync(join(path, "README.md"), "both versions\n");
     git(path, "add", "-A");
     git(path, "-c", "core.editor=true", "rebase", "--continue");
     // Scratch the session wrote by hand and never staged.
     writeFileSync(join(path, "notes.md"), `${"<".repeat(7)} HEAD\nmine\n`);
 
-    const state = await workspace.rebaseState(path);
+    const state = await workspace.rebaseState(path, "main");
 
     expect(state.resolved).toBe(false);
     if (state.resolved) throw new Error("expected an unresolved marker");
@@ -419,12 +428,12 @@ describe("rebaseState", () => {
 
   it("refuses a conflict that was merged in rather than rebased away", async () => {
     const path = conflictingWorktree();
-    await workspace.rebaseOnMain(path);
+    await workspace.rebase(path, "main");
     await workspace.abortRebase(path);
 
     git(path, "-c", "core.editor=true", "merge", "main", "--strategy-option=ours");
 
-    const state = await workspace.rebaseState(path);
+    const state = await workspace.rebaseState(path, "main");
 
     expect(state.resolved).toBe(false);
     if (state.resolved) throw new Error("expected the merge to be refused");
@@ -433,18 +442,18 @@ describe("rebaseState", () => {
 
   it("does not mistake a marker quoted mid-line for a conflict", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
     const quoted = `const marker = "${"<".repeat(7)} HEAD";\n`;
     commit(path, "markers.ts", quoted, "feat: quote a marker (#2)");
 
-    expect(await workspace.rebaseState(path)).toEqual({ resolved: true });
+    expect(await workspace.rebaseState(path, "main")).toEqual({ resolved: true });
   });
 });
 
-describe("push and pullMain", () => {
+describe("push and pullBase", () => {
   it("pushes the branch to the remote", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
     commit(path, "a.txt", "a\n", "feat: a (#2)");
 
     await workspace.push(path, "agent/2-x");
@@ -454,7 +463,7 @@ describe("push and pullMain", () => {
 
   it("deletes the branch on the remote", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
     commit(path, "a.txt", "a\n", "feat: a (#2)");
     await workspace.push(path, "agent/2-x");
 
@@ -465,7 +474,7 @@ describe("push and pullMain", () => {
 
   it("treats a branch the remote already deleted as deleted", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
     commit(path, "a.txt", "a\n", "feat: a (#2)");
     await workspace.push(path, "agent/2-x");
     // As GitHub does the moment a PR merges when the repo is set to.
@@ -478,7 +487,7 @@ describe("push and pullMain", () => {
 
   it("still fails when the remote refuses the delete", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
     commit(path, "a.txt", "a\n", "feat: a (#2)");
     await workspace.push(path, "agent/2-x");
     // A remote that has gone away fails the push before any ref is looked at.
@@ -489,12 +498,12 @@ describe("push and pullMain", () => {
 
   it("force-pushes after a rebase rewrote the branch", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
-    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
     commit(path, "a.txt", "a\n", "feat: a (#2)");
     await workspace.push(path, "agent/2-x");
 
     commit(repo, "main.txt", "main\n", "feat: main moved (#1)");
-    await workspace.rebaseOnMain(path);
+    await workspace.rebase(path, "main");
     await workspace.push(path, "agent/2-x");
 
     expect(git(remote, "rev-parse", "agent/2-x")).toBe(git(path, "rev-parse", "HEAD"));
@@ -510,7 +519,7 @@ describe("push and pullMain", () => {
     git(other, "push", "origin", "main");
 
     git(repo, "checkout", "-b", "human/2-skeleton");
-    await workspace.pullMain();
+    await workspace.pullBase("main");
 
     expect(git(repo, "rev-parse", "main")).toBe(git(other, "rev-parse", "HEAD"));
   });
@@ -524,8 +533,77 @@ describe("push and pullMain", () => {
     commit(other, "from-elsewhere.txt", "x\n", "feat: elsewhere (#1)");
     git(other, "push", "origin", "main");
 
-    await workspace.pullMain();
+    await workspace.pullBase("main");
 
     expect(git(repo, "rev-parse", "HEAD")).toBe(git(other, "rev-parse", "HEAD"));
+  });
+});
+
+/**
+ * A Target GitHub calls `master`, which is the whole of what the config-free
+ * repository on an older default gets: the same worktree, the same rebase and
+ * the same pull, against a branch nothing here spells out.
+ */
+describe("a Target whose base branch is not main", () => {
+  const BASE = "master";
+  let master: GitWorkspace;
+  let masterRemote: string;
+  let masterRepo: string;
+
+  beforeEach(() => {
+    ({ remote: masterRemote, repo: masterRepo } = setUpRepo(BASE));
+    master = new GitWorkspace(masterRepo);
+  });
+
+  it("creates the worktree from master, not from a branch called main", async () => {
+    const path = join(masterRepo, ".worktrees", "ticket-2");
+
+    await master.createWorktree({ path, branch: "agent/2-x" }, BASE);
+
+    expect(git(path, "rev-parse", "HEAD")).toBe(git(masterRepo, "rev-parse", BASE));
+    expect(git(masterRepo, "branch", "--list", "main")).toBe("");
+  });
+
+  it("replays the branch onto a master that moved on", async () => {
+    const path = join(masterRepo, ".worktrees", "ticket-2");
+    await master.createWorktree({ path, branch: "agent/2-x" }, BASE);
+    commit(path, "a.txt", "a\n", "feat: a (#2)");
+    commit(masterRepo, "master.txt", "master\n", "feat: master moved (#1)");
+
+    const result = await master.rebase(path, BASE);
+
+    expect(result.ok).toBe(true);
+    expect(existsSync(join(path, "master.txt"))).toBe(true);
+    expect(await master.commitSubjects("agent/2-x", BASE)).toEqual(["feat: a (#2)"]);
+    expect(await master.rebaseState(path, BASE)).toEqual({ resolved: true });
+  });
+
+  it("pulls master after the merge, while another branch is checked out", async () => {
+    const other = mkdtempSync(join(tmpdir(), "agent-pipeline-other-"));
+    created.push(other);
+    git(other, "clone", masterRemote, ".");
+    git(other, "config", "user.email", "human@example.com");
+    git(other, "config", "user.name", "human");
+    commit(other, "merged.txt", "x\n", "feat: merged elsewhere (#1)");
+    git(other, "push", "origin", BASE);
+    git(masterRepo, "checkout", "-b", "human/2-x");
+
+    await master.pullBase(BASE);
+
+    expect(git(masterRepo, "rev-parse", BASE)).toBe(git(other, "rev-parse", "HEAD"));
+  });
+
+  it("fast-forwards master when master is the branch checked out", async () => {
+    const other = mkdtempSync(join(tmpdir(), "agent-pipeline-other-"));
+    created.push(other);
+    git(other, "clone", masterRemote, ".");
+    git(other, "config", "user.email", "human@example.com");
+    git(other, "config", "user.name", "human");
+    commit(other, "merged.txt", "x\n", "feat: merged elsewhere (#1)");
+    git(other, "push", "origin", BASE);
+
+    await master.pullBase(BASE);
+
+    expect(git(masterRepo, "rev-parse", "HEAD")).toBe(git(other, "rev-parse", "HEAD"));
   });
 });

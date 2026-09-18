@@ -9,6 +9,9 @@ import {
 
 const url = "https://github.com/jjongs2/agent-pipeline/issues/2";
 
+/** The base branch the Run resolved, which most of these prompts only carry. */
+const BASE = "main";
+
 const CONFLICT = "CONFLICT (content): Merge conflict in src/cli.ts";
 
 const FAILED_CHECK = {
@@ -19,13 +22,13 @@ const FAILED_CHECK = {
 
 describe("implementPrompt", () => {
   it("begins with the skill invocation and the full issue URL", () => {
-    expect(implementPrompt(url, "").split("\n")[0]).toBe(
+    expect(implementPrompt(url, BASE, "").split("\n")[0]).toBe(
       `/mattpocock-skills:implement ${url}`,
     );
   });
 
   it("carries the correction guidance for a known plugin defect", () => {
-    const prompt = implementPrompt(url, "");
+    const prompt = implementPrompt(url, BASE, "");
 
     expect(prompt).toMatch(/confirm the ticket title/i);
     expect(prompt).toMatch(/commit .*before .*code-review/i);
@@ -37,13 +40,13 @@ describe("implementPrompt", () => {
   });
 
   it("appends the configured extra prompt after the guidance", () => {
-    const prompt = implementPrompt(url, "Prefer table-driven tests.");
+    const prompt = implementPrompt(url, BASE, "Prefer table-driven tests.");
 
     expect(prompt.trimEnd().endsWith("Prefer table-driven tests.")).toBe(true);
   });
 
   it("leaves no trailing blank block when no extra prompt is configured", () => {
-    expect(implementPrompt(url, "")).toBe(implementPrompt(url, "   "));
+    expect(implementPrompt(url, BASE, "")).toBe(implementPrompt(url, BASE, "   "));
   });
 });
 
@@ -72,11 +75,11 @@ describe("verifyPrompt", () => {
 
 describe("fixPrompt", () => {
   it("invokes no plugin skill: the failure is the whole brief", () => {
-    expect(fixPrompt(url, FAILED_CHECK, "")).not.toContain("/mattpocock-skills:");
+    expect(fixPrompt(url, FAILED_CHECK, BASE, "")).not.toContain("/mattpocock-skills:");
   });
 
   it("names the Ticket, the failure and the evidence that was captured", () => {
-    const prompt = fixPrompt(url, FAILED_CHECK, "");
+    const prompt = fixPrompt(url, FAILED_CHECK, BASE, "");
 
     expect(prompt).toContain(url);
     expect(prompt).toContain("Check `npm test` failed");
@@ -84,61 +87,61 @@ describe("fixPrompt", () => {
   });
 
   it("says which kind of failure this is", () => {
-    expect(fixPrompt(url, FAILED_CHECK, "")).toMatch(/a Check .*failed/i);
-    expect(fixPrompt(url, { ...FAILED_CHECK, kind: "unmet-criteria" }, "")).toMatch(
+    expect(fixPrompt(url, FAILED_CHECK, BASE, "")).toMatch(/a Check .*failed/i);
+    expect(fixPrompt(url, { ...FAILED_CHECK, kind: "unmet-criteria" }, BASE, "")).toMatch(
       /unmet Acceptance Criteria/i,
     );
-    expect(fixPrompt(url, { ...FAILED_CHECK, kind: "failed-ci" }, "")).toMatch(
+    expect(fixPrompt(url, { ...FAILED_CHECK, kind: "failed-ci" }, BASE, "")).toMatch(
       /pull request check failed/i,
     );
     expect(
-      fixPrompt(url, { ...FAILED_CHECK, kind: "unresolved-conflict" }, ""),
+      fixPrompt(url, { ...FAILED_CHECK, kind: "unresolved-conflict" }, BASE, ""),
     ).toMatch(/conflicts with main/i);
   });
 
   it("asks for the regression test a gap the Verdict found should have had", () => {
-    expect(fixPrompt(url, { ...FAILED_CHECK, kind: "unmet-criteria" }, "")).toMatch(
+    expect(fixPrompt(url, { ...FAILED_CHECK, kind: "unmet-criteria" }, BASE, "")).toMatch(
       /regression test/i,
     );
   });
 
   it("tells the session to commit where it is and to open nothing", () => {
-    const prompt = fixPrompt(url, FAILED_CHECK, "");
+    const prompt = fixPrompt(url, FAILED_CHECK, BASE, "");
 
     expect(prompt).toMatch(/commit .*on the .*branch|branch you are on/i);
     expect(prompt).toMatch(/do not open pull requests/i);
   });
 
   it("appends the configured extra prompt", () => {
-    expect(fixPrompt(url, FAILED_CHECK, "Keep it small.").trimEnd().endsWith("Keep it small.")).toBe(
-      true,
-    );
+    const prompt = fixPrompt(url, FAILED_CHECK, BASE, "Keep it small.");
+
+    expect(prompt.trimEnd().endsWith("Keep it small.")).toBe(true);
   });
 });
 
 describe("conflictPrompt", () => {
   it("begins with the skill that resolves an in-progress rebase", () => {
-    expect(conflictPrompt(url, CONFLICT, "").split("\n")[0]).toBe(
+    expect(conflictPrompt(url, CONFLICT, BASE, "").split("\n")[0]).toBe(
       "/mattpocock-skills:resolving-merge-conflicts",
     );
   });
 
   it("names the Ticket and fences what git printed when the rebase stopped", () => {
-    const prompt = conflictPrompt(url, CONFLICT, "");
+    const prompt = conflictPrompt(url, CONFLICT, BASE, "");
 
     expect(prompt).toContain(url);
     expect(prompt).toContain(`\`\`\`\n${CONFLICT}\n\`\`\``);
   });
 
   it("forbids the two ways out that leave the branch unrebased", () => {
-    const prompt = conflictPrompt(url, CONFLICT, "");
+    const prompt = conflictPrompt(url, CONFLICT, BASE, "");
 
     expect(prompt).toMatch(/never .*rebase --abort/i);
     expect(prompt).toMatch(/rewind the branch/i);
   });
 
   it("keeps the session inside the conflict, and out of the pipeline's work", () => {
-    const prompt = conflictPrompt(url, CONFLICT, "");
+    const prompt = conflictPrompt(url, CONFLICT, BASE, "");
 
     expect(prompt).toMatch(/implement nothing new/i);
     expect(prompt).toMatch(/no conflict marker/i);
@@ -148,7 +151,7 @@ describe("conflictPrompt", () => {
 
   it("appends the configured extra prompt", () => {
     expect(
-      conflictPrompt(url, CONFLICT, "Keep it small.").trimEnd().endsWith("Keep it small."),
+      conflictPrompt(url, CONFLICT, BASE, "Keep it small.").trimEnd().endsWith("Keep it small."),
     ).toBe(true);
   });
 });
@@ -161,14 +164,14 @@ describe("the self-hosting guidance", () => {
   });
 
   it("is carried verbatim by every Stage prompt, from one place", () => {
-    expect(implementPrompt(url, "")).toContain(SELF_HOSTING_GUIDANCE);
+    expect(implementPrompt(url, BASE, "")).toContain(SELF_HOSTING_GUIDANCE);
     expect(verifyPrompt(url, "")).toContain(SELF_HOSTING_GUIDANCE);
-    expect(fixPrompt(url, FAILED_CHECK, "")).toContain(SELF_HOSTING_GUIDANCE);
-    expect(conflictPrompt(url, CONFLICT, "")).toContain(SELF_HOSTING_GUIDANCE);
+    expect(fixPrompt(url, FAILED_CHECK, BASE, "")).toContain(SELF_HOSTING_GUIDANCE);
+    expect(conflictPrompt(url, CONFLICT, BASE, "")).toContain(SELF_HOSTING_GUIDANCE);
   });
 
   it("stays ahead of the repo's own extra prompt", () => {
-    const prompt = implementPrompt(url, "Prefer table-driven tests.");
+    const prompt = implementPrompt(url, BASE, "Prefer table-driven tests.");
 
     expect(prompt.indexOf(SELF_HOSTING_GUIDANCE)).toBeLessThan(
       prompt.indexOf("Prefer table-driven tests."),
@@ -178,26 +181,55 @@ describe("the self-hosting guidance", () => {
 
 describe("the Notes channel", () => {
   it("tells the implement Stage where a finding for another Ticket goes", () => {
-    const prompt = implementPrompt(url, "");
+    const prompt = implementPrompt(url, BASE, "");
 
     expect(prompt).toContain("Notes for other Tickets");
     expect(prompt).toContain("`notes`");
   });
 
   it("tells the fix Stage the same", () => {
-    expect(fixPrompt(url, FAILED_CHECK, "")).toContain("Notes for other Tickets");
+    expect(fixPrompt(url, FAILED_CHECK, BASE, "")).toContain("Notes for other Tickets");
   });
 
   it("tells a Stage to leave the number out rather than guess it", () => {
-    expect(implementPrompt(url, "")).toContain("leave it out when you are not sure");
+    expect(implementPrompt(url, BASE, "")).toContain("leave it out when you are not sure");
   });
 
   it("tells a Stage that finding nothing is the ordinary case", () => {
-    expect(implementPrompt(url, "")).toContain(`"notes": []`);
+    expect(implementPrompt(url, BASE, "")).toContain(`"notes": []`);
   });
 
   it("asks the Stages that only grade or rebase for no Notes", () => {
     expect(verifyPrompt(url, "")).not.toContain("Notes for other Tickets");
-    expect(conflictPrompt(url, CONFLICT, "")).not.toContain("Notes for other Tickets");
+    expect(conflictPrompt(url, CONFLICT, BASE, "")).not.toContain("Notes for other Tickets");
+  });
+});
+
+describe("the resolved base branch", () => {
+  it("is what the implement Stage is told its subject lands on", () => {
+    const prompt = implementPrompt(url, "release", "");
+
+    expect(prompt).toContain("the squash commit on `release`");
+    expect(prompt).not.toContain("`main`");
+  });
+
+  it("is what the conflict Stage is told the rebase stopped against", () => {
+    const prompt = conflictPrompt(url, CONFLICT, "release", "");
+
+    expect(prompt).toContain("rebasing it onto `release`");
+    expect(prompt).toContain("keep `release`'s everywhere the Ticket is silent");
+    expect(prompt).not.toContain("`main`");
+  });
+
+  it("is what the fix Stage is told a branch that will not replay conflicts with", () => {
+    const prompt = fixPrompt(
+      url,
+      { ...FAILED_CHECK, kind: "unresolved-conflict" },
+      "release",
+      "",
+    );
+
+    expect(prompt).toContain("the branch conflicts with release");
+    expect(prompt).not.toContain("conflicts with main");
   });
 });

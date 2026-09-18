@@ -21,11 +21,11 @@ export const SELF_HOSTING_GUIDANCE = `This checkout is the pipeline that started
  * Guidance appended to every implement Stage, working around known defects of
  * the `implement` skill in an unattended session.
  */
-const IMPLEMENT_GUIDANCE = `This session is unattended. Follow this guidance as well as the skill's own:
+const implementGuidance = (base: string) => `This session is unattended. Follow this guidance as well as the skill's own:
 
 - Confirm the Ticket title matches what you are about to build before you start.
 - Make an initial commit before running code-review, so the reviewed diff is not empty.
-- Your first commit's subject becomes the pull request title and the squash commit on \`main\`, so write it in the repo's commit convention and make it summarise the whole Ticket, not just that first commit.
+- Your first commit's subject becomes the pull request title and the squash commit on \`${base}\`, so write it in the repo's commit convention and make it summarise the whole Ticket, not just that first commit.
 - Do not spawn nested review agents beyond what the skill itself does.
 - Do not open pull requests and do not close the issue; the pipeline does both.
 - Commit all of your work to the branch that is already checked out.`;
@@ -60,22 +60,21 @@ const FIX_INSTRUCTIONS = `You are the fix Stage of an unattended pipeline. The T
 - Stay inside this Ticket's Acceptance Criteria. Anything else you find belongs to another Ticket, not to this session; record it as a Note rather than mending it.
 - Write commit subjects in the repo's commit convention. The pipeline re-runs the Checks and the verify Stage as soon as you finish.`;
 
-const CONFLICT_INSTRUCTIONS = `You are the conflict Stage of an unattended pipeline. The Ticket below is already implemented on the branch you are on, and rebasing it onto \`main\` stopped on a conflict. That rebase is still in progress in this worktree, and finishing it is the whole of your job.
+const conflictInstructions = (base: string) => `You are the conflict Stage of an unattended pipeline. The Ticket below is already implemented on the branch you are on, and rebasing it onto \`${base}\` stopped on a conflict. That rebase is still in progress in this worktree, and finishing it is the whole of your job.
 
 - Follow the skill. Resolve every hunk and carry the rebase through to the end; never \`git rebase --abort\`, and never rewind the branch to escape the conflict.
-- Where the two sides are compatible, keep both intents. Where they are not, keep the behaviour this Ticket's Acceptance Criteria ask for, and keep main's everywhere the Ticket is silent.
+- Where the two sides are compatible, keep both intents. Where they are not, keep the behaviour this Ticket's Acceptance Criteria ask for, and keep \`${base}\`'s everywhere the Ticket is silent.
 - Resolve, do not redesign. Implement nothing new, and touch no file the conflict did not.
 - Leave no conflict marker behind in any file, committed or not.
 - Do not push, do not open pull requests, and do not close the Ticket. The pipeline runs the Checks again as soon as you finish, and a failure there spends this Ticket's fix budget.`;
 
 /** How the fix prompt announces each kind of failure. */
-const FAILURE_SENTENCES: Record<FailureKind, string> = {
+const failureSentences = (base: string): Record<FailureKind, string> => ({
   "failed-check": "a Check the pipeline runs itself failed",
   "unmet-criteria": "the verify Stage found unmet Acceptance Criteria",
   "failed-ci": "a pull request check failed after the branch was pushed",
-  "unresolved-conflict":
-    "the branch conflicts with main, and the session sent in to resolve the rebase did not finish it",
-};
+  "unresolved-conflict": `the branch conflicts with ${base}, and the session sent in to resolve the rebase did not finish it`,
+});
 
 /** What went wrong, in the words the hand-off comment would have used. */
 export interface FixFailure {
@@ -87,10 +86,14 @@ export interface FixFailure {
 }
 
 /** `/mattpocock-skills:implement <url>`, then the corrections, then config. */
-export function implementPrompt(issueUrl: string, extraPrompt: string): string {
+export function implementPrompt(
+  issueUrl: string,
+  base: string,
+  extraPrompt: string,
+): string {
   return sections([
     `/mattpocock-skills:implement ${issueUrl}`,
-    IMPLEMENT_GUIDANCE,
+    implementGuidance(base),
     SELF_HOSTING_GUIDANCE,
     NOTES_GUIDANCE,
     extraPrompt,
@@ -111,12 +114,13 @@ export function verifyPrompt(issueUrl: string, extraPrompt: string): string {
 export function conflictPrompt(
   issueUrl: string,
   conflict: string,
+  base: string,
   extraPrompt: string,
 ): string {
   return sections([
     "/mattpocock-skills:resolving-merge-conflicts",
     `Ticket: ${issueUrl}`,
-    CONFLICT_INSTRUCTIONS,
+    conflictInstructions(base),
     outputSection("## Where the rebase stopped", conflict),
     SELF_HOSTING_GUIDANCE,
     extraPrompt,
@@ -127,12 +131,13 @@ export function conflictPrompt(
 export function fixPrompt(
   issueUrl: string,
   failure: FixFailure,
+  base: string,
   extraPrompt: string,
 ): string {
   return sections([
     `Ticket: ${issueUrl}`,
     FIX_INSTRUCTIONS,
-    failureSection(failure),
+    failureSection(failure, base),
     SELF_HOSTING_GUIDANCE,
     NOTES_GUIDANCE,
     extraPrompt,
@@ -140,8 +145,12 @@ export function fixPrompt(
 }
 
 /** The failure, its kind and its evidence, under a heading naming the kind. */
-function failureSection({ kind, summary, evidence }: FixFailure): string {
-  return outputSection(`## The failure: ${FAILURE_SENTENCES[kind]}`, evidence, summary);
+function failureSection({ kind, summary, evidence }: FixFailure, base: string): string {
+  return outputSection(
+    `## The failure: ${failureSentences(base)[kind]}`,
+    evidence,
+    summary,
+  );
 }
 
 /**

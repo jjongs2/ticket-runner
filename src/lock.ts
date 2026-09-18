@@ -2,12 +2,12 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 /**
- * One Run at a time per repo.
+ * One Run at a time per Target.
  *
- * Two Runs sharing a checkout would fight over `main`, over the same Frontier
- * and over the same worktrees. The lock is a PID file rather than an advisory
- * lock so a Run killed mid-flight leaves something a human can read, and so the
- * next Run can tell a live holder from a stale file.
+ * Two Runs sharing a Target would fight over its base branch, over the same
+ * Frontier and over the same worktrees. The lock is a PID file rather than an
+ * advisory lock so a Run killed mid-flight leaves something a human can read,
+ * and so the next Run can tell a live holder from a stale file.
  */
 
 export interface LockHolder {

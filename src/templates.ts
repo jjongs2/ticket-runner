@@ -135,7 +135,7 @@ export interface SquashCommitMessage {
   ticket: number;
   /** The pull request number, appended to the subject as GitHub would. */
   pullRequest: number;
-  /** The pull request title, which is the subject that lands on main. */
+  /** The pull request title, which is the subject that lands on the base branch. */
   title: string;
   verdict: Verdict;
   /** The branch's commit subjects, oldest first. */
@@ -145,7 +145,7 @@ export interface SquashCommitMessage {
 }
 
 /**
- * The commit a merged Ticket leaves on main.
+ * The commit a merged Ticket leaves on the base branch.
  *
  * `git log` renders no HTML, so this is the one template with nothing folded
  * away: the Verdict is counts only, and the per-criterion evidence stays in the

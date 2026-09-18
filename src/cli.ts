@@ -3,6 +3,7 @@ import { ClaudeAgentRunner } from "./adapters/claude-agent-runner.js";
 import { GhTracker } from "./adapters/gh-tracker.js";
 import { GitWorkspace } from "./adapters/git-workspace.js";
 import { findRepoRoot } from "./adapters/repo-root.js";
+import { resolveBaseBranch } from "./base-branch.js";
 import { type Config, ConfigError, loadConfig } from "./config.js";
 import { ensureLabels } from "./labels.js";
 import { acquireLock, lockHeldMessage } from "./lock.js";
@@ -107,6 +108,9 @@ async function execute(work: Work, { repoRoot, config, runId }: Setup): Promise<
   const tracker = new GhTracker({ cwd: repoRoot });
   const created = await ensureLabels(tracker, config.labels);
   if (created.length > 0) console.log(`Created labels: ${created.join(", ")}`);
+  // Once per Run, before any Ticket: every branch, rebase, pull request and
+  // pull of this Run goes to the branch this answers.
+  const baseBranch = await resolveBaseBranch(tracker, config);
 
   const pipeline: Pipeline = {
     tracker,
@@ -115,12 +119,13 @@ async function execute(work: Work, { repoRoot, config, runId }: Setup): Promise<
     config,
     repoRoot,
     runId,
+    baseBranch,
     log: (line) => console.log(line),
   };
 
   const startedAt = Date.now();
   console.log(
-    `agent-pipeline run ${runId}${work.command === "run" ? "" : ` · #${work.ticket}`}`,
+    `agent-pipeline run ${runId}${work.command === "run" ? "" : ` · #${work.ticket}`} · ${baseBranch}`,
   );
   const summary = (outcomes: TicketOutcome[], stop?: RunStop) =>
     runSummary({

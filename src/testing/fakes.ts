@@ -43,6 +43,8 @@ export interface FakePullRequest extends CreatePullRequest {
 
 export class FakeTracker implements Tracker {
   user = "pipeline-user";
+  /** What GitHub calls this Target's default branch; the Run resolves from it. */
+  defaultBranchName = "main";
   labels = new Set<string>();
   createdLabels: LabelSpec[] = [];
   issues = new Map<number, Issue>();
@@ -93,6 +95,12 @@ export class FakeTracker implements Tracker {
 
   async currentUser(): Promise<string> {
     return this.user;
+  }
+
+  // Not in `calls`: like the other reads, and a Run resolves the base branch
+  // before it touches a Ticket, where the log is about what it wrote.
+  async defaultBranch(): Promise<string> {
+    return this.defaultBranchName;
   }
 
   async listLabels(): Promise<string[]> {
@@ -310,14 +318,19 @@ export class FakeWorkspace implements Workspace {
   /** Outcomes for the next runs of a command; `checkOutcomes` answers once they run out. */
   checkQueue = new Map<string, CheckOutcome[]>();
   ranChecks: { command: string; cwd: string; timeoutMs: number }[] = [];
-  rebase: RebaseOutcome = { ok: true };
-  /** Outcomes for the next rebases, oldest first; `rebase` answers once they run out. */
+  rebaseOutcome: RebaseOutcome = { ok: true };
+  /** Outcomes for the next rebases, oldest first; `rebaseOutcome` answers once they run out. */
   rebaseQueue: RebaseOutcome[] = [];
+  /** The branch each worktree was created from, in order. */
+  branchedFrom: string[] = [];
+  /** The branch each rebase replayed onto, in order. */
+  rebasedOnto: string[] = [];
   /** What the worktree looks like once the conflict Stage has had its turn. */
   rebaseStateAfterStage: RebaseState = { resolved: true };
   aborts = 0;
   pushes: { cwd: string; branch: string }[] = [];
-  pulledMain = 0;
+  /** The branch each post-merge pull brought the main checkout to, in order. */
+  pulledBase: string[] = [];
 
   /** Fail `command` every time the pipeline runs it. */
   failCheck(command: string, output: string): this {
@@ -354,8 +367,9 @@ export class FakeWorkspace implements Workspace {
     return this;
   }
 
-  async createWorktree({ path, branch }: WorktreeRef): Promise<void> {
+  async createWorktree({ path, branch }: WorktreeRef, base: string): Promise<void> {
     this.calls.push(`createWorktree:${branch}`);
+    this.branchedFrom.push(base);
     this.worktrees.set(path, branch);
     this.branches.add(branch);
   }
@@ -376,12 +390,12 @@ export class FakeWorkspace implements Workspace {
     this.branches.delete(branch);
   }
 
-  async commitSubjects(branch: string): Promise<string[]> {
+  async commitSubjects(branch: string, _base: string): Promise<string[]> {
     this.calls.push(`commitSubjects:${branch}`);
     return [...this.commits];
   }
 
-  async coAuthors(branch: string): Promise<string[]> {
+  async coAuthors(branch: string, _base: string): Promise<string[]> {
     this.calls.push(`coAuthors:${branch}`);
     return [...this.coAuthorList];
   }
@@ -399,9 +413,10 @@ export class FakeWorkspace implements Workspace {
     this.calls.push(`discardChanges:${cwd}`);
   }
 
-  async rebaseOnMain(): Promise<RebaseOutcome> {
-    this.calls.push("rebaseOnMain");
-    return this.rebaseQueue.shift() ?? this.rebase;
+  async rebase(_cwd: string, base: string): Promise<RebaseOutcome> {
+    this.calls.push("rebase");
+    this.rebasedOnto.push(base);
+    return this.rebaseQueue.shift() ?? this.rebaseOutcome;
   }
 
   async rebaseState(): Promise<RebaseState> {
@@ -429,8 +444,8 @@ export class FakeWorkspace implements Workspace {
     this.calls.push(`deleteRemoteBranch:${branch}`);
   }
 
-  async pullMain(): Promise<void> {
-    this.calls.push("pullMain");
-    this.pulledMain += 1;
+  async pullBase(base: string): Promise<void> {
+    this.calls.push("pullBase");
+    this.pulledBase.push(base);
   }
 }

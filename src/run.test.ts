@@ -64,6 +64,7 @@ function pipeline(): Pipeline {
     config: config(),
     repoRoot,
     runId: "run-1",
+    baseBranch: "main",
     log: (line) => logged.push(line),
   };
 }
@@ -389,12 +390,12 @@ describe("recomputing the Frontier", () => {
     expect(result.stop).toEqual({ reason: "frontier", blocked: [] });
   });
 
-  it("pulls main before the next Ticket's worktree is created", async () => {
+  it("pulls the base branch before the next Ticket's worktree is created", async () => {
     for (const number of [4, 5]) tracker.addIssue({ number });
 
     await processRun(pipeline());
 
-    const pull = workspace.calls.indexOf("pullMain");
+    const pull = workspace.calls.indexOf("pullBase");
     expect(pull).toBeGreaterThan(-1);
     expect(pull).toBeLessThan(workspace.calls.indexOf("createWorktree:agent/5-ticket-5"));
   });

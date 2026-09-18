@@ -24,17 +24,16 @@ const REBASE_DIRS = ["rebase-merge", "rebase-apply"];
 
 /**
  * The git-backed {@link Workspace}: one worktree per Ticket, branched from the
- * main checkout's `main`, so the checkout itself is never touched.
+ * main checkout's base branch, so the checkout itself is never touched.
  */
 export class GitWorkspace implements Workspace {
   constructor(
     private readonly repoRoot: string,
-    private readonly mainBranch = "main",
     private readonly remote = "origin",
   ) {}
 
-  async createWorktree({ path, branch }: WorktreeRef): Promise<void> {
-    await this.git(["worktree", "add", "-b", branch, path, this.mainBranch]);
+  async createWorktree({ path, branch }: WorktreeRef, base: string): Promise<void> {
+    await this.git(["worktree", "add", "-b", branch, path, base]);
   }
 
   async removeWorktree({ path, branch }: WorktreeRef): Promise<void> {
@@ -80,13 +79,13 @@ export class GitWorkspace implements Workspace {
     return result.exitCode === 0;
   }
 
-  async commitSubjects(branch: string): Promise<string[]> {
+  async commitSubjects(branch: string, base: string): Promise<string[]> {
     // --reverse turns git's newest-first log into the order they were written.
     const { stdout } = await this.git([
       "log",
       "--reverse",
       "--format=%s",
-      `${this.mainBranch}..${branch}`,
+      `${base}..${branch}`,
     ]);
     // Only git's trailing newline is dropped: a commit with an empty subject is
     // still a commit, and losing it would shift which one counts as the first.
@@ -95,12 +94,12 @@ export class GitWorkspace implements Workspace {
     return subjects;
   }
 
-  async coAuthors(branch: string): Promise<string[]> {
+  async coAuthors(branch: string, base: string): Promise<string[]> {
     const { stdout } = await this.git([
       "log",
       "--reverse",
       "--format=%(trailers:key=Co-authored-by,valueonly)",
-      `${this.mainBranch}..${branch}`,
+      `${base}..${branch}`,
     ]);
     const seen = new Set<string>();
     for (const line of stdout.split("\n")) {
@@ -129,8 +128,8 @@ export class GitWorkspace implements Workspace {
     await execOrThrow("git", ["clean", "-fd"], { cwd });
   }
 
-  async rebaseOnMain(cwd: string): Promise<RebaseOutcome> {
-    const result = await exec("git", ["rebase", this.mainBranch], { cwd });
+  async rebase(cwd: string, base: string): Promise<RebaseOutcome> {
+    const result = await exec("git", ["rebase", base], { cwd });
     if (result.exitCode === 0) return { ok: true };
 
     // The rebase is deliberately left where it stopped: the conflict Stage
@@ -148,24 +147,20 @@ export class GitWorkspace implements Workspace {
    * a finished rebase, on a branch that has never met the commits it conflicts
    * with.
    */
-  async rebaseState(cwd: string): Promise<RebaseState> {
+  async rebaseState(cwd: string, base: string): Promise<RebaseState> {
     const reasons: string[] = [];
 
     if (await this.rebaseInProgress(cwd)) {
       reasons.push("a rebase is still in progress");
-    } else if (!(await this.isRebasedOnMain(cwd))) {
-      reasons.push(`the branch is not rebased onto ${this.mainBranch}`);
+    } else if (!(await this.isRebasedOn(cwd, base))) {
+      reasons.push(`the branch is not rebased onto ${base}`);
     } else {
-      // Being on top of main is not the same as having been replayed onto it:
-      // merging main in would satisfy the ancestry and put a merge commit on a
-      // branch whose every commit is about to be listed in a squash message.
-      const merges = await this.lines(cwd, [
-        "rev-list",
-        "--merges",
-        `${this.mainBranch}..HEAD`,
-      ]);
+      // Being on top of the base branch is not the same as having been replayed
+      // onto it: merging it in would satisfy the ancestry and put a merge commit
+      // on a branch whose every commit is about to be listed in a squash message.
+      const merges = await this.lines(cwd, ["rev-list", "--merges", `${base}..HEAD`]);
       if (merges.length > 0) {
-        reasons.push(`the conflict was merged into the branch, not rebased onto ${this.mainBranch}`);
+        reasons.push(`the conflict was merged into the branch, not rebased onto ${base}`);
       }
     }
 
@@ -205,12 +200,10 @@ export class GitWorkspace implements Workspace {
     return paths.some((path) => existsSync(resolve(cwd, path)));
   }
 
-  private async isRebasedOnMain(cwd: string): Promise<boolean> {
-    const result = await exec(
-      "git",
-      ["merge-base", "--is-ancestor", this.mainBranch, "HEAD"],
-      { cwd },
-    );
+  private async isRebasedOn(cwd: string, base: string): Promise<boolean> {
+    const result = await exec("git", ["merge-base", "--is-ancestor", base, "HEAD"], {
+      cwd,
+    });
     return result.exitCode === 0;
   }
 
@@ -241,14 +234,15 @@ export class GitWorkspace implements Workspace {
     throwOnFailure("git", args, result);
   }
 
-  async pullMain(): Promise<void> {
+  async pullBase(base: string): Promise<void> {
     const { stdout } = await this.git(["rev-parse", "--abbrev-ref", "HEAD"]);
-    if (stdout.trim() === this.mainBranch) {
-      await this.git(["pull", "--ff-only", this.remote, this.mainBranch]);
+    if (stdout.trim() === base) {
+      await this.git(["pull", "--ff-only", this.remote, base]);
       return;
     }
-    // main is not checked out here, so move the ref without touching the tree.
-    await this.git(["fetch", this.remote, `${this.mainBranch}:${this.mainBranch}`]);
+    // The base branch is not checked out here, so move the ref without
+    // touching the tree.
+    await this.git(["fetch", this.remote, `${base}:${base}`]);
   }
 
   private git(args: string[]) {

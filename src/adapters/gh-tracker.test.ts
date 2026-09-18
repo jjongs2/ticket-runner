@@ -41,6 +41,22 @@ describe("reading", () => {
     expect(calls[0]).toEqual(["api", "user", "--jq", ".login"]);
   });
 
+  it("asks gh what GitHub calls the Target's default branch", async () => {
+    expect(await tracker(ok("master\n")).defaultBranch()).toBe("master");
+    expect(calls[0]).toEqual([
+      "repo",
+      "view",
+      "--json",
+      "defaultBranchRef",
+      "--jq",
+      ".defaultBranchRef.name",
+    ]);
+  });
+
+  it("refuses an empty answer rather than branching from nothing", async () => {
+    await expect(tracker(ok("\n")).defaultBranch()).rejects.toThrow(/no default branch/);
+  });
+
   it("lists label names", async () => {
     const labels = await tracker(ok('[{"name":"needs-triage"},{"name":"wontfix"}]')).listLabels();
 
@@ -332,8 +348,9 @@ describe("writing", () => {
 });
 
 describe("pull requests", () => {
-  it("opens a PR against main and reads its number from the URL", async () => {
+  it("opens a PR against the base branch it is given and reads its number from the URL", async () => {
     const pr = await tracker(ok("https://github.com/acme/repo/pull/12\n")).createPullRequest({
+      base: "main",
       head: "agent/2-skeleton",
       title: "Skeleton (#2)",
       body: "Closes #2",
@@ -391,6 +408,7 @@ describe("pull requests", () => {
     ).rejects.toThrow("could not read an issue number");
     await expect(
       tracker(ok("3 files changed\n")).createPullRequest({
+        base: "main",
         head: "agent/2-skeleton",
         title: "Skeleton (#2)",
         body: "Closes #2",
@@ -419,6 +437,7 @@ describe("pull requests", () => {
     ).rejects.toThrow("could not read an issue number");
     await expect(
       tracker(ok("https://github.com/acme/repo/pull/12 (draft)\n")).createPullRequest({
+        base: "main",
         head: "agent/2-skeleton",
         title: "Skeleton (#2)",
         body: "Closes #2",
@@ -431,6 +450,7 @@ describe("pull requests", () => {
     const pr = await tracker(
       ok("Creating pull request into main\nhttps://github.com/acme/repo/pull/12\n"),
     ).createPullRequest({
+      base: "main",
       head: "agent/2-skeleton",
       title: "Skeleton (#2)",
       body: "Closes #2",
@@ -442,6 +462,7 @@ describe("pull requests", () => {
 
   it("opens a draft PR when the Ticket is being handed off", async () => {
     await tracker(ok("https://github.com/acme/repo/pull/12\n")).createPullRequest({
+      base: "main",
       head: "agent/2-skeleton",
       title: "Skeleton (#2)",
       body: "Closes #2",
