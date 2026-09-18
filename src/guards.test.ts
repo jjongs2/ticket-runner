@@ -14,6 +14,7 @@ function issue(overrides: IssueOverrides = {}): Issue {
     title: "Planning guards",
     url: "https://github.com/acme/repo/issues/4",
     body: "- [ ] it works",
+    closed: false,
     labels: [READY],
     assignees: [],
     subIssues: 0,
@@ -24,6 +25,10 @@ function issue(overrides: IssueOverrides = {}): Issue {
 }
 
 const guard = (overrides: IssueOverrides = {}) => skipReason(issue(overrides), READY);
+
+/** The same issue, offered as a Ticket this checkout is already holding. */
+const strandedGuard = (overrides: IssueOverrides = {}) =>
+  skipReason(issue(overrides), READY, true);
 
 describe("a Ticket Planning got right", () => {
   it("passes every guard", () => {
@@ -44,6 +49,24 @@ describe("issues no Run may take", () => {
     // Nothing the guards would comment on gets said to an issue that was never
     // offered to the pipeline in the first place.
     expect(guard({ labels: [], body: "no criteria here", subIssues: 3 })).toBe("not-ready");
+  });
+});
+
+describe("a stranded Ticket", () => {
+  /** What a Claim leaves on the board: the assignee on, ready-for-agent off. */
+  const CLAIMED = { assignees: ["pipeline-user"], labels: ["in-progress"] };
+
+  it("is taken rather than refused for the Claim it is still wearing", () => {
+    expect(strandedGuard(CLAIMED)).toBeUndefined();
+  });
+
+  it("is still graded by the Planning guards, which are about the issue", () => {
+    expect(strandedGuard({ ...CLAIMED, subIssues: 5 })).toBe("spec");
+    expect(strandedGuard({ ...CLAIMED, body: "no criteria here" })).toBe("no-criteria");
+  });
+
+  it("is refused as usual when nothing says this checkout is holding it", () => {
+    expect(guard(CLAIMED)).toBe("claimed");
   });
 });
 

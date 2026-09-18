@@ -28,6 +28,7 @@ import {
   writeTicketState,
 } from "./resume.js";
 import { retryLogDir, stageLogDir } from "./run-log.js";
+import { holdsClaim } from "./stranded.js";
 import {
   draftPullRequestBody,
   guardComment,
@@ -169,15 +170,21 @@ export async function processTicket(
   const log = pipeline.log ?? (() => {});
 
   const issue = await tracker.getIssue(ticket);
-  const skip = skipReason(issue, config.labels.readyForAgent);
+  const user = await tracker.currentUser();
+
+  // What an earlier Run left behind, read before the guards because it decides
+  // one of them: a Ticket this checkout still holds with state recorded for it is
+  // stranded — the Claim on it is this pipeline's own, left by a Run that never
+  // came back — and the refusals must not read it as somebody else's.
+  const recorded = readTicketState(repoRoot, ticket);
+  const stranded = recorded !== undefined && holdsClaim(issue, user, config.labels.inProgress);
+  const skip = skipReason(issue, config.labels.readyForAgent, stranded);
   if (skip !== undefined) return await passOver(pipeline, issue, skip);
 
-  const user = await tracker.currentUser();
   const worktree = worktreePath(repoRoot, ticket);
-  // What an earlier Run a rate limit stopped left behind, if anything. Its
-  // branch is the one the work is on, which the Ticket's title may no longer
-  // say anything about.
-  const resume = await resumable(pipeline, ticket, worktree);
+  // Whether the work that state names is still there. Its branch is the one the
+  // work is on, which the Ticket's title may no longer say anything about.
+  const resume = await resumable(pipeline, ticket, worktree, recorded);
   const branch = resume?.branch ?? branchName(ticket, issue.title);
   // Built from the comments the Ticket already has, so a Run that comes back to
   // a Ticket an earlier Run reported on edits that table rather than opening a
@@ -191,19 +198,41 @@ export async function processTicket(
     log,
   });
 
-  // The claim is the first write: the board shows what the pipeline holds
-  // before anything else can go wrong.
-  await tracker.assign(ticket, user);
-  await tracker.addLabel(ticket, config.labels.inProgress);
-  await tracker.removeLabel(ticket, config.labels.readyForAgent);
+  // The State file, written as part of the Claim and kept current from here on,
+  // so a Run that is killed mid-Ticket still leaves the next one something to
+  // resume. A resumed Ticket carries on from what it had already reached.
+  //
+  // First of the two, because a Claim no State file names is the one thing this
+  // has to rule out: a crash between the writes then leaves a Ticket nobody has
+  // claimed with state beside it, which is a released Ticket and resumes itself.
+  const record = new ResumeRecord(pipeline, {
+    ticket,
+    branch,
+    state: resume?.state ?? "claimed",
+    fixUsed: resume?.fixUsed ?? false,
+    ...(resume?.pullRequest === undefined ? {} : { pullRequest: resume.pullRequest }),
+  });
+  record.advance();
+
+  // The claim is the first write on the board: it shows what the pipeline holds
+  // before anything else can go wrong. A stranded Ticket is resumed in place,
+  // wearing the Claim it never gave up — re-writing what is already there would
+  // only risk the Ticket on three tracker calls that change nothing.
+  if (!stranded) {
+    await tracker.assign(ticket, user);
+    await tracker.addLabel(ticket, config.labels.inProgress);
+    await tracker.removeLabel(ticket, config.labels.readyForAgent);
+  }
   log(
-    resume === undefined
-      ? `#${ticket} claimed · ${branch}`
-      : `#${ticket} resumed from ${resume.state} · ${branch}`,
+    resume !== undefined
+      ? `#${ticket} resumed from ${resume.state} · ${branch}`
+      : stranded
+        ? `#${ticket} taken from the top, still claimed · ${branch}`
+        : `#${ticket} claimed · ${branch}`,
   );
 
-  // A pull request the released Run had already opened: without it this Run
-  // would try to open a second one for the same branch.
+  // A pull request an earlier Run had already opened: without it this Run would
+  // try to open a second one for the same branch.
   let pullRequest: number | undefined = resume?.pullRequest;
   // Where an unexpected error would have happened, so the hand-off comment
   // names the step the human has to look at rather than guessing.
@@ -211,7 +240,7 @@ export async function processTicket(
   // The fix budget, which is one per Ticket and spent by the first failure a
   // fix Stage is offered. Once it is gone the next failure of any kind — even a
   // kind the fix Stage never touched — is a hand-off. A resumed Ticket keeps the
-  // budget it had when it was released: resuming buys no second chances.
+  // budget recorded when it stopped: resuming buys no second chances.
   let fixUsed = resume?.fixUsed ?? false;
   // The pass behind a fix Stage logs beside the first one rather than over it.
   let logDir = stageLogDir(repoRoot, runId, ticket);
@@ -221,14 +250,22 @@ export async function processTicket(
   let verdict: Verdict;
 
   try {
-    // A released Ticket kept its worktree and branch, and the Stages that
-    // already succeeded on them are not paid for twice.
+    // A resumed Ticket kept its worktree and branch, and the Stages that already
+    // succeeded on them are not paid for twice.
     if (resume === undefined) {
       await workspace.createWorktree({ path: worktree, branch });
+    } else {
+      // A Run that was killed mid-rebase left git stopped in the worktree, with
+      // conflict markers in files the Checks are about to grade. Back to the
+      // branch tip first, then: a no-op on a worktree nothing stopped, so every
+      // resume rebases from the same clean start a released Ticket does.
+      await workspace.abortRebase(worktree);
     }
     if (resume === undefined || resume.state === "claimed") {
       point = "implement";
       await implement(pipeline, issue, worktree, branch, logDir, progress, notes);
+      // The branch now carries work no later Run should pay for again.
+      record.advance({ state: "implemented" });
     }
 
     let commits: string[];
@@ -269,6 +306,7 @@ export async function processTicket(
           { issue, branch, worktree, verdict, title },
           pullRequest,
         );
+        record.advance({ pullRequest });
         point = "ci";
         await requireGreenCi(pipeline, pullRequest, progress);
         break;
@@ -290,6 +328,10 @@ export async function processTicket(
           progress,
           notes,
         );
+        // Recorded once the Stage has come back, not when the budget was
+        // committed: a fix Stage the rate limit stopped before it ran spends
+        // nothing, and the release below says so.
+        record.advance({ fixUsed: true });
       }
     }
 
@@ -306,10 +348,10 @@ export async function processTicket(
         user,
         branch,
         limit: error,
+        record,
         // A fix Stage the limit stopped before it ran spends nothing: the
         // budget is still there for the Run that resumes the Ticket.
         fixUsed: fixUsed && error.point !== "fix",
-        ...(pullRequest === undefined ? {} : { pullRequest }),
         notes,
       });
     }
@@ -362,17 +404,18 @@ export async function processTicket(
  * The State file only names where the work is; whether the work is still there
  * is the Workspace's answer. A human who has removed the worktree, or moved it
  * onto another branch, has thrown the resume away with it — so the file goes too
- * and the Ticket is taken from the top. That is the safe reading of a worktree
- * nobody can be sure of, not a free one: the branch may still exist, and then
- * creating the worktree fails and the Ticket is handed over with the failure
- * naming it. Better that than resuming into a worktree that is not there.
+ * and the Ticket is taken from the top, released or stranded alike. That is the
+ * safe reading of a worktree nobody can be sure of, not a free one: the branch
+ * may still exist, and then creating the worktree fails and the Ticket is handed
+ * over with the failure naming it. Better that than resuming into a worktree that
+ * is not there.
  */
 async function resumable(
   pipeline: Pipeline,
   ticket: number,
   worktree: string,
+  state: TicketState | undefined,
 ): Promise<TicketState | undefined> {
-  const state = readTicketState(pipeline.repoRoot, ticket);
   if (state === undefined) return undefined;
   if (await pipeline.workspace.hasWorktree({ path: worktree, branch: state.branch })) {
     return state;
@@ -381,6 +424,46 @@ async function resumable(
   clearTicketState(pipeline.repoRoot, ticket);
   pipeline.log?.(`#${ticket} was resumable, but ${state.branch} is not in ${worktree}`);
   return undefined;
+}
+
+/** What one write moves the Ticket's State file on by. */
+type Advance = Partial<Pick<TicketState, "state" | "fixUsed" | "pullRequest">>;
+
+/**
+ * The State file a claimed Ticket keeps, and the one place a Ticket writes it.
+ *
+ * A Ticket is resumable for as long as it is claimed, so the file is written as
+ * part of the Claim and rewritten whenever the Ticket reaches something a later
+ * Run should not pay for again. The release is one more such write rather than
+ * the only one, which is what makes a Run that was killed recoverable too.
+ *
+ * A write that does not land is logged and nothing more. What is on disk is then
+ * an earlier state of the same Ticket, and resuming from further back costs a
+ * Stage rather than being wrong — where failing the Ticket over a local file
+ * would throw away the work the Stages have already done.
+ */
+class ResumeRecord {
+  private readonly state: TicketState;
+
+  constructor(
+    private readonly pipeline: Pipeline,
+    reached: Omit<TicketState, "runId" | "updatedAt">,
+  ) {
+    this.state = { ...reached, runId: pipeline.runId, updatedAt: "" };
+  }
+
+  /** Move the record on, and put it where the next Run will look for it. */
+  advance(reached: Advance = {}): void {
+    Object.assign(this.state, reached);
+    this.state.updatedAt = new Date().toISOString();
+    try {
+      writeTicketState(this.pipeline.repoRoot, this.state);
+    } catch (error) {
+      this.pipeline.log?.(
+        `#${this.state.ticket} could not record its state: ${(error as Error).message}`,
+      );
+    }
+  }
 }
 
 /**
@@ -862,9 +945,10 @@ interface Release {
   user: string;
   branch: string;
   limit: RateLimited;
+  /** The Ticket's State file, which the release brings up to date and leaves. */
+  record: ResumeRecord;
   /** Whether the Fix budget was spent by a failure of the Ticket's own. */
   fixUsed: boolean;
-  pullRequest?: number;
   notes: RoutedNote[];
 }
 
@@ -879,22 +963,14 @@ interface Release {
  */
 async function release(
   pipeline: Pipeline,
-  { issue, user, branch, limit, fixUsed, pullRequest, notes }: Release,
+  { issue, user, branch, limit, record, fixUsed, notes }: Release,
 ): Promise<TicketOutcome> {
-  const { tracker, config, repoRoot } = pipeline;
+  const { tracker, config } = pipeline;
   const ticket = issue.number;
 
-  // Written before the Claim comes off: a Ticket back on the Frontier without a
-  // State file is one the next Run would start again from nothing.
-  writeTicketState(repoRoot, {
-    ticket,
-    branch,
-    state: limit.state,
-    fixUsed,
-    ...(pullRequest === undefined ? {} : { pullRequest }),
-    runId: pipeline.runId,
-    releasedAt: new Date().toISOString(),
-  });
+  // Brought up to date before the Claim comes off: a Ticket back on the Frontier
+  // whose state is out of date is one the next Run would redo Stages for.
+  record.advance({ state: limit.state, fixUsed });
 
   // The claim, undone in the order it was made, so the assignee — which is what
   // another Run reads to tell a taken Ticket from a free one — comes off last.

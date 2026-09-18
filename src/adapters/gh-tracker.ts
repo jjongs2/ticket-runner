@@ -30,6 +30,7 @@ interface RawIssue {
   title: string;
   url: string;
   body: string;
+  state: string;
   labels: { name: string }[];
   assignees: { login: string }[];
   comments: { body: string; url: string }[];
@@ -115,7 +116,7 @@ export class GhTracker implements Tracker {
       "view",
       String(number),
       "--json",
-      "number,title,url,body,labels,assignees,comments,subIssuesSummary,blockedBy",
+      "number,title,url,body,state,labels,assignees,comments,subIssuesSummary,blockedBy",
     ]);
     const raw = JSON.parse(stdout) as RawIssue;
     return {
@@ -123,6 +124,7 @@ export class GhTracker implements Tracker {
       title: raw.title,
       url: raw.url,
       body: raw.body ?? "",
+      closed: raw.state === "CLOSED",
       labels: raw.labels.map((label) => label.name),
       assignees: raw.assignees.map((assignee) => assignee.login),
       comments: raw.comments.map((comment) => ({

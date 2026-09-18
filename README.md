@@ -122,9 +122,9 @@ anything to do about it: the `⏸ rate limited` row in the progress table is the
 report. A released Ticket does not change the exit code, so a Run that released every
 Ticket it took still exits `0`.
 
-What the release leaves behind is a **State file** at
-`.agent-pipeline/state/ticket-<n>.json`, naming the state the Ticket reached, its branch,
-whether the fix budget was already spent, and the pull request if one was open
+What the release leaves behind is the **State file** the Ticket has been keeping since it
+was claimed, at `.agent-pipeline/state/ticket-<n>.json`, naming the state it reached, its
+branch, whether the fix budget was already spent, and the pull request if one is open
 ([ADR-0004](docs/adr/0004-resume-state-is-a-local-file.md)):
 
 ```json
@@ -134,7 +134,7 @@ whether the fix budget was already spent, and the pull request if one was open
   "state": "implemented",
   "fixUsed": false,
   "runId": "2026-09-17T09-00-00-000",
-  "releasedAt": "2026-09-17T10:14:02.511Z"
+  "updatedAt": "2026-09-17T10:14:02.511Z"
 }
 ```
 
@@ -142,14 +142,47 @@ A Run started once the limit has reset finds the Ticket back on the Frontier, re
 file and carries on in the worktree and on the branch it names rather than creating new
 ones: `claimed` runs the implement Stage again, `implemented` goes straight to the Checks.
 The fix budget is resumed as it was recorded, so a Ticket that had already spent it is
-handed off at its next failure — resuming buys no second chances. The file is removed when
-the Ticket merges and when it is handed off, and ignored if the worktree it names has since
-been cleaned up — the Ticket is then taken from the top, which is handed over at `setup` if
-the branch is still lying about.
+handed off at its next failure — resuming buys no second chances. The file is ignored if
+the worktree it names has since been cleaned up — the Ticket is then taken from the top,
+which is handed over at `setup` if the branch is still lying about.
 
 The Run the limit stops does not wait for it to reset and does not take the Ticket it
 released a second time; it carries on down the Frontier, releasing whatever the limit
 stops next.
+
+## A Run that did not come back
+
+A Run that is killed — Ctrl-C, an OOM, a machine that went away — releases nothing. The
+Ticket it was holding keeps its Claim, and its branch and worktree keep the work. So the
+State file is not written by the release; it is written as part of the Claim and kept
+current as the Ticket advances: `claimed` when the Claim is made, `implemented` once the
+implement Stage has committed, the pull request once one is open, the fix budget once a fix
+Stage has come back. It is removed when the Ticket merges and when it is handed off, which
+are the two ways a Ticket stops being resumable.
+
+A Ticket left like that is a **stranded Ticket**: state recorded locally, and the Claim
+still on the board. No Frontier can offer one — it is claimed — so before a `run` computes
+the Frontier at all it sweeps the local State files and resumes every stranded Ticket, in
+ascending number, in the worktree and on the branch it already has. The Claim stays exactly
+as it is: nothing is re-assigned, nothing is relabelled, and nobody is notified. `ticket
+<n>` naming a stranded Ticket resumes it too, where it would otherwise refuse it as
+claimed.
+
+Nothing records a process id. One Run at a time holds the lock for a checkout and the State
+file is local to that checkout, so a Run that holds the lock and finds a Ticket still
+wearing this checkout's Claim knows the Run that claimed it is gone.
+
+The sweep is careful about the files it did not write:
+
+- a Ticket whose Claim has come off is a released Ticket, and is left to the Frontier
+- a Ticket that has closed has nothing left to resume, so its State file is removed
+- a Ticket somebody else now holds is left alone and logged — a human took it over
+- a Ticket whose worktree is gone is taken from the top, in place, keeping its Claim
+
+Being killed is still worse than stopping properly: whatever the Stage was doing is lost,
+and a worktree the Run left mid-rebase is aborted back to the branch tip before the Checks
+grade it. What the sweep buys is that no human has to unpick the labels and the assignee
+before the Ticket can move again.
 
 ## What a Ticket gets told
 

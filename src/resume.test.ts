@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   type TicketState,
   clearTicketState,
+  listTicketStates,
   readTicketState,
   statePath,
   writeTicketState,
@@ -21,7 +22,7 @@ function state(overrides: Partial<TicketState> = {}): TicketState {
     state: "implemented",
     fixUsed: false,
     runId: "run-1",
-    releasedAt: "2026-09-17T09:00:00.000Z",
+    updatedAt: "2026-09-17T09:00:00.000Z",
     ...overrides,
   };
 }
@@ -122,5 +123,40 @@ describe("clearTicketState", () => {
 
   it("is a no-op on a Ticket that was never released", () => {
     expect(() => clearTicketState(repoRoot, TICKET)).not.toThrow();
+  });
+});
+
+describe("listTicketStates", () => {
+  it("reports every Ticket with state recorded, lowest number first", () => {
+    for (const ticket of [12, 3, 8]) writeTicketState(repoRoot, state({ ticket }));
+
+    expect(listTicketStates(repoRoot).map((recorded) => recorded.ticket)).toEqual([3, 8, 12]);
+  });
+
+  it("reports what each file says, so a sweep needs no second read", () => {
+    writeTicketState(repoRoot, state({ ticket: 3, branch: "agent/3-one", fixUsed: true }));
+
+    expect(listTicketStates(repoRoot)).toEqual([
+      state({ ticket: 3, branch: "agent/3-one", fixUsed: true }),
+    ]);
+  });
+
+  it("has nothing to say on a checkout that has never claimed a Ticket", () => {
+    expect(listTicketStates(repoRoot)).toEqual([]);
+  });
+
+  it("leaves out a file no Run could resume from, rather than failing the sweep", () => {
+    writeTicketState(repoRoot, state({ ticket: 3 }));
+    writeRaw("{ not json");
+
+    expect(listTicketStates(repoRoot).map((recorded) => recorded.ticket)).toEqual([3]);
+  });
+
+  it("ignores anything in the directory that is not a Ticket's state", () => {
+    writeTicketState(repoRoot, state({ ticket: 3 }));
+    mkdirSync(join(repoRoot, ".agent-pipeline", "state"), { recursive: true });
+    writeFileSync(join(repoRoot, ".agent-pipeline", "state", "notes.txt"), "a human's note");
+
+    expect(listTicketStates(repoRoot).map((recorded) => recorded.ticket)).toEqual([3]);
   });
 });

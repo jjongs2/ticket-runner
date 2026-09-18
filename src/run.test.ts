@@ -1,9 +1,10 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Config } from "./config.js";
 import type { Pipeline } from "./orchestrator.js";
+import { type TicketState, statePath, writeTicketState } from "./resume.js";
 import { processRun } from "./run.js";
 import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./testing/fakes.js";
 
@@ -39,7 +40,7 @@ let tracker: FakeTracker;
 let runner: FakeAgentRunner;
 let workspace: FakeWorkspace;
 let logged: string[];
-/** A temporary repo root, because a released Ticket's State file is a real file. */
+/** A temporary repo root, because a claimed Ticket's State file is a real file. */
 let repoRoot: string;
 
 beforeEach(() => {
@@ -371,5 +372,187 @@ describe("recomputing the Frontier", () => {
     const pull = workspace.calls.indexOf("pullMain");
     expect(pull).toBeGreaterThan(-1);
     expect(pull).toBeLessThan(workspace.calls.indexOf("createWorktree:agent/5-ticket-5"));
+  });
+});
+
+/**
+ * The sweep a Run does before it touches the Frontier: the Tickets a Run that
+ * never came back left claimed, which nothing else would ever pick up.
+ */
+describe("stranded Tickets", () => {
+  /** Where this Ticket's worktree is, under the repo root the Run was given. */
+  const worktreeOf = (ticket: number) => join(repoRoot, ".worktrees", `ticket-${ticket}`);
+
+  /** Exactly what a killed Run leaves: the Claim, the worktree, the State file. */
+  function stranded(ticket: number, overrides: Partial<TicketState> = {}): void {
+    const state: TicketState = {
+      ticket,
+      branch: `agent/${ticket}-ticket-${ticket}`,
+      state: "implemented",
+      fixUsed: false,
+      runId: "run-0",
+      updatedAt: "2026-09-17T09:00:00.000Z",
+      ...overrides,
+    };
+    tracker.addIssue({ number: ticket, assignees: ["pipeline-user"], labels: ["in-progress"] });
+    workspace.worktrees.set(worktreeOf(ticket), state.branch);
+    writeTicketState(repoRoot, state);
+  }
+
+  it("resumes one the Frontier could never have offered", async () => {
+    stranded(4);
+
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes).toEqual([expect.objectContaining({ outcome: "merged", ticket: 4 })]);
+    expect(runner.stages()).toEqual(["verify"]);
+    expect(workspace.calls).not.toContain("createWorktree:agent/4-ticket-4");
+  });
+
+  it("resumes every one of them, in ascending number, before computing the Frontier", async () => {
+    stranded(9);
+    stranded(4);
+    tracker.addIssue({ number: 6 });
+
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes.map((outcome) => outcome.ticket)).toEqual([4, 9, 6]);
+    // The Frontier is not even asked for until the sweep is done.
+    expect(tracker.calls.indexOf("listCandidates:ready-for-agent")).toBeGreaterThan(
+      tracker.calls.indexOf("squashMerge:101"),
+    );
+  });
+
+  it("works on the branch each State file names, not one derived from the title", async () => {
+    stranded(4, { branch: "agent/4-what-it-was-called-then" });
+
+    await processRun(pipeline());
+
+    expect(workspace.pushes.map((push) => push.branch)).toEqual([
+      "agent/4-what-it-was-called-then",
+    ]);
+  });
+
+  it("keeps the Claim each one already has", async () => {
+    stranded(4);
+
+    await processRun(pipeline());
+
+    expect(tracker.calls).not.toContain("assign:4:pipeline-user");
+    expect(tracker.calls).not.toContain("addLabel:4:in-progress");
+  });
+
+  it("takes a Ticket it resumed and released only once", async () => {
+    stranded(4);
+    runner.queue("verify", { ok: false, failure: "rate-limited" });
+
+    const result = await processRun(pipeline());
+
+    // The release puts #4 straight back on the Frontier; the Run that resumed it
+    // must not meet it there while the limit lasts.
+    expect(result.outcomes.map((outcome) => outcome.outcome)).toEqual(["released"]);
+    expect(tracker.issue(4).labels).toEqual(["ready-for-agent"]);
+  });
+
+  it("carries on into the Frontier when a resumed Ticket is handed off", async () => {
+    stranded(4);
+    workspace.failCheck("npm test", "1 test failed");
+    tracker.addIssue({ number: 6 });
+
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes.map((outcome) => [outcome.ticket, outcome.outcome])).toEqual([
+      [4, "handed-off"],
+      [6, "handed-off"],
+    ]);
+  });
+
+  it("forgets one whose Ticket has closed rather than resuming it", async () => {
+    tracker.addIssue({ number: 4, closed: true, assignees: ["pipeline-user"] });
+    writeTicketState(repoRoot, {
+      ticket: 4,
+      branch: "agent/4-ticket-4",
+      state: "implemented",
+      fixUsed: false,
+      runId: "run-0",
+      updatedAt: "2026-09-17T09:00:00.000Z",
+    });
+
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes).toEqual([]);
+    expect(existsSync(statePath(repoRoot, 4))).toBe(false);
+    expect(logged).toContain("#4 has closed, so the state it left is gone");
+  });
+
+  it("leaves one somebody else now holds in place, and says so", async () => {
+    stranded(4);
+    tracker.issue(4).assignees = ["octocat"];
+
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes).toEqual([]);
+    expect(existsSync(statePath(repoRoot, 4))).toBe(true);
+    expect(logged).toContain("#4 is resumable, but octocat holds it now");
+  });
+
+  it("leaves a released Ticket to the Frontier, which claims it the usual way", async () => {
+    tracker.addIssue({ number: 4 });
+    writeTicketState(repoRoot, {
+      ticket: 4,
+      branch: "agent/4-ticket-4",
+      state: "implemented",
+      fixUsed: false,
+      runId: "run-0",
+      updatedAt: "2026-09-17T09:00:00.000Z",
+    });
+    workspace.worktrees.set(worktreeOf(4), "agent/4-ticket-4");
+
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes).toEqual([expect.objectContaining({ outcome: "merged", ticket: 4 })]);
+    expect(processed()).toEqual([4]);
+  });
+
+  it("takes one whose worktree is gone from the top, in place", async () => {
+    stranded(4);
+    workspace.worktrees.delete(worktreeOf(4));
+
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes).toEqual([expect.objectContaining({ outcome: "merged", ticket: 4 })]);
+    expect(workspace.calls).toContain("createWorktree:agent/4-ticket-4");
+    expect(runner.stages()).toEqual(["implement", "verify"]);
+  });
+
+  it("reports a resumed Ticket that throws with the branch its state named", async () => {
+    stranded(4, { branch: "agent/4-what-it-was-called-then" });
+    tracker.comment = async () => {
+      throw new Error("gh: connection reset");
+    };
+    runner.queue("verify", stageResult({ ok: false, failure: "nonzero-exit" }));
+
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes).toEqual([
+      {
+        outcome: "handed-off",
+        ticket: 4,
+        title: "Ticket 4",
+        branch: "agent/4-what-it-was-called-then",
+        stage: "setup",
+        failure: "gh: connection reset",
+        notes: [],
+      },
+    ]);
+  });
+
+  it("changes nothing for a Run on a checkout that has nothing recorded", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+
+    const result = await processRun(pipeline());
+
+    expect(processed()).toEqual([4, 5]);
+    expect(result.outcomes.map((outcome) => outcome.outcome)).toEqual(["merged", "merged"]);
   });
 });
