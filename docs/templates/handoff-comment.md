@@ -18,6 +18,11 @@ disk sends the human to a directory they will not find. No draft PR is opened
 for such a Ticket either, because there is nothing to push out of, so the PR
 clause goes with it.
 
+A hand-off at `setup` for a branch the pipeline refused to branch over opens no
+draft PR even when it does name a worktree: no Stage of that Run ran there, so
+the branch carries a human's work, which is neither pushed to the remote unasked
+nor presented as this Run's under `Closes #<n>`.
+
 The PR clause is dropped when no pull request could be opened. The whole
 `<details>` block is dropped when there is no evidence to show. Evidence is
 fenced because it is raw command output, which would otherwise be read as

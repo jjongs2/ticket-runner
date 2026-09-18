@@ -230,10 +230,11 @@ export async function processTicket(
   // Where an unexpected error would have happened, so the hand-off comment
   // names the step the human has to look at rather than guessing.
   let point: FailurePoint = "setup";
-  // The worktree a hand-off can send a human to and push out of, once there is
-  // one. A Ticket that failed before `createWorktree` ran has none; a resumed
-  // Ticket was resumed into the one it kept.
-  let worktreeOnDisk: string | undefined = resume === undefined ? undefined : worktree;
+  // The worktree a hand-off can send a human to, once there is one, and whether
+  // this Run may push out of it. A Ticket that failed before `createWorktree`
+  // ran has none; a resumed Ticket was resumed into the one it kept.
+  let worktreeOnDisk: HandOffWorktree | undefined =
+    resume === undefined ? undefined : { path: worktree, ours: true };
   // The fix budget, which is one per Ticket and spent by the first failure a
   // fix Stage is offered. Once it is gone the next failure of any kind — even a
   // kind the fix Stage never touched — is a hand-off. A resumed Ticket keeps the
@@ -264,15 +265,17 @@ export async function processTicket(
           ? worktree
           : undefined;
         // Not this Run's worktree, but the one holding the branch it was told
-        // to use: the hand-off names a directory a human can open either way.
-        worktreeOnDisk = checkedOutAt;
+        // to use: the hand-off names a directory a human can open either way,
+        // and pushes nothing out of work no Stage of this Run produced.
+        worktreeOnDisk =
+          checkedOutAt === undefined ? undefined : { path: checkedOutAt, ours: false };
         throw new TicketFailure(
           "setup",
           describeBranchInTheWay(branch, checkedOutAt, config.labels.readyForAgent),
         );
       }
       await workspace.createWorktree({ path: worktree, branch });
-      worktreeOnDisk = worktree;
+      worktreeOnDisk = { path: worktree, ours: true };
     } else {
       // A Run that was killed mid-rebase left git stopped in the worktree, with
       // conflict markers in files the Checks are about to grade. Back to the
@@ -1111,12 +1114,24 @@ async function release(
   return { outcome: "released", ticket, title: issue.title, branch, stage: limit.point, notes };
 }
 
+/** The worktree a hand-off has to hand, which is not always one of this Run's. */
+interface HandOffWorktree {
+  /** Where the branch is checked out, which is where a human is sent. */
+  path: string;
+  /**
+   * Whether this Run created it or was resumed into it, so a Stage of this Run
+   * could have left work in there. A worktree the pipeline only found the
+   * branch checked out in holds a human's work, which it does not push.
+   */
+  ours: boolean;
+}
+
 interface HandOff {
   issue: Issue;
   user: string;
   branch: string;
   /** Where the work is, absent when the Ticket failed before it had a worktree. */
-  worktree?: string;
+  worktree?: HandOffWorktree;
   pullRequest: number | undefined;
   failure: TicketFailure;
   /** Whether the Ticket's fix budget had already been spent when this failure came. */
@@ -1132,6 +1147,11 @@ interface HandOff {
  * branched, so there is no directory to name and nothing to push a draft PR out
  * of. Both are left out rather than written as a path that is not there and a
  * push that fails.
+ *
+ * Where a human is sent and what the pipeline pushes are two different facts. A
+ * Ticket refused at setup over a branch still checked out somewhere names that
+ * worktree and stops there: the work in it is a human's, and pushing it or
+ * opening a PR that says `Closes #<n>` over it would claim it for this Run.
  */
 async function handOff(
   pipeline: Pipeline,
@@ -1154,10 +1174,10 @@ async function handOff(
 
   if (pullRequest !== undefined) {
     await tracker.convertPullRequestToDraft(pullRequest);
-  } else if (worktree !== undefined) {
+  } else if (worktree?.ours === true) {
     // A draft PR is worth trying for, but never worth losing the relabel over.
     try {
-      await workspace.push(worktree, branch);
+      await workspace.push(worktree.path, branch);
       const pr = await tracker.createPullRequest({
         head: branch,
         // Nothing here is merged, so there is no commit subject worth deriving.
@@ -1182,7 +1202,7 @@ async function handOff(
       stage: failure.point,
       failure: failure.summary,
       branch,
-      ...(worktree === undefined ? {} : { worktree }),
+      ...(worktree === undefined ? {} : { worktree: worktree.path }),
       evidence: failure.evidence,
       fixUsed,
       ...(pullRequest === undefined ? {} : { pullRequest }),
