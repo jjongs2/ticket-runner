@@ -334,6 +334,7 @@ export async function processTicket(
           pipeline,
           issue,
           worktree,
+          branch,
           logDir,
           { kind: failure.kind, summary: failure.summary, evidence: failure.evidence },
           progress,
@@ -827,6 +828,7 @@ async function fix(
   pipeline: Pipeline,
   issue: Issue,
   worktree: string,
+  branch: string,
   logDir: string,
   failure: FixFailure,
   progress: Progress,
@@ -834,6 +836,11 @@ async function fix(
 ): Promise<void> {
   const stage = pipeline.config.stages.fix;
   pipeline.log?.(`#${issue.number} fixing · ${failure.summary}`);
+
+  // Read before the Stage runs, because the implement Stage's work is already
+  // on the branch: what this asks afterwards is whether the branch grew, not
+  // whether it has anything on it at all.
+  const before = (await pipeline.workspace.commitSubjects(branch)).length;
 
   const result = await runStage(pipeline, "fix", {
     prompt: fixPrompt(issue.url, failure, stage.extraPrompt),
@@ -844,6 +851,16 @@ async function fix(
   });
   await collectNotes(pipeline, issue.number, "fix", result, notes);
   if (!result.ok) throw await stageDidNotFinish(pipeline, progress, "fix", result);
+
+  // A session that came back clean mended nothing, whatever it says. Believing
+  // it costs the Ticket a whole second pass of the Checks, the Verdict and CI
+  // over a branch nobody touched, which can only fail the way it just did — and
+  // a progress row claiming the Stage committed. The budget is already spent,
+  // so this ends the Ticket rather than buying another try.
+  if ((await pipeline.workspace.commitSubjects(branch)).length === before) {
+    await progress.record(stageRow("fix", result, "❌ no commits"));
+    throw new TicketFailure("fix", "the fix Stage left no new commits on the branch");
+  }
 
   await progress.record(stageRow("fix", result, "✅ committed"));
 }

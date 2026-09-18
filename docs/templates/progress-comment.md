@@ -41,7 +41,7 @@ Ticket for a later Run to resume.
 | Stage | Outcome |
 |---|---|
 | implement | `✅ committed`, `❌ no commits`, `⏸ rate limited`, `❌ <why the Stage did not finish>` |
-| fix | `✅ committed`, `⏸ rate limited`, `❌ <why the Stage did not finish>` |
+| fix | `✅ committed`, `❌ no commits`, `⏸ rate limited`, `❌ <why the Stage did not finish>` |
 | checks | `✅ passed`, ``❌ `<command>` failed`` |
 | verify | `✅ <k> met · <u> unverifiable`, `❌ <k> unmet`, `❌ no evidence`, `❌ no Verdict`, `⏸ rate limited`, `❌ <why the Stage did not finish>` |
 | conflict | `✅ rebased`, `❌ unresolved`, `⏸ rate limited`, `❌ unknown` |
@@ -54,6 +54,13 @@ Stage came back without saying which. The subscription rate limit is the one
 Stage failure that is nothing about the Ticket, so it reads `⏸ rate limited`
 and is the last row of the table: the Ticket is released there, and the Run that
 resumes it writes its own table over this one.
+
+`❌ no commits` reads the same on both Stages the branch is asked about — a
+session that came back having committed nothing — but it is not the same
+question. implement asks whether the branch carries anything at all; fix asks
+whether it grew, since implement's commits are already on it. A fix Stage that
+answers no ends the Ticket where it stands, because the fix budget it would take
+to try again is the one already spent on it.
 
 A `conflict` Stage that came back rate-limited is still read as `✅ rebased`
 when it had finished the rebase first: the worktree decides that row, so a
