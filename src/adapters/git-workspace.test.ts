@@ -463,6 +463,30 @@ describe("push and pullMain", () => {
     expect(git(remote, "branch", "--list", "agent/2-x")).toBe("");
   });
 
+  it("treats a branch the remote already deleted as deleted", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    commit(path, "a.txt", "a\n", "feat: a (#2)");
+    await workspace.push(path, "agent/2-x");
+    // As GitHub does the moment a PR merges when the repo is set to.
+    git(remote, "branch", "-D", "agent/2-x");
+
+    await expect(workspace.deleteRemoteBranch("agent/2-x")).resolves.toBeUndefined();
+
+    expect(git(remote, "branch", "--list", "agent/2-x")).toBe("");
+  });
+
+  it("still fails when the remote refuses the delete", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    commit(path, "a.txt", "a\n", "feat: a (#2)");
+    await workspace.push(path, "agent/2-x");
+    // A remote that has gone away fails the push before any ref is looked at.
+    git(repo, "remote", "set-url", "origin", join(remote, "missing"));
+
+    await expect(workspace.deleteRemoteBranch("agent/2-x")).rejects.toThrow(/exited/);
+  });
+
   it("force-pushes after a rebase rewrote the branch", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
     await workspace.createWorktree({ path, branch: "agent/2-x" });
