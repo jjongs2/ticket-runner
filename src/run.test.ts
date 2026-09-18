@@ -279,6 +279,23 @@ describe("a Ticket the rate limit released", () => {
     expect(logged).toContain("run stopped after #4 · rate limit");
   });
 
+  it("says nothing about a candidate a blocker held back as it stopped", async () => {
+    tracker.addIssue({ number: 6 });
+    tracker.openBlockers.set(6, 1);
+
+    const result = await processRun(pipeline());
+
+    // #6 is never judged, so the Run cannot say a blocker held it back all Run:
+    // the stop it reports carries no candidates for the summary to skip.
+    expect(result.stop).toEqual({ reason: "rate-limited" });
+  });
+
+  it("hands nothing over, which is the whole of what the exit code reads", async () => {
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes.some((outcome) => outcome.outcome === "handed-off")).toBe(false);
+  });
+
   it("leaves both Tickets to the Run started once the limit has reset", async () => {
     await processRun(pipeline());
 

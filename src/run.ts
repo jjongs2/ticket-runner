@@ -68,7 +68,8 @@ export async function processRun(pipeline: Pipeline): Promise<RunResult> {
     outcomes.push(outcome);
     // Before the Frontier is so much as asked for: the stranded Tickets left
     // keep their Claim, and the next Run sweeps them up as this one found them.
-    if (endsTheRun(pipeline, outcome)) return { outcomes, stop: { reason: "rate-limited" } };
+    const stopped = rateLimitedRun(pipeline, outcomes, outcome);
+    if (stopped !== undefined) return stopped;
   }
 
   for (;;) {
@@ -87,21 +88,27 @@ export async function processRun(pipeline: Pipeline): Promise<RunResult> {
       branch: branchName(next.number, next.title),
     });
     outcomes.push(outcome);
-    if (endsTheRun(pipeline, outcome)) return { outcomes, stop: { reason: "rate-limited" } };
+    const stopped = rateLimitedRun(pipeline, outcomes, outcome);
+    if (stopped !== undefined) return stopped;
   }
 }
 
 /**
- * Whether this outcome is the Release that ends the Run, said out loud.
+ * The Run this outcome ended, if it is the Release that ends one, and the line
+ * that says so.
  *
- * The Ticket's own release is already logged where it happened; this is the
- * line that says the Run goes no further, so a transcript shows the Frontier
- * was left alone rather than found empty.
+ * The Ticket's own release is already logged where it happened; this line says
+ * the Run goes no further, so a transcript shows the Frontier was left alone
+ * rather than found empty.
  */
-function endsTheRun(pipeline: Pipeline, outcome: TicketOutcome): boolean {
-  if (outcome.outcome !== "released") return false;
+function rateLimitedRun(
+  pipeline: Pipeline,
+  outcomes: TicketOutcome[],
+  outcome: TicketOutcome,
+): RunResult | undefined {
+  if (outcome.outcome !== "released") return undefined;
   pipeline.log?.(`run stopped after #${outcome.ticket} · rate limit`);
-  return true;
+  return { outcomes, stop: { reason: "rate-limited" } };
 }
 
 /**
