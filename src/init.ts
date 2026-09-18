@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { CONFIG_FILENAME, type Config } from "./config.js";
 import { CLAUDE_SECTION, CONVENTIONS_DOC, CONVENTIONS_PATH } from "./conventions.js";
@@ -9,7 +9,12 @@ import {
   SKILLS_PLUGIN,
 } from "./ports/agent-runner.js";
 import type { Tracker } from "./ports/tracker.js";
-import { CLAUDE_FILENAME, IGNORED, ignorePattern } from "./readiness.js";
+import {
+  CLAUDE_FILENAME,
+  hasClaudePointer,
+  missingIgnoreLines,
+  readTargetFile,
+} from "./readiness.js";
 import { nestedRunRefusal } from "./stage-guard.js";
 
 /**
@@ -133,13 +138,11 @@ function writeTargetFiles(repoRoot: string): string[] {
  * its comment and gains nothing.
  */
 function ensureGitignore(repoRoot: string): string | undefined {
-  const path = join(repoRoot, ".gitignore");
-  const existing = read(path) ?? "";
-  const ignored = new Set(existing.split("\n").map(ignorePattern));
-
-  const missing = IGNORED.filter((entry) => !ignored.has(ignorePattern(entry.line)));
+  const missing = missingIgnoreLines(repoRoot);
   if (missing.length === 0) return undefined;
 
+  const path = join(repoRoot, ".gitignore");
+  const existing = readTargetFile(path) ?? "";
   const additions = missing.map((entry) => `${entry.comment}\n${entry.line}\n`).join("\n");
   writeFileSync(path, `${existing}${separator(existing)}${additions}`);
   return `.gitignore: added ${missing.map((entry) => `\`${entry.line}\``).join(" and ")}`;
@@ -159,7 +162,7 @@ function ensureConfigFile(repoRoot: string): string | undefined {
 /** The pipeline's own text, so a Target never carries an older copy of it. */
 function ensureConventionsDoc(repoRoot: string): string | undefined {
   const path = join(repoRoot, CONVENTIONS_PATH);
-  const existing = read(path);
+  const existing = readTargetFile(path);
   if (existing === CONVENTIONS_DOC) return undefined;
 
   mkdirSync(dirname(path), { recursive: true });
@@ -170,16 +173,14 @@ function ensureConventionsDoc(repoRoot: string): string | undefined {
 }
 
 /**
- * Point the Target's `CLAUDE.md` at the conventions document.
- *
- * Presence is judged on the path, not on the section this would write: a human
- * who reworded the section around the same path still has a pointer, and a
- * second copy of it would only be noise in the file every session reads.
+ * Point the Target's `CLAUDE.md` at the conventions document, where a Run would
+ * find no pointer. A second copy of the section would only be noise in the file
+ * every session reads.
  */
 function ensureClaudePointer(repoRoot: string): string | undefined {
   const path = join(repoRoot, CLAUDE_FILENAME);
-  const existing = read(path);
-  if (existing !== undefined && existing.includes(CONVENTIONS_PATH)) return undefined;
+  const existing = readTargetFile(path);
+  if (hasClaudePointer(existing)) return undefined;
 
   const before = existing ?? "";
   writeFileSync(path, `${before}${separator(before)}${CLAUDE_SECTION}`);
@@ -264,14 +265,5 @@ function hasCiWorkflow(repoRoot: string): boolean {
     return readdirSync(join(repoRoot, WORKFLOWS_DIR)).some((entry) => /\.ya?ml$/i.test(entry));
   } catch {
     return false;
-  }
-}
-
-/** A file's contents, or nothing when the Target does not have it yet. */
-function read(path: string): string | undefined {
-  try {
-    return readFileSync(path, "utf8");
-  } catch {
-    return undefined;
   }
 }

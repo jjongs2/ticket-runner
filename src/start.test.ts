@@ -160,6 +160,19 @@ describe("a Target init has not set up", () => {
     expect(lockTaken()).toBe(false);
     expect(tracker.calls).toEqual([]);
   });
+
+  it("refuses `ticket <n>` over a missing label too, and claims nothing", async () => {
+    tracker.addIssue({ number: 4 });
+    tracker.labels.delete("in-progress");
+
+    const { code, err } = await start({ command: "ticket", ticket: 4 });
+
+    expect(code).toBe(2);
+    expect(err).toContain("in-progress");
+    expect(tracker.createdLabels).toEqual([]);
+    expect(lockTaken()).toBe(false);
+    expect(tracker.calls).toEqual([]);
+  });
 });
 
 describe("a Target init has set up", () => {
