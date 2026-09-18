@@ -12,9 +12,10 @@ import type { Execution } from "../adapters/exec.js";
 /**
  * A recorded run, successful unless the overrides say otherwise.
  *
- * `output` follows what the child printed unless a test names it, the way a
- * real run's does — stdout and stderr in the order a single stream would have
- * carried them, which for a recording that sets one of them is that one.
+ * `output` defaults to stdout followed by stderr rather than to nothing, so a
+ * recording that sets one stream still carries what the child printed. A real
+ * run interleaves the two and a recording cannot know that order, so a test
+ * that needs both of them in `output` names it.
  */
 export function execution(overrides: Partial<Execution> = {}): Execution {
   const run = { exitCode: 0, stdout: "", stderr: "", timedOut: false, ...overrides };
