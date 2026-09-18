@@ -840,7 +840,7 @@ async function fix(
   // Read before the Stage runs, because the implement Stage's work is already
   // on the branch: what this asks afterwards is whether the branch grew, not
   // whether it has anything on it at all.
-  const before = (await pipeline.workspace.commitSubjects(branch)).length;
+  const commitsBefore = (await pipeline.workspace.commitSubjects(branch)).length;
 
   const result = await runStage(pipeline, "fix", {
     prompt: fixPrompt(issue.url, failure, stage.extraPrompt),
@@ -857,7 +857,7 @@ async function fix(
   // over a branch nobody touched, which can only fail the way it just did — and
   // a progress row claiming the Stage committed. The budget is already spent,
   // so this ends the Ticket rather than buying another try.
-  if ((await pipeline.workspace.commitSubjects(branch)).length === before) {
+  if ((await pipeline.workspace.commitSubjects(branch)).length === commitsBefore) {
     await progress.record(stageRow("fix", result, "❌ no commits"));
     throw new TicketFailure("fix", "the fix Stage left no new commits on the branch");
   }

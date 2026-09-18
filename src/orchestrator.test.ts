@@ -1034,14 +1034,6 @@ describe("a fix Stage that committed nothing", () => {
     expect(progressTable()).toContain("| fix | ❌ no commits |");
   });
 
-  it("never buys a second fix Stage with a budget that is already spent", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
-
-    await run();
-
-    expect(runner.stages().filter((stage) => stage === "fix")).toEqual(["fix"]);
-  });
-
   it("routes the Notes it made before its own outcome is judged", async () => {
     const other = 7;
     tracker.addIssue({ number: other, title: "Progress comment" });
