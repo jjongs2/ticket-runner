@@ -87,9 +87,12 @@ let workspace: FakeWorkspace;
 let repoRoot: string;
 /** Where this Ticket's Stages run, under the repo root the Run was given. */
 let worktree: string;
+/** The Run log, for the lines a Ticket is expected to print — or not to. */
+let logged: string[];
 
 beforeEach(() => {
   repoRoot = mkdtempSync(join(tmpdir(), "agent-pipeline-ticket-"));
+  logged = [];
   worktree = join(repoRoot, ".worktrees", `ticket-${TICKET}`);
   tracker = new FakeTracker();
   tracker.addIssue({ number: TICKET, title: "Skeleton: one Ticket end to end", url: URL });
@@ -132,6 +135,7 @@ function run(overrides: Partial<Config> = {}): Promise<TicketOutcome> {
       config: config(overrides),
       repoRoot,
       runId: "run-1",
+      log: (line) => logged.push(line),
     },
     TICKET,
   );
@@ -1606,6 +1610,19 @@ describe("resuming a stranded Ticket", () => {
     expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
   });
 
+  it("still pushes and opens a draft PR when it is handed off in its own worktree", async () => {
+    strandedTicket({ fixUsed: true });
+    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+
+    const outcome = await run();
+
+    // The worktree is one this Run was resumed into, so a Stage of it could
+    // have left work there and the hand-off pushes as it always did.
+    expect(outcome).toMatchObject({ outcome: "handed-off", pullRequest: 100 });
+    expect(workspace.pushes).toEqual([{ cwd: worktree, branch: BRANCH }]);
+    expect(handoffBody()).toContain("PR #100 (draft)");
+  });
+
   it("aborts a rebase the killed Run left in the worktree before the Checks run", async () => {
     strandedTicket();
 
@@ -1915,10 +1932,35 @@ git branch -D ${BRANCH}\`, then relabel the Ticket ready-for-agent`,
     // The advice a branch git is holding cannot take: `git branch -D` on its own.
     expect(handoffBody()).not.toContain(`\`git branch -D ${BRANCH}\``);
     expect(workspace.calls).not.toContain(`createWorktree:${BRANCH}`);
-    // The worktree is on disk here, so the hand-off still sends the human to it,
-    // and the draft PR it can push out of is opened as it was before.
+    // The worktree is on disk here, so the hand-off still sends the human to it.
     expect(handoffBody()).toContain(`worktree \`${worktree}\``);
-    expect(handoffBody()).toContain("PR #100 (draft)");
+  });
+
+  it("pushes nothing and opens no draft PR over the worktree it names", async () => {
+    workspace.worktrees.set(worktree, BRANCH);
+
+    const outcome = await run();
+
+    // No Stage of this Run ran in there: what the branch carries is a human's
+    // work, which the pipeline neither writes to the remote nor presents as
+    // this Run's in a PR that says `Closes #<n>`.
+    expect(outcome).not.toHaveProperty("pullRequest");
+    expect(workspace.calls).not.toContain(`push:${BRANCH}`);
+    expect(tracker.pullRequests).toEqual([]);
+    expect(handoffBody()).toContain(`Branch \`${BRANCH}\``);
+    expect(handoffBody()).not.toContain("PR #");
+  });
+
+  it("says nothing about a draft PR it never set out to open", async () => {
+    workspace.worktrees.set(worktree, BRANCH);
+
+    const outcome = await run();
+
+    // The line a failed attempt logs reads as if something had gone wrong.
+    expect(logged.some((line) => line.includes("could not open a draft PR"))).toBe(false);
+    // What the Run log says instead is the refusal, exactly as it always did.
+    if (outcome.outcome !== "handed-off") throw new Error("the Ticket was not handed off");
+    expect(logged).toContain(`#${TICKET} handed off at setup · ${outcome.failure}`);
   });
 
   it("creates the worktree as before when the branch is not there", async () => {
