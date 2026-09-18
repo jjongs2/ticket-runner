@@ -155,7 +155,9 @@ by hand, then relabel the Ticket `ready-for-agent`. That is the ordinary hand-of
 `ready-for-human` on, `in-progress` off, unassigned, State file cleared — and it costs the
 Ticket nothing, because the fix budget is never spent at `setup`. The same refusal meets a
 human who finished a handed-off Ticket and deleted `.worktrees/ticket-<n>` without deleting
-its branch.
+its branch, and a handed-off Ticket relabelled with its worktree untouched — there the
+failure names the worktree the branch is checked out in, since a branch git is holding is
+not one `git branch -D` can take.
 
 The Run the limit stops does not wait for it to reset and does not take the Ticket it
 released a second time; it carries on down the Frontier, releasing whatever the limit

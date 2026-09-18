@@ -1512,6 +1512,8 @@ describe("resuming a released Ticket", () => {
     expect(outcome).toMatchObject({ outcome: "merged" });
     expect(runner.stages()).toEqual(["verify"]);
     expect(workspace.calls).not.toContain(`createWorktree:${BRANCH}`);
+    // Nothing is branched, so nothing is in the way: the branch is not asked about.
+    expect(workspace.calls).not.toContain(`hasBranch:${BRANCH}`);
     expect(workspace.ranChecks.map((check) => check.cwd)).toEqual([worktree, worktree]);
   });
 
@@ -1644,9 +1646,11 @@ describe("a branch that outlived its worktree", () => {
   it("hands the Ticket over at setup, naming the branch and what to do with it", async () => {
     const outcome = await run();
 
-    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "setup" });
     expect(outcome).toMatchObject({
-      failure: expect.stringContaining(`git branch -D ${BRANCH}`) as unknown as string,
+      outcome: "handed-off",
+      stage: "setup",
+      // The summary the Run summary and the Run log carry, not just the comment.
+      failure: `the branch ${BRANCH} already exists but no worktree of this repo is on it; delete it with \`git branch -D ${BRANCH}\` if the work on it is abandoned, or finish it by hand, then relabel the Ticket ready-for-agent`,
     });
     expect(handoffBody()).toContain(BRANCH);
     expect(handoffBody()).toContain("ready-for-agent");
@@ -1683,6 +1687,25 @@ describe("a branch that outlived its worktree", () => {
     expect(outcome).toMatchObject({ outcome: "handed-off", stage: "setup" });
     expect(handoffBody()).toContain(`git branch -D ${BRANCH}`);
     expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
+  });
+
+  it("names the worktree instead when the branch is still checked out in one", async () => {
+    // What a hand-off leaves: the worktree and the branch kept for a human, the
+    // State file cleared. Relabelling the Ticket brings it back here.
+    workspace.worktrees.set(worktree, BRANCH);
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({
+      outcome: "handed-off",
+      stage: "setup",
+      failure: `the branch ${BRANCH} already exists and is checked out at ${worktree}; \
+finish the work there by hand, or throw it away with \`git worktree remove ${worktree} && \
+git branch -D ${BRANCH}\`, then relabel the Ticket ready-for-agent`,
+    });
+    // The advice a branch git is holding cannot take: `git branch -D` on its own.
+    expect(handoffBody()).not.toContain(`\`git branch -D ${BRANCH}\``);
+    expect(workspace.calls).not.toContain(`createWorktree:${BRANCH}`);
   });
 
   it("creates the worktree as before when the branch is not there", async () => {

@@ -252,7 +252,17 @@ export async function processTicket(
       // is what turns git's `fatal: a branch named ... already exists` into a
       // hand-off that says whose branch it is and what to do with it.
       if (await workspace.hasBranch(branch)) {
-        throw new TicketFailure("setup", strandedBranch(branch, config.labels.readyForAgent));
+        // Where the branch is decides what the human is asked to do about it:
+        // a hand-off keeps the worktree and the branch while clearing the State
+        // file, so a Ticket relabelled after one arrives here with both still
+        // there, and a branch that is checked out cannot simply be deleted.
+        const checkedOutAt = (await workspace.hasWorktree({ path: worktree, branch }))
+          ? worktree
+          : undefined;
+        throw new TicketFailure(
+          "setup",
+          describeBranchInTheWay(branch, checkedOutAt, config.labels.readyForAgent),
+        );
       }
       await workspace.createWorktree({ path: worktree, branch });
     } else {
@@ -400,17 +410,33 @@ export async function processTicket(
 }
 
 /**
- * What the human is told about a branch that outlived its worktree.
+ * What the human is told about a branch nothing can be branched over.
  *
  * One line, because that is what the hand-off comment, the Run summary and the
  * Run log each carry. It names the branch twice on purpose: once as the thing
  * that is in the way, and once inside the command that clears it.
+ *
+ * `checkedOutAt` is the worktree the branch is in, when it is in one: a branch
+ * git will not let go of is not one `git branch -D` can delete, so being told
+ * to run that would send the human round a second failure.
  */
-function strandedBranch(branch: string, readyForAgent: string): string {
+function describeBranchInTheWay(
+  branch: string,
+  checkedOutAt: string | undefined,
+  readyForAgent: string,
+): string {
+  const relabel = `then relabel the Ticket ${readyForAgent}`;
+  if (checkedOutAt !== undefined) {
+    return (
+      `the branch ${branch} already exists and is checked out at ${checkedOutAt}; ` +
+      `finish the work there by hand, or throw it away with ` +
+      `\`git worktree remove ${checkedOutAt} && git branch -D ${branch}\`, ${relabel}`
+    );
+  }
   return (
     `the branch ${branch} already exists but no worktree of this repo is on it; ` +
     `delete it with \`git branch -D ${branch}\` if the work on it is abandoned, ` +
-    `or finish it by hand, then relabel the Ticket ${readyForAgent}`
+    `or finish it by hand, ${relabel}`
   );
 }
 
