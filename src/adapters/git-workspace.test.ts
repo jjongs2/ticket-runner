@@ -79,6 +79,55 @@ describe("worktrees", () => {
   });
 });
 
+describe("hasBranch", () => {
+  it("says yes about a branch that is checked out in a worktree", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" });
+
+    expect(await workspace.hasBranch("agent/2-x")).toBe(true);
+  });
+
+  it("says yes about the branch a removed worktree left behind", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    // `git worktree remove` without the `git branch -D` that follows it here:
+    // how a human cleans up after finishing a handed-off Ticket by hand.
+    git(repo, "worktree", "remove", "--force", path);
+
+    expect(existsSync(path)).toBe(false);
+    expect(await workspace.hasBranch("agent/2-x")).toBe(true);
+  });
+
+  it("says no about a branch nothing has created", async () => {
+    expect(await workspace.hasBranch("agent/2-x")).toBe(false);
+  });
+
+  it("says no once the branch has been deleted with its worktree", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    await workspace.removeWorktree({ path, branch: "agent/2-x" });
+
+    expect(await workspace.hasBranch("agent/2-x")).toBe(false);
+  });
+
+  it("says no about a branch that exists only on the remote", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" });
+    commit(path, "a.txt", "a\n", "feat: a (#2)");
+    await workspace.push(path, "agent/2-x");
+    await workspace.removeWorktree({ path, branch: "agent/2-x" });
+
+    expect(git(repo, "rev-parse", "--verify", "refs/remotes/origin/agent/2-x")).not.toBe("");
+    expect(await workspace.hasBranch("agent/2-x")).toBe(false);
+  });
+
+  it("does not mistake a tag of the same name for a branch", async () => {
+    git(repo, "tag", "agent/2-x");
+
+    expect(await workspace.hasBranch("agent/2-x")).toBe(false);
+  });
+});
+
 describe("hasWorktree", () => {
   it("recognises the worktree it created, on the branch it created it on", async () => {
     const path = join(repo, ".worktrees", "ticket-2");

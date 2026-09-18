@@ -246,6 +246,24 @@ export async function processTicket(
     // A resumed Ticket kept its worktree and branch, and the Stages that already
     // succeeded on them are not paid for twice.
     if (resume === undefined) {
+      // The branch is asked about before it is branched: `createWorktree`
+      // branches fresh from main and fails on a name that is taken, and a
+      // branch nobody can account for is not reused (ADR-0004). Refusing here
+      // is what turns git's `fatal: a branch named ... already exists` into a
+      // hand-off that says whose branch it is and what to do with it.
+      if (await workspace.hasBranch(branch)) {
+        // Where the branch is decides what the human is asked to do about it:
+        // a hand-off keeps the worktree and the branch while clearing the State
+        // file, so a Ticket relabelled after one arrives here with both still
+        // there, and a branch that is checked out cannot simply be deleted.
+        const checkedOutAt = (await workspace.hasWorktree({ path: worktree, branch }))
+          ? worktree
+          : undefined;
+        throw new TicketFailure(
+          "setup",
+          describeBranchInTheWay(branch, checkedOutAt, config.labels.readyForAgent),
+        );
+      }
       await workspace.createWorktree({ path: worktree, branch });
     } else {
       // A Run that was killed mid-rebase left git stopped in the worktree, with
@@ -392,6 +410,37 @@ export async function processTicket(
 }
 
 /**
+ * What the human is told about a branch nothing can be branched over.
+ *
+ * One line, because that is what the hand-off comment, the Run summary and the
+ * Run log each carry. It names the branch twice on purpose: once as the thing
+ * that is in the way, and once inside the command that clears it.
+ *
+ * `checkedOutAt` is the worktree the branch is in, when it is in one: a branch
+ * git will not let go of is not one `git branch -D` can delete, so being told
+ * to run that would send the human round a second failure.
+ */
+function describeBranchInTheWay(
+  branch: string,
+  checkedOutAt: string | undefined,
+  readyForAgent: string,
+): string {
+  const relabel = `then relabel the Ticket ${readyForAgent}`;
+  if (checkedOutAt !== undefined) {
+    return (
+      `the branch ${branch} already exists and is checked out at ${checkedOutAt}; ` +
+      `finish the work there by hand, or throw it away with ` +
+      `\`git worktree remove ${checkedOutAt} && git branch -D ${branch}\`, ${relabel}`
+    );
+  }
+  return (
+    `the branch ${branch} already exists but no worktree of this repo is on it; ` +
+    `delete it with \`git branch -D ${branch}\` if the work on it is abandoned, ` +
+    `or finish it by hand, ${relabel}`
+  );
+}
+
+/**
  * The state an earlier Run left for this Ticket, if a Run can still resume it.
  *
  * The State file only names where the work is; whether the work is still there
@@ -399,9 +448,8 @@ export async function processTicket(
  * onto another branch, has thrown the resume away with it — so the file goes too
  * and the Ticket is taken from the top, released or stranded alike. That is the
  * safe reading of a worktree nobody can be sure of, not a free one: the branch
- * may still exist, and then creating the worktree fails and the Ticket is handed
- * over with the failure naming it. Better that than resuming into a worktree that
- * is not there.
+ * may still exist, and then the Ticket is handed over at setup with a failure
+ * naming it. Better that than resuming into a worktree that is not there.
  */
 async function resumable(
   pipeline: Pipeline,

@@ -43,6 +43,19 @@ export interface Workspace {
    */
   hasWorktree(worktree: WorktreeRef): Promise<boolean>;
   /**
+   * Whether `branch` is a branch of this local repo, asked before a Ticket's
+   * worktree is created.
+   *
+   * {@link createWorktree} branches fresh from main and fails on a name that is
+   * taken, and a branch nobody can account for is not reused (ADR-0004). Asking
+   * first is what lets the Ticket be handed over with a message naming the
+   * branch and what to do with it, rather than with git's own.
+   *
+   * Local only: a branch that exists nowhere but the remote is not one this
+   * answers yes about.
+   */
+  hasBranch(branch: string): Promise<boolean>;
+  /**
    * Subjects of the commits on `branch` that main does not have, oldest first.
    *
    * The order is the port's promise, not an accident of git's default: the

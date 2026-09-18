@@ -76,7 +76,8 @@ reproducing a Stage by hand reproduces its environment too.
 `ticket <n>` takes exactly one Ticket from claimed to merged:
 
 1. run the guards, then assign it and swap `ready-for-agent` for `in-progress`
-2. create `agent/<n>-<slug>` from `main` in a worktree under `.worktrees/`
+2. create `agent/<n>-<slug>` from `main` in a worktree under `.worktrees/`, refusing the
+   Ticket if that branch already exists
 3. implement Stage
 4. the configured Checks, run by the pipeline itself
 5. verify Stage, graded against the Ticket's Acceptance Criteria
@@ -144,7 +145,19 @@ ones: `claimed` runs the implement Stage again, `implemented` goes straight to t
 The fix budget is resumed as it was recorded, so a Ticket that had already spent it is
 handed off at its next failure — resuming buys no second chances. The file is ignored if
 the worktree it names has since been cleaned up — the Ticket is then taken from the top,
-which is handed over at `setup` if the branch is still lying about.
+which needs a branch to create, and the branch may still be there.
+
+A branch nobody can account for is not reused. So before the worktree is created the
+pipeline asks whether the Ticket's branch already exists locally, and hands the Ticket
+over at `setup` if it does, with a failure that names the branch and says what to do with
+it: delete it with `git branch -D <branch>` if the work on it is abandoned, or finish it
+by hand, then relabel the Ticket `ready-for-agent`. That is the ordinary hand-off —
+`ready-for-human` on, `in-progress` off, unassigned, State file cleared — and it costs the
+Ticket nothing, because the fix budget is never spent at `setup`. The same refusal meets a
+human who finished a handed-off Ticket and deleted `.worktrees/ticket-<n>` without deleting
+its branch, and a handed-off Ticket relabelled with its worktree untouched — there the
+failure names the worktree the branch is checked out in, since a branch git is holding is
+not one `git branch -D` can take.
 
 The Run the limit stops does not wait for it to reset and does not take the Ticket it
 released a second time; it carries on down the Frontier, releasing whatever the limit
@@ -177,7 +190,8 @@ Not everything the sweep finds is stranded, and it resumes nothing else:
 - a Ticket whose Claim has come off is a released Ticket, and is left to the Frontier
 - a Ticket that has closed has nothing left to resume, so its State file is removed
 - a Ticket somebody else now holds is left alone and logged — a human took it over
-- a Ticket whose worktree is gone is taken from the top, in place, keeping its Claim
+- a Ticket whose worktree is gone is taken from the top, in place, keeping its Claim —
+  which is a hand-off at `setup` when the branch it named is still there
 
 Being killed is still worse than stopping properly: whatever the Stage was doing is lost,
 and a worktree the Run left mid-rebase is aborted back to the branch tip before the Checks
