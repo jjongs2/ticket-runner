@@ -309,7 +309,7 @@ export class FakeWorkspace implements Workspace {
   checkOutcomes = new Map<string, CheckOutcome>();
   /** Outcomes for the next runs of a command; `checkOutcomes` answers once they run out. */
   checkQueue = new Map<string, CheckOutcome[]>();
-  ranChecks: { command: string; cwd: string }[] = [];
+  ranChecks: { command: string; cwd: string; timeoutMs: number }[] = [];
   rebase: RebaseOutcome = { ok: true };
   /** Outcomes for the next rebases, oldest first; `rebase` answers once they run out. */
   rebaseQueue: RebaseOutcome[] = [];
@@ -321,7 +321,7 @@ export class FakeWorkspace implements Workspace {
 
   /** Fail `command` every time the pipeline runs it. */
   failCheck(command: string, output: string): this {
-    this.checkOutcomes.set(command, { ok: false, output });
+    this.checkOutcomes.set(command, { ok: false, output, timedOut: false });
     return this;
   }
 
@@ -333,8 +333,23 @@ export class FakeWorkspace implements Workspace {
 
   /** Fail `command` on its next run only: a Check a fix Stage then mends. */
   failCheckOnce(command: string, output: string): this {
+    return this.queueCheck(command, { ok: false, output, timedOut: false });
+  }
+
+  /** Time `command` out every time the pipeline runs it. */
+  timeOutCheck(command: string, output: string): this {
+    this.checkOutcomes.set(command, { ok: false, output, timedOut: true });
+    return this;
+  }
+
+  /** Time `command` out on its next run only. */
+  timeOutCheckOnce(command: string, output: string): this {
+    return this.queueCheck(command, { ok: false, output, timedOut: true });
+  }
+
+  private queueCheck(command: string, outcome: CheckOutcome): this {
     const queued = this.checkQueue.get(command) ?? [];
-    queued.push({ ok: false, output });
+    queued.push(outcome);
     this.checkQueue.set(command, queued);
     return this;
   }
@@ -371,9 +386,9 @@ export class FakeWorkspace implements Workspace {
     return [...this.coAuthorList];
   }
 
-  async runCheck(command: string, cwd: string): Promise<CheckOutcome> {
+  async runCheck(command: string, cwd: string, timeoutMs: number): Promise<CheckOutcome> {
     this.calls.push(`runCheck:${command}`);
-    this.ranChecks.push({ command, cwd });
+    this.ranChecks.push({ command, cwd, timeoutMs });
     return (
       this.checkQueue.get(command)?.shift() ??
       this.checkOutcomes.get(command) ?? { ok: true, output: "" }

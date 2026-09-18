@@ -235,17 +235,20 @@ describe("commitSubjects", () => {
 });
 
 describe("runCheck", () => {
+  /** Long enough that nothing here reaches it by running slowly. */
+  const LIMIT_MS = 30_000;
+
   it("reports a passing command with its output", async () => {
-    const result = await workspace.runCheck("echo hello", repo);
+    const result = await workspace.runCheck("echo hello", repo, LIMIT_MS);
 
     expect(result.ok).toBe(true);
     expect(result.output).toContain("hello");
   });
 
   it("reports a failing command and captures stderr", async () => {
-    const result = await workspace.runCheck("echo boom >&2; exit 3", repo);
+    const result = await workspace.runCheck("echo boom >&2; exit 3", repo, LIMIT_MS);
 
-    expect(result.ok).toBe(false);
+    expect(result).toMatchObject({ ok: false, timedOut: false });
     expect(result.output).toContain("boom");
   });
 
@@ -253,9 +256,21 @@ describe("runCheck", () => {
     const path = join(repo, ".worktrees", "ticket-2");
     await workspace.createWorktree({ path, branch: "agent/2-x" });
 
-    const result = await workspace.runCheck("pwd", path);
+    const result = await workspace.runCheck("pwd", path, LIMIT_MS);
 
     expect(result.output).toContain("ticket-2");
+  });
+
+  it("kills a command that outlives the limit and keeps what it printed", async () => {
+    const startedAt = Date.now();
+
+    const result = await workspace.runCheck("echo starting; sleep 30", repo, 300);
+
+    expect(result).toMatchObject({ ok: false, timedOut: true });
+    expect(result.output).toContain("starting");
+    // The point of the limit: the call settles on its own clock rather than on
+    // the command's, which here would have been a hundred times longer.
+    expect(Date.now() - startedAt).toBeLessThan(2_000);
   });
 });
 

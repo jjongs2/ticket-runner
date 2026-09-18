@@ -21,4 +21,6 @@ clause goes with it.
 The PR clause is dropped when no pull request could be opened. The whole
 `<details>` block is dropped when there is no evidence to show. Evidence is
 fenced because it is raw command output, which would otherwise be read as
-Markdown.
+Markdown. A Check the wall-clock limit killed is the one evidence the pipeline
+adds a line of its own to, inside the fence: the output stops mid-run, so
+something has to say that a kill is why.

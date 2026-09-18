@@ -34,6 +34,7 @@ function config(overrides: Partial<Config> = {}): Config {
     },
     permissionMode: "auto",
     ciTimeoutMinutes: 30,
+    checkTimeoutMinutes: 15,
     labels: {
       needsTriage: "needs-triage",
       needsInfo: "needs-info",
@@ -405,8 +406,9 @@ describe("Checks", () => {
     await run();
 
     expect(workspace.ranChecks).toEqual([
-      { command: "npm test", cwd: worktree },
-      { command: "npm run typecheck", cwd: worktree },
+      // Each Check gets the whole limit, not a share of it.
+      { command: "npm test", cwd: worktree, timeoutMs: 15 * 60_000 },
+      { command: "npm run typecheck", cwd: worktree, timeoutMs: 15 * 60_000 },
     ]);
   });
 
@@ -421,6 +423,39 @@ describe("Checks", () => {
     expect(workspace.ranChecks.map((c) => c.command)).toEqual(["npm test", "npm test"]);
     expect(handoffBody()).toContain("FAIL src/a.test.ts");
     expect(runner.stages()).toEqual(["implement", "fix"]);
+  });
+
+  it("spends the fix budget on a Check that timed out and says the limit was the cause", async () => {
+    workspace.timeOutCheckOnce("npm test", "RUN  v3.0.0 /repo");
+
+    await run();
+
+    expect(progressTable()).toContain("| checks | ❌ `npm test` timed out |");
+    expect(runner.stages()).toEqual(["implement", "fix", "verify"]);
+    const prompt = runner.prompts("fix")[0] as string;
+    expect(prompt).toContain("Check `npm test` timed out");
+    expect(prompt).toContain("RUN  v3.0.0 /repo");
+    expect(prompt).toMatch(/killed after 15 minutes/);
+  });
+
+  it("hands a timed-out Check off with the same evidence once the budget is spent", async () => {
+    workspace.timeOutCheck("npm test", "RUN  v3.0.0 /repo");
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "checks" });
+    expect(handoffBody()).toContain("Check `npm test` timed out");
+    expect(handoffBody()).toContain("RUN  v3.0.0 /repo");
+    expect(handoffBody()).toMatch(/killed after 15 minutes/);
+  });
+
+  it("names the configured limit, not the default, when the config moves it", async () => {
+    workspace.timeOutCheck("npm test", "");
+
+    await run({ checkTimeoutMinutes: 2 });
+
+    expect(workspace.ranChecks[0]?.timeoutMs).toBe(2 * 60_000);
+    expect(handoffBody()).toMatch(/killed after 2 minutes/);
   });
 });
 

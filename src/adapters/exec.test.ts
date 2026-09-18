@@ -115,6 +115,7 @@ describe("the wall-clock limit", () => {
 
     expect(Date.now() - startedAt).toBeLessThan(2_000);
     expect(result.exitCode).toBe(124);
+    expect(result.timedOut).toBe(true);
     expect(result.stdout).toBe("early");
     expect(result.output).toBe("early");
   });
@@ -127,6 +128,7 @@ describe("the wall-clock limit", () => {
 
     expect(Date.now() - startedAt).toBeLessThan(3_000);
     expect(result.exitCode).toBe(3);
+    expect(result.timedOut).toBeFalsy();
     expect(result.stdout).toBe("early");
   });
 });

@@ -107,9 +107,17 @@ export class GitWorkspace implements Workspace {
     return [...seen];
   }
 
-  async runCheck(command: string, cwd: string): Promise<CheckOutcome> {
-    const result = await exec(command, [], { cwd, shell: true });
-    return { ok: result.exitCode === 0, output: result.output };
+  /**
+   * The kill reaches the shell the command runs in, not whatever it started:
+   * a test runner left behind is tolerated, the same trade `exec` already makes
+   * when it drains a dead child's pipes on a clock.
+   */
+  async runCheck(command: string, cwd: string, timeoutMs: number): Promise<CheckOutcome> {
+    const result = await exec(command, [], { cwd, shell: true, timeoutMs });
+    if (result.exitCode === 0) return { ok: true, output: result.output };
+    // Asked of the run rather than read off the exit code: a Check is free to
+    // exit 124 itself, and only `exec` knows whether it was killed.
+    return { ok: false, output: result.output, timedOut: result.timedOut === true };
   }
 
   async discardChanges(cwd: string): Promise<void> {

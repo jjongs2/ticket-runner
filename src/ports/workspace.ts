@@ -5,11 +5,15 @@
  * never touched and a failed Ticket leaves something to inspect.
  */
 
-export interface CheckOutcome {
-  ok: boolean;
+/**
+ * How one Check command ended. A failed Check says whether the wall-clock limit
+ * killed it, because that is the difference between a Check that hung and one
+ * that failed, and a fix Stage is told which it is mending.
+ */
+export type CheckOutcome =
   /** stdout and stderr combined, as a human would see them in a terminal. */
-  output: string;
-}
+  | { ok: true; output: string }
+  | { ok: false; output: string; timedOut: boolean };
 
 export type RebaseOutcome = { ok: true } | { ok: false; conflict: string };
 
@@ -69,7 +73,15 @@ export interface Workspace {
    * pipeline composes its own, so it has to carry them itself.
    */
   coAuthors(branch: string): Promise<string[]>;
-  runCheck(command: string, cwd: string): Promise<CheckOutcome>;
+  /**
+   * Run one Check command in `cwd`, killing it after `timeoutMs`.
+   *
+   * The limit is passed per call, not held by the workspace, because it is the
+   * config's to decide and every Check gets the whole of it: a Check is a
+   * command a user wrote, and without a limit one that hangs stalls the Run for
+   * good.
+   */
+  runCheck(command: string, cwd: string, timeoutMs: number): Promise<CheckOutcome>;
   /** Restore the worktree to its committed state, tracked and untracked. */
   discardChanges(cwd: string): Promise<void>;
   /**

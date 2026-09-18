@@ -20,6 +20,7 @@ function config(): Config {
     },
     permissionMode: "auto",
     ciTimeoutMinutes: 30,
+    checkTimeoutMinutes: 15,
     labels: {
       needsTriage: "needs-triage",
       needsInfo: "needs-info",

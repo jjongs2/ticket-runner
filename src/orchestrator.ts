@@ -742,18 +742,22 @@ async function runChecks(
   // One row for the whole gate, however many commands it is made of: which
   // command failed is the outcome, and its output is the hand-off's business.
   const startedAt = Date.now();
+  const minutes = pipeline.config.checkTimeoutMinutes;
   for (const command of pipeline.config.checks) {
-    const result = await pipeline.workspace.runCheck(command, worktree);
+    const result = await pipeline.workspace.runCheck(command, worktree, minutes * 60_000);
     if (!result.ok) {
+      // A Check that hung and one that failed are the same failure to the fix
+      // budget and the hand-off; they are told apart only in what they say, so
+      // that a fix Stage knows whether it is mending a hang or an assertion.
       await progress.record({
         point: "checks",
-        outcome: `❌ \`${command}\` failed`,
+        outcome: `❌ \`${command}\` ${result.timedOut ? "timed out" : "failed"}`,
         durationMs: Date.now() - startedAt,
       });
       throw new TicketFailure(
         "checks",
-        `Check \`${command}\` failed`,
-        result.output,
+        `Check \`${command}\` ${result.timedOut ? "timed out" : "failed"}`,
+        result.timedOut ? killedEvidence(command, result.output, minutes) : result.output,
         "failed-check",
       );
     }
@@ -763,6 +767,18 @@ async function runChecks(
     outcome: "✅ passed",
     durationMs: Date.now() - startedAt,
   });
+}
+
+/**
+ * What the Check printed before the kill, and then a line saying that a kill is
+ * what ended it. A fix Stage is given the evidence and little else, so the
+ * output alone would read as a suite that simply stopped mid-run.
+ */
+function killedEvidence(command: string, output: string, minutes: number): string {
+  const unit = minutes === 1 ? "minute" : "minutes";
+  const trailer = `\`${command}\` was killed after ${minutes} ${unit} at the Check wall-clock limit: it hung rather than failing, and everything above is what it had printed by then.`;
+  const printed = output.trimEnd();
+  return printed === "" ? trailer : `${printed}\n\n${trailer}`;
 }
 
 async function verify(

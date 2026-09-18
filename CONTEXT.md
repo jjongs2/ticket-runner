@@ -83,7 +83,7 @@ The structured result of Verify: one status per criterion (met, unmet, unverifia
 _Avoid_: report, review result, score
 
 **Fix budget**:
-The single fix Stage a Ticket is allowed. A failing Check, an unmet criterion or a red CI spends it, and processing resumes at the Checks — unless the fix Stage came back without committing anything, which ends the Ticket where it stands rather than re-grading a branch nobody touched. A second failure of any kind is a hand-off.
+The single fix Stage a Ticket is allowed. A failing Check, including one the wall-clock limit killed, an unmet criterion or a red CI spends it, and processing resumes at the Checks — unless the fix Stage came back without committing anything, which ends the Ticket where it stands rather than re-grading a branch nobody touched. A second failure of any kind is a hand-off.
 _Avoid_: retry budget, fix limit, second chance
 
 **Release**:

@@ -19,6 +19,7 @@ describe("loadConfig", () => {
     expect(config.gates).toEqual({ checks: true, ci: true });
     expect(config.permissionMode).toBe("auto");
     expect(config.ciTimeoutMinutes).toBe(30);
+    expect(config.checkTimeoutMinutes).toBe(15);
     expect(config.stages.implement).toEqual({
       model: "claude-opus-5",
       maxTurns: 300,
@@ -104,6 +105,26 @@ describe("loadConfig", () => {
       extraPrompt: "",
     });
   });
+
+  it("takes a configured Check limit as given", () => {
+    const root = repoWith({
+      [CONFIG_FILENAME]: JSON.stringify({ checkTimeoutMinutes: 3 }),
+    });
+
+    expect(loadConfig(root).checkTimeoutMinutes).toBe(3);
+  });
+
+  it.each([0, -5, "fifteen"])(
+    "rejects %o as a Check limit with a message naming the field",
+    (value) => {
+      const root = repoWith({
+        [CONFIG_FILENAME]: JSON.stringify({ checkTimeoutMinutes: value }),
+      });
+
+      expect(() => loadConfig(root)).toThrowError(ConfigError);
+      expect(() => loadConfig(root)).toThrowError(/checkTimeoutMinutes/);
+    },
+  );
 
   it("rejects an invalid field with a message naming it", () => {
     const root = repoWith({
