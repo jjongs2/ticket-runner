@@ -9,7 +9,7 @@ import { acquireLock, lockHeldMessage } from "./lock.js";
 import type { Pipeline, TicketOutcome } from "./orchestrator.js";
 import { processTicket } from "./orchestrator.js";
 import { newRunId } from "./run-log.js";
-import { processRun } from "./run.js";
+import { type RunStop, processRun } from "./run.js";
 import { nestedRunRefusal } from "./stage-guard.js";
 import { startupMessages } from "./startup.js";
 import { runSummary } from "./templates.js";
@@ -122,17 +122,17 @@ async function execute(work: Work, { repoRoot, config, runId }: Setup): Promise<
   console.log(
     `agent-pipeline run ${runId}${work.command === "run" ? "" : ` · #${work.ticket}`}`,
   );
-  const summary = (outcomes: TicketOutcome[], blocked?: number[]) =>
+  const summary = (outcomes: TicketOutcome[], stop?: RunStop) =>
     runSummary({
       runId,
       durationMs: Date.now() - startedAt,
       outcomes,
-      ...(blocked === undefined ? {} : { blocked }),
+      ...(stop === undefined ? {} : { stop }),
     });
 
   if (work.command === "run") {
-    const { outcomes, blocked } = await processRun(pipeline);
-    console.log(`\n${summary(outcomes, blocked)}`);
+    const { outcomes, stop } = await processRun(pipeline);
+    console.log(`\n${summary(outcomes, stop)}`);
     return exitCode(outcomes);
   }
 

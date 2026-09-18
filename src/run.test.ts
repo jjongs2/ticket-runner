@@ -109,7 +109,7 @@ describe("draining the Frontier", () => {
   it("does nothing when the Frontier is empty", async () => {
     const result = await processRun(pipeline());
 
-    expect(result).toEqual({ outcomes: [], blocked: [] });
+    expect(result).toEqual({ outcomes: [], stop: { reason: "frontier", blocked: [] } });
     expect(runner.requests).toEqual([]);
   });
 
@@ -148,7 +148,7 @@ describe("blocked candidates", () => {
     const result = await processRun(pipeline());
 
     expect(processed()).toEqual([5]);
-    expect(result.blocked).toEqual([4]);
+    expect(result.stop).toEqual({ reason: "frontier", blocked: [4] });
   });
 
   it("includes a Ticket whose native blockers have all closed", async () => {
@@ -158,7 +158,7 @@ describe("blocked candidates", () => {
     const result = await processRun(pipeline());
 
     expect(processed()).toEqual([4]);
-    expect(result.blocked).toEqual([]);
+    expect(result.stop).toEqual({ reason: "frontier", blocked: [] });
   });
 
   it("ends the Run when every remaining candidate is blocked", async () => {
@@ -170,7 +170,7 @@ describe("blocked candidates", () => {
     const result = await processRun(pipeline());
 
     expect(processed()).toEqual([]);
-    expect(result.blocked).toEqual([4, 6]);
+    expect(result.stop).toEqual({ reason: "frontier", blocked: [4, 6] });
     expect(runner.requests).toEqual([]);
   });
 });
@@ -223,7 +223,7 @@ describe("candidates a guard rejected", () => {
 
     expect(processed()).toEqual([]);
     expect(runner.requests).toEqual([]);
-    expect(result.blocked).toEqual([]);
+    expect(result.stop).toEqual({ reason: "frontier", blocked: [] });
   });
 });
 
@@ -258,26 +258,50 @@ describe("a Ticket that fails", () => {
 describe("a Ticket the rate limit released", () => {
   beforeEach(() => {
     for (const number of [4, 5]) tracker.addIssue({ number });
-    // Only the first implement Stage is stopped, so #4 is released and #5 is not.
+    // Only the first implement Stage is stopped. Nothing else has to be: the
+    // limit that stopped it would stop #5 too, so the Run never reaches it.
     runner.queue("implement", { ok: false, failure: "rate-limited" });
   });
 
-  it("does not stop the Run", async () => {
+  it("ends the Run, which claims no further Ticket", async () => {
     const result = await processRun(pipeline());
 
-    expect(processed()).toEqual([4, 5]);
-    expect(result.outcomes.map((outcome) => outcome.outcome)).toEqual(["released", "merged"]);
+    expect(processed()).toEqual([4]);
+    expect(result.outcomes.map((outcome) => outcome.outcome)).toEqual(["released"]);
+    expect(workspace.calls).not.toContain("createWorktree:agent/5-ticket-5");
+    expect(runner.stages()).toEqual(["implement"]);
   });
 
-  it("is not taken again by the Run that released it", async () => {
-    // The release puts the Ticket straight back on the Frontier, unassigned and
-    // labelled: without the Tickets it has taken, a Run would loop on it while
-    // the limit lasts.
+  it("says the limit ended the Run, not the Frontier", async () => {
     const result = await processRun(pipeline());
 
-    expect(processed()).toEqual([4, 5]);
-    expect(result.outcomes).toHaveLength(2);
+    expect(result.stop).toEqual({ reason: "rate-limited" });
+    expect(logged).toContain("run stopped after #4 · rate limit");
+  });
+
+  it("says nothing about a candidate a blocker held back as it stopped", async () => {
+    tracker.addIssue({ number: 6 });
+    tracker.openBlockers.set(6, 1);
+
+    const result = await processRun(pipeline());
+
+    // #6 is never judged, so the Run cannot say a blocker held it back all Run:
+    // the stop it reports carries no candidates for the summary to skip.
+    expect(result.stop).toEqual({ reason: "rate-limited" });
+  });
+
+  it("hands nothing over, which is the whole of what the exit code reads", async () => {
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes.some((outcome) => outcome.outcome === "handed-off")).toBe(false);
+  });
+
+  it("leaves both Tickets to the Run started once the limit has reset", async () => {
+    await processRun(pipeline());
+
     expect(tracker.issue(4).labels).toEqual(["ready-for-agent"]);
+    expect(tracker.issue(5).labels).toEqual(["ready-for-agent"]);
+    expect(tracker.issue(5).assignees).toEqual([]);
   });
 });
 
@@ -361,7 +385,7 @@ describe("recomputing the Frontier", () => {
     const result = await processRun(pipeline());
 
     expect(processed()).toEqual([4, 6]);
-    expect(result.blocked).toEqual([]);
+    expect(result.stop).toEqual({ reason: "frontier", blocked: [] });
   });
 
   it("pulls main before the next Ticket's worktree is created", async () => {
@@ -442,16 +466,24 @@ describe("stranded Tickets", () => {
     expect(tracker.calls).not.toContain("addLabel:4:in-progress");
   });
 
-  it("takes a Ticket it resumed and released only once", async () => {
+  it("ends the Run when one it resumed is released, before the Frontier is computed", async () => {
     stranded(4);
+    stranded(9);
+    tracker.addIssue({ number: 6 });
     runner.queue("verify", { ok: false, failure: "rate-limited" });
 
     const result = await processRun(pipeline());
 
-    // The release puts #4 straight back on the Frontier; the Run that resumed it
-    // must not meet it there while the limit lasts.
     expect(result.outcomes.map((outcome) => outcome.outcome)).toEqual(["released"]);
+    expect(result.stop).toEqual({ reason: "rate-limited" });
     expect(tracker.issue(4).labels).toEqual(["ready-for-agent"]);
+    // #9 keeps the Claim that makes it stranded, and its state keeps the work,
+    // so the next Run sweeps it up exactly as this one found it.
+    expect(tracker.issue(9).assignees).toEqual(["pipeline-user"]);
+    expect(existsSync(statePath(repoRoot, 9))).toBe(true);
+    // No Candidate is listed, let alone taken.
+    expect(tracker.calls).not.toContain("listCandidates:ready-for-agent");
+    expect(processed()).toEqual([]);
   });
 
   it("carries on into the Frontier when a resumed Ticket is handed off", async () => {
@@ -511,6 +543,30 @@ describe("stranded Tickets", () => {
     const result = await processRun(pipeline());
 
     expect(result.outcomes).toEqual([expect.objectContaining({ outcome: "merged", ticket: 4 })]);
+    expect(processed()).toEqual([4]);
+  });
+
+  it("ends the Run when one resumed off the Frontier is released", async () => {
+    // No Claim, so the Frontier offers #4 and the Run resumes it from its state.
+    tracker.addIssue({ number: 4 });
+    writeTicketState(repoRoot, {
+      ticket: 4,
+      branch: "agent/4-ticket-4",
+      state: "implemented",
+      fixUsed: false,
+      runId: "run-0",
+      updatedAt: "2026-09-17T09:00:00.000Z",
+    });
+    workspace.worktrees.set(worktreeOf(4), "agent/4-ticket-4");
+    tracker.addIssue({ number: 6 });
+    runner.queue("verify", { ok: false, failure: "rate-limited" });
+
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes.map((outcome) => [outcome.ticket, outcome.outcome])).toEqual([
+      [4, "released"],
+    ]);
+    expect(result.stop).toEqual({ reason: "rate-limited" });
     expect(processed()).toEqual([4]);
   });
 

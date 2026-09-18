@@ -9,6 +9,7 @@ import type { RoutedNote } from "./notes.js";
 import type { TicketOutcome } from "./orchestrator.js";
 import type { StageName } from "./ports/agent-runner.js";
 import type { IssueComment, SquashCommit } from "./ports/tracker.js";
+import type { RunStop } from "./run.js";
 import { type Criterion, type Verdict, countStatuses } from "./verdict.js";
 
 /** How the pipeline finds its own hand-off comment again. */
@@ -331,11 +332,11 @@ export interface RunSummary {
   durationMs: number;
   outcomes: TicketOutcome[];
   /**
-   * Candidates an open blocker kept off the Frontier for the whole Run. Only a
-   * Run has a Frontier, so `ticket <n>` leaves this out and the summary says
-   * nothing about what else was pickable.
+   * Why the Run stopped, and with it whatever it can still say about the
+   * Frontier. Only a Run has a Frontier, so `ticket <n>` leaves this out and
+   * the summary says nothing about what else was pickable.
    */
-  blocked?: number[];
+  stop?: RunStop;
 }
 
 /** Every summary row is `<verb> #<n> <detail>`, so the numbers line up. */
@@ -343,12 +344,17 @@ const VERB_WIDTH = 9;
 
 /**
  * What a Run prints when it ends. One line per Ticket, then why the Run
- * stopped — the Frontier is either empty or everything left on it is blocked.
+ * stopped — the Frontier is empty, everything left on it is blocked, or the
+ * rate limit released a Ticket and the Run went no further.
  */
-export function runSummary({ runId, durationMs, outcomes, blocked }: RunSummary): string {
+export function runSummary({ runId, durationMs, outcomes, stop }: RunSummary): string {
   const rows = [
     ...outcomes.flatMap(ticketRows),
-    ...(blocked ?? []).map((ticket) => row("skipped", ticket, "blocked")),
+    // Only a Run that reached the end of the Frontier can name what was held
+    // back all Run, so only that stop carries candidates to skip.
+    ...(stop?.reason === "frontier"
+      ? stop.blocked.map((ticket) => row("skipped", ticket, "blocked"))
+      : []),
   ];
 
   return [
@@ -356,9 +362,15 @@ export function runSummary({ runId, durationMs, outcomes, blocked }: RunSummary)
     "",
     ...(rows.length === 0 ? ["  nothing to do"] : rows),
     "",
-    ...(blocked === undefined ? [] : [blocked.length === 0 ? "Frontier empty." : "Frontier blocked."]),
+    ...(stop === undefined ? [] : [lastLine(stop)]),
     "",
   ].join("\n");
+}
+
+/** The one line that says why the Run stopped. */
+function lastLine(stop: RunStop): string {
+  if (stop.reason === "rate-limited") return "Rate limited.";
+  return stop.blocked.length === 0 ? "Frontier empty." : "Frontier blocked.";
 }
 
 /**

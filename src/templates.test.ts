@@ -205,9 +205,22 @@ describe("runSummary", () => {
     failure: "1 unmet",
     notes: [],
   };
+  const released = {
+    outcome: "released" as const,
+    ticket: 6,
+    title: "Rebase conflict resolution",
+    branch: "agent/6-rebase-conflict-resolution",
+    stage: "implement" as const,
+    notes: [],
+  };
 
   it("heads the summary with the Run and how long it took", () => {
-    const summary = runSummary({ runId: "r1", durationMs: 42 * 60_000, outcomes: [], blocked: [] });
+    const summary = runSummary({
+      runId: "r1",
+      durationMs: 42 * 60_000,
+      outcomes: [],
+      stop: { reason: "frontier", blocked: [] },
+    });
 
     expect(summary.split("\n")[0]).toBe("agent-pipeline run r1 · 42m");
   });
@@ -217,7 +230,7 @@ describe("runSummary", () => {
       runId: "r1",
       durationMs: 0,
       outcomes: [merged, handed],
-      blocked: [9],
+      stop: { reason: "frontier", blocked: [9] },
     });
 
     expect(summary).toContain("  merged   #3 Run: drain the Frontier (PR #12)");
@@ -229,17 +242,8 @@ describe("runSummary", () => {
     const summary = runSummary({
       runId: "r1",
       durationMs: 0,
-      outcomes: [
-        {
-          outcome: "released",
-          ticket: 6,
-          title: "Rebase conflict resolution",
-          branch: "agent/6-rebase-conflict-resolution",
-          stage: "implement",
-          notes: [],
-        },
-      ],
-      blocked: [],
+      outcomes: [released],
+      stop: { reason: "rate-limited" },
     });
 
     expect(summary).toContain("  released #6 Rebase conflict resolution · rate limit at implement");
@@ -252,7 +256,7 @@ describe("runSummary", () => {
       outcomes: [
         { outcome: "skipped", ticket: 7, title: "Progress comment", reason: "no-criteria" },
       ],
-      blocked: [9],
+      stop: { reason: "frontier", blocked: [9] },
     });
 
     expect(summary).toContain("  skipped  #7 no-criteria");
@@ -260,19 +264,58 @@ describe("runSummary", () => {
   });
 
   it("says the Frontier is empty when nothing was left blocked", () => {
-    const summary = runSummary({ runId: "r1", durationMs: 0, outcomes: [merged], blocked: [] });
+    const summary = runSummary({
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [merged],
+      stop: { reason: "frontier", blocked: [] },
+    });
 
     expect(summary.trimEnd().split("\n").at(-1)).toBe("Frontier empty.");
   });
 
   it("says the Frontier is blocked when candidates were held back", () => {
-    const summary = runSummary({ runId: "r1", durationMs: 0, outcomes: [], blocked: [9] });
+    const summary = runSummary({
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [],
+      stop: { reason: "frontier", blocked: [9] },
+    });
 
     expect(summary.trimEnd().split("\n").at(-1)).toBe("Frontier blocked.");
   });
 
+  it("says the rate limit stopped a Run a Release ended", () => {
+    const summary = runSummary({
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [released],
+      stop: { reason: "rate-limited" },
+    });
+
+    expect(summary.trimEnd().split("\n").at(-1)).toBe("Rate limited.");
+  });
+
+  it("reports nothing but the released Ticket when the rate limit stopped the Run", () => {
+    // A Run stopped this way cannot say a candidate was held back all Run, so
+    // the stop carries no candidates to skip and the summary skips none.
+    const summary = runSummary({
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [released],
+      stop: { reason: "rate-limited" },
+    });
+
+    expect(summary).not.toContain("skipped");
+  });
+
   it("says so when a Run found nothing to take", () => {
-    const summary = runSummary({ runId: "r1", durationMs: 0, outcomes: [], blocked: [] });
+    const summary = runSummary({
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [],
+      stop: { reason: "frontier", blocked: [] },
+    });
 
     expect(summary).toContain("  nothing to do");
   });
