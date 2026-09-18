@@ -1880,8 +1880,10 @@ git branch -D ${BRANCH}\`, then relabel the Ticket ready-for-agent`,
     // The advice a branch git is holding cannot take: `git branch -D` on its own.
     expect(handoffBody()).not.toContain(`\`git branch -D ${BRANCH}\``);
     expect(workspace.calls).not.toContain(`createWorktree:${BRANCH}`);
-    // The worktree is on disk here, so the hand-off still sends the human to it.
+    // The worktree is on disk here, so the hand-off still sends the human to it,
+    // and the draft PR it can push out of is opened as it was before.
     expect(handoffBody()).toContain(`worktree \`${worktree}\``);
+    expect(handoffBody()).toContain("PR #100 (draft)");
   });
 
   it("creates the worktree as before when the branch is not there", async () => {

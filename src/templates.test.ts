@@ -130,16 +130,12 @@ describe("handoffComment", () => {
   });
 
   it("omits the worktree clause when the Ticket failed before it had one", () => {
-    const beforeSetup = {
-      stage: base.stage,
-      failure: base.failure,
-      branch: base.branch,
-      evidence: base.evidence,
-    };
+    const { worktree, ...beforeSetup } = base;
 
     const comment = handoffComment(beforeSetup);
 
     expect(comment).toContain("- Branch `agent/2-skeleton`");
+    expect(comment).not.toContain(worktree);
     expect(comment).not.toContain("worktree");
   });
 

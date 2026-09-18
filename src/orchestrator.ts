@@ -230,11 +230,10 @@ export async function processTicket(
   // Where an unexpected error would have happened, so the hand-off comment
   // names the step the human has to look at rather than guessing.
   let point: FailurePoint = "setup";
-  // Whether there is a worktree at `worktree` for a human to open and for a
-  // push to run out of. A Ticket that failed before `createWorktree` ran has
-  // none, and a hand-off that named one would send the human to a directory
-  // that is not there. A resumed Ticket kept the worktree it was resumed into.
-  let worktreeOnDisk = resume !== undefined;
+  // The worktree a hand-off can send a human to and push out of, once there is
+  // one. A Ticket that failed before `createWorktree` ran has none; a resumed
+  // Ticket was resumed into the one it kept.
+  let worktreeOnDisk: string | undefined = resume === undefined ? undefined : worktree;
   // The fix budget, which is one per Ticket and spent by the first failure a
   // fix Stage is offered. Once it is gone the next failure of any kind — even a
   // kind the fix Stage never touched — is a hand-off. A resumed Ticket keeps the
@@ -266,14 +265,14 @@ export async function processTicket(
           : undefined;
         // Not this Run's worktree, but the one holding the branch it was told
         // to use: the hand-off names a directory a human can open either way.
-        worktreeOnDisk = checkedOutAt !== undefined;
+        worktreeOnDisk = checkedOutAt;
         throw new TicketFailure(
           "setup",
           describeBranchInTheWay(branch, checkedOutAt, config.labels.readyForAgent),
         );
       }
       await workspace.createWorktree({ path: worktree, branch });
-      worktreeOnDisk = true;
+      worktreeOnDisk = worktree;
     } else {
       // A Run that was killed mid-rebase left git stopped in the worktree, with
       // conflict markers in files the Checks are about to grade. Back to the
@@ -380,7 +379,7 @@ export async function processTicket(
       issue,
       user,
       branch,
-      ...(worktreeOnDisk ? { worktree } : {}),
+      ...(worktreeOnDisk === undefined ? {} : { worktree: worktreeOnDisk }),
       pullRequest,
       failure: asTicketFailure(error, point),
       fixUsed,
@@ -1113,9 +1112,10 @@ interface HandOff {
  * Hand the Ticket to a human: a draft PR to review, a comment naming where the
  * work is, and the labels a human filters on. The worktree and branch stay put.
  *
- * A Ticket handed over at setup has no worktree: nothing was branched, so there
- * is no directory to name and nothing to push a draft PR out of. Both are left
- * out rather than written as a path that is not there and a push that fails.
+ * A Ticket handed over before its worktree was created has none: nothing was
+ * branched, so there is no directory to name and nothing to push a draft PR out
+ * of. Both are left out rather than written as a path that is not there and a
+ * push that fails.
  */
 async function handOff(
   pipeline: Pipeline,
