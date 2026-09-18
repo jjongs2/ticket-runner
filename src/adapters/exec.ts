@@ -31,11 +31,11 @@ export interface ExecOptions {
  * so what the child printed has to be collected on a clock rather than waited
  * for. Long enough that a pipe's worth of buffered output always arrives.
  *
- * What this window guarantees, and what it gives up: everything the child
- * itself wrote is complete, because the child's own output is in the pipe
- * buffer by the time it exits. What a descendant writes is collected only
- * while the child lives and during this window after it; later than that it is
- * dropped by design, in exchange for a call that always settles.
+ * What the clock gives up: everything the child itself wrote is complete,
+ * because its own output is in the pipe buffer by the time it exits, but a
+ * descendant's is collected only while the child lives and during this window
+ * after it. Later than that it is dropped by design, in exchange for a call
+ * that always settles.
  */
 const DRAIN_MS = 100;
 

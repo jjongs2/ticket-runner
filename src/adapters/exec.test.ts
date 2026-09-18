@@ -13,10 +13,12 @@ function printEnv(name: string): [string, string[]] {
  */
 function leaveDescendantHolding(stream: "stdout" | "stderr"): string {
   const stdio =
-    stream === "stdout" ? `["ignore", "inherit", "ignore"]` : `["ignore", "ignore", "inherit"]`;
+    stream === "stdout"
+      ? ["ignore", "inherit", "ignore"]
+      : ["ignore", "ignore", "inherit"];
   return `
     const { spawn } = require("node:child_process");
-    const descendant = spawn("/bin/sh", ["-c", "sleep 5"], { stdio: ${stdio} });
+    const descendant = spawn("/bin/sh", ["-c", "sleep 5"], { stdio: ${JSON.stringify(stdio)} });
     process.${stream}.write("early");
   `;
 }
