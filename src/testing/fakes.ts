@@ -401,6 +401,12 @@ export class FakeWorkspace implements Workspace {
 
   async push(cwd: string, branch: string): Promise<void> {
     this.calls.push(`push:${branch}`);
+    // git runs in a directory or it does not run at all: a push out of a
+    // worktree that was never created fails with ENOENT, and a fake that
+    // shrugged it off would let the pipeline go on asking for one.
+    if (!this.worktrees.has(cwd)) {
+      throw new Error(`ENOENT: no such file or directory, chdir '${cwd}'`);
+    }
     this.pushes.push({ cwd, branch });
   }
 

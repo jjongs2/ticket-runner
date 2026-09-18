@@ -721,6 +721,9 @@ describe("failures the pipeline did not expect", () => {
 
     expect(outcome).toMatchObject({ outcome: "handed-off", stage: "setup" });
     expect(handoffBody()).toContain("worktree path already exists");
+    // The worktree the Stage would have run in was never created.
+    expect(handoffBody()).not.toContain(`worktree \`${worktree}\``);
+    expect(workspace.calls).not.toContain(`push:${BRANCH}`);
   });
 
   it("blames the PR step when the push fails", async () => {
@@ -787,6 +790,23 @@ describe("hand-off", () => {
     const outcome = await run();
 
     expect(outcome).toMatchObject({ outcome: "handed-off" });
+    expect(tracker.issue(TICKET).labels).toEqual(["ready-for-human"]);
+    expect(handoffBody()).not.toContain("PR #");
+  });
+
+  it("swallows a push out of a worktree that is no longer there", async () => {
+    // What the fake does to an unknown path is what git does: a working
+    // directory that is not on disk is an ENOENT, not a push that quietly
+    // works. Here a human removed the worktree while the Stage was running.
+    runner.leaves("implement", () => workspace.worktrees.delete(worktree));
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off" });
+    // Attempted, because the Ticket did have a worktree, and then refused.
+    expect(workspace.calls).toContain(`push:${BRANCH}`);
+    expect(workspace.pushes).toEqual([]);
+    expect(tracker.pullRequests).toEqual([]);
     expect(tracker.issue(TICKET).labels).toEqual(["ready-for-human"]);
     expect(handoffBody()).not.toContain("PR #");
   });
@@ -1801,6 +1821,22 @@ describe("a branch that outlived its worktree", () => {
     expect(runner.stages()).toEqual([]);
   });
 
+  it("names no worktree, because the Ticket failed before it had one", async () => {
+    await run();
+
+    expect(handoffBody()).toContain(`Branch \`${BRANCH}\``);
+    expect(handoffBody()).not.toContain("worktree `");
+  });
+
+  it("opens no draft PR, because there is no worktree to push out of", async () => {
+    const outcome = await run();
+
+    expect(outcome).not.toHaveProperty("pullRequest");
+    expect(workspace.calls).not.toContain(`push:${BRANCH}`);
+    expect(tracker.pullRequests).toEqual([]);
+    expect(handoffBody()).not.toContain("PR #");
+  });
+
   it("hands off the usual way, on a budget it has not spent", async () => {
     await run();
 
@@ -1844,6 +1880,8 @@ git branch -D ${BRANCH}\`, then relabel the Ticket ready-for-agent`,
     // The advice a branch git is holding cannot take: `git branch -D` on its own.
     expect(handoffBody()).not.toContain(`\`git branch -D ${BRANCH}\``);
     expect(workspace.calls).not.toContain(`createWorktree:${BRANCH}`);
+    // The worktree is on disk here, so the hand-off still sends the human to it.
+    expect(handoffBody()).toContain(`worktree \`${worktree}\``);
   });
 
   it("creates the worktree as before when the branch is not there", async () => {
