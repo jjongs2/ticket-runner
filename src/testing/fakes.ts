@@ -280,6 +280,11 @@ export function stageResult(overrides: Partial<StageResult> = {}): StageResult {
 export class FakeWorkspace implements Workspace {
   /** worktree path → branch, for the worktrees that currently exist. */
   worktrees = new Map<string, string>();
+  /**
+   * The branches this repo has, which outlive their worktrees: a test seeds one
+   * to stand for a branch a human left behind.
+   */
+  branches = new Set<string>();
   calls: string[] = [];
   /** The branch's commit subjects, oldest first, as an implement Stage leaves them. */
   commits = ["feat(cli): do the thing (#2)", "test(cli): cover the thing (#2)"];
@@ -321,6 +326,7 @@ export class FakeWorkspace implements Workspace {
   async createWorktree({ path, branch }: WorktreeRef): Promise<void> {
     this.calls.push(`createWorktree:${branch}`);
     this.worktrees.set(path, branch);
+    this.branches.add(branch);
   }
 
   async hasWorktree({ path, branch }: WorktreeRef): Promise<boolean> {
@@ -328,9 +334,15 @@ export class FakeWorkspace implements Workspace {
     return this.worktrees.get(path) === branch;
   }
 
+  async hasBranch(branch: string): Promise<boolean> {
+    this.calls.push(`hasBranch:${branch}`);
+    return this.branches.has(branch);
+  }
+
   async removeWorktree({ path, branch }: WorktreeRef): Promise<void> {
     this.calls.push(`removeWorktree:${branch}`);
     this.worktrees.delete(path);
+    this.branches.delete(branch);
   }
 
   async commitSubjects(branch: string): Promise<string[]> {

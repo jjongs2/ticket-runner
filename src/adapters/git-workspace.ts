@@ -63,6 +63,20 @@ export class GitWorkspace implements Workspace {
     return false;
   }
 
+  /**
+   * A ref lookup, never the output of a failed `worktree add`: the branch is
+   * asked about before anything is created, and `refs/heads/` is spelt out so a
+   * tag or a remote-tracking ref of the same name is not mistaken for a branch.
+   */
+  async hasBranch(branch: string): Promise<boolean> {
+    const result = await exec(
+      "git",
+      ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`],
+      { cwd: this.repoRoot },
+    );
+    return result.exitCode === 0;
+  }
+
   async commitSubjects(branch: string): Promise<string[]> {
     // --reverse turns git's newest-first log into the order they were written.
     const { stdout } = await this.git([

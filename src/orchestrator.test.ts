@@ -161,13 +161,20 @@ describe("the happy path", () => {
       `addLabel:${TICKET}:in-progress`,
       `removeLabel:${TICKET}:ready-for-agent`,
     ]);
-    expect(workspace.calls.indexOf(`createWorktree:${BRANCH}`)).toBe(0);
+    // Asking whether the branch is there is not a side effect; creating the
+    // worktree is the first one the workspace sees.
+    expect(workspace.calls.filter((call) => call !== `hasBranch:${BRANCH}`)[0]).toBe(
+      `createWorktree:${BRANCH}`,
+    );
   });
 
   it("implements in a worktree on a fresh branch named after the Ticket", async () => {
     await run();
 
-    expect(workspace.calls[0]).toBe(`createWorktree:${BRANCH}`);
+    expect(workspace.calls.slice(0, 2)).toEqual([
+      `hasBranch:${BRANCH}`,
+      `createWorktree:${BRANCH}`,
+    ]);
     expect(runner.requests[0]?.cwd).toBe(worktree);
   });
 
@@ -1361,6 +1368,7 @@ describe("resuming a stranded Ticket", () => {
     issue.assignees = ["pipeline-user"];
     issue.labels = ["in-progress"];
     workspace.worktrees.set(worktree, state.branch);
+    workspace.branches.add(state.branch);
     writeTicketState(repoRoot, state);
   }
 
@@ -1416,9 +1424,10 @@ describe("resuming a stranded Ticket", () => {
     );
   });
 
-  it("is taken from the top, in place, when its worktree is gone", async () => {
+  it("is taken from the top, in place, when its worktree and branch are gone", async () => {
     strandedTicket();
     workspace.worktrees.delete(worktree);
+    workspace.branches.delete(BRANCH);
 
     const outcome = await run();
 
@@ -1427,6 +1436,17 @@ describe("resuming a stranded Ticket", () => {
     expect(runner.stages()).toEqual(["implement", "verify"]);
     // Nothing was re-assigned or relabelled: the Claim was already this Run's.
     expect(tracker.calls).not.toContain(`assign:${TICKET}:pipeline-user`);
+  });
+
+  it("is handed off at setup when its branch outlived its worktree", async () => {
+    strandedTicket();
+    workspace.worktrees.delete(worktree);
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "setup" });
+    expect(handoffBody()).toContain(`git branch -D ${BRANCH}`);
+    expect(workspace.calls).not.toContain(`createWorktree:${BRANCH}`);
   });
 
   it("is refused as claimed when there is no State file beside it", async () => {
@@ -1480,6 +1500,7 @@ describe("resuming a released Ticket", () => {
       ...overrides,
     };
     workspace.worktrees.set(worktree, state.branch);
+    workspace.branches.add(state.branch);
     writeTicketState(repoRoot, state);
   }
 
@@ -1585,7 +1606,9 @@ describe("resuming a released Ticket", () => {
     expect(tracker.issue(TICKET).labels).toEqual(["ready-for-human"]);
   });
 
-  it("starts the Ticket over when the worktree the State file named is gone", async () => {
+  it("starts the Ticket over when the worktree and the branch are both gone", async () => {
+    // Nothing is seeded on the workspace: the human who removed the worktree
+    // removed the branch with it, so there is nothing in the way of a fresh one.
     writeTicketState(repoRoot, {
       ticket: TICKET,
       branch: BRANCH,
@@ -1603,6 +1626,70 @@ describe("resuming a released Ticket", () => {
     // And the State file nothing can resume from is gone, so the next Run is
     // not asked the same question again.
     expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
+  });
+});
+
+/**
+ * A branch left behind by work nobody can account for: a human who finished a
+ * handed-off Ticket and deleted the worktree without the branch, or a Ticket
+ * taken from the top after its worktree went. Creating the worktree would fail
+ * on the name, so the pipeline refuses first and says whose turn it is.
+ */
+describe("a branch that outlived its worktree", () => {
+  /** The branch is there, nothing is checked out on it, nothing is recorded. */
+  beforeEach(() => {
+    workspace.branches.add(BRANCH);
+  });
+
+  it("hands the Ticket over at setup, naming the branch and what to do with it", async () => {
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "setup" });
+    expect(outcome).toMatchObject({
+      failure: expect.stringContaining(`git branch -D ${BRANCH}`) as unknown as string,
+    });
+    expect(handoffBody()).toContain(BRANCH);
+    expect(handoffBody()).toContain("ready-for-agent");
+  });
+
+  it("does not create a worktree on a branch it cannot account for", async () => {
+    await run();
+
+    expect(workspace.calls).not.toContain(`createWorktree:${BRANCH}`);
+    expect(runner.stages()).toEqual([]);
+  });
+
+  it("hands off the usual way, on a budget it has not spent", async () => {
+    await run();
+
+    expect(tracker.issue(TICKET).labels).toEqual(["ready-for-human"]);
+    expect(tracker.issue(TICKET).assignees).toEqual([]);
+    expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
+    expect(handoffBody()).not.toContain("after the fix budget was used");
+  });
+
+  it("reaches the same hand-off when a released Ticket's worktree has gone", async () => {
+    writeTicketState(repoRoot, {
+      ticket: TICKET,
+      branch: BRANCH,
+      state: "implemented",
+      fixUsed: false,
+      runId: "run-0",
+      updatedAt: "2026-09-17T09:00:00.000Z",
+    });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "setup" });
+    expect(handoffBody()).toContain(`git branch -D ${BRANCH}`);
+    expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
+  });
+
+  it("creates the worktree as before when the branch is not there", async () => {
+    workspace.branches.delete(BRANCH);
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(workspace.calls).toContain(`createWorktree:${BRANCH}`);
   });
 });
 

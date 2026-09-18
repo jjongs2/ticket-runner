@@ -246,6 +246,14 @@ export async function processTicket(
     // A resumed Ticket kept its worktree and branch, and the Stages that already
     // succeeded on them are not paid for twice.
     if (resume === undefined) {
+      // The branch is asked about before it is branched: `createWorktree`
+      // branches fresh from main and fails on a name that is taken, and a
+      // branch nobody can account for is not reused (ADR-0004). Refusing here
+      // is what turns git's `fatal: a branch named ... already exists` into a
+      // hand-off that says whose branch it is and what to do with it.
+      if (await workspace.hasBranch(branch)) {
+        throw new TicketFailure("setup", strandedBranch(branch, config.labels.readyForAgent));
+      }
       await workspace.createWorktree({ path: worktree, branch });
     } else {
       // A Run that was killed mid-rebase left git stopped in the worktree, with
@@ -392,6 +400,21 @@ export async function processTicket(
 }
 
 /**
+ * What the human is told about a branch that outlived its worktree.
+ *
+ * One line, because that is what the hand-off comment, the Run summary and the
+ * Run log each carry. It names the branch twice on purpose: once as the thing
+ * that is in the way, and once inside the command that clears it.
+ */
+function strandedBranch(branch: string, readyForAgent: string): string {
+  return (
+    `the branch ${branch} already exists but no worktree of this repo is on it; ` +
+    `delete it with \`git branch -D ${branch}\` if the work on it is abandoned, ` +
+    `or finish it by hand, then relabel the Ticket ${readyForAgent}`
+  );
+}
+
+/**
  * The state an earlier Run left for this Ticket, if a Run can still resume it.
  *
  * The State file only names where the work is; whether the work is still there
@@ -399,9 +422,8 @@ export async function processTicket(
  * onto another branch, has thrown the resume away with it — so the file goes too
  * and the Ticket is taken from the top, released or stranded alike. That is the
  * safe reading of a worktree nobody can be sure of, not a free one: the branch
- * may still exist, and then creating the worktree fails and the Ticket is handed
- * over with the failure naming it. Better that than resuming into a worktree that
- * is not there.
+ * may still exist, and then the Ticket is handed over at setup with a failure
+ * naming it. Better that than resuming into a worktree that is not there.
  */
 async function resumable(
   pipeline: Pipeline,
