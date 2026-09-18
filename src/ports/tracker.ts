@@ -117,7 +117,21 @@ export interface CreatePullRequest {
  */
 export type CiOutcome =
   | { state: "passed" }
-  | { state: "failed"; summary: string }
+  | {
+      state: "failed";
+      /** The one line a human reads in a notification: which checks went red. */
+      summary: string;
+      /**
+       * The tail of the failing job's log, as the fix Stage's evidence.
+       *
+       * The names alone say nothing a fix Stage can work from: it cannot see
+       * the CI log, and a failure that only happens on the runner may not
+       * reproduce in the worktree. Empty when no log could be fetched — the
+       * checks are not all GitHub Actions jobs and a tracker owes the caller
+       * the failure either way — so every reader of it degrades to the summary.
+       */
+      excerpt: string;
+    }
   | { state: "none" }
   | { state: "timed-out" };
 

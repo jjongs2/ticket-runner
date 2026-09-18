@@ -53,7 +53,21 @@ interface RawCandidate {
 interface CiCheck {
   name: string;
   bucket: string;
+  /** Where the check reports; an Actions job's is the only one a log is behind. */
+  link?: string;
 }
+
+/**
+ * What one reading of `gh pr checks` settled on, before any log is fetched.
+ *
+ * A failed reading keeps the checks themselves rather than only their names,
+ * because the log fetch happens once, after the polling loop is over, and it
+ * needs the links.
+ */
+type CiReading =
+  | { state: "passed" }
+  | { state: "none" }
+  | { state: "failed"; summary: string; failed: CiCheck[] };
 
 /**
  * The GitHub-backed {@link Tracker}, spoken through the `gh` CLI so it reuses
@@ -280,17 +294,63 @@ export class GhTracker implements Tracker {
 
     for (;;) {
       const result = await this.gh(
-        ["pr", "checks", String(number), "--json", "name,bucket,state"],
+        ["pr", "checks", String(number), "--json", "name,bucket,state,link"],
         { allowFailure: true },
       );
 
-      const outcome = readCi(result);
-      const stillRegistering = outcome !== "pending" && outcome.state === "none" && this.now() < graceUntil;
-      if (outcome !== "pending" && !stillRegistering) return outcome;
+      const reading = readCi(result);
+      const stillRegistering = reading !== "pending" && reading.state === "none" && this.now() < graceUntil;
+      if (reading !== "pending" && !stillRegistering) return this.settle(reading);
       // Checks that never appeared are "none", not a timeout: nothing was ever pending.
-      if (this.now() >= deadline) return outcome === "pending" ? { state: "timed-out" } : outcome;
+      if (this.now() >= deadline) {
+        return reading === "pending" ? { state: "timed-out" } : this.settle(reading);
+      }
       await this.sleep(this.pollIntervalMs);
     }
+  }
+
+  /**
+   * The reading the poll stopped on, turned into the outcome the caller gets.
+   *
+   * The one place a job log is fetched, so it happens once per wait and never
+   * while a check is still pending.
+   */
+  private async settle(reading: CiReading): Promise<CiOutcome> {
+    if (reading.state !== "failed") return reading;
+    return {
+      state: "failed",
+      summary: reading.summary,
+      excerpt: await this.failedJobLogs(reading.failed),
+    };
+  }
+
+  /**
+   * The tail of each failing Actions job's failed steps, best effort.
+   *
+   * Evidence is worth a few extra calls and nothing more: a Ticket whose CI
+   * really is red has a failure to report whether or not a log came back, so
+   * every way this can go wrong — a check that is not an Actions job, a `gh`
+   * that fails or is not there, an empty log — yields no excerpt rather than
+   * an error. Only the first {@link MAX_LOG_JOBS} jobs are asked for, which is
+   * what keeps a whole matrix of red checks out of a prompt.
+   */
+  private async failedJobLogs(failed: CiCheck[]): Promise<string> {
+    const logs: string[] = [];
+    for (const check of failed.slice(0, MAX_LOG_JOBS)) {
+      const job = actionsJobId(check.link);
+      if (job === undefined) continue;
+      try {
+        const result = await this.gh(["run", "view", "--job", job, "--log-failed"], {
+          allowFailure: true,
+        });
+        if (result.exitCode !== 0) continue;
+        const log = result.stdout.trim();
+        if (log !== "") logs.push(`${check.name}\n${tail(log)}`);
+      } catch {
+        // `gh` itself could not be run. The failure still stands; the log does not.
+      }
+    }
+    return logs.join("\n\n");
   }
 
   async squashMerge(number: number, commit: SquashCommit): Promise<void> {
@@ -420,7 +480,7 @@ function relations(issue: RawIssue): Pick<Issue, "subIssues" | "blockedBy"> {
 }
 
 /** `pending` means "ask again"; everything else is an answer. */
-function readCi(result: Execution): CiOutcome | "pending" {
+function readCi(result: Execution): CiReading | "pending" {
   if (/no checks reported/i.test(result.stderr)) return { state: "none" };
 
   let runs: CiCheck[];
@@ -440,8 +500,57 @@ function readCi(result: Execution): CiOutcome | "pending" {
       summary: failed
         .map((run) => `${run.name} ${run.bucket === "cancel" ? "cancelled" : "failed"}`)
         .join(", "),
+      failed,
     };
   }
   if (runs.some((run) => run.bucket === "pending")) return "pending";
   return { state: "passed" };
+}
+
+
+/**
+ * How many failing checks a single wait fetches a log for.
+ *
+ * A red matrix job fails once per leg with the same log each time, and the
+ * prompt and the hand-off comment both have to stay readable, so the excerpt
+ * is bounded by this times {@link MAX_LOG_LINES} rather than by the build.
+ */
+const MAX_LOG_JOBS = 3;
+
+/** Lines kept from the tail of one job's log. */
+const MAX_LOG_LINES = 40;
+
+/** Characters kept from the tail of one job's log, for lines long enough to need it. */
+const MAX_LOG_CHARS = 4_000;
+
+/** The Actions job a check's link points at: `.../actions/runs/<run>/job/<job>`. */
+const ACTIONS_JOB_URL = /\/actions\/runs\/\d+\/job\/(\d+)(?:[?#]|$)/;
+
+/**
+ * The Actions job id behind a check's link, or nothing when the check does not
+ * report from one. An external app's check has a link of its own shape and no
+ * log `gh` can read, which is a reason to skip it and never a reason to fail.
+ */
+function actionsJobId(link: string | undefined): string | undefined {
+  const match = link === undefined ? null : ACTIONS_JOB_URL.exec(link);
+  return match ? (match[1] as string) : undefined;
+}
+
+/**
+ * The end of a log, under a fixed cap, saying what it left out.
+ *
+ * The tail is the part worth carrying: a runner prints the assertion or the
+ * stack that ended the job last, under however much setup noise came first.
+ */
+function tail(log: string): string {
+  const lines = log.split("\n");
+  let kept = lines.slice(-MAX_LOG_LINES);
+  while (kept.length > 1 && kept.join("\n").length > MAX_LOG_CHARS) kept = kept.slice(1);
+
+  const text = kept.join("\n");
+  const omitted = lines.length - kept.length;
+  // One line longer than the whole cap is still worth its own tail, and the
+  // count of dropped lines would say nothing about what was cut out of it.
+  if (text.length > MAX_LOG_CHARS) return `… (earlier output omitted)\n${text.slice(-MAX_LOG_CHARS)}`;
+  return omitted > 0 ? `… (${omitted} earlier lines omitted)\n${text}` : text;
 }
