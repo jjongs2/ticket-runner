@@ -129,6 +129,16 @@ describe("handoffComment", () => {
     expect(comment).toContain("worktree `/repo/.worktrees/ticket-2`");
   });
 
+  it("omits the worktree clause when the Ticket failed before it had one", () => {
+    const { worktree, ...beforeSetup } = base;
+
+    const comment = handoffComment(beforeSetup);
+
+    expect(comment).toContain("- Branch `agent/2-skeleton`");
+    expect(comment).not.toContain(worktree);
+    expect(comment).not.toContain("worktree");
+  });
+
   it("names the draft PR when one was opened", () => {
     expect(handoffComment({ ...base, pullRequest: 12 })).toContain("PR #12 (draft)");
   });

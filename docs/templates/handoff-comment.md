@@ -12,6 +12,12 @@
 
 </details>
 
+The worktree clause is dropped when there is no worktree to name: a Ticket that
+failed before its worktree was created never had one, and a path that is not on
+disk sends the human to a directory they will not find. No draft PR is opened
+for such a Ticket either, because there is nothing to push out of, so the PR
+clause goes with it.
+
 The PR clause is dropped when no pull request could be opened. The whole
 `<details>` block is dropped when there is no evidence to show. Evidence is
 fenced because it is raw command output, which would otherwise be read as

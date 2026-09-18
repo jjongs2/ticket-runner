@@ -180,7 +180,12 @@ export interface HandoffComment {
   /** One line a human can read in a notification. */
   failure: string;
   branch: string;
-  worktree: string;
+  /**
+   * Where the work is, left out when there is no worktree to send anyone to:
+   * a Ticket that failed at setup never had one created, and a path that is not
+   * on disk reads as if something else had gone wrong.
+   */
+  worktree?: string;
   pullRequest?: number;
   /** Failing Check output, unmet criteria, or a CI log excerpt. */
   evidence: string;
@@ -191,7 +196,7 @@ export interface HandoffComment {
 export function handoffComment(handoff: HandoffComment): string {
   const location = [
     `Branch \`${handoff.branch}\``,
-    `worktree \`${handoff.worktree}\``,
+    ...(handoff.worktree === undefined ? [] : [`worktree \`${handoff.worktree}\``]),
     ...(handoff.pullRequest === undefined ? [] : [`PR #${handoff.pullRequest} (draft)`]),
   ].join(" · ");
 
