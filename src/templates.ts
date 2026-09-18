@@ -3,6 +3,7 @@
  * source of truth for these; change it there first.
  */
 
+import { UNCHECKED_BOX } from "./acceptance-criteria.js";
 import type { GuardReason } from "./guards.js";
 import type { FailurePoint } from "./lifecycle.js";
 import type { RoutedNote } from "./notes.js";
@@ -238,8 +239,8 @@ export interface NoteSubject {
   intended?: number;
 }
 
-/** A task list item at the start of a line, which is what a guard reads. */
-const NOTE_CHECKBOX = /^([ \t]*[-*+] )\[ \]/gm;
+/** {@link UNCHECKED_BOX}, over every line of a Note rather than the first. */
+const NOTE_CHECKBOX = new RegExp(UNCHECKED_BOX, "gm");
 
 /**
  * A Note's prose, with every checkbox defused.

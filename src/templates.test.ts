@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { UNCHECKED_BOX } from "./acceptance-criteria.js";
 import {
   HANDOFF_MARKER,
   NOTE_MARKER,
@@ -349,7 +350,7 @@ describe("noteComment", () => {
     const comment = noteComment({ ...subject, note: "- [ ] rename the flag" });
 
     expect(comment).toContain("- \\[ \\] rename the flag");
-    expect(/^[ \t]*[-*+] \[ \]/m.test(comment)).toBe(false);
+    expect(new RegExp(UNCHECKED_BOX, "m").test(comment)).toBe(false);
   });
 });
 

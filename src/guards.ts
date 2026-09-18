@@ -1,3 +1,4 @@
+import { UNCHECKED_BOX } from "./acceptance-criteria.js";
 import type { Issue } from "./ports/tracker.js";
 
 /**
@@ -72,13 +73,13 @@ export function skipReason(
   return undefined;
 }
 
-/** An unchecked task list item, which is what Acceptance Criteria are made of. */
-const UNCHECKED_BOX = /^[ \t]*[-*+] \[ \]/m;
+/** {@link UNCHECKED_BOX}, asking only whether one line of a text is a criterion. */
+const CRITERION_LINE = new RegExp(UNCHECKED_BOX, "m");
 
 /** Triage posts its brief as a comment, so criteria are not always in the body. */
 function hasCriteria(issue: Issue): boolean {
   return [issue.body, ...issue.comments.map((comment) => comment.body)].some((text) =>
-    UNCHECKED_BOX.test(text),
+    CRITERION_LINE.test(text),
   );
 }
 

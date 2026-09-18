@@ -12,11 +12,12 @@
  * the line, and the document around it, as it found them.
  */
 
+import { UNCHECKED_BOX } from "./acceptance-criteria.js";
 import type { Tracker } from "./ports/tracker.js";
 import type { Verdict } from "./verdict.js";
 
-/** A task list item: its bullet and indent, its box, and the text after it. */
-const CHECKBOX_LINE = /^([ \t]*[-*+] )\[ \]( .*)$/gm;
+/** {@link UNCHECKED_BOX}, extended to capture the criterion text after the box. */
+const CHECKBOX_LINE = new RegExp(`${UNCHECKED_BOX}( .*)$`, "gm");
 
 /**
  * The same criterion as the verify Stage reported it.
