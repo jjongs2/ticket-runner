@@ -234,7 +234,7 @@ export async function processTicket(
   // this Run may push out of it. A Ticket that failed before `createWorktree`
   // ran has none; a resumed Ticket was resumed into the one it kept.
   let worktreeOnDisk: HandOffWorktree | undefined =
-    resume === undefined ? undefined : { path: worktree, ours: true };
+    resume === undefined ? undefined : { path: worktree, pushable: true };
   // The fix budget, which is one per Ticket and spent by the first failure a
   // fix Stage is offered. Once it is gone the next failure of any kind — even a
   // kind the fix Stage never touched — is a hand-off. A resumed Ticket keeps the
@@ -268,14 +268,14 @@ export async function processTicket(
         // to use: the hand-off names a directory a human can open either way,
         // and pushes nothing out of work no Stage of this Run produced.
         worktreeOnDisk =
-          checkedOutAt === undefined ? undefined : { path: checkedOutAt, ours: false };
+          checkedOutAt === undefined ? undefined : { path: checkedOutAt, pushable: false };
         throw new TicketFailure(
           "setup",
           describeBranchInTheWay(branch, checkedOutAt, config.labels.readyForAgent),
         );
       }
       await workspace.createWorktree({ path: worktree, branch });
-      worktreeOnDisk = { path: worktree, ours: true };
+      worktreeOnDisk = { path: worktree, pushable: true };
     } else {
       // A Run that was killed mid-rebase left git stopped in the worktree, with
       // conflict markers in files the Checks are about to grade. Back to the
@@ -1119,11 +1119,11 @@ interface HandOffWorktree {
   /** Where the branch is checked out, which is where a human is sent. */
   path: string;
   /**
-   * Whether this Run created it or was resumed into it, so a Stage of this Run
-   * could have left work in there. A worktree the pipeline only found the
-   * branch checked out in holds a human's work, which it does not push.
+   * Whether this Run may push out of it: true for a worktree it created or was
+   * resumed into, where a Stage of it could have left work. A worktree the
+   * pipeline only found the branch checked out in holds a human's work.
    */
-  ours: boolean;
+  pushable: boolean;
 }
 
 interface HandOff {
@@ -1174,7 +1174,7 @@ async function handOff(
 
   if (pullRequest !== undefined) {
     await tracker.convertPullRequestToDraft(pullRequest);
-  } else if (worktree?.ours === true) {
+  } else if (worktree?.pushable) {
     // A draft PR is worth trying for, but never worth losing the relabel over.
     try {
       await workspace.push(worktree.path, branch);
