@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { UNCHECKED_BOX } from "./acceptance-criteria.js";
+import { resolveBaseBranch } from "./base-branch.js";
 import type { Config } from "./config.js";
 import { processTicket } from "./orchestrator.js";
 import {
@@ -126,15 +127,22 @@ function stateAtEachStage(): { stage: StageName; state: TicketState | undefined 
   return seen;
 }
 
-function run(overrides: Partial<Config> = {}): Promise<TicketOutcome> {
-  return processTicket(
+/**
+ * One Ticket, through a pipeline wired the way the CLI wires one: the base
+ * branch is resolved from the tracker and the config before the Ticket starts,
+ * so a fake Tracker on `master` is enough to drive the whole Run there.
+ */
+async function run(overrides: Partial<Config> = {}): Promise<TicketOutcome> {
+  const settings = config(overrides);
+  return await processTicket(
     {
       tracker,
       runner,
       workspace,
-      config: config(overrides),
+      config: settings,
       repoRoot,
       runId: "run-1",
+      baseBranch: await resolveBaseBranch(tracker, settings),
       log: (line) => logged.push(line),
     },
     TICKET,
@@ -187,12 +195,12 @@ describe("the happy path", () => {
     expect(runner.requests[0]?.cwd).toBe(worktree);
   });
 
-  it("squash-merges, pulls main and cleans the worktree and remote branch up", async () => {
+  it("squash-merges, pulls the base branch and cleans the worktree and remote branch up", async () => {
     await run();
 
     expect(tracker.calls).toContain("squashMerge:100");
     expect(workspace.calls.slice(-3)).toEqual([
-      "pullMain",
+      "pullBase",
       `removeWorktree:${BRANCH}`,
       `deleteRemoteBranch:${BRANCH}`,
     ]);
@@ -215,6 +223,65 @@ describe("the happy path", () => {
     expect(tracker.issue(TICKET).labels).toEqual([]);
     expect(tracker.issue(TICKET).assignees).toEqual(["pipeline-user"]);
     expect(notices()).toEqual([]);
+  });
+});
+
+describe("the Target's base branch", () => {
+  it("branches, targets and pulls whatever the Target calls its default", async () => {
+    tracker.defaultBranchName = "master";
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(workspace.branchedFrom).toEqual(["master"]);
+    expect(workspace.rebasedOnto).toEqual(["master"]);
+    expect(tracker.pullRequest(100).base).toBe("master");
+    expect(workspace.pulledBase).toEqual(["master"]);
+  });
+
+  it("hands every operation that names a branch the one branch it resolved", async () => {
+    tracker.defaultBranchName = "master";
+    workspace.conflictOnce(CONFLICT);
+
+    await run();
+
+    // The reads that only compute a range included: the commits the pull
+    // request title and the squash body are taken from are `master..branch`.
+    expect([...new Set(workspace.basesGiven)]).toEqual(["master"]);
+  });
+
+  it("lets the config file's baseBranch win over the Target's default", async () => {
+    tracker.defaultBranchName = "master";
+
+    await run({ baseBranch: "release" });
+
+    expect(workspace.branchedFrom).toEqual(["release"]);
+    expect(tracker.pullRequest(100).base).toBe("release");
+  });
+
+  it("tells the Stages the branch it resolved, not `main`", async () => {
+    tracker.defaultBranchName = "master";
+    workspace.conflictOnce(CONFLICT);
+
+    await run();
+
+    const prompts = runner.requests.map((request) => request.prompt);
+    expect(prompts.join("\n")).not.toContain("`main`");
+    expect(prompts.some((prompt) => prompt.includes("the squash commit on `master`"))).toBe(
+      true,
+    );
+    expect(prompts.some((prompt) => prompt.includes("rebasing it onto `master`"))).toBe(true);
+  });
+
+  it("hands the Ticket off naming the branch the conflict Stage left unrebased", async () => {
+    tracker.defaultBranchName = "master";
+    workspace.conflictOnce(CONFLICT);
+    workspace.rebaseStateAfterStage = UNRESOLVED;
+
+    await run();
+
+    const fix = runner.requests.find((request) => request.stage === "fix");
+    expect(fix?.prompt).toContain("the branch conflicts with master");
   });
 });
 
@@ -596,7 +663,7 @@ describe("rebase", () => {
   });
 
   it("spends the fix budget when the conflict outlives the Stage", async () => {
-    workspace.rebase = { ok: false, conflict: CONFLICT };
+    workspace.rebaseOutcome = { ok: false, conflict: CONFLICT };
     workspace.rebaseStateAfterStage = UNRESOLVED;
 
     const outcome = await run();
@@ -649,7 +716,7 @@ describe("rebase", () => {
   it("hands off naming the limit when the conflict Stage ran out of turns", async () => {
     // A Check spends the budget first, so this conflict gets one Stage only.
     workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
-    workspace.rebase = { ok: false, conflict: CONFLICT };
+    workspace.rebaseOutcome = { ok: false, conflict: CONFLICT };
     workspace.rebaseStateAfterStage = UNRESOLVED;
     runner.queue("conflict", { ok: false, failure: "turn-capped" });
 
@@ -854,7 +921,7 @@ describe("hand-off", () => {
     await run();
 
     expect(tracker.pullRequest(100).merged).toBe(false);
-    expect(workspace.pulledMain).toBe(0);
+    expect(workspace.pulledBase).toEqual([]);
   });
 });
 
@@ -1373,7 +1440,7 @@ describe("releasing a rate-limited Ticket", () => {
   });
 
   it("aborts the rebase a stopped conflict Stage left behind", async () => {
-    workspace.rebase = { ok: false, conflict: CONFLICT };
+    workspace.rebaseOutcome = { ok: false, conflict: CONFLICT };
     workspace.rebaseStateAfterStage = UNRESOLVED;
     runner.queue("conflict", { ok: false, failure: "rate-limited" });
 
@@ -1460,9 +1527,9 @@ describe("the State file a claimed Ticket keeps", () => {
   it("is not moved on until the implement Stage's commits have been counted", async () => {
     let atCount: TicketState | undefined;
     const commitSubjects = workspace.commitSubjects.bind(workspace);
-    workspace.commitSubjects = async (branch) => {
+    workspace.commitSubjects = async (branch, base) => {
       atCount ??= readTicketState(repoRoot, TICKET);
-      return commitSubjects(branch);
+      return commitSubjects(branch, base);
     };
 
     await run();
@@ -1785,6 +1852,7 @@ describe("resuming a released Ticket", () => {
   it("brings the pull request the earlier Run opened up to date", async () => {
     tracker.pullRequests.push({
       number: 100,
+      base: "main",
       head: BRANCH,
       title: "feat(cli): do the thing",
       body: `Closes #${TICKET}`,
@@ -2014,7 +2082,7 @@ describe("a Ticket released and then resumed", () => {
   });
 
   it("rebases again when the limit stopped the conflict Stage", async () => {
-    workspace.rebase = { ok: false, conflict: CONFLICT };
+    workspace.rebaseOutcome = { ok: false, conflict: CONFLICT };
     workspace.rebaseStateAfterStage = UNRESOLVED;
     runner.queue("conflict", { ok: false, failure: "rate-limited" });
 

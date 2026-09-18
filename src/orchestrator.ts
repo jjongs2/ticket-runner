@@ -91,6 +91,12 @@ export interface Pipeline {
   config: Config;
   repoRoot: string;
   runId: string;
+  /**
+   * The branch every Ticket of this Run branches from, rebases onto, merges
+   * into and pulls, resolved once before the Run started
+   * ({@link import("./base-branch.js").resolveBaseBranch}).
+   */
+  baseBranch: string;
   log?: (line: string) => void;
 }
 
@@ -166,7 +172,7 @@ export async function processTicket(
    */
   notes: RoutedNote[] = [],
 ): Promise<TicketOutcome> {
-  const { tracker, workspace, config, repoRoot, runId } = pipeline;
+  const { tracker, workspace, config, repoRoot, runId, baseBranch } = pipeline;
   const log = pipeline.log ?? (() => {});
 
   const issue = await tracker.getIssue(ticket);
@@ -252,10 +258,10 @@ export async function processTicket(
     // succeeded on them are not paid for twice.
     if (resume === undefined) {
       // The branch is asked about before it is branched: `createWorktree`
-      // branches fresh from main and fails on a name that is taken, and a
-      // branch nobody can account for is not reused (ADR-0004). Refusing here
-      // is what turns git's `fatal: a branch named ... already exists` into a
-      // hand-off that says whose branch it is and what to do with it.
+      // branches fresh from the base branch and fails on a name that is taken,
+      // and a branch nobody can account for is not reused (ADR-0004). Refusing
+      // here is what turns git's `fatal: a branch named ... already exists`
+      // into a hand-off that says whose branch it is and what to do with it.
       if (await workspace.hasBranch(branch)) {
         // Where the branch is decides what the human is asked to do about it:
         // a hand-off keeps the worktree and the branch while clearing the State
@@ -274,7 +280,7 @@ export async function processTicket(
           describeBranchInTheWay(branch, checkedOutAt, config.labels.readyForAgent),
         );
       }
-      await workspace.createWorktree({ path: worktree, branch });
+      await workspace.createWorktree({ path: worktree, branch }, baseBranch);
       worktreeOnDisk = { path: worktree, pushable: true };
     } else {
       // A Run that was killed mid-rebase left git stopped in the worktree, with
@@ -304,7 +310,7 @@ export async function processTicket(
         verdict = await verify(pipeline, issue, worktree, logDir, progress);
 
         point = "rebase";
-        const rebase = await workspace.rebaseOnMain(worktree);
+        const rebase = await workspace.rebase(worktree, baseBranch);
         if (!rebase.ok) {
           // Once per conflict, not once per Ticket: a pass the fix budget
           // bought meets a branch the fix Stage has changed, so the conflict it
@@ -319,9 +325,10 @@ export async function processTicket(
         }
 
         point = "pr";
-        // Read after the rebase, because these are the commits that land on main.
-        commits = await workspace.commitSubjects(branch);
-        coAuthors = await workspace.coAuthors(branch);
+        // Read after the rebase, because these are the commits that land on
+        // the base branch.
+        commits = await workspace.commitSubjects(branch, baseBranch);
+        coAuthors = await workspace.coAuthors(branch, baseBranch);
         title = pullRequestTitle(commits, issue.title);
         pullRequest = await publishPullRequest(
           pipeline,
@@ -410,7 +417,7 @@ export async function processTicket(
     log(`#${ticket} merged, but clearing in-progress failed: ${(error as Error).message}`);
   }
   try {
-    await workspace.pullMain();
+    await workspace.pullBase(baseBranch);
     await workspace.removeWorktree({ path: worktree, branch });
     await workspace.deleteRemoteBranch(branch);
   } catch (error) {
@@ -699,6 +706,15 @@ async function collectNotes(
   );
 }
 
+/**
+ * How many commits the branch carries that the base branch does not, which is
+ * how both code Stages are asked whether they committed anything.
+ */
+async function commitCount(pipeline: Pipeline, branch: string): Promise<number> {
+  const subjects = await pipeline.workspace.commitSubjects(branch, pipeline.baseBranch);
+  return subjects.length;
+}
+
 async function implement(
   pipeline: Pipeline,
   issue: Issue,
@@ -710,7 +726,7 @@ async function implement(
 ): Promise<void> {
   const stage = pipeline.config.stages.implement;
   const result = await runStage(pipeline, "implement", {
-    prompt: implementPrompt(issue.url, stage.extraPrompt),
+    prompt: implementPrompt(issue.url, pipeline.baseBranch, stage.extraPrompt),
     cwd: worktree,
     logDir,
     jsonSchema: NOTES_JSON_SCHEMA,
@@ -726,7 +742,7 @@ async function implement(
   // it carries what the Stage the rate limit stopped had committed — so this
   // asks the same question there: is there anything at all to grade. Whether it
   // is enough is the Verdict's business, not this guard's.
-  if ((await pipeline.workspace.commitSubjects(branch)).length === 0) {
+  if ((await commitCount(pipeline, branch)) === 0) {
     await progress.record(stageRow("implement", result, "❌ no commits"));
     throw new TicketFailure(
       "implement",
@@ -867,10 +883,10 @@ async function fix(
   // Read before the Stage runs, because the implement Stage's work is already
   // on the branch: what this asks afterwards is whether the branch grew, not
   // whether it has anything on it at all.
-  const commitsBefore = (await pipeline.workspace.commitSubjects(branch)).length;
+  const commitsBefore = await commitCount(pipeline, branch);
 
   const result = await runStage(pipeline, "fix", {
-    prompt: fixPrompt(issue.url, failure, stage.extraPrompt),
+    prompt: fixPrompt(issue.url, failure, pipeline.baseBranch, stage.extraPrompt),
     cwd: worktree,
     logDir,
     jsonSchema: NOTES_JSON_SCHEMA,
@@ -888,7 +904,7 @@ async function fix(
   // A branch that grew is the whole signal, which is not the same as one that
   // changed: a session that squashed the branch shorter, or amended in place,
   // is read here as having committed nothing.
-  if ((await pipeline.workspace.commitSubjects(branch)).length <= commitsBefore) {
+  if ((await commitCount(pipeline, branch)) <= commitsBefore) {
     await progress.record(stageRow("fix", result, "❌ no commits"));
     throw new TicketFailure("fix", "the fix Stage left no new commits on the branch");
   }
@@ -900,9 +916,9 @@ async function fix(
  * Send one session into the stopped rebase to resolve it.
  *
  * It is not what the fix budget buys and it does not spend it: a conflict is
- * main moving on underneath a branch, not a defect in the branch, and a Ticket
- * that hits one has done nothing wrong yet. The budget covers what is left if
- * this fails.
+ * the base branch moving on underneath a branch, not a defect in the branch,
+ * and a Ticket that hits one has done nothing wrong yet. The budget covers what
+ * is left if this fails.
  *
  * The tree decides whether it worked, not the session's exit status. A Stage
  * that finished the rebase and then ran out of turns has done the job; one that
@@ -952,12 +968,12 @@ async function conflictStage(
   const stage = pipeline.config.stages.conflict;
   try {
     const result = await runStage(pipeline, "conflict", {
-      prompt: conflictPrompt(issue.url, conflict, stage.extraPrompt),
+      prompt: conflictPrompt(issue.url, conflict, pipeline.baseBranch, stage.extraPrompt),
       cwd: worktree,
       logDir,
     });
 
-    const state = await pipeline.workspace.rebaseState(worktree);
+    const state = await pipeline.workspace.rebaseState(worktree, pipeline.baseBranch);
     if (state.resolved) {
       // The worktree decides the row, as it decides the outcome: a Stage that
       // ran out of turns, or into the rate limit, after finishing the rebase
@@ -977,7 +993,7 @@ async function conflictStage(
     return new TicketFailure(
       "rebase",
       result.ok
-        ? "the conflict Stage did not finish the rebase onto main"
+        ? `the conflict Stage did not finish the rebase onto ${pipeline.baseBranch}`
         : describeStageFailure("conflict", stage, result),
       [conflict, state.unresolved].join("\n\n"),
       "unresolved-conflict",
@@ -1004,7 +1020,7 @@ interface PullRequestSubject {
  *
  * A second pass comes back to a pull request that already exists: the push is
  * what GitHub re-runs its checks on, and the body is rewritten so the Verdict a
- * human reads there is the one that will reach main.
+ * human reads there is the one that will reach the base branch.
  */
 async function publishPullRequest(
   pipeline: Pipeline,
@@ -1020,6 +1036,7 @@ async function publishPullRequest(
   }
 
   const pr = await pipeline.tracker.createPullRequest({
+    base: pipeline.baseBranch,
     head: branch,
     title,
     body,
@@ -1179,6 +1196,7 @@ async function handOff(
     try {
       await workspace.push(worktree.path, branch);
       const pr = await tracker.createPullRequest({
+        base: pipeline.baseBranch,
         head: branch,
         // Nothing here is merged, so there is no commit subject worth deriving.
         title: issue.title,
@@ -1237,8 +1255,8 @@ const TICKET_REFERENCE = /\s*\(#\d+\)$/;
  * The implement Stage is told its first commit must summarise the whole Ticket
  * in the commit convention, so that subject is the one line written about the
  * branch as a whole. A subject that ignored the convention is not worth putting
- * on main, and neither is a Ticket the Stage left no commits on: the Ticket
- * title says at least as much.
+ * on the base branch, and neither is a Ticket the Stage left no commits on: the
+ * Ticket title says at least as much.
  */
 function pullRequestTitle(commits: string[], ticketTitle: string): string {
   const first = (commits[0] ?? "").replace(TICKET_REFERENCE, "");

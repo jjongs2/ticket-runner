@@ -73,8 +73,8 @@ export interface Candidate {
 }
 
 /**
- * The commit a squash merge lands on main. Both halves are used verbatim, so
- * GitHub appends no pull request number to the subject.
+ * The commit a squash merge lands on the base branch. Both halves are used
+ * verbatim, so GitHub appends no pull request number to the subject.
  */
 export interface SquashCommit {
   subject: string;
@@ -102,6 +102,8 @@ export interface IssueRef {
 }
 
 export interface CreatePullRequest {
+  /** The branch it merges into: the Target's base branch, as the Run resolved it. */
+  base: string;
   head: string;
   title: string;
   body: string;
@@ -137,6 +139,14 @@ export type CiOutcome =
 
 export interface Tracker {
   currentUser(): Promise<string>;
+  /**
+   * The branch GitHub calls the Target's default.
+   *
+   * Asked once at the start of a Run, and only where the config names no
+   * `baseBranch` of its own: it is what a Run branches from, rebases onto,
+   * merges into and pulls, so a repository on `master` needs no config file.
+   */
+  defaultBranch(): Promise<string>;
   listLabels(): Promise<string[]>;
   createLabel(label: LabelSpec): Promise<void>;
   getIssue(number: number): Promise<Issue>;

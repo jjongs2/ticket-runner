@@ -22,6 +22,7 @@ const stageSchema = z
 
 const configSchema = z
   .object({
+    baseBranch: z.string().min(1).optional(),
     checks: z.array(z.string().min(1)).optional(),
     gates: z
       .object({ checks: z.boolean().optional(), ci: z.boolean().optional() })
@@ -70,6 +71,12 @@ export interface Labels {
 }
 
 export interface Config {
+  /**
+   * The branch a Run branches from, rebases onto, merges into and pulls, where
+   * the config names one. Absent means the Target's default branch on GitHub,
+   * which is what {@link import("./base-branch.js").resolveBaseBranch} asks for.
+   */
+  baseBranch?: string;
   checks: string[];
   gates: { checks: boolean; ci: boolean };
   stages: {
@@ -133,6 +140,9 @@ export function loadConfig(repoRoot: string): Config {
 
   const file = parsed.data;
   return {
+    // Spread, not `baseBranch: file.baseBranch`: the field is absent rather
+    // than undefined when the config file names none.
+    ...(file.baseBranch === undefined ? {} : { baseBranch: file.baseBranch }),
     checks: file.checks ?? inferChecks(repoRoot),
     gates: {
       checks: file.gates?.checks ?? true,

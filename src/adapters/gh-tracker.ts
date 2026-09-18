@@ -16,7 +16,6 @@ import { type Execution, type RunProcess, exec, throwOnFailure } from "./exec.js
 export interface GhTrackerOptions {
   run?: RunProcess;
   cwd?: string;
-  baseBranch?: string;
   pollIntervalMs?: number;
   /** How long "no checks yet" counts as pending after the wait starts. */
   checksGraceMs?: number;
@@ -80,7 +79,6 @@ type CiReading =
 export class GhTracker implements Tracker {
   private readonly runProcess: RunProcess;
   private readonly cwd: string | undefined;
-  private readonly baseBranch: string;
   private readonly pollIntervalMs: number;
   private readonly checksGraceMs: number;
   private readonly sleep: (ms: number) => Promise<void>;
@@ -89,7 +87,6 @@ export class GhTracker implements Tracker {
   constructor(options: GhTrackerOptions = {}) {
     this.runProcess = options.run ?? exec;
     this.cwd = options.cwd;
-    this.baseBranch = options.baseBranch ?? "main";
     this.pollIntervalMs = options.pollIntervalMs ?? 15_000;
     this.checksGraceMs = options.checksGraceMs ?? 120_000;
     this.sleep =
@@ -100,6 +97,21 @@ export class GhTracker implements Tracker {
   async currentUser(): Promise<string> {
     const { stdout } = await this.gh(["api", "user", "--jq", ".login"]);
     return stdout.trim();
+  }
+
+  /** Whatever the Target's `HEAD` points at, which `gh repo view` reports. */
+  async defaultBranch(): Promise<string> {
+    const { stdout } = await this.gh([
+      "repo",
+      "view",
+      "--json",
+      "defaultBranchRef",
+      "--jq",
+      ".defaultBranchRef.name",
+    ]);
+    const branch = stdout.trim();
+    if (branch === "") throw new Error("gh reported no default branch for this repository");
+    return branch;
   }
 
   async listLabels(): Promise<string[]> {
@@ -253,7 +265,7 @@ export class GhTracker implements Tracker {
       "pr",
       "create",
       "--base",
-      this.baseBranch,
+      pr.base,
       "--head",
       pr.head,
       "--title",

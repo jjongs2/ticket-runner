@@ -39,6 +39,26 @@ describe("loadConfig", () => {
     });
   });
 
+  it("names no base branch of its own, leaving the Target's default to answer", () => {
+    expect(loadConfig(repoWith({})).baseBranch).toBeUndefined();
+  });
+
+  it("takes the base branch the config file names", () => {
+    const root = repoWith({ [CONFIG_FILENAME]: JSON.stringify({ baseBranch: "trunk" }) });
+
+    expect(loadConfig(root).baseBranch).toBe("trunk");
+  });
+
+  it.each(["", 7, null])(
+    "rejects %o as a base branch with a message naming the field",
+    (value) => {
+      const root = repoWith({ [CONFIG_FILENAME]: JSON.stringify({ baseBranch: value }) });
+
+      expect(() => loadConfig(root)).toThrowError(ConfigError);
+      expect(() => loadConfig(root)).toThrowError(/baseBranch/);
+    },
+  );
+
   it("infers Checks from the package.json scripts", () => {
     const root = repoWith({
       "package.json": JSON.stringify({
