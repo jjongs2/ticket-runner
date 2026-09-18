@@ -101,7 +101,11 @@ export interface Workspace {
    */
   abortRebase(cwd: string): Promise<void>;
   push(cwd: string, branch: string): Promise<void>;
-  /** Delete `branch` on the remote; the PR is merged, so nothing references it. */
+  /**
+   * Delete `branch` on the remote; the PR is merged, so nothing references it.
+   * A branch the remote already deleted, as GitHub does on merge when told to,
+   * counts as deleted.
+   */
   deleteRemoteBranch(branch: string): Promise<void>;
   pullMain(): Promise<void>;
 }
