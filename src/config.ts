@@ -38,6 +38,7 @@ const configSchema = z
       .optional(),
     permissionMode: z.enum(PERMISSION_MODES).optional(),
     ciTimeoutMinutes: z.number().positive().optional(),
+    checkTimeoutMinutes: z.number().positive().optional(),
     labels: z
       .object({
         needsTriage: z.string().min(1).optional(),
@@ -79,6 +80,11 @@ export interface Config {
   };
   permissionMode: PermissionMode;
   ciTimeoutMinutes: number;
+  /**
+   * How long any one Check command may run before it is killed. One number for
+   * the whole pipeline, and every command gets the whole of it.
+   */
+  checkTimeoutMinutes: number;
   labels: Labels;
 }
 
@@ -90,6 +96,13 @@ const STAGE_DEFAULTS = {
   // has the Checks to run before it finishes.
   conflict: { maxTurns: 120, maxMinutes: 30 },
 } as const;
+
+/**
+ * The wall-clock limit a Check runs under when the config names none. Longer
+ * than any suite a Ticket-sized change should have, so reaching it means the
+ * command hung rather than that it was slow.
+ */
+const DEFAULT_CHECK_TIMEOUT_MINUTES = 15;
 
 const LABEL_DEFAULTS: Labels = {
   needsTriage: "needs-triage",
@@ -133,6 +146,7 @@ export function loadConfig(repoRoot: string): Config {
     },
     permissionMode: file.permissionMode ?? "auto",
     ciTimeoutMinutes: file.ciTimeoutMinutes ?? 30,
+    checkTimeoutMinutes: file.checkTimeoutMinutes ?? DEFAULT_CHECK_TIMEOUT_MINUTES,
     labels: labels(file.labels),
   };
 }

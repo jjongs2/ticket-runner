@@ -85,19 +85,22 @@ reproducing a Stage by hand reproduces its environment too.
    Ticket, wait for CI
 7. squash-merge, pull `main`, remove the worktree
 
-A failing Check, a Verdict with an `unmet` criterion, a red CI, or a rebase conflict the
-conflict Stage could not resolve spends the Ticket's **fix budget** rather than ending
-it. A fresh session runs in the same worktree on the
-same branch, given the kind of failure and the evidence that was captured — the failing
-Check's output, the unmet criteria with theirs, or the CI summary — and asked for the
-regression test a gap the Verdict found should have had. Step 4 then starts again, so
+A failing Check, a Check killed at its wall-clock limit, a Verdict with an `unmet`
+criterion, a red CI, or a rebase conflict the conflict Stage could not resolve spends the
+Ticket's **fix budget** rather than ending it. A fresh session runs in the same worktree
+on the same branch, given the kind of failure and the evidence that was captured — the
+failing Check's output, the unmet criteria with theirs, or the CI summary — and asked for
+the regression test a gap the Verdict found should have had. Step 4 then starts again, so
 the fix is graded by every gate from the Checks onwards. The budget is one per Ticket:
 a second failure of any kind, including a kind the fix Stage never touched, is a
 hand-off, and the comment says the budget had already been used.
 
 Nothing else spends the budget. A Stage that never came back, a Verdict with no evidence in
 it, CI that timed out or never ran — none of these is a defect in the code a fresh session
-could go and mend.
+could go and mend. A Check that timed out is the one timeout that does spend it: a Check
+runs the branch's own code on this machine, so a suite that hangs or a server a Stage left
+in the foreground is a defect in that code, which is exactly what a fix Stage is for. CI
+that never finishes is somebody else's infrastructure, and stays budget-free.
 
 A failure the fix budget cannot cover hands the Ticket over instead: `ready-for-human`,
 unassigned, draft PR, branch and worktree preserved. Exit code is `0` when nothing was
@@ -308,6 +311,10 @@ untriaged one.
   // Commands run in the worktree after implement.
   // Default: `npm test` and `npm run typecheck`, whichever package.json defines.
   "checks": ["npm test", "npm run typecheck"],
+
+  // Wall-clock limit for any one Check command; each gets the whole of it.
+  // A command killed here is a failed Check and spends the fix budget.
+  "checkTimeoutMinutes": 15,
 
   // Turn a gate off to run without a net; each one prints a warning at start.
   "gates": { "checks": true, "ci": true },

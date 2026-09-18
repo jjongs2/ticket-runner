@@ -9,6 +9,12 @@ export interface CheckOutcome {
   ok: boolean;
   /** stdout and stderr combined, as a human would see them in a terminal. */
   output: string;
+  /**
+   * Set when the wall-clock limit killed the command rather than the command
+   * exiting on its own. Both are a failed Check; only this one is a Check that
+   * hung, and a fix Stage is told which it is mending.
+   */
+  timedOut?: boolean;
 }
 
 export type RebaseOutcome = { ok: true } | { ok: false; conflict: string };
@@ -69,7 +75,15 @@ export interface Workspace {
    * pipeline composes its own, so it has to carry them itself.
    */
   coAuthors(branch: string): Promise<string[]>;
-  runCheck(command: string, cwd: string): Promise<CheckOutcome>;
+  /**
+   * Run one Check command in `cwd`, killing it after `timeoutMs`.
+   *
+   * The limit is passed per call, not held by the workspace, because it is the
+   * config's to decide and every Check gets the whole of it: a Check is a
+   * command a user wrote, and without a limit one that hangs stalls the Run for
+   * good.
+   */
+  runCheck(command: string, cwd: string, timeoutMs: number): Promise<CheckOutcome>;
   /** Restore the worktree to its committed state, tracked and untracked. */
   discardChanges(cwd: string): Promise<void>;
   /**
