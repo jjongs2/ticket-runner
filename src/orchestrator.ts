@@ -1003,12 +1003,9 @@ async function requireGreenCi(
       return;
     case "failed":
       await record("❌ failed");
-      throw new TicketFailure(
-        "ci",
-        "a pull request check failed",
-        outcome.summary,
-        "failed-ci",
-      );
+      // The names are the line a human reads; the log excerpt is what a fix
+      // Stage works from, and it is empty whenever none could be fetched.
+      throw new TicketFailure("ci", outcome.summary, outcome.excerpt, "failed-ci");
     case "timed-out":
       await record("❌ timed out");
       throw new TicketFailure(

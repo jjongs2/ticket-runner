@@ -618,7 +618,7 @@ describe("rebase", () => {
 
   it("does not spend the fix budget on a conflict it resolved", async () => {
     workspace.conflictOnce(CONFLICT);
-    tracker.queueCi({ state: "failed", summary: "checks/build failed" });
+    tracker.queueCi({ state: "failed", summary: "checks/build failed", excerpt: "" });
 
     const outcome = await run();
 
@@ -635,12 +635,34 @@ describe("CI", () => {
   });
 
   it("hands off when a check fails", async () => {
-    tracker.ci = { state: "failed", summary: "checks/build failed" };
+    tracker.ci = { state: "failed", summary: "checks/build failed", excerpt: "" };
 
     const outcome = await run();
 
     expect(outcome).toMatchObject({ outcome: "handed-off", stage: "ci" });
     expect(handoffBody()).toContain("checks/build failed");
+  });
+
+  it("shows the CI log excerpt as the hand-off evidence", async () => {
+    tracker.ci = {
+      state: "failed",
+      summary: "checks/build failed",
+      excerpt: "build\nerror TS2345: not assignable",
+    };
+
+    await run();
+
+    expect(handoffBody()).toContain("<details><summary>Evidence</summary>");
+    expect(handoffBody()).toContain("error TS2345: not assignable");
+  });
+
+  it("drops the evidence block when no CI log could be fetched", async () => {
+    tracker.ci = { state: "failed", summary: "checks/build failed", excerpt: "" };
+
+    await run();
+
+    expect(handoffBody()).toContain("checks/build failed");
+    expect(handoffBody()).not.toContain("<details><summary>Evidence</summary>");
   });
 
   it("hands off when the PR has no checks at all", async () => {
@@ -667,7 +689,7 @@ describe("CI", () => {
   });
 
   it("still refuses a red PR when the CI gate is off", async () => {
-    tracker.ci = { state: "failed", summary: "checks/build failed" };
+    tracker.ci = { state: "failed", summary: "checks/build failed", excerpt: "" };
 
     expect(await run({ gates: { checks: true, ci: false } })).toMatchObject({
       outcome: "handed-off",
@@ -744,7 +766,7 @@ describe("hand-off", () => {
 
   it("converts the existing PR to a draft rather than opening a second one", async () => {
     workspace.commits = ["feat(cli): do the thing (#2)"];
-    tracker.ci = { state: "failed", summary: "checks/build failed" };
+    tracker.ci = { state: "failed", summary: "checks/build failed", excerpt: "" };
 
     await run();
 
@@ -836,7 +858,7 @@ describe("the fix Stage", () => {
   });
 
   it("retries a red CI without opening a second pull request", async () => {
-    tracker.queueCi({ state: "failed", summary: "checks/build failed" });
+    tracker.queueCi({ state: "failed", summary: "checks/build failed", excerpt: "" });
 
     const outcome = await run();
 
@@ -847,8 +869,21 @@ describe("the fix Stage", () => {
     expect(runner.prompts("fix")[0]).toContain("checks/build failed");
   });
 
+  it("hands the fix Stage the CI log, not just the check names", async () => {
+    tracker.queueCi({
+      state: "failed",
+      summary: "checks/build failed",
+      excerpt: "build\nerror TS2345: not assignable",
+    });
+
+    await run();
+
+    expect(runner.prompts("fix")[0]).toContain("checks/build failed");
+    expect(runner.prompts("fix")[0]).toContain("```\nbuild\nerror TS2345: not assignable\n```");
+  });
+
   it("pushes the fixed branch and waits for CI a second time", async () => {
-    tracker.queueCi({ state: "failed", summary: "checks/build failed" });
+    tracker.queueCi({ state: "failed", summary: "checks/build failed", excerpt: "" });
 
     await run();
 
@@ -918,7 +953,7 @@ describe("the fix Stage", () => {
   });
 
   it("rewrites the pull request body with the Verdict the second pass reached", async () => {
-    tracker.queueCi({ state: "failed", summary: "checks/build failed" });
+    tracker.queueCi({ state: "failed", summary: "checks/build failed", excerpt: "" });
     runner.queue("verify", stageResult({ result: MIXED_VERDICT }));
     runner.queue("verify", stageResult({ result: PASSING_VERDICT }));
 
@@ -964,7 +999,7 @@ describe("the fix budget", () => {
 
   it("is spent by an unmet criterion that a red CI then follows", async () => {
     runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
-    tracker.ci = { state: "failed", summary: "checks/build failed" };
+    tracker.ci = { state: "failed", summary: "checks/build failed", excerpt: "" };
 
     const outcome = await run();
 
@@ -1164,7 +1199,7 @@ describe("releasing a rate-limited Ticket", () => {
   });
 
   it("records the pull request the Run had already opened", async () => {
-    tracker.queueCi({ state: "failed", summary: "checks/build failed" });
+    tracker.queueCi({ state: "failed", summary: "checks/build failed", excerpt: "" });
     runner.queue("verify", stageResult({ result: PASSING_VERDICT }));
     runner.queue("verify", { ok: false, failure: "rate-limited" });
 
