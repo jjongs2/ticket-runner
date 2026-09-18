@@ -12,12 +12,15 @@
  * the line, and the document around it, as it found them.
  */
 
-import { UNCHECKED_BOX } from "./acceptance-criteria.js";
+import { TICKED_BOX, UNCHECKED_BOX } from "./acceptance-criteria.js";
 import type { Tracker } from "./ports/tracker.js";
 import type { Verdict } from "./verdict.js";
 
 /** {@link UNCHECKED_BOX}, extended to capture the criterion text after the box. */
 const CHECKBOX_LINE = new RegExp(`${UNCHECKED_BOX}( .*)$`, "gm");
+
+/** {@link TICKED_BOX}, over every line of a text rather than the first. */
+const TICKED_LINE = new RegExp(TICKED_BOX, "gm");
 
 /**
  * The same criterion as the verify Stage reported it.
@@ -99,5 +102,5 @@ function ticks(before: string, after: string): number {
 }
 
 function countTicked(text: string): number {
-  return [...text.matchAll(/^[ \t]*[-*+] \[x\]/gm)].length;
+  return [...text.matchAll(TICKED_LINE)].length;
 }
