@@ -95,6 +95,9 @@ beforeEach(() => {
     verify: stageResult({ result: PASSING_VERDICT }),
   });
   workspace = new FakeWorkspace();
+  // A fix session commits, as the real one does when it mends anything: what it
+  // left on the branch is part of how the Stage is judged, so the fake says so.
+  runner.leaves("fix", () => workspace.commits.push("fix(cli): mend the thing (#2)"));
 });
 
 afterEach(() => {
@@ -970,6 +973,105 @@ describe("the fix Stage", () => {
     await run();
 
     expect(tracker.calls).not.toContain("updatePullRequestBody:100");
+  });
+});
+
+describe("a fix Stage that committed nothing", () => {
+  /** The session came back clean: it ran, and the branch is as it found it. */
+  beforeEach(() => {
+    runner.leaves("fix", () => {});
+  });
+
+  it("hands the Ticket off at fix, saying the branch never grew", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "fix" });
+    expect(handoffBody()).toContain("the fix Stage left no new commits on the branch");
+    expect(handoffBody()).toContain("after the fix budget was used");
+    expect(progressTable()).toContain("| fix | ❌ no commits | 7 | 0m |");
+  });
+
+  it("stops the pass there, so nothing re-grades a branch nobody touched", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+
+    await run();
+
+    // The Check that bought the fix Stage ran once, not twice, and neither the
+    // Verdict nor CI was asked about a branch the fix Stage left alone.
+    expect(workspace.ranChecks.map((check) => check.command)).toEqual(["npm test"]);
+    expect(runner.stages()).toEqual(["implement", "fix"]);
+    expect(tracker.ciWaits).toEqual([]);
+  });
+
+  it.each([
+    [
+      "a failed Check",
+      () => {
+        workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+      },
+    ],
+    [
+      "unmet Acceptance Criteria",
+      () => {
+        runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
+      },
+    ],
+    [
+      "a red CI",
+      () => {
+        tracker.queueCi({ state: "failed", summary: "checks/build failed", excerpt: "" });
+      },
+    ],
+  ])("reads the same whichever failure bought the Stage: %s", async (_kind, arrange) => {
+    arrange();
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "fix" });
+    expect(handoffBody()).toContain("the fix Stage left no new commits on the branch");
+    expect(progressTable()).toContain("| fix | ❌ no commits |");
+  });
+
+  it("routes the Notes it made before its own outcome is judged", async () => {
+    const other = 7;
+    tracker.addIssue({ number: other, title: "Progress comment" });
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    runner.queue(
+      "fix",
+      stageResult({ result: { notes: [{ ticket: other, note: "found while fixing" }] } }),
+    );
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({
+      outcome: "handed-off",
+      stage: "fix",
+      notes: [{ origin: TICKET, stage: "fix", issue: other, note: "found while fixing" }],
+    });
+  });
+
+  it("is still released, not blamed, when the rate limit is why it committed nothing", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    runner.queue("fix", { ok: false, failure: "rate-limited" });
+
+    const outcome = await run();
+
+    // The limit is read before the branch is: a Ticket released here spends no
+    // budget, and the Run that resumes it still has the fix Stage to buy.
+    expect(outcome).toMatchObject({ outcome: "released", stage: "fix" });
+    expect(progressTable()).toContain("| fix | ⏸ rate limited |");
+  });
+
+  it("leaves a Stage that did commit reported as committed", async () => {
+    runner.leaves("fix", () => workspace.commits.push("fix(cli): mend the thing (#2)"));
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(progressTable()).toContain("| fix | ✅ committed | 7 | 0m |");
   });
 });
 

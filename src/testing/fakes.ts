@@ -239,8 +239,21 @@ export class FakeAgentRunner implements AgentRunner {
   requests: StageRequest[] = [];
   /** Queued results per Stage; the last one is reused once the queue drains. */
   private queued = new Map<StageName, StageResult[]>();
+  /** What each Stage leaves behind besides its result; see {@link leaves}. */
+  private effects = new Map<StageName, () => void>();
 
   constructor(private readonly defaults: Partial<Record<StageName, StageResult>> = {}) {}
+
+  /**
+   * Say what a Stage does to the world every time it runs, on top of returning
+   * a result — committing on the branch, above all, which the fake Workspace
+   * holds. Registering no effect is how a test says the session changed
+   * nothing, and registering a second one replaces the first.
+   */
+  leaves(stage: StageName, effect: () => void): this {
+    this.effects.set(stage, effect);
+    return this;
+  }
 
   /** Queue the next result for a Stage, overriding the default. */
   queue(stage: StageName, result: Partial<StageResult>): this {
@@ -260,6 +273,9 @@ export class FakeAgentRunner implements AgentRunner {
 
   async run(request: StageRequest): Promise<StageResult> {
     this.requests.push(request);
+    // Before the result is read, and whatever it turns out to be: a session
+    // that committed and then ran out of turns still committed.
+    this.effects.get(request.stage)?.();
     const queued = this.queued.get(request.stage);
     if (queued && queued.length > 0) return queued.shift() as StageResult;
     return this.defaults[request.stage] ?? stageResult();
