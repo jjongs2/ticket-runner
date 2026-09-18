@@ -7,11 +7,12 @@ export interface Execution {
   /** stdout and stderr interleaved, as a human would see them in a terminal. */
   output: string;
   /**
-   * Set when `timeoutMs` killed the child, which the exit code alone cannot
+   * Whether `timeoutMs` killed the child, which the exit code alone cannot
    * say: 124 is what the kill is reported as, and a command is free to exit
-   * 124 on its own.
+   * 124 on its own. Asking the run is the only honest answer, so every caller
+   * that cares reads this flag rather than the code.
    */
-  timedOut?: boolean;
+  timedOut: boolean;
 }
 
 export interface ExecOptions {
@@ -100,7 +101,7 @@ export function exec(
         stdout,
         stderr,
         output,
-        ...(killed ? { timedOut: true } : {}),
+        timedOut: killed,
       });
     };
 

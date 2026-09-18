@@ -10,7 +10,7 @@ let logDir: string;
 let calls: { command: string; args: string[]; options: ExecOptions }[];
 
 function execution(overrides: Partial<Execution> = {}): Execution {
-  return { exitCode: 0, stdout: "", stderr: "", output: "", ...overrides };
+  return { exitCode: 0, stdout: "", stderr: "", output: "", timedOut: false, ...overrides };
 }
 
 const WARNING = "a warning\n";
