@@ -36,6 +36,14 @@ export interface Issue {
   title: string;
   url: string;
   body: string;
+  /**
+   * Whether the issue is closed.
+   *
+   * Only ever asked of a Ticket the pipeline kept local state for: a Run sweeps
+   * its State files before it does anything else, and a Ticket that has closed
+   * since is one there is nothing left to resume.
+   */
+  closed: boolean;
   labels: string[];
   assignees: string[];
   comments: IssueComment[];

@@ -56,6 +56,7 @@ describe("reading", () => {
           title: "Skeleton",
           url: "https://github.com/acme/repo/issues/2",
           body: "- [ ] it works",
+          state: "OPEN",
           labels: [{ name: "ready-for-agent" }],
           assignees: [{ login: "octocat" }],
           comments: [
@@ -75,6 +76,7 @@ describe("reading", () => {
       title: "Skeleton",
       url: "https://github.com/acme/repo/issues/2",
       body: "- [ ] it works",
+      closed: false,
       labels: ["ready-for-agent"],
       assignees: ["octocat"],
       comments: [{ id: "5714903734", body: "extra criteria" }],
@@ -82,6 +84,28 @@ describe("reading", () => {
       blockedBy: [3, 7],
     });
     expect(calls[0]?.slice(0, 3)).toEqual(["issue", "view", "2"]);
+  });
+
+  it("reports an issue GitHub calls closed as closed", async () => {
+    const issue = await tracker(
+      ok(
+        JSON.stringify({
+          number: 2,
+          title: "Skeleton",
+          url: "https://github.com/acme/repo/issues/2",
+          body: "",
+          state: "CLOSED",
+          labels: [],
+          assignees: [],
+          comments: [],
+          subIssuesSummary: { total: 0 },
+          blockedBy: { nodes: [] },
+        }),
+      ),
+    ).getIssue(2);
+
+    expect(issue.closed).toBe(true);
+    expect(calls[0]?.at(-1)).toContain("state");
   });
 
   it("reads an issue whose comment has no id in its url, since the bodies still grade it", async () => {

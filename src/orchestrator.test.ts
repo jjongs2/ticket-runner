@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -12,6 +12,7 @@ import {
 } from "./resume.js";
 import { PROGRESS_MARKER } from "./progress.js";
 import type { TicketOutcome } from "./orchestrator.js";
+import type { StageName } from "./ports/agent-runner.js";
 import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./testing/fakes.js";
 
 const TICKET = 2;
@@ -78,7 +79,7 @@ let tracker: FakeTracker;
 let runner: FakeAgentRunner;
 let workspace: FakeWorkspace;
 /**
- * A temporary repo root, because a released Ticket's State file is a real file
+ * A temporary repo root, because a claimed Ticket's State file is a real file
  * (ADR-0004). The three ports are still fakes; only the local state is not.
  */
 let repoRoot: string;
@@ -99,6 +100,23 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(repoRoot, { recursive: true, force: true });
 });
+
+/**
+ * The State file as it stood when each Stage started.
+ *
+ * The file is written as part of the Claim and rewritten as the Ticket advances,
+ * and by the time a Run comes back it has been cleared — so the only place those
+ * writes can be read is from inside the Run.
+ */
+function stateAtEachStage(): { stage: StageName; state: TicketState | undefined }[] {
+  const seen: { stage: StageName; state: TicketState | undefined }[] = [];
+  const runStage = runner.run.bind(runner);
+  runner.run = async (request) => {
+    seen.push({ stage: request.stage, state: readTicketState(repoRoot, TICKET) });
+    return runStage(request);
+  };
+  return seen;
+}
 
 function run(overrides: Partial<Config> = {}): Promise<TicketOutcome> {
   return processTicket(
@@ -1190,6 +1208,265 @@ describe("releasing a rate-limited Ticket", () => {
   });
 });
 
+describe("the State file a claimed Ticket keeps", () => {
+  it("is written as part of the Claim, before any Stage runs", async () => {
+    const seen = stateAtEachStage();
+
+    await run();
+
+    expect(seen[0]).toEqual({
+      stage: "implement",
+      state: {
+        ticket: TICKET,
+        branch: BRANCH,
+        state: "claimed",
+        fixUsed: false,
+        runId: "run-1",
+        updatedAt: expect.any(String),
+      },
+    });
+  });
+
+  it("is on disk before the Claim reaches the board", async () => {
+    let atClaim: TicketState | undefined;
+    const assign = tracker.assign.bind(tracker);
+    tracker.assign = async (number, assignee) => {
+      atClaim = readTicketState(repoRoot, TICKET);
+      return assign(number, assignee);
+    };
+
+    await run();
+
+    // A Claim no State file names is what the order rules out: a crash between
+    // the two writes leaves a Ticket nobody claimed, which resumes itself.
+    expect(atClaim).toMatchObject({ state: "claimed", branch: BRANCH });
+  });
+
+  it("says implemented once the implement Stage has come back with commits", async () => {
+    const seen = stateAtEachStage();
+
+    await run();
+
+    expect(seen.map(({ stage, state }) => [stage, state?.state])).toEqual([
+      ["implement", "claimed"],
+      ["verify", "implemented"],
+    ]);
+  });
+
+  it("is not moved on until the implement Stage's commits have been counted", async () => {
+    let atCount: TicketState | undefined;
+    const commitSubjects = workspace.commitSubjects.bind(workspace);
+    workspace.commitSubjects = async (branch) => {
+      atCount ??= readTicketState(repoRoot, TICKET);
+      return commitSubjects(branch);
+    };
+
+    await run();
+
+    // The first read is the implement Stage's own "did it commit anything", and
+    // the state is still claimed there: a Stage that left a clean branch never
+    // reaches implemented.
+    expect(atCount).toMatchObject({ state: "claimed" });
+  });
+
+  it("stays at claimed when the implement Stage left nothing on the branch", async () => {
+    workspace.commits = [];
+    const seen = stateAtEachStage();
+
+    // The Ticket is handed off, so the only reading left is the fix Stage's —
+    // and there is none, because a branch with no commits buys no fix Stage.
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "implement" });
+    expect(seen.map(({ state }) => state?.state)).toEqual(["claimed"]);
+  });
+
+  it("fails the Ticket at setup rather than claiming what it cannot record", async () => {
+    // A file where the state directory has to go, so the very first write fails.
+    mkdirSync(join(repoRoot, ".agent-pipeline"), { recursive: true });
+    writeFileSync(join(repoRoot, ".agent-pipeline", "state"), "not a directory");
+
+    await expect(run()).rejects.toThrow();
+
+    // Nothing was claimed, so there is no Claim for a later Run to be stuck on.
+    expect(tracker.issue(TICKET).assignees).toEqual([]);
+    expect(tracker.issue(TICKET).labels).toEqual(["ready-for-agent"]);
+    expect(runner.requests).toEqual([]);
+  });
+
+  it("names the pull request once it is open", async () => {
+    let atCi: TicketState | undefined;
+    const waitForCi = tracker.waitForCi.bind(tracker);
+    tracker.waitForCi = async (number, timeoutMs) => {
+      atCi = readTicketState(repoRoot, TICKET);
+      return waitForCi(number, timeoutMs);
+    };
+
+    await run();
+
+    expect(atCi).toMatchObject({ state: "implemented", pullRequest: 100 });
+  });
+
+  it("records the fix budget once the fix Stage has come back, not before it runs", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    const seen = stateAtEachStage();
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+
+    expect(seen.map(({ stage, state }) => [stage, state?.fixUsed])).toEqual([
+      ["implement", false],
+      // The budget is committed before the Stage starts and recorded only once it
+      // is back, so a fix Stage the rate limit stops still leaves it unspent.
+      ["fix", false],
+      ["verify", true],
+    ]);
+  });
+
+  it("is gone once the Ticket merges", async () => {
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
+  });
+
+  it("is gone once the Ticket is handed off", async () => {
+    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+
+    expect(await run()).toMatchObject({ outcome: "handed-off" });
+    expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
+  });
+
+  it("is never written for a candidate a guard passed over", async () => {
+    tracker.issue(TICKET).subIssues = 3;
+
+    expect(await run()).toMatchObject({ outcome: "skipped", reason: "spec" });
+    expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
+  });
+});
+
+/**
+ * A **Stranded Ticket**: one a Run claimed and never released, because the Run
+ * was killed. The Claim is still on the board and the State file is still beside
+ * the worktree, which together is what says so (CONTEXT.md).
+ */
+describe("resuming a stranded Ticket", () => {
+  /** Exactly what a killed Run leaves: the Claim, the worktree, the State file. */
+  function strandedTicket(overrides: Partial<TicketState> = {}): void {
+    const state: TicketState = {
+      ticket: TICKET,
+      branch: BRANCH,
+      state: "implemented",
+      fixUsed: false,
+      runId: "run-0",
+      updatedAt: "2026-09-17T09:00:00.000Z",
+      ...overrides,
+    };
+    const issue = tracker.issue(TICKET);
+    issue.assignees = ["pipeline-user"];
+    issue.labels = ["in-progress"];
+    workspace.worktrees.set(worktree, state.branch);
+    writeTicketState(repoRoot, state);
+  }
+
+  it("is resumed rather than refused as claimed", async () => {
+    strandedTicket();
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).toEqual(["verify"]);
+    expect(workspace.calls).not.toContain(`createWorktree:${BRANCH}`);
+  });
+
+  it("keeps the Claim it already has, re-assigning and relabelling nothing", async () => {
+    strandedTicket();
+
+    await run();
+
+    expect(tracker.calls).not.toContain(`assign:${TICKET}:pipeline-user`);
+    expect(tracker.calls).not.toContain(`addLabel:${TICKET}:in-progress`);
+    expect(tracker.calls).not.toContain(`removeLabel:${TICKET}:ready-for-agent`);
+  });
+
+  it("runs the implement Stage again when that is the state recorded", async () => {
+    strandedTicket({ state: "claimed" });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).toEqual(["implement", "verify"]);
+    expect(runner.requests[0]?.cwd).toBe(worktree);
+  });
+
+  it("is handed off at its next failure when the recorded fix budget is spent", async () => {
+    strandedTicket({ fixUsed: true });
+    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "checks" });
+    expect(runner.stages()).toEqual([]);
+    expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
+  });
+
+  it("aborts a rebase the killed Run left in the worktree before the Checks run", async () => {
+    strandedTicket();
+
+    await run();
+
+    expect(workspace.aborts).toBe(1);
+    expect(workspace.calls.indexOf("abortRebase")).toBeLessThan(
+      workspace.calls.indexOf("runCheck:npm test"),
+    );
+  });
+
+  it("is taken from the top, in place, when its worktree is gone", async () => {
+    strandedTicket();
+    workspace.worktrees.delete(worktree);
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(workspace.calls).toContain(`createWorktree:${BRANCH}`);
+    expect(runner.stages()).toEqual(["implement", "verify"]);
+    // Nothing was re-assigned or relabelled: the Claim was already this Run's.
+    expect(tracker.calls).not.toContain(`assign:${TICKET}:pipeline-user`);
+  });
+
+  it("is refused as claimed when there is no State file beside it", async () => {
+    const issue = tracker.issue(TICKET);
+    issue.assignees = ["pipeline-user"];
+    issue.labels = ["in-progress"];
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "skipped", reason: "claimed" });
+    expect(runner.requests).toEqual([]);
+    expect(tracker.comments).toEqual([]);
+  });
+
+  it("is refused when the Claim on it is somebody else's, State file or not", async () => {
+    strandedTicket();
+    tracker.issue(TICKET).assignees = ["octocat"];
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "skipped", reason: "claimed" });
+    expect(existsSync(statePath(repoRoot, TICKET))).toBe(true);
+  });
+
+  it("is released again, with its state current, when the rate limit is still on", async () => {
+    strandedTicket();
+    runner.queue("verify", { ok: false, failure: "rate-limited" });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "released", stage: "verify" });
+    expect(readTicketState(repoRoot, TICKET)).toMatchObject({
+      state: "implemented",
+      runId: "run-1",
+    });
+    expect(tracker.issue(TICKET).labels).toEqual(["ready-for-agent"]);
+    expect(tracker.issue(TICKET).assignees).toEqual([]);
+  });
+});
+
 describe("resuming a released Ticket", () => {
   /** Leave behind exactly what a release leaves: a worktree, a branch, a State file. */
   function released(overrides: Partial<TicketState> = {}): void {
@@ -1199,7 +1476,7 @@ describe("resuming a released Ticket", () => {
       state: "implemented",
       fixUsed: false,
       runId: "run-0",
-      releasedAt: "2026-09-17T09:00:00.000Z",
+      updatedAt: "2026-09-17T09:00:00.000Z",
       ...overrides,
     };
     workspace.worktrees.set(worktree, state.branch);
@@ -1315,7 +1592,7 @@ describe("resuming a released Ticket", () => {
       state: "implemented",
       fixUsed: true,
       runId: "run-0",
-      releasedAt: "2026-09-17T09:00:00.000Z",
+      updatedAt: "2026-09-17T09:00:00.000Z",
     });
 
     const outcome = await run();

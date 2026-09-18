@@ -46,9 +46,26 @@ export function isGuardReason(reason: SkipReason): reason is GuardReason {
  * and a Spec is named a Spec rather than whatever else is unlike a Ticket
  * about it.
  */
-export function skipReason(issue: Issue, readyForAgent: string): SkipReason | undefined {
-  if (issue.assignees.length > 0) return "claimed";
-  if (!issue.labels.includes(readyForAgent)) return "not-ready";
+export function skipReason(
+  issue: Issue,
+  readyForAgent: string,
+  /**
+   * Whether this is a **Stranded Ticket**: one this checkout already holds, left
+   * claimed by a Run that never came back (CONTEXT.md). Both refusals read the
+   * Claim as somebody else's work, and a stranded Ticket wears it itself — the
+   * assignee is this very user and `ready-for-agent` came off when the Claim was
+   * made — so it passes them and is resumed rather than refused. The Planning
+   * guards below still grade it: they are about the issue, not about who has it.
+   *
+   * Required rather than defaulted, so no caller can forget to answer it and
+   * quietly have a stranded Ticket refused as somebody else's.
+   */
+  stranded: boolean,
+): SkipReason | undefined {
+  if (!stranded) {
+    if (issue.assignees.length > 0) return "claimed";
+    if (!issue.labels.includes(readyForAgent)) return "not-ready";
+  }
   if (issue.subIssues > 0) return "spec";
   if (!hasCriteria(issue)) return "no-criteria";
   if (bodyOnlyBlockers(issue).length > 0) return "body-only-blockers";

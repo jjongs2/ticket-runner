@@ -70,6 +70,7 @@ export class FakeTracker implements Tracker {
       title: `Ticket ${issue.number}`,
       url: `https://github.com/acme/repo/issues/${issue.number}`,
       body: "- [ ] it works",
+      closed: false,
       labels: ["ready-for-agent"],
       assignees: [],
       comments: [],
@@ -77,6 +78,9 @@ export class FakeTracker implements Tracker {
       blockedBy: [],
       ...issue,
     };
+    // `closed` is the same fact the candidate list filters on, so a merge and a
+    // seeded closed issue are read the same way.
+    if (full.closed) this.closed.add(full.number);
     this.issues.set(full.number, full);
     return full;
   }
@@ -102,7 +106,7 @@ export class FakeTracker implements Tracker {
   }
 
   async getIssue(number: number): Promise<Issue> {
-    return structuredClone(this.issue(number));
+    return structuredClone({ ...this.issue(number), closed: this.closed.has(number) });
   }
 
   /** Numbered from 200 so a new issue is never mistaken for a seeded one. */

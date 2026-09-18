@@ -91,8 +91,12 @@ What a rate-limited Stage does to a Ticket instead of handing it to a human: the
 _Avoid_: pause, defer, requeue, unclaim
 
 **State file**:
-What a released Ticket leaves under `.agent-pipeline/state/`: the state it reached, its branch, and whether the Fix budget was spent. Its presence is what makes a candidate resumable; it is removed on merge and on hand-off.
+What a claimed Ticket keeps under `.agent-pipeline/state/`: the state it reached, its branch, whether the Fix budget was spent, and the pull request if one is open. Written as part of the Claim and updated as the Ticket advances, so it is there for as long as the Ticket is claimed; removed on merge and on hand-off. Its presence makes the Ticket resumable, and the Claim on GitHub says whether the Ticket was released or stranded.
 _Avoid_: checkpoint, journal, resume file
+
+**Stranded Ticket**:
+A Ticket whose State file is still there while the Ticket still carries this checkout's Claim — the Run that claimed it was killed and released nothing. No Frontier can offer one, because it is claimed, so a Run resumes every one of them in place before it computes the Frontier.
+_Avoid_: orphan, zombie, abandoned Ticket, crashed Ticket, dead Ticket
 
 **Note**:
 A finding a Stage makes that belongs to another Ticket, or to no Ticket yet. Routed to that Ticket's comments or to a new needs-triage issue; never acted on in the current Ticket.
