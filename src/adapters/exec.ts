@@ -30,6 +30,12 @@ export interface ExecOptions {
  * descendant that inherited them can hold them open for as long as it likes,
  * so what the child printed has to be collected on a clock rather than waited
  * for. Long enough that a pipe's worth of buffered output always arrives.
+ *
+ * What the clock gives up: everything the child itself wrote is complete,
+ * because its own output is in the pipe buffer by the time it exits, but a
+ * descendant's is collected only while the child lives and during this window
+ * after it. Later than that it is dropped by design, in exchange for a call
+ * that always settles.
  */
 const DRAIN_MS = 100;
 
@@ -98,13 +104,11 @@ export function exec(
 
     if (options.timeoutMs !== undefined) {
       limit = setTimeout(() => {
-        // A child that already exited is past killing: only its pipes are
-        // still open, and its own exit code is the honest one to report.
-        if (hasExited()) drainThenFinish();
-        else {
-          killed = true;
-          child.kill("SIGKILL");
-        }
+        // A child that already exited is past killing: its own exit started
+        // the drain, and its own exit code is the honest one to report.
+        if (hasExited()) return;
+        killed = true;
+        child.kill("SIGKILL");
       }, options.timeoutMs);
     }
 
@@ -126,10 +130,10 @@ export function exec(
       stopWaiting();
       reject(error);
     });
-    child.on("exit", () => {
-      if (killed) drainThenFinish();
-    });
-    // The usual ending: the child exited and its pipes are drained and closed.
+    // However the child ended, its pipes are read on a clock from here on.
+    child.on("exit", drainThenFinish);
+    // The usual ending, and the quicker one: nothing outlived the child, so
+    // its pipes reach EOF and there is nothing left to wait for.
     child.on("close", finish);
   });
 }

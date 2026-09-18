@@ -6,6 +6,23 @@ function printEnv(name: string): [string, string[]] {
   return ["node", ["-e", `process.stdout.write(String(process.env.${name}))`]];
 }
 
+/**
+ * A child that prints on one stream and hands that same stream to a descendant,
+ * the way a session that starts a background process does. The descendant
+ * outlives the test that spawns it.
+ */
+function leaveDescendantHolding(stream: "stdout" | "stderr"): string {
+  const stdio =
+    stream === "stdout"
+      ? ["ignore", "inherit", "ignore"]
+      : ["ignore", "ignore", "inherit"];
+  return `
+    const { spawn } = require("node:child_process");
+    const descendant = spawn("/bin/sh", ["-c", "sleep 5"], { stdio: ${JSON.stringify(stdio)} });
+    process.${stream}.write("early");
+  `;
+}
+
 describe("the child environment", () => {
   it("inherits this process's environment when no extra variables are given", async () => {
     const result = await exec(...printEnv("PATH"));
@@ -90,18 +107,8 @@ describe("streaming the child's output", () => {
 });
 
 describe("the wall-clock limit", () => {
-  /**
-   * Leaves a descendant holding the stdout pipe, the way a session that starts
-   * a background process does. The descendant outlives the test that spawns it.
-   */
-  const leaveDescendantHoldingStdout = `
-    const { spawn } = require("node:child_process");
-    const descendant = spawn("/bin/sh", ["-c", "sleep 5"], { stdio: "inherit" });
-    process.stdout.write("early");
-  `;
-
   it("settles once the child is dead, with what it printed before the kill", async () => {
-    const script = `${leaveDescendantHoldingStdout} setTimeout(() => {}, 5_000);`;
+    const script = `${leaveDescendantHolding("stdout")} setTimeout(() => {}, 5_000);`;
     const startedAt = Date.now();
 
     const result = await exec("node", ["-e", script], { timeoutMs: 200 });
@@ -113,7 +120,7 @@ describe("the wall-clock limit", () => {
   });
 
   it("reports the child's own exit code when it beat the limit on its own", async () => {
-    const script = `${leaveDescendantHoldingStdout} descendant.unref(); process.exitCode = 3;`;
+    const script = `${leaveDescendantHolding("stdout")} descendant.unref(); process.exitCode = 3;`;
     const startedAt = Date.now();
 
     const result = await exec("node", ["-e", script], { timeoutMs: 1_000 });
@@ -121,5 +128,41 @@ describe("the wall-clock limit", () => {
     expect(Date.now() - startedAt).toBeLessThan(3_000);
     expect(result.exitCode).toBe(3);
     expect(result.stdout).toBe("early");
+  });
+});
+
+describe("a child that exits on its own", () => {
+  it("settles without waiting for a descendant holding stdout", async () => {
+    const script = `${leaveDescendantHolding("stdout")} descendant.unref(); process.exitCode = 3;`;
+    const startedAt = Date.now();
+
+    const result = await exec("node", ["-e", script]);
+
+    expect(Date.now() - startedAt).toBeLessThan(2_000);
+    expect(result.exitCode).toBe(3);
+    expect(result.stdout).toBe("early");
+    expect(result.output).toBe("early");
+  });
+
+  it("settles without waiting for a descendant holding stderr", async () => {
+    const script = `${leaveDescendantHolding("stderr")} descendant.unref(); process.exitCode = 3;`;
+    const startedAt = Date.now();
+
+    const result = await exec("node", ["-e", script]);
+
+    expect(Date.now() - startedAt).toBeLessThan(2_000);
+    expect(result.exitCode).toBe(3);
+    expect(result.stderr).toBe("early");
+    expect(result.output).toBe("early");
+  });
+
+  it("returns the whole output of a child that leaves no descendants", async () => {
+    const script = `process.stdout.write("one"); process.stdout.write("last"); process.exitCode = 3;`;
+
+    const result = await exec("node", ["-e", script]);
+
+    expect(result.exitCode).toBe(3);
+    expect(result.stdout).toBe("onelast");
+    expect(result.output).toBe("onelast");
   });
 });
