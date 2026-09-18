@@ -3,15 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { StageRequest } from "../ports/agent-runner.js";
+import { execution, failedExecution } from "../testing/executions.js";
 import { ClaudeAgentRunner } from "./claude-agent-runner.js";
 import type { ExecOptions, Execution } from "./exec.js";
 
 let logDir: string;
 let calls: { command: string; args: string[]; options: ExecOptions }[];
-
-function execution(overrides: Partial<Execution> = {}): Execution {
-  return { exitCode: 0, stdout: "", stderr: "", output: "", timedOut: false, ...overrides };
-}
 
 const WARNING = "a warning\n";
 
@@ -41,11 +38,11 @@ function runner(result: Execution | ((args: string[]) => Execution)) {
   return new ClaudeAgentRunner({
     run: async (command, args, options) => {
       calls.push({ command, args, options });
-      const execution = typeof result === "function" ? result(args) : result;
+      const recorded = typeof result === "function" ? result(args) : result;
       // A real child prints its output before it exits, not after.
-      if (execution.stdout !== "") options.onStdout?.(execution.stdout);
-      if (execution.stderr !== "") options.onStderr?.(execution.stderr);
-      return execution;
+      if (recorded.stdout !== "") options.onStdout?.(recorded.stdout);
+      if (recorded.stderr !== "") options.onStderr?.(recorded.stderr);
+      return recorded;
     },
   });
 }
@@ -101,7 +98,7 @@ describe("the preflight", () => {
   it("reports the plugin as missing when claude cannot list its plugins", async () => {
     const preflight = await asked(
       execution({ stdout: VERSION }),
-      execution({ exitCode: 1, stderr: "unknown command `plugin`" }),
+      failedExecution("unknown command `plugin`"),
     ).preflight();
 
     expect(preflight).toEqual({ runs: true, plugin: false });
@@ -121,7 +118,7 @@ describe("the preflight", () => {
 
   it("reports claude as unrunnable when it exits non-zero on its own version", async () => {
     const preflight = await asked(
-      execution({ exitCode: 1, stderr: "not installed" }),
+      failedExecution("not installed"),
       execution({ stdout: PLUGINS }),
     ).preflight();
 
@@ -426,23 +423,19 @@ describe("reading the outcome", () => {
   });
 
   it("classifies a wall-clock kill as a timeout", async () => {
-    const result = await runner(
-      execution({ exitCode: 124, stdout: "", timedOut: true }),
-    ).run(request());
+    const result = await runner(execution({ exitCode: 124, timedOut: true })).run(request());
 
     expect(result).toMatchObject({ ok: false, failure: "timed-out" });
   });
 
   it("classifies a kill the child beat to its own exit code", async () => {
-    const result = await runner(
-      execution({ exitCode: 143, stdout: "", timedOut: true }),
-    ).run(request());
+    const result = await runner(execution({ exitCode: 143, timedOut: true })).run(request());
 
     expect(result).toMatchObject({ ok: false, failure: "timed-out" });
   });
 
   it("does not mistake a session that exited 124 on its own for a Stage past its limit", async () => {
-    const result = await runner(execution({ exitCode: 124, stdout: "" })).run(request());
+    const result = await runner(execution({ exitCode: 124 })).run(request());
 
     expect(result).toMatchObject({ ok: false, failure: "nonzero-exit" });
   });
@@ -489,9 +482,9 @@ describe("reading the outcome", () => {
   });
 
   it("reads the rate limit from stderr when the session died without a result", async () => {
-    const result = await runner(
-      execution({ exitCode: 1, stdout: "", stderr: "Claude AI usage limit reached" }),
-    ).run(request());
+    const result = await runner(failedExecution("Claude AI usage limit reached")).run(
+      request(),
+    );
 
     expect(result).toMatchObject({ ok: false, failure: "rate-limited" });
   });
@@ -513,7 +506,7 @@ describe("reading the outcome", () => {
   });
 
   it("falls back to a non-zero exit when nothing more specific is known", async () => {
-    const result = await runner(execution({ exitCode: 2, stderr: "boom" })).run(request());
+    const result = await runner(failedExecution("boom", { exitCode: 2 })).run(request());
 
     expect(result).toMatchObject({ ok: false, failure: "nonzero-exit" });
   });

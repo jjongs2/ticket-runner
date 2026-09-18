@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { execution, failedExecution } from "../testing/executions.js";
 import { GhTracker } from "./gh-tracker.js";
 import type { ExecOptions, Execution, RunProcess } from "./exec.js";
 
 let calls: string[][];
 let responses: Execution[];
 
+/** A `gh` call that succeeded, printing `stdout`. */
 function ok(stdout: string, extra: Partial<Execution> = {}): Execution {
-  return { exitCode: 0, stdout, stderr: "", output: stdout, timedOut: false, ...extra };
+  return execution({ stdout, ...extra });
 }
 
 function tracker(...queued: Execution[]) {
@@ -42,13 +44,7 @@ describe("reading", () => {
   });
 
   it("answers that gh is not authenticated rather than throwing", async () => {
-    const gh = tracker({
-      exitCode: 1,
-      stdout: "",
-      stderr: "You are not logged into any GitHub hosts.",
-      output: "You are not logged into any GitHub hosts.",
-      timedOut: false,
-    });
+    const gh = tracker(failedExecution("You are not logged into any GitHub hosts."));
 
     expect(await gh.authenticated()).toBe(false);
   });
@@ -640,13 +636,7 @@ describe("waiting for CI", () => {
   it("still reports the failure when the log cannot be fetched", async () => {
     const outcome = await tracker(
       ok(checks("fail"), { exitCode: 1 }),
-      {
-        exitCode: 1,
-        stdout: "",
-        stderr: "could not find any workflow run",
-        output: "",
-        timedOut: false,
-      },
+      failedExecution("could not find any workflow run"),
     ).waitForCi(12, 60_000);
 
     expect(outcome).toEqual({ state: "failed", summary: "check-0 failed", excerpt: "" });
@@ -739,16 +729,11 @@ describe("waiting for CI", () => {
     expect(calls.map((args) => args[0])).toEqual(["pr", "pr", "run"]);
   });
 
-  const noChecks = (): Execution => ({
-    exitCode: 1,
-    stdout: "",
-    stderr: "no checks reported on the 'agent/2-x' branch",
-    output: "",
-    timedOut: false,
-  });
+  /** What `gh pr checks` says when GitHub has registered none yet. */
+  const NO_CHECKS = "no checks reported on the 'agent/2-x' branch";
 
   it("reports a PR with no checks rather than treating it as green", async () => {
-    const outcome = await tracker(noChecks()).waitForCi(12, 60_000);
+    const outcome = await tracker(failedExecution(NO_CHECKS)).waitForCi(12, 60_000);
 
     expect(outcome).toEqual({ state: "none" });
   });
@@ -766,8 +751,8 @@ describe("waiting for CI", () => {
   it("keeps waiting while GitHub has not registered the checks yet", async () => {
     const outcome = await trackerWith(
       { now: ticking(1_000), checksGraceMs: 120_000 },
-      noChecks(),
-      noChecks(),
+      failedExecution(NO_CHECKS),
+      failedExecution(NO_CHECKS),
       ok(checks("pass")),
     ).waitForCi(12, 60_000 * 30);
 
@@ -778,10 +763,10 @@ describe("waiting for CI", () => {
   it("reports no checks once the grace period has passed", async () => {
     const outcome = await trackerWith(
       { now: ticking(50_000), checksGraceMs: 120_000 },
-      noChecks(),
-      noChecks(),
-      noChecks(),
-      noChecks(),
+      failedExecution(NO_CHECKS),
+      failedExecution(NO_CHECKS),
+      failedExecution(NO_CHECKS),
+      failedExecution(NO_CHECKS),
     ).waitForCi(12, 60_000 * 30);
 
     expect(outcome).toEqual({ state: "none" });
@@ -792,8 +777,8 @@ describe("waiting for CI", () => {
   it("never lets the grace period outlive the CI timeout", async () => {
     const outcome = await trackerWith(
       { now: ticking(1_000), checksGraceMs: 120_000 },
-      noChecks(),
-      noChecks(),
+      failedExecution(NO_CHECKS),
+      failedExecution(NO_CHECKS),
     ).waitForCi(12, 1_500);
 
     expect(outcome).toEqual({ state: "none" });
