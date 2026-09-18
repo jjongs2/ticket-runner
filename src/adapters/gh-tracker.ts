@@ -151,12 +151,11 @@ export class GhTracker implements Tracker {
       issue.body,
       ...issue.labels.flatMap((label) => ["--label", label]),
     ]);
-    const url = stdout.trim().split("\n").at(-1) ?? "";
-    const number = Number.parseInt(url.split("/").at(-1) ?? "", 10);
-    if (!Number.isInteger(number)) {
+    const ref = refFromOutput(stdout);
+    if (!ref) {
       throw new Error(`could not read an issue number from gh output: ${stdout}`);
     }
-    return { number, url };
+    return ref;
   }
 
   /**
@@ -211,7 +210,7 @@ export class GhTracker implements Tracker {
   /** `gh` prints the new comment's URL, which is the only handle it gives back. */
   async comment(number: number, body: string): Promise<IssueComment> {
     const { stdout } = await this.gh(["issue", "comment", String(number), "--body", body]);
-    return { ...withCommentId(stdout.trim().split("\n").at(-1) ?? ""), body };
+    return { ...withCommentId(lastLine(stdout)), body };
   }
 
   /**
@@ -251,12 +250,11 @@ export class GhTracker implements Tracker {
     if (pr.draft) args.push("--draft");
 
     const { stdout } = await this.gh(args);
-    const url = stdout.trim().split("\n").at(-1) ?? "";
-    const number = Number.parseInt(url.split("/").at(-1) ?? "", 10);
-    if (!Number.isInteger(number)) {
+    const ref = refFromOutput(stdout);
+    if (!ref) {
       throw new Error(`could not read a pull request number from gh output: ${stdout}`);
     }
-    return { number, url };
+    return ref;
   }
 
   async convertPullRequestToDraft(number: number): Promise<void> {
@@ -325,6 +323,38 @@ export class GhTracker implements Tracker {
 
 /** The numeric id a comment URL ends in, which is what the REST API edits by. */
 const COMMENT_ID = /#issuecomment-(\d+)\s*$/;
+
+/** The URL `gh issue create` and `gh pr create` print, and the number it ends in. */
+const ISSUE_OR_PR_URL = /^https?:\/\/[^\s/]+\/[^\s/]+\/[^\s/]+\/(?:issues|pull)\/(\d+)$/;
+
+/** The one line of `gh` output that carries the handle it gives back. */
+function lastLine(stdout: string): string {
+  return stdout.trim().split("\n").at(-1)?.trim() ?? "";
+}
+
+/**
+ * The issue or pull request `gh` just opened, read off the last line of its
+ * output, or nothing when that line is not the URL of one.
+ *
+ * A number read loosely is worse than none: taken segment by segment, `3 files
+ * changed` is issue 3, and a URL with trailing text yields a number while
+ * keeping the text in the URL. Either way the pipeline goes on to wait for CI
+ * on, comment on, or merge whatever issue happens to carry that number. So the
+ * whole line has to be the URL, matched as strictly as {@link withCommentId}
+ * matches a comment's, and anything else becomes the refusal both call sites
+ * throw.
+ *
+ * Only the path shape is matched — host, owner, repo, the kind, the number — so
+ * an Enterprise host reads the same as github.com without being named here.
+ *
+ * A pull request's ref is the same shape as an issue's, so one reader serves
+ * both call sites.
+ */
+function refFromOutput(stdout: string): IssueRef | undefined {
+  const url = lastLine(stdout);
+  const match = ISSUE_OR_PR_URL.exec(url);
+  return match ? { number: Number(match[1]), url } : undefined;
+}
 
 /**
  * A comment's id, read out of its URL, or nothing when the URL carries none.
