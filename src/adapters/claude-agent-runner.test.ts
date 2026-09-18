@@ -212,6 +212,67 @@ describe("logs written while the Stage runs", () => {
   });
 });
 
+/**
+ * A session that spawns a background agent ends its main turn with a `result`
+ * event, then wakes once per finished agent and ends each waking with another
+ * `result` event that counts only its own waking and carries no structured
+ * output.
+ */
+describe("a session that woke for a background agent", () => {
+  const mainTurn = {
+    type: "result",
+    subtype: "success",
+    is_error: false,
+    num_turns: 54,
+    duration_ms: 421_549,
+    structured_output: { notes: [{ note: "the glossary drifts" }] },
+    result: '{"notes":[{"note":"the glossary drifts"}]}',
+  };
+  const waking = (text: string) => ({
+    type: "result",
+    subtype: "success",
+    is_error: false,
+    num_turns: 3,
+    duration_ms: 45_172,
+    result: text,
+  });
+  const WOKEN_TWICE = transcript(
+    mainTurn,
+    { type: "assistant", message: { content: [{ type: "text", text: "one review is in" }] } },
+    waking("one review is in"),
+    { type: "assistant", message: { content: [{ type: "text", text: "both are in" }] } },
+    waking("both are in"),
+  );
+
+  it("counts the turns of every waking, not the last one's", async () => {
+    const result = await runner(execution({ stdout: WOKEN_TWICE })).run(request());
+
+    expect(result.turns).toBe(60);
+  });
+
+  it("keeps the structured output the main turn returned", async () => {
+    const result = await runner(execution({ stdout: WOKEN_TWICE })).run(
+      request({ jsonSchema: { type: "object" }, resultRequired: false }),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.result).toEqual({ notes: [{ note: "the glossary drifts" }] });
+  });
+
+  it("still fails a Stage whose last waking hit the turn cap", async () => {
+    const stdout = transcript(mainTurn, {
+      type: "result",
+      subtype: "error_max_turns",
+      is_error: true,
+      num_turns: 3,
+    });
+
+    const result = await runner(execution({ stdout })).run(request());
+
+    expect(result).toMatchObject({ ok: false, failure: "turn-capped" });
+  });
+});
+
 describe("reading the outcome", () => {
   it("reports success with the turn count the session used", async () => {
     const result = await runner(execution({ stdout: SUCCESS })).run(request());
@@ -288,6 +349,20 @@ describe("reading the outcome", () => {
 
     expect(result).toMatchObject({ ok: true });
     expect(result.failure).toBeUndefined();
+  });
+
+  it("measures the Stage on its own clock rather than the session's", async () => {
+    const stdout = transcript({
+      type: "result",
+      subtype: "success",
+      is_error: false,
+      num_turns: 12,
+      duration_ms: 99_000_000,
+    });
+
+    const result = await runner(execution({ stdout })).run(request());
+
+    expect(result.durationMs).toBeLessThan(60_000);
   });
 
   it("classifies a wall-clock kill as a timeout", async () => {

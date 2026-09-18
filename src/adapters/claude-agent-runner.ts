@@ -20,7 +20,6 @@ interface ResultEvent {
   subtype?: string;
   is_error?: boolean;
   num_turns?: number;
-  duration_ms?: number;
   result?: unknown;
   structured_output?: unknown;
 }
@@ -71,10 +70,10 @@ export class ClaudeAgentRunner implements AgentRunner {
 
     log.close(execution, parseEvents(execution.stdout));
 
-    const events = parseEvents(execution.stdout);
-    const result = events.findLast(isResultEvent);
-    const failure = classify(request, execution, result);
-    const structured = request.jsonSchema === undefined ? undefined : structuredOutput(result);
+    const results = parseEvents(execution.stdout).filter(isResultEvent);
+    const failure = classify(request, execution, results);
+    const structured = request.jsonSchema === undefined ? undefined : structuredOutput(results);
+    const turns = countTurns(results);
 
     return {
       ok: failure === undefined,
@@ -82,10 +81,25 @@ export class ClaudeAgentRunner implements AgentRunner {
       ...(structured === undefined ? {} : { result: structured }),
       commandLine,
       transcriptPath: log.transcriptPath,
-      ...(result?.num_turns === undefined ? {} : { turns: result.num_turns }),
-      durationMs: result?.duration_ms ?? Date.now() - startedAt,
+      ...(turns === undefined ? {} : { turns }),
+      // The clock is the runner's own. A session that woke for a background
+      // agent reports one `duration_ms` per waking, and the time it spent
+      // waiting for that agent belongs to none of them.
+      durationMs: Date.now() - startedAt,
     };
   }
+}
+
+/**
+ * A session that spawns a background agent ends its main turn with a `result`
+ * event, then wakes once per finished agent and ends each waking with another.
+ * Every later event counts only its own waking, so a Stage's turns are the sum
+ * over all of them.
+ */
+function countTurns(results: ResultEvent[]): number | undefined {
+  const counted = results.filter((result) => result.num_turns !== undefined);
+  if (counted.length === 0) return undefined;
+  return counted.reduce((sum, result) => sum + (result.num_turns ?? 0), 0);
 }
 
 /** A session that could not even start still has to leave a trace behind. */
@@ -206,8 +220,12 @@ function isResultEvent(event: unknown): event is ResultEvent {
 function classify(
   request: StageRequest,
   execution: Execution,
-  result: ResultEvent | undefined,
+  results: ResultEvent[],
 ): StageFailure | undefined {
+  // How the session ended is what its last event says; see `structuredOutput`
+  // for why the last event is not where the rest of the answer is.
+  const result = results.at(-1);
+
   // 124 is what the wall-clock kill in `exec` reports.
   if (execution.exitCode === 124) return "timed-out";
 
@@ -229,7 +247,7 @@ function classify(
   if (
     request.jsonSchema !== undefined &&
     request.resultRequired !== false &&
-    structuredOutput(result) === undefined
+    structuredOutput(results) === undefined
   ) {
     return "invalid-result";
   }
@@ -237,11 +255,26 @@ function classify(
 }
 
 /**
- * The Stage's structured output: the dedicated field when the CLI provides it,
+ * The Stage's structured output, from whichever `result` event carries one.
+ *
+ * The session answers the schema when its main turn ends, which is the first
+ * event; a waking for a background agent ends with an event that carries none.
+ * Reading only the last event would drop a Verdict or the Notes over a review
+ * the session had waited for.
+ */
+function structuredOutput(results: ResultEvent[]): unknown {
+  for (const result of results) {
+    const output = structuredOutputOf(result);
+    if (output !== undefined) return output;
+  }
+  return undefined;
+}
+
+/**
+ * One event's structured output: the dedicated field when the CLI provides it,
  * otherwise whatever JSON the session left in `result`.
  */
-function structuredOutput(result: ResultEvent | undefined): unknown {
-  if (result === undefined) return undefined;
+function structuredOutputOf(result: ResultEvent): unknown {
   if (result.structured_output !== undefined && result.structured_output !== null) {
     return result.structured_output;
   }
