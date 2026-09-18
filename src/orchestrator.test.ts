@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { UNCHECKED_BOX } from "./acceptance-criteria.js";
 import type { Config } from "./config.js";
 import { processTicket } from "./orchestrator.js";
 import {
@@ -2311,7 +2312,7 @@ describe("Notes a Stage makes", () => {
 
     const note = tracker.issue(OTHER).comments.at(-1)?.body as string;
     expect(note).toContain("- \\[ \\] rename the flag");
-    expect(/^[ \t]*[-*+] \[ \]/m.test(note)).toBe(false);
+    expect(new RegExp(UNCHECKED_BOX, "m").test(note)).toBe(false);
   });
 
   it("reports every Note it routed, with where it went", async () => {
