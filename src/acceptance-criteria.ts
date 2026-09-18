@@ -17,8 +17,8 @@
  * `-`, `*` or `+` bullet and one space. Deliberately narrow — an item anywhere
  * else on a line is prose, and widening this widens every reader at once.
  *
- * Group 1 is the indent and bullet, which the readers that rewrite a line put
- * back untouched.
+ * Group 1 is the indent and bullet, for the readers that rewrite a line and put
+ * it back untouched. A reader that only counts lines ignores it.
  */
 const ITEM_HEAD = String.raw`^([ \t]*[-*+] )`;
 

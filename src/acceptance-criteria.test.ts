@@ -35,7 +35,7 @@ function guardCountsCriteria(text: string): boolean {
  * every line it logged. The reader under test is the count of ticked boxes,
  * which only speaks up when it disagrees with what was ticked.
  */
-async function merged(text: string): Promise<{ body: string; lines: string[] }> {
+async function tickedByMerge(text: string): Promise<{ body: string; lines: string[] }> {
   const tracker = new FakeTracker();
   tracker.addIssue({ number: TICKET, body: text });
   const lines: string[] = [];
@@ -70,7 +70,7 @@ const CRITERIA = [
 ];
 const NOT_CRITERIA = ["- [x] it works", "-[ ] it works", "a - [ ] it works", "[ ] it works"];
 
-describe("the shape the guard, the ticker, its count and the Note escaper share", () => {
+describe("the shape the guard, the ticker, the tick count and the Note escaper share", () => {
   it.each(CRITERIA)("is counted by the guard in %j", (text) => {
     expect(guardCountsCriteria(text)).toBe(true);
   });
@@ -80,7 +80,7 @@ describe("the shape the guard, the ticker, its count and the Note escaper share"
   });
 
   it.each(CRITERIA)("is counted as ticked by the merge in %j", async (text) => {
-    const { body, lines } = await merged(text);
+    const { body, lines } = await tickedByMerge(text);
 
     expect(body).toContain("[x] it works");
     expect(lines).toEqual([]);
@@ -91,7 +91,7 @@ describe("the shape the guard, the ticker, its count and the Note escaper share"
     expect(guardCountsCriteria(posted(text))).toBe(false);
   });
 
-  it.each(NOT_CRITERIA)("is not read into %j by any of them", (text) => {
+  it.each(NOT_CRITERIA)("is not read into %j by the guard, the ticker or a Note", (text) => {
     expect(guardCountsCriteria(text)).toBe(false);
     expect(tickCriteria(text, ["it works"])).toBe(text);
     expect(posted(text)).toContain(text);
