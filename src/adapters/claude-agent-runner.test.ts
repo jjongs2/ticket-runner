@@ -373,7 +373,7 @@ describe("reading the outcome", () => {
     expect(result).toMatchObject({ ok: false, failure: "timed-out" });
   });
 
-  it("classifies a wall-clock kill the child survived long enough to exit its own way", async () => {
+  it("classifies a kill the child beat to its own exit code", async () => {
     const result = await runner(
       execution({ exitCode: 143, stdout: "", timedOut: true }),
     ).run(request());
