@@ -857,7 +857,11 @@ async function fix(
   // over a branch nobody touched, which can only fail the way it just did — and
   // a progress row claiming the Stage committed. The budget is already spent,
   // so this ends the Ticket rather than buying another try.
-  if ((await pipeline.workspace.commitSubjects(branch)).length === commitsBefore) {
+  //
+  // A branch that grew is the whole signal, which is not the same as one that
+  // changed: a session that squashed the branch shorter, or amended in place,
+  // is read here as having committed nothing.
+  if ((await pipeline.workspace.commitSubjects(branch)).length <= commitsBefore) {
     await progress.record(stageRow("fix", result, "❌ no commits"));
     throw new TicketFailure("fix", "the fix Stage left no new commits on the branch");
   }
