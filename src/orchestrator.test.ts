@@ -1958,7 +1958,10 @@ git branch -D ${BRANCH}\`, then relabel the Ticket ready-for-agent`,
     // The line a failed attempt logs reads as if something had gone wrong.
     expect(logged.some((line) => line.includes("could not open a draft PR"))).toBe(false);
     expect(logged).toContain(
-      `#${TICKET} handed off at setup · the branch ${BRANCH} already exists and is checked out at ${worktree}; finish the work there by hand, or throw it away with \`git worktree remove ${worktree} && git branch -D ${BRANCH}\`, then relabel the Ticket ready-for-agent`,
+      `#${TICKET} handed off at setup · the branch ${BRANCH} already exists and is \
+checked out at ${worktree}; finish the work there by hand, or throw it away with \
+\`git worktree remove ${worktree} && git branch -D ${BRANCH}\`, then relabel the Ticket \
+ready-for-agent`,
     );
   });
 
