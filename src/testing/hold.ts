@@ -10,9 +10,12 @@
  *
  * Holding is per point, not per call: every run that reaches a held point waits,
  * and {@link release} lets all of them, and everything that arrives after, past.
+ *
+ * Scaffolding the fakes are built from rather than a word the pipeline uses, so
+ * it is not in `CONTEXT.md`: nothing a Run does is ever held.
  */
 export class Hold {
-  /** How many runs have reached the hold, released or not. */
+  /** How many runs have reached the hold, parked or waved through. */
   private arrivals = 0;
 
   private released = false;
@@ -20,27 +23,27 @@ export class Hold {
   /** What resumes each run parked here. */
   private readonly parked: (() => void)[] = [];
 
-  /** Tests waiting for arrivals, and how many each is waiting for. */
-  private watching: { arrivals: number; resolve: () => void }[] = [];
+  /** Tests waiting to be told that a run has reached the hold. */
+  private readonly watching: (() => void)[] = [];
 
   /** What the fake calls: park here unless the test has already let go. */
   async reached(): Promise<void> {
     this.arrivals += 1;
-    // Before parking, so a test waiting on `started` is woken by the arrival
-    // rather than by whatever the fake does next.
-    this.wake();
+    // Woken before this run parks, so a test waiting on `started` is told by
+    // the arrival rather than by whatever the fake does next.
+    for (const watcher of this.watching.splice(0)) watcher();
     if (this.released) return;
     await new Promise<void>((resume) => this.parked.push(resume));
   }
 
   /**
-   * Resolves once `arrivals` runs have reached the hold — which, while it is
-   * held, is where they still are.
+   * Resolves once a run has reached the hold — which, while it is held, is
+   * where that run still is.
    */
-  started(arrivals = 1): Promise<void> {
-    if (this.arrivals >= arrivals) return Promise.resolve();
+  started(): Promise<void> {
+    if (this.arrivals > 0) return Promise.resolve();
     return new Promise<void>((resolve) => {
-      this.watching.push({ arrivals, resolve });
+      this.watching.push(resolve);
     });
   }
 
@@ -48,11 +51,5 @@ export class Hold {
   release(): void {
     this.released = true;
     for (const resume of this.parked.splice(0)) resume();
-  }
-
-  private wake(): void {
-    const woken = this.watching.filter((watcher) => watcher.arrivals <= this.arrivals);
-    this.watching = this.watching.filter((watcher) => watcher.arrivals > this.arrivals);
-    for (const watcher of woken) watcher.resolve();
   }
 }

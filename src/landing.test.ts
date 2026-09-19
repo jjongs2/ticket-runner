@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Landing } from "./landing.js";
-
-/** Let everything that can settle settle, so a test can say what is still stuck. */
-const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+import { settle } from "./testing/settle.js";
 
 /** A Ticket asking for the Landing, which records its name once it is in. */
 function arrive(landing: Landing, name: string, entered: string[]) {

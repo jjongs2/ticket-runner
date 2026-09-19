@@ -17,6 +17,7 @@ import { PROGRESS_MARKER } from "./progress.js";
 import type { Pipeline, TicketOutcome } from "./orchestrator.js";
 import type { StageName } from "./ports/agent-runner.js";
 import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./testing/fakes.js";
+import { settle } from "./testing/settle.js";
 
 const TICKET = 2;
 const BRANCH = "agent/2-skeleton-one-ticket-end-to-end";
@@ -2617,16 +2618,6 @@ describe("the Landing", () => {
 
   /** One Ticket through the shared Pipeline, started rather than waited for. */
   const land = (ticket: number) => processTicket(shared, ticket);
-
-  /**
-   * Let every Ticket run as far as it can, so what has not happened by then is
-   * what something is holding back rather than what has not got round to it.
-   */
-  async function settle(): Promise<void> {
-    for (let turn = 0; turn < 2; turn += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-  }
 
   /** How many Tickets have reached the rebase, which is the Landing's door. */
   const rebases = () => workspace.calls.filter((call) => call === "rebase").length;

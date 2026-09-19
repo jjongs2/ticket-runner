@@ -29,16 +29,24 @@ const REBASE_DIRS = ["rebase-merge", "rebase-apply"];
  * Commands that run in the main checkout go one at a time, because the Tickets
  * of a Run do not: adding and removing worktrees, deleting branches and moving
  * the Base branch all take git refs and index locks that git fails on rather
- * than waits for. Commands inside a worktree are left parallel — that is where
- * a Run spends its time, and no two Tickets share one.
+ * than waits for, and a read of a commit range taken while another Ticket is
+ * moving the Base branch is a range nobody asked for. Commands inside a
+ * worktree are left parallel — that is where a Run spends its time, and no two
+ * Tickets share one.
+ *
+ * One command at a time, not one operation: the two commands an operation such
+ * as {@link removeWorktree} is made of can have another Ticket's between them.
+ * What each of them needs is a main checkout nobody else is writing to while it
+ * runs, which is what this gives; a pair that had to be indivisible would have
+ * to say so, and none of them is.
  */
 export class GitWorkspace implements Workspace {
   /**
-   * What the next main-checkout command waits for: the one before it, settled
-   * either way. A command that fails is still a command that finished, so the
-   * queue carries on rather than rejecting everything behind it.
+   * The last main-checkout command queued, which the next one waits for —
+   * settled either way. A command that failed is still a command that finished,
+   * so the queue carries on rather than rejecting everything behind it.
    */
-  private mainCheckout: Promise<unknown> = Promise.resolve();
+  private lastMainCheckoutCommand: Promise<unknown> = Promise.resolve();
 
   constructor(
     private readonly repoRoot: string,
@@ -272,8 +280,8 @@ export class GitWorkspace implements Workspace {
   }
 
   private inMainCheckout<T>(command: () => Promise<T>): Promise<T> {
-    const started = this.mainCheckout.then(command, command);
-    this.mainCheckout = started.then(
+    const started = this.lastMainCheckoutCommand.then(command, command);
+    this.lastMainCheckoutCommand = started.then(
       () => undefined,
       () => undefined,
     );

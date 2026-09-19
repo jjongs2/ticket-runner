@@ -439,9 +439,11 @@ async function takeTicket(
     });
   }
 
-  // The Ticket is merged from here on, so nothing below may hand it off.
+  // The Ticket is merged from here on, so nothing below may hand it off, and
+  // it is still in the Landing: the pull below is the last of it.
   // The State file goes first: a merged Ticket must not look resumable to the
-  // next Run, whatever else below fails.
+  // next Run, whatever else below fails — which is worth the Landing staying
+  // shut for three writes nobody else is waiting on.
   try {
     clearTicketState(repoRoot, ticket);
   } catch (error) {
