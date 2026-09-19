@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Config } from "./config.js";
+import { Landing } from "./landing.js";
 import type { Pipeline } from "./orchestrator.js";
 import { type TicketState, statePath, writeTicketState } from "./resume.js";
 import { processRun } from "./run.js";
@@ -65,6 +66,7 @@ function pipeline(): Pipeline {
     repoRoot,
     runId: "run-1",
     baseBranch: "main",
+    landing: new Landing(),
     log: (line) => logged.push(line),
   };
 }

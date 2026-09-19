@@ -34,6 +34,7 @@ import type {
   RebaseState,
   Workspace,
 } from "../ports/workspace.js";
+import { Hold } from "./hold.js";
 
 export interface FakePullRequest extends CreatePullRequest {
   number: number;
@@ -71,6 +72,8 @@ export class FakeTracker implements Tracker {
   ciWaits: { pullRequest: number; timeoutMs: number }[] = [];
   calls: string[] = [];
   private nextCommentId = 1;
+  /** Where {@link waitForCi} parks, once a test has asked it to; see {@link holdsCi}. */
+  private ciHold: Hold | undefined;
 
   addIssue(issue: Partial<Issue> & { number: number }): Issue {
     const full: Issue = {
@@ -234,9 +237,22 @@ export class FakeTracker implements Tracker {
     return this;
   }
 
+  /**
+   * Hold every CI wait open until the test releases it.
+   *
+   * A Ticket parked here is inside the Landing with its pull request open, which
+   * is where a test puts one to watch what another Ticket does meanwhile.
+   */
+  holdsCi(): Hold {
+    const hold = new Hold();
+    this.ciHold = hold;
+    return hold;
+  }
+
   async waitForCi(number: number, timeoutMs: number): Promise<CiOutcome> {
     this.calls.push(`waitForCi:${number}`);
     this.ciWaits.push({ pullRequest: number, timeoutMs });
+    await this.ciHold?.reached();
     return this.ciQueue.shift() ?? this.ci;
   }
 
@@ -268,6 +284,8 @@ export class FakeAgentRunner implements AgentRunner {
   private queued = new Map<StageName, StageResult[]>();
   /** What each Stage leaves behind besides its result; see {@link leaves}. */
   private effects = new Map<StageName, () => void>();
+  /** Where a Stage parks before it comes back; see {@link holds}. */
+  private held = new Map<StageName, Hold>();
 
   constructor(private readonly defaults: Partial<Record<StageName, StageResult>> = {}) {}
 
@@ -280,6 +298,22 @@ export class FakeAgentRunner implements AgentRunner {
   leaves(stage: StageName, effect: () => void): this {
     this.effects.set(stage, effect);
     return this;
+  }
+
+  /**
+   * Hold a Stage open: every run of it parks once it has started and stays
+   * there until the test releases the hold.
+   *
+   * What a test uses to say where a Ticket is while it watches another one — a
+   * Ticket inside a held conflict Stage is inside the Landing, and one inside a
+   * held fix Stage has given the Landing up. Whatever the Stage
+   * {@link leaves} behind it leaves on arrival, as a real session that committed
+   * and then ran long does.
+   */
+  holds(stage: StageName): Hold {
+    const hold = new Hold();
+    this.held.set(stage, hold);
+    return hold;
   }
 
   /** Queue the next result for a Stage, overriding the default. */
@@ -308,6 +342,7 @@ export class FakeAgentRunner implements AgentRunner {
     // Before the result is read, and whatever it turns out to be: a session
     // that committed and then ran out of turns still committed.
     this.effects.get(request.stage)?.();
+    await this.held.get(request.stage)?.reached();
     const queued = this.queued.get(request.stage);
     if (queued && queued.length > 0) return queued.shift() as StageResult;
     return this.defaults[request.stage] ?? stageResult();

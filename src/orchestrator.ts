@@ -2,6 +2,7 @@ import { branchName, worktreePath } from "./branch.js";
 import type { Config } from "./config.js";
 import { tickMetCriteria } from "./criteria.js";
 import { type SkipReason, isGuardReason, skipReason } from "./guards.js";
+import type { Landing, LandingTurn } from "./landing.js";
 import type { FailureKind, FailurePoint } from "./lifecycle.js";
 import { NOTES_JSON_SCHEMA, type RoutedNote, routeNotes } from "./notes.js";
 import type {
@@ -97,6 +98,12 @@ export interface Pipeline {
    * ({@link import("./base-branch.js").resolveBaseBranch}).
    */
   baseBranch: string;
+  /**
+   * The Run's Landing, made once before the first Ticket and shared by every
+   * Ticket it drives: only one of them is between its rebase and the pull of
+   * the Base branch after its merge at a time (ADR-0005).
+   */
+  landing: Landing;
   log?: (line: string) => void;
 }
 
@@ -161,6 +168,10 @@ function asTicketFailure(error: unknown, point: FailurePoint): TicketFailure {
  * never marked as taken. A Run has already dropped the claimed and the
  * untriaged from its Frontier; `ticket <n>` names an issue by hand and reaches
  * those guards too.
+ *
+ * From the rebase to the pull of the Base branch after the merge the Ticket
+ * holds the Run's Landing, so no other Ticket of the same Run moves the Base
+ * branch underneath the branch CI is grading (ADR-0005).
  */
 export async function processTicket(
   pipeline: Pipeline,
@@ -171,6 +182,25 @@ export async function processTicket(
    * The returned outcome carries the same array.
    */
   notes: RoutedNote[] = [],
+): Promise<TicketOutcome> {
+  // Made here rather than where it is first entered, so that however the Ticket
+  // ends — including on a path nobody wrote a hand-off for — the Landing is
+  // given back. Every path that leaves it early says so where it happens; this
+  // is only the backstop behind them.
+  const turn = pipeline.landing.turn();
+  try {
+    return await takeTicket(pipeline, ticket, turn, notes);
+  } finally {
+    turn.leave();
+  }
+}
+
+/** One Ticket, holding the turn at the Landing its caller owes the Run. */
+async function takeTicket(
+  pipeline: Pipeline,
+  ticket: number,
+  landing: LandingTurn,
+  notes: RoutedNote[],
 ): Promise<TicketOutcome> {
   const { tracker, workspace, config, repoRoot, runId, baseBranch } = pipeline;
   const log = pipeline.log ?? (() => {});
@@ -310,6 +340,10 @@ export async function processTicket(
         verdict = await verify(pipeline, issue, worktree, logDir, progress);
 
         point = "rebase";
+        // The Landing, from here until the Base branch has been pulled: the
+        // Ticket waits its turn, and the Base branch it rebases onto is then
+        // the one its merge will land on.
+        await landing.enter();
         const rebase = await workspace.rebase(worktree, baseBranch);
         if (!rebase.ok) {
           // Once per conflict, not once per Ticket: a pass the fix budget
@@ -347,6 +381,10 @@ export async function processTicket(
         if (fixUsed || failure.kind === undefined) throw failure;
         fixUsed = true;
         point = "fix";
+        // A fix Stage is a session nobody else is waiting on, so the Landing
+        // goes back: another Ticket lands while it runs, and this one rejoins
+        // the queue at the back when it reaches the rebase again.
+        landing.leave();
         logDir = retryLogDir(repoRoot, runId, ticket);
         await fix(
           pipeline,
@@ -372,6 +410,10 @@ export async function processTicket(
     );
     await progress.record({ point: "merge", outcome: `✅ #${pullRequest}` });
   } catch (error) {
+    // Out of the Landing before either ending is written: a hand-off's draft
+    // pull request and a Release's labels are nothing for the next Ticket to
+    // wait behind, and a Ticket that never reached the rebase gives up nothing.
+    landing.leave();
     if (error instanceof RateLimited) {
       return release(pipeline, {
         issue,
@@ -418,6 +460,9 @@ export async function processTicket(
   }
   try {
     await workspace.pullBase(baseBranch);
+    // The pull ends the Landing: the next Ticket now rebases onto a Base branch
+    // that already carries this one, and the cleanup below holds nobody up.
+    landing.leave();
     await workspace.removeWorktree({ path: worktree, branch });
     await workspace.deleteRemoteBranch(branch);
   } catch (error) {

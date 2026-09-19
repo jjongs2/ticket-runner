@@ -540,6 +540,93 @@ describe("push and pullBase", () => {
 });
 
 /**
+ * What the Tickets of one Run do to the main checkout when they are not taking
+ * turns: git fails a second `worktree add` or `fetch` outright rather than
+ * waiting for the lock the first one holds, so the workspace queues them.
+ */
+describe("two Tickets at the main checkout at once", () => {
+  /** A commit pushed to the remote from elsewhere, as another Run's merge is. */
+  function moveMainOnTheRemote(): string {
+    const other = mkdtempSync(join(tmpdir(), "agent-pipeline-other-"));
+    created.push(other);
+    git(other, "clone", remote, ".");
+    git(other, "config", "user.email", "human@example.com");
+    git(other, "config", "user.name", "human");
+    commit(other, "from-elsewhere.txt", "x\n", "feat: elsewhere (#1)");
+    git(other, "push", "origin", "main");
+    return git(other, "rev-parse", "HEAD");
+  }
+
+  it("pulls the base branch several times at once without losing a ref lock", async () => {
+    const moved = moveMainOnTheRemote();
+
+    // The one command two Tickets really do ask for together, and the one git
+    // refuses outright rather than waiting for: they all move the same ref.
+    await Promise.all([1, 2, 3, 4, 5, 6].map(() => workspace.pullBase("main")));
+
+    expect(git(repo, "rev-parse", "main")).toBe(moved);
+  });
+
+  it("creates every worktree asked for at once", async () => {
+    const tickets = [2, 3, 4];
+    const paths = tickets.map((ticket) => join(repo, ".worktrees", `ticket-${ticket}`));
+
+    await Promise.all(
+      tickets.map((ticket, index) =>
+        workspace.createWorktree(
+          { path: paths[index] as string, branch: `agent/${ticket}-x` },
+          "main",
+        ),
+      ),
+    );
+
+    for (const [index, ticket] of tickets.entries()) {
+      const path = paths[index] as string;
+      expect(git(path, "rev-parse", "--abbrev-ref", "HEAD")).toBe(`agent/${ticket}-x`);
+      expect(git(path, "rev-parse", "HEAD")).toBe(git(repo, "rev-parse", "main"));
+    }
+  });
+
+  it("pulls the base branch while another Ticket's worktree is removed", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
+    const moved = moveMainOnTheRemote();
+
+    await Promise.all([
+      workspace.pullBase("main"),
+      workspace.removeWorktree({ path, branch: "agent/2-x" }),
+    ]);
+
+    expect(git(repo, "rev-parse", "main")).toBe(moved);
+    expect(existsSync(path)).toBe(false);
+    expect(await workspace.hasBranch("agent/2-x")).toBe(false);
+  });
+
+  it("carries on with the next command after one of them fails", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    // A branch that is already there, which is the failure the pipeline asks
+    // about by hand before it ever gets here.
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
+
+    const taken = workspace.createWorktree(
+      { path: join(repo, ".worktrees", "ticket-3"), branch: "agent/2-x" },
+      "main",
+    );
+    const next = workspace.createWorktree(
+      { path: join(repo, ".worktrees", "ticket-4"), branch: "agent/4-x" },
+      "main",
+    );
+
+    await expect(taken).rejects.toThrow();
+    await next;
+
+    expect(git(join(repo, ".worktrees", "ticket-4"), "rev-parse", "--abbrev-ref", "HEAD")).toBe(
+      "agent/4-x",
+    );
+  });
+});
+
+/**
  * A Target GitHub calls `master`, which is the whole of what the config-free
  * repository on an older default gets: the same worktree, the same rebase and
  * the same pull, against a branch nothing here spells out.

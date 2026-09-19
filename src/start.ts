@@ -1,5 +1,6 @@
 import { resolveBaseBranch } from "./base-branch.js";
 import type { Config } from "./config.js";
+import { Landing } from "./landing.js";
 import { acquireLock, lockHeldMessage } from "./lock.js";
 import { type Pipeline, type TicketOutcome, processTicket } from "./orchestrator.js";
 import type { AgentRunner } from "./ports/agent-runner.js";
@@ -97,6 +98,10 @@ async function execute(options: StartOptions, log: (line: string) => void): Prom
     repoRoot,
     runId,
     baseBranch,
+    // Once per Run as well, and for the same reason: the Tickets of one Run
+    // take turns between their rebase and their merge, and a Landing made per
+    // Ticket would be a queue of one every time (ADR-0005).
+    landing: new Landing(),
     log,
   };
 

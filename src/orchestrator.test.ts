@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { UNCHECKED_BOX } from "./acceptance-criteria.js";
 import { resolveBaseBranch } from "./base-branch.js";
 import type { Config } from "./config.js";
+import { Landing } from "./landing.js";
 import { processTicket } from "./orchestrator.js";
 import {
   type TicketState,
@@ -13,7 +14,7 @@ import {
   writeTicketState,
 } from "./resume.js";
 import { PROGRESS_MARKER } from "./progress.js";
-import type { TicketOutcome } from "./orchestrator.js";
+import type { Pipeline, TicketOutcome } from "./orchestrator.js";
 import type { StageName } from "./ports/agent-runner.js";
 import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./testing/fakes.js";
 
@@ -143,6 +144,7 @@ async function run(overrides: Partial<Config> = {}): Promise<TicketOutcome> {
       repoRoot,
       runId: "run-1",
       baseBranch: await resolveBaseBranch(tracker, settings),
+      landing: new Landing(),
       log: (line) => logged.push(line),
     },
     TICKET,
@@ -2587,6 +2589,181 @@ describe("a Stage with no Notes", () => {
 
     expect(tracker.createdIssues).toEqual([]);
     expect(notices()).toEqual([]);
+  });
+});
+
+describe("the Landing", () => {
+  const SECOND = 3;
+  const SECOND_BRANCH = "agent/3-the-second-ticket";
+
+  /** One Run's Pipeline, which every Ticket driven through it shares. */
+  let shared: Pipeline;
+
+  beforeEach(async () => {
+    tracker.addIssue({ number: SECOND, title: "The second Ticket" });
+    const settings = config();
+    shared = {
+      tracker,
+      runner,
+      workspace,
+      config: settings,
+      repoRoot,
+      runId: "run-1",
+      baseBranch: await resolveBaseBranch(tracker, settings),
+      landing: new Landing(),
+      log: (line) => logged.push(line),
+    };
+  });
+
+  /** One Ticket through the shared Pipeline, started rather than waited for. */
+  const land = (ticket: number) => processTicket(shared, ticket);
+
+  /**
+   * Let every Ticket run as far as it can, so what has not happened by then is
+   * what something is holding back rather than what has not got round to it.
+   */
+  async function settle(): Promise<void> {
+    for (let turn = 0; turn < 2; turn += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  }
+
+  /** How many Tickets have reached the rebase, which is the Landing's door. */
+  const rebases = () => workspace.calls.filter((call) => call === "rebase").length;
+
+  /** The Landing's two ends, in the order the Tickets went through them. */
+  const landings = () =>
+    workspace.calls.filter((call) => call === "rebase" || call === "pullBase");
+
+  /** Which branch was pushed when, which is one Ticket per turn at the Landing. */
+  const pushed = () => workspace.pushes.map(({ branch }) => branch);
+
+  it("holds the second Ticket's rebase until the first has merged and pulled", async () => {
+    workspace.conflictOnce(CONFLICT);
+    const conflict = runner.holds("conflict");
+    const first = land(TICKET);
+    const second = land(SECOND);
+    await conflict.started();
+    await settle();
+
+    // One Ticket is stopped in its conflict Stage, inside the Landing; the
+    // other has done everything it may do outside one.
+    expect(rebases()).toBe(1);
+
+    conflict.release();
+    await Promise.all([first, second]);
+
+    expect(landings()).toEqual(["rebase", "pullBase", "rebase", "pullBase"]);
+  });
+
+  it("holds the second Ticket's rebase while the first waits for CI", async () => {
+    const ci = tracker.holdsCi();
+    const first = land(TICKET);
+    const second = land(SECOND);
+    await ci.started();
+    await settle();
+
+    expect(rebases()).toBe(1);
+    expect(tracker.ciWaits).toHaveLength(1);
+
+    ci.release();
+    await Promise.all([first, second]);
+
+    expect(landings()).toEqual(["rebase", "pullBase", "rebase", "pullBase"]);
+  });
+
+  it("lands the Ticket that reached the rebase first, whatever its number", async () => {
+    const ci = tracker.holdsCi();
+    // The higher number arrives on its own: the lower one has not been started
+    // by the time this one is inside the Landing.
+    const first = land(SECOND);
+    await ci.started();
+    const second = land(TICKET);
+    await settle();
+
+    // Waiting at the door behind a Ticket with a higher number: the queue is
+    // the order they arrived in and nothing else.
+    expect(rebases()).toBe(1);
+
+    ci.release();
+    await Promise.all([first, second]);
+
+    expect(pushed()).toEqual([SECOND_BRANCH, BRANCH]);
+  });
+
+  it("gives the Landing up for a fix Stage, so another Ticket lands meanwhile", async () => {
+    tracker.queueCi({ state: "failed", summary: "checks/build failed", excerpt: "" });
+    const fix = runner.holds("fix");
+    const first = land(TICKET);
+    await fix.started();
+
+    // Nobody is waiting on a fix session, so the Ticket that arrives while one
+    // is open rebases, merges and pulls without ever meeting it.
+    expect(await land(SECOND)).toMatchObject({ outcome: "merged" });
+
+    fix.release();
+
+    expect(await first).toMatchObject({ outcome: "merged" });
+    expect(pushed()).toEqual([BRANCH, SECOND_BRANCH, BRANCH]);
+  });
+
+  it("sends a Ticket back to the end of the queue after its fix Stage", async () => {
+    tracker.queueCi({ state: "failed", summary: "checks/build failed", excerpt: "" });
+    const fix = runner.holds("fix");
+    const first = land(TICKET);
+    await fix.started();
+
+    // Arrived while the first Ticket was out of the Landing, and holds it from
+    // its own rebase until its own pull.
+    const ci = tracker.holdsCi();
+    const second = land(SECOND);
+    await ci.started();
+
+    fix.release();
+    await settle();
+
+    // The mended Ticket is at the rebase again and waiting there: re-entering
+    // is joining the queue, not taking the turn it gave up back.
+    expect(rebases()).toBe(2);
+
+    ci.release();
+    await Promise.all([first, second]);
+
+    expect(pushed()).toEqual([BRANCH, SECOND_BRANCH, BRANCH]);
+  });
+
+  it("gives the Landing up when a Ticket is handed off from inside it", async () => {
+    tracker.queueCi({ state: "timed-out" });
+    const ci = tracker.holdsCi();
+    const first = land(TICKET);
+    await ci.started();
+    const second = land(SECOND);
+    await settle();
+
+    expect(rebases()).toBe(1);
+
+    ci.release();
+
+    expect(await first).toMatchObject({ outcome: "handed-off", stage: "ci" });
+    expect(await second).toMatchObject({ outcome: "merged" });
+  });
+
+  it("gives the Landing up when a Ticket is released from inside it", async () => {
+    workspace.conflictOnce(CONFLICT);
+    workspace.rebaseStateAfterStage = UNRESOLVED;
+    runner.queue("conflict", { ok: false, failure: "rate-limited" });
+    const conflict = runner.holds("conflict");
+    const first = land(TICKET);
+    await conflict.started();
+    const second = land(SECOND);
+    await settle();
+
+    expect(rebases()).toBe(1);
+
+    conflict.release();
+
+    expect(await first).toMatchObject({ outcome: "released", stage: "rebase" });
+    expect(await second).toMatchObject({ outcome: "merged" });
   });
 });
 
