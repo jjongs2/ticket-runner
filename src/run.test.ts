@@ -691,15 +691,23 @@ describe("Lanes", () => {
     ]);
   });
 
-  it("takes a Ticket a busy Lane's Ticket blocks once that Lane has merged", async () => {
+  it("takes a Ticket a busy Lane's Ticket blocks only once that Lane has merged", async () => {
     tracker.addIssue({ number: 4 });
     tracker.addIssue({ number: 6 });
     tracker.openBlockers.set(6, 1);
-    // #6's blocker closes the moment #4 merges, which is a Frontier no refill
-    // before that one could have offered #6 from.
     tracker.onSquashMerge = () => tracker.openBlockers.set(6, 0);
+    // #4 parked with its pull request open, which is as far as a Lane gets
+    // without merging: two free Lanes, and #6 blocked by what is in this one.
+    const ci = tracker.holdsCi();
 
-    const result = await processRun(pipeline(3));
+    const run = processRun(pipeline(3));
+    await ci.started();
+    await settle();
+
+    expect(processed()).toEqual([4]);
+
+    ci.release();
+    const result = await run;
 
     expect(processed()).toEqual([4, 6]);
     expect(tracker.calls.indexOf("assign:6:pipeline-user")).toBeGreaterThan(
@@ -708,6 +716,24 @@ describe("Lanes", () => {
     // The last Frontier the Run computed is the one the summary reports, and by
     // then nothing was held back.
     expect(result.stop).toEqual({ reason: "frontier", blocked: [] });
+  });
+
+  it("fills every Lane that came back in the same pass", async () => {
+    for (const number of [4, 5, 6, 7]) tracker.addIssue({ number });
+    // Every Ticket is handed off at its implement Stage, so the two Lanes of a
+    // pair come back together rather than one merge apart.
+    for (let i = 0; i < 4; i += 1) {
+      runner.queue("implement", { ok: false, failure: "nonzero-exit" });
+    }
+
+    const result = await processRun(pipeline(2));
+
+    expect(result.outcomes.map((outcome) => outcome.ticket)).toEqual([4, 5, 6, 7]);
+    // Three Frontiers and no more: the one that filled both Lanes, the one that
+    // refilled both, and the one that found nothing left to take.
+    expect(tracker.calls.filter((call) => call === "listCandidates:ready-for-agent")).toHaveLength(
+      3,
+    );
   });
 
   it("fills its Lanes from the stranded Tickets before it asks for the Frontier", async () => {
@@ -789,7 +815,7 @@ describe("Lanes", () => {
   });
 
   it("says the limit stopped the Run once, however many Lanes were released", async () => {
-    for (const number of [4, 5] as const) tracker.addIssue({ number });
+    for (const number of [4, 5]) tracker.addIssue({ number });
     runner.queue("implement", { ok: false, failure: "rate-limited" });
     runner.queue("implement", { ok: false, failure: "rate-limited" });
 
@@ -835,12 +861,37 @@ describe("Lanes", () => {
 
   it("reports the candidates the last Frontier it computed held back", async () => {
     tracker.addIssue({ number: 4 });
-    tracker.addIssue({ number: 9 });
-    tracker.openBlockers.set(9, 1);
+    for (const number of [7, 9]) {
+      tracker.addIssue({ number });
+      tracker.openBlockers.set(number, 1);
+    }
+    // #7's blocker closes with #4, so the first Frontier this Run computed held
+    // back two candidates and the last held back one.
+    tracker.onSquashMerge = (pullRequest) => {
+      if (pullRequest === 100) tracker.openBlockers.set(7, 0);
+    };
 
     const result = await processRun(pipeline(3));
 
-    expect(processed()).toEqual([4]);
+    expect(processed()).toEqual([4, 7]);
     expect(result.stop).toEqual({ reason: "frontier", blocked: [9] });
+  });
+
+  it("waits for the busy Lanes before it throws a Frontier it could not list", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    const listed = tracker.listCandidates.bind(tracker);
+    let listings = 0;
+    tracker.listCandidates = async (label) => {
+      listings += 1;
+      if (listings > 1) throw new Error("gh: connection reset");
+      return await listed(label);
+    };
+
+    await expect(processRun(pipeline(2))).rejects.toThrow("gh: connection reset");
+
+    // Both Lanes were filled from the one Frontier that listed, and neither was
+    // abandoned mid-Ticket to report that `gh` had gone down.
+    expect(tracker.pullRequest(100).merged).toBe(true);
+    expect(tracker.pullRequest(101).merged).toBe(true);
   });
 });

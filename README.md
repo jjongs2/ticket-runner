@@ -256,10 +256,11 @@ are the two ways a Ticket stops being resumable.
 
 A Ticket left like that is a **stranded Ticket**: state recorded locally, and the Claim
 still on the board. No Frontier can offer one — it is claimed — so a `run` sweeps the local
-State files first and resumes every stranded Ticket it finds, in ascending number, in the
-worktree and on the branch it already has. A free Lane takes a stranded Ticket before
+State files first and resumes every stranded Ticket it finds, in the worktree and on the
+branch it already has. A free Lane takes a stranded Ticket, in ascending number, before
 anything the Frontier is offering, and the Frontier is not computed at all while there are
-enough of them to fill every Lane. The Claim stays exactly as it is: nothing is
+enough of them to fill every Lane — so with more than one Lane a stranded Ticket may still
+be running when a Frontier Ticket starts beside it. The Claim stays exactly as it is: nothing is
 re-assigned, nothing is relabelled, and nobody is notified. `ticket <n>` naming a stranded
 Ticket resumes it too, where it would otherwise refuse it as claimed.
 

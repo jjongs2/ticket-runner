@@ -68,15 +68,21 @@ export async function processRun(pipeline: Pipeline): Promise<RunResult> {
   // to a second Lane, whether because that write did not land or because the
   // Claim of the Lane holding it has not reached GitHub yet.
   const taken = new Set<number>();
-  // The Lanes with a Ticket in them, by Ticket number. Each promise answers with
-  // its own number, so the Lane that came back is the one that frees.
-  const busy = new Map<number, Promise<number>>();
+  // The Lanes with a Ticket in them, by Ticket number. A Lane takes itself out
+  // of here as its Ticket ends rather than where the Run waits, so a fill pass
+  // that several Lanes came back during sees every one of them free.
+  const busy = new Map<number, Promise<void>>();
   // What the last Frontier this Run computed held back, which is what a Run
   // that drained the Frontier reports. Replaced at every refill: a candidate a
   // Lane unblocked on the way is not one the Run was still held up by.
   let blocked: number[] = [];
   // Whether a Release has stopped this Run filling Lanes.
   let rateLimited = false;
+  // A Frontier the tracker refused to list, kept until the Lanes still busy are
+  // back. A Run must not walk away from a Ticket mid-Stage to report that `gh`
+  // went down, so the error waits for them and is thrown where a Run with one
+  // Lane threw it: out of the Run, with nothing else left running.
+  let listing: unknown;
 
   // Taken off the front as Lanes free, so the sweep is a queue rather than a
   // pass of its own: a stranded Ticket and a Frontier Ticket can be in two
@@ -87,6 +93,11 @@ export async function processRun(pipeline: Pipeline): Promise<RunResult> {
     inProgress: config.labels.inProgress,
     ...(pipeline.log === undefined ? {} : { log: pipeline.log }),
   });
+
+  /** Whether the Run has a Lane to put a Ticket in right now. */
+  function laneFree(): boolean {
+    return busy.size < config.lanes;
+  }
 
   /**
    * Put a Ticket in a Lane, and record what came back when it ends.
@@ -99,31 +110,31 @@ export async function processRun(pipeline: Pipeline): Promise<RunResult> {
    * transcript of interleaved Lanes must not lose the line that explains why one
    * Lane was the last to be filled.
    */
-  function fill(ticket: Taken): void {
+  function fillLane(ticket: Taken): void {
     taken.add(ticket.number);
     busy.set(
       ticket.number,
       take(pipeline, ticket).then((outcome) => {
+        busy.delete(ticket.number);
         outcomes.push(outcome);
         if (outcome.outcome === "released" && !rateLimited) {
           rateLimited = true;
           pipeline.log?.(`#${outcome.ticket} stopped the Run · rate limit`);
         }
-        return ticket.number;
       }),
     );
   }
 
   /** Fill every free Lane: the stranded Tickets first, the Frontier second. */
   async function fillLanes(): Promise<void> {
-    while (busy.size < config.lanes) {
+    while (laneFree()) {
       const resumable = stranded.shift();
       if (resumable === undefined) break;
-      fill(resumable);
+      fillLane(resumable);
     }
     // Asked for only when a Lane is still free, so a Run whose Lanes are full of
     // stranded Tickets spends no call on a Frontier it could not take from.
-    if (busy.size >= config.lanes) return;
+    if (!laneFree()) return;
 
     const selection = selectFrontier(
       await tracker.listCandidates(config.labels.readyForAgent),
@@ -135,9 +146,9 @@ export async function processRun(pipeline: Pipeline): Promise<RunResult> {
     if (rateLimited) return;
 
     for (const candidate of selection.frontier) {
-      if (busy.size >= config.lanes) break;
+      if (!laneFree()) break;
       if (taken.has(candidate.number)) continue;
-      fill({
+      fillLane({
         number: candidate.number,
         title: candidate.title,
         branch: branchName(candidate.number, candidate.title),
@@ -146,13 +157,20 @@ export async function processRun(pipeline: Pipeline): Promise<RunResult> {
   }
 
   for (;;) {
-    if (!rateLimited) await fillLanes();
+    if (!rateLimited && listing === undefined) {
+      try {
+        await fillLanes();
+      } catch (error) {
+        listing = error;
+      }
+    }
     // Never while a Lane is busy, whatever the Frontier had to offer: that Lane
     // may be about to close the blocker the rest of the Frontier is waiting on.
     if (busy.size === 0) break;
-    busy.delete(await Promise.race(busy.values()));
+    await Promise.race(busy.values());
   }
 
+  if (listing !== undefined) throw listing;
   return rateLimited
     ? { outcomes, stop: { reason: "rate-limited" } }
     : { outcomes, stop: { reason: "frontier", blocked } };
