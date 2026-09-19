@@ -8,6 +8,7 @@ import type { Pipeline } from "./orchestrator.js";
 import { type TicketState, statePath, writeTicketState } from "./resume.js";
 import { processRun } from "./run.js";
 import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./testing/fakes.js";
+import { settle } from "./testing/settle.js";
 
 function config(): Config {
   return {
@@ -58,12 +59,13 @@ afterEach(() => {
   rmSync(repoRoot, { recursive: true, force: true });
 });
 
-function pipeline(): Pipeline {
+/** A Run with `lanes` Lanes, which is one unless the test is about the others. */
+function pipeline(lanes = 1): Pipeline {
   return {
     tracker,
     runner,
     workspace,
-    config: config(),
+    config: { ...config(), lanes },
     repoRoot,
     runId: "run-1",
     baseBranch: "main",
@@ -77,6 +79,27 @@ function processed(): number[] {
   return tracker.calls
     .filter((call) => call.startsWith("assign:"))
     .map((call) => Number.parseInt(call.split(":")[1] as string, 10));
+}
+
+/** Where this Ticket's worktree is, under the repo root the Run was given. */
+function worktreeOf(ticket: number): string {
+  return join(repoRoot, ".worktrees", `ticket-${ticket}`);
+}
+
+/** Exactly what a killed Run leaves: the Claim, the worktree, the State file. */
+function stranded(ticket: number, overrides: Partial<TicketState> = {}): void {
+  const state: TicketState = {
+    ticket,
+    branch: `agent/${ticket}-ticket-${ticket}`,
+    state: "implemented",
+    fixUsed: false,
+    runId: "run-0",
+    updatedAt: "2026-09-17T09:00:00.000Z",
+    ...overrides,
+  };
+  tracker.addIssue({ number: ticket, assignees: ["pipeline-user"], labels: ["in-progress"] });
+  workspace.worktrees.set(worktreeOf(ticket), state.branch);
+  writeTicketState(repoRoot, state);
 }
 
 describe("draining the Frontier", () => {
@@ -412,25 +435,6 @@ describe("recomputing the Frontier", () => {
  * never came back left claimed, which nothing else would ever pick up.
  */
 describe("stranded Tickets", () => {
-  /** Where this Ticket's worktree is, under the repo root the Run was given. */
-  const worktreeOf = (ticket: number) => join(repoRoot, ".worktrees", `ticket-${ticket}`);
-
-  /** Exactly what a killed Run leaves: the Claim, the worktree, the State file. */
-  function stranded(ticket: number, overrides: Partial<TicketState> = {}): void {
-    const state: TicketState = {
-      ticket,
-      branch: `agent/${ticket}-ticket-${ticket}`,
-      state: "implemented",
-      fixUsed: false,
-      runId: "run-0",
-      updatedAt: "2026-09-17T09:00:00.000Z",
-      ...overrides,
-    };
-    tracker.addIssue({ number: ticket, assignees: ["pipeline-user"], labels: ["in-progress"] });
-    workspace.worktrees.set(worktreeOf(ticket), state.branch);
-    writeTicketState(repoRoot, state);
-  }
-
   it("resumes one the Frontier could never have offered", async () => {
     stranded(4);
 
@@ -618,5 +622,225 @@ describe("stranded Tickets", () => {
 
     expect(processed()).toEqual([4, 5]);
     expect(result.outcomes.map((outcome) => outcome.outcome)).toEqual(["merged", "merged"]);
+  });
+});
+
+/**
+ * A Run with more than one Lane. Everything above holds a Run to the one Lane a
+ * Target gets by default, which is what says the Lane count changed nothing for
+ * the Targets that never asked for it; these say what the other Lanes do.
+ */
+describe("Lanes", () => {
+  it("starts a Ticket in every Lane before any of them ends", async () => {
+    for (const number of [4, 5, 6]) tracker.addIssue({ number });
+    const implementing = runner.holds("implement");
+
+    const run = processRun(pipeline(3));
+    await implementing.started();
+    await settle();
+
+    expect(runner.stages()).toEqual(["implement", "implement", "implement"]);
+    expect(processed()).toEqual([4, 5, 6]);
+
+    implementing.release();
+    const result = await run;
+
+    expect(result.outcomes.map((outcome) => outcome.outcome)).toEqual([
+      "merged",
+      "merged",
+      "merged",
+    ]);
+  });
+
+  it("holds no more Tickets at once than it has Lanes", async () => {
+    for (const number of [4, 5, 6]) tracker.addIssue({ number });
+    const implementing = runner.holds("implement");
+
+    const run = processRun(pipeline(2));
+    await implementing.started();
+    await settle();
+
+    expect(processed()).toEqual([4, 5]);
+
+    implementing.release();
+    const result = await run;
+
+    expect(result.outcomes).toHaveLength(3);
+  });
+
+  it("refills a Lane the moment its Ticket ends, whatever the others are doing", async () => {
+    for (const number of [4, 5, 6]) tracker.addIssue({ number });
+    // #4 is handed off at its implement Stage, so its Lane frees while #5 is
+    // still parked in a Stage of its own.
+    runner.queue("implement", { ok: false, failure: "nonzero-exit" });
+    const verifying = runner.holds("verify");
+
+    const run = processRun(pipeline(2));
+    await verifying.started();
+    await settle();
+
+    expect(processed()).toEqual([4, 5, 6]);
+
+    verifying.release();
+    const result = await run;
+
+    expect(result.outcomes.map((outcome) => [outcome.ticket, outcome.outcome])).toEqual([
+      [4, "handed-off"],
+      [5, "merged"],
+      [6, "merged"],
+    ]);
+  });
+
+  it("takes a Ticket a busy Lane's Ticket blocks once that Lane has merged", async () => {
+    tracker.addIssue({ number: 4 });
+    tracker.addIssue({ number: 6 });
+    tracker.openBlockers.set(6, 1);
+    // #6's blocker closes the moment #4 merges, which is a Frontier no refill
+    // before that one could have offered #6 from.
+    tracker.onSquashMerge = () => tracker.openBlockers.set(6, 0);
+
+    const result = await processRun(pipeline(3));
+
+    expect(processed()).toEqual([4, 6]);
+    expect(tracker.calls.indexOf("assign:6:pipeline-user")).toBeGreaterThan(
+      tracker.calls.indexOf("squashMerge:100"),
+    );
+    // The last Frontier the Run computed is the one the summary reports, and by
+    // then nothing was held back.
+    expect(result.stop).toEqual({ reason: "frontier", blocked: [] });
+  });
+
+  it("fills its Lanes from the stranded Tickets before it asks for the Frontier", async () => {
+    stranded(4);
+    stranded(9);
+    tracker.addIssue({ number: 6 });
+    const verifying = runner.holds("verify");
+
+    const run = processRun(pipeline(2));
+    await verifying.started();
+    await settle();
+
+    expect(tracker.calls).not.toContain("listCandidates:ready-for-agent");
+    expect(processed()).toEqual([]);
+
+    verifying.release();
+    const result = await run;
+
+    expect(result.outcomes.map((outcome) => outcome.ticket)).toEqual([4, 9, 6]);
+  });
+
+  it("starts a Frontier Ticket in one Lane while a stranded Ticket holds another", async () => {
+    stranded(4);
+    tracker.addIssue({ number: 6 });
+    const verifying = runner.holds("verify");
+
+    const run = processRun(pipeline(2));
+    await verifying.started();
+    await settle();
+
+    expect(processed()).toEqual([6]);
+
+    verifying.release();
+    const result = await run;
+
+    expect(result.outcomes.map((outcome) => outcome.ticket)).toEqual([4, 6]);
+  });
+
+  it("offers a Ticket it has already taken to no second Lane", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    workspace.failCheck("npm test", "1 test failed");
+    // A hand-off leaves the Ticket unassigned, so only the relabel keeps it off
+    // the next Frontier — and with Lanes there is a Frontier per refill.
+    tracker.removeLabel = async () => {};
+
+    const result = await processRun(pipeline(3));
+
+    expect(processed()).toEqual([4, 5]);
+    expect(result.outcomes).toHaveLength(2);
+  });
+
+  it("fills no Lane after a Release, and waits for the ones still busy", async () => {
+    for (const number of [4, 5, 6]) tracker.addIssue({ number });
+    runner.queue("implement", { ok: false, failure: "rate-limited" });
+    const verifying = runner.holds("verify");
+
+    let ended = false;
+    const run = processRun(pipeline(2)).then((result) => {
+      ended = true;
+      return result;
+    });
+    await verifying.started();
+    await settle();
+
+    // The Release has happened and its Lane is free, and #6 is left where it is.
+    expect(processed()).toEqual([4, 5]);
+    expect(workspace.calls).not.toContain("createWorktree:agent/6-ticket-6");
+    expect(ended).toBe(false);
+
+    verifying.release();
+    const result = await run;
+
+    expect(result.outcomes.map((outcome) => [outcome.ticket, outcome.outcome])).toEqual([
+      [4, "released"],
+      [5, "merged"],
+    ]);
+    expect(result.stop).toEqual({ reason: "rate-limited" });
+    expect(logged).toContain("#4 stopped the Run · rate limit");
+  });
+
+  it("says the limit stopped the Run once, however many Lanes were released", async () => {
+    for (const number of [4, 5] as const) tracker.addIssue({ number });
+    runner.queue("implement", { ok: false, failure: "rate-limited" });
+    runner.queue("implement", { ok: false, failure: "rate-limited" });
+
+    const result = await processRun(pipeline(2));
+
+    expect(result.outcomes.map((outcome) => outcome.outcome)).toEqual([
+      "released",
+      "released",
+    ]);
+    expect(logged.filter((line) => line.endsWith("stopped the Run · rate limit"))).toEqual([
+      "#4 stopped the Run · rate limit",
+    ]);
+  });
+
+  it("waits for a busy Lane rather than ending on an empty Frontier", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    // #4's implement Stage passes and parks at verify; #5's fails, so its Lane
+    // frees while the Frontier the refill computes has nothing left on it.
+    runner.queue("implement", {});
+    runner.queue("implement", { ok: false, failure: "nonzero-exit" });
+    const verifying = runner.holds("verify");
+
+    let ended = false;
+    const run = processRun(pipeline(2)).then((result) => {
+      ended = true;
+      return result;
+    });
+    await verifying.started();
+    await settle();
+
+    expect(ended).toBe(false);
+
+    verifying.release();
+    const result = await run;
+
+    // Completion order, not the order the Lanes were filled in.
+    expect(result.outcomes.map((outcome) => [outcome.ticket, outcome.outcome])).toEqual([
+      [5, "handed-off"],
+      [4, "merged"],
+    ]);
+    expect(result.stop).toEqual({ reason: "frontier", blocked: [] });
+  });
+
+  it("reports the candidates the last Frontier it computed held back", async () => {
+    tracker.addIssue({ number: 4 });
+    tracker.addIssue({ number: 9 });
+    tracker.openBlockers.set(9, 1);
+
+    const result = await processRun(pipeline(3));
+
+    expect(processed()).toEqual([4]);
+    expect(result.stop).toEqual({ reason: "frontier", blocked: [9] });
   });
 });

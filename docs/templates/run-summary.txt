@@ -12,15 +12,21 @@ Frontier empty.
 The verb is padded to nine columns so the Ticket numbers line up. A Run that
 took no Ticket prints `  nothing to do` in place of the rows.
 
+The rows are in the order the Tickets ended, which is the order they were
+claimed in only for a Run with one Lane. A Run with more than one has several
+Tickets in flight at once, and each takes as long as its own Stages take.
+
 `released` is a Ticket the subscription rate limit stopped mid-flight: its Claim
 was undone, and the State file it has been keeping since it was claimed says
 where the next Run resumes it from. Nobody has to do anything about it, which is
-why it is not `handed`. It is the last row of its Run, which ends there:
+why it is not `handed`. It stops the Run filling Lanes, so no Ticket is claimed
+after it; the Lanes still busy finish what they hold, and whatever they end as
+has its row after the `released` one:
 
 agent-pipeline run <runId> · <duration>
 
-  merged   #3 Run: drain the Frontier (PR #12)
   released #6 Rebase conflict resolution · rate limit at implement
+  merged   #3 Run: drain the Frontier (PR #12)
 
 Rate limited.
 
@@ -48,8 +54,12 @@ The last line says why the Run stopped: `Frontier empty.` when nothing is left,
 
 A Run the limit stopped prints no `skipped  #<n> blocked` rows and no rows for
 the Frontier Tickets it never reached: it stopped before it could say a
-candidate was held back all Run. The `released` row and the last line are the
-whole report.
+candidate was held back all Run. The rows its Lanes earned and the last line are
+the whole report.
+
+The `blocked` rows of any other Run are read off the last Frontier it computed,
+which is the one its final refill asked for. A candidate another Lane unblocked
+on the way was taken rather than held back, so it is not among them.
 
 `ticket <n>` prints the same header and its one row, and stops there: it drains
 no Frontier, so it says nothing about one.
