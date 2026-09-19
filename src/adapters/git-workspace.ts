@@ -25,8 +25,29 @@ const REBASE_DIRS = ["rebase-merge", "rebase-apply"];
 /**
  * The git-backed {@link Workspace}: one worktree per Ticket, branched from the
  * main checkout's base branch, so the checkout itself is never touched.
+ *
+ * Commands that run in the main checkout go one at a time, because the Tickets
+ * of a Run do not: adding and removing worktrees, deleting branches and moving
+ * the Base branch all take git refs and index locks that git fails on rather
+ * than waits for, and a read of a commit range taken while another Ticket is
+ * moving the Base branch is a range nobody asked for. Commands inside a
+ * worktree are left parallel — that is where a Run spends its time, and no two
+ * Tickets share one.
+ *
+ * One command at a time, not one operation: the two commands an operation such
+ * as {@link removeWorktree} is made of can have another Ticket's between them.
+ * What each of them needs is a main checkout nobody else is writing to while it
+ * runs, which is what this gives; a pair that had to be indivisible would have
+ * to say so, and none of them is.
  */
 export class GitWorkspace implements Workspace {
+  /**
+   * The last main-checkout command queued, which the next one waits for —
+   * settled either way. A command that failed is still a command that finished,
+   * so the queue carries on rather than rejecting everything behind it.
+   */
+  private lastMainCheckoutCommand: Promise<unknown> = Promise.resolve();
+
   constructor(
     private readonly repoRoot: string,
     private readonly remote = "origin",
@@ -71,11 +92,12 @@ export class GitWorkspace implements Workspace {
    * tag or a remote-tracking ref of the same name is not mistaken for a branch.
    */
   async hasBranch(branch: string): Promise<boolean> {
-    const result = await exec(
-      "git",
-      ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`],
-      { cwd: this.repoRoot },
-    );
+    const result = await this.tryGit([
+      "show-ref",
+      "--verify",
+      "--quiet",
+      `refs/heads/${branch}`,
+    ]);
     return result.exitCode === 0;
   }
 
@@ -225,7 +247,7 @@ export class GitWorkspace implements Workspace {
 
   async deleteRemoteBranch(branch: string): Promise<void> {
     const args = ["push", this.remote, "--delete", branch];
-    const result = await exec("git", args, { cwd: this.repoRoot });
+    const result = await this.tryGit(args);
     // A remote set to delete head branches on merge got there first. The
     // branch is gone either way, which is all this step is for.
     if (result.exitCode !== 0 && BRANCH_ALREADY_GONE.test(result.stderr)) return;
@@ -243,7 +265,26 @@ export class GitWorkspace implements Workspace {
     await this.git(["fetch", this.remote, `${base}:${base}`]);
   }
 
+  /**
+   * A git command in the main checkout, waiting its turn. Every command this
+   * class runs there goes through here or through {@link tryGit}, so a new one
+   * is serialized by being written the way the others are.
+   */
   private git(args: string[]) {
-    return execOrThrow("git", args, { cwd: this.repoRoot });
+    return this.inMainCheckout(() => execOrThrow("git", args, { cwd: this.repoRoot }));
+  }
+
+  /** The same, for a command whose failure is an answer rather than an error. */
+  private tryGit(args: string[]) {
+    return this.inMainCheckout(() => exec("git", args, { cwd: this.repoRoot }));
+  }
+
+  private inMainCheckout<T>(command: () => Promise<T>): Promise<T> {
+    const started = this.lastMainCheckoutCommand.then(command, command);
+    this.lastMainCheckoutCommand = started.then(
+      () => undefined,
+      () => undefined,
+    );
+    return started;
   }
 }
