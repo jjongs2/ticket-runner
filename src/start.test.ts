@@ -240,8 +240,13 @@ describe("the Run log", () => {
 
     const { lines } = await start();
 
-    const ticketLines = lines.slice(1, -1);
-    expect(ticketLines.length).toBeGreaterThan(2);
+    // Split on newlines as well: an entry a Stage logs in two lines is two
+    // lines in the transcript, and the second one has to carry the number too.
+    const ticketLines = lines.slice(1, -1).flatMap((entry) => entry.split("\n"));
+    // Claimed, verified and merged for each of #4 and #7, and the guard's line
+    // for #9. Counted rather than bounded, so a new Ticket line has to be
+    // looked at here rather than slipping past an inequality.
+    expect(ticketLines).toHaveLength(7);
     for (const line of ticketLines) expect(line).toMatch(/^#\d+ /);
   });
 });

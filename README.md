@@ -383,7 +383,9 @@ pulls once they merge — is asked of GitHub once at the start of a Run, so a Ta
   "baseBranch": "main",
 
   // How many Tickets a Run may hold at once, one Lane per Ticket.
-  // A positive whole number. Default: 1.
+  // A positive whole number. Default: 1. Lanes run their Checks at the same time
+  // in different worktrees, so a Target whose Checks need a port or a database
+  // keeps this at 1.
   "lanes": 1,
 
   // Commands run in the worktree after implement.
@@ -392,8 +394,6 @@ pulls once they merge — is asked of GitHub once at the start of a Run, so a Ta
 
   // Wall-clock limit for any one Check command; each gets the whole of it.
   // A command killed here is a failed Check and spends the fix budget.
-  // Lanes run their Checks at the same time in different worktrees, so a Target
-  // whose Checks need a port or a database keeps `lanes` at 1.
   "checkTimeoutMinutes": 15,
 
   // Turn a gate off to run without a net; each one prints a warning at start.
