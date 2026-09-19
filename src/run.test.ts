@@ -11,6 +11,7 @@ import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./test
 
 function config(): Config {
   return {
+    lanes: 1,
     checks: ["npm test"],
     gates: { checks: true, ci: true },
     stages: {

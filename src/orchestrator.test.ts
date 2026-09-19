@@ -27,6 +27,7 @@ const UNRESOLVED = { resolved: false, unresolved: "a rebase is still in progress
 
 function config(overrides: Partial<Config> = {}): Config {
   return {
+    lanes: 1,
     checks: ["npm test", "npm run typecheck"],
     gates: { checks: true, ci: true },
     stages: {

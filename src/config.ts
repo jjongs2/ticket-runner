@@ -23,6 +23,7 @@ const stageSchema = z
 const configSchema = z
   .object({
     baseBranch: z.string().min(1).optional(),
+    lanes: z.number().int().positive().optional(),
     checks: z.array(z.string().min(1)).optional(),
     gates: z
       .object({ checks: z.boolean().optional(), ci: z.boolean().optional() })
@@ -77,6 +78,12 @@ export interface Config {
    * which is what {@link import("./base-branch.js").resolveBaseBranch} asks for.
    */
   baseBranch?: string;
+  /**
+   * How many Tickets a Run may hold at once, one Lane per Ticket. The Checks of
+   * different Lanes run in different worktrees at the same time, so a Target
+   * whose Checks share a port or a database stays at the default of one.
+   */
+  lanes: number;
   checks: string[];
   gates: { checks: boolean; ci: boolean };
   stages: {
@@ -111,6 +118,13 @@ const STAGE_DEFAULTS = {
  */
 const DEFAULT_CHECK_TIMEOUT_MINUTES = 15;
 
+/**
+ * The Lane count a Target that says nothing gets: one, which is a Run that takes
+ * its Tickets one after another. Sharing a machine is opt-in, because only the
+ * Target knows whether its Checks can.
+ */
+const DEFAULT_LANES = 1;
+
 const LABEL_DEFAULTS: Labels = {
   needsTriage: "needs-triage",
   needsInfo: "needs-info",
@@ -143,6 +157,7 @@ export function loadConfig(repoRoot: string): Config {
     // Spread, not `baseBranch: file.baseBranch`: the field is absent rather
     // than undefined when the config file names none.
     ...(file.baseBranch === undefined ? {} : { baseBranch: file.baseBranch }),
+    lanes: file.lanes ?? DEFAULT_LANES,
     checks: file.checks ?? inferChecks(repoRoot),
     gates: {
       checks: file.gates?.checks ?? true,

@@ -4,6 +4,7 @@ import { startupMessages } from "./startup.js";
 
 function config(overrides: Partial<Config>): Config {
   return {
+    lanes: 1,
     checks: ["npm test"],
     gates: { checks: true, ci: true },
     stages: {
