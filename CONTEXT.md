@@ -47,8 +47,16 @@ The branch of the Target a Run works against: what it branches a Ticket from, re
 _Avoid_: default branch, trunk, main, integration branch
 
 **Run**:
-One invocation of the pipeline command. Drains the Frontier one Ticket at a time. Ends when the Frontier is empty, when every Ticket left on it is blocked, or at the first Ticket it releases.
+One invocation of the pipeline command. Drains the Frontier through its Lanes. Ends when no Lane is busy and the Frontier is empty or every Ticket left on it is blocked, or, once a Ticket has been released, when the last busy Lane comes back.
 _Avoid_: session, batch, loop
+
+**Lane**:
+One of the places a Run has for a Ticket in progress; the Target's config says how many. A Lane holds one Ticket from Claim to merge, hand-off or Release, and is refilled from the Stranded Tickets first and the Frontier second.
+_Avoid_: slot, worker, thread, parallelism
+
+**Landing**:
+The stretch of a Ticket from its rebase to the pull of the Base branch after its merge, including any Conflict Stage and the wait for CI. Only one Lane is in it at a time, taken in the order they arrive, so the Base branch cannot move between a Ticket's rebase and its merge. A Ticket that leaves it for a fix Stage rejoins at the back.
+_Avoid_: merge queue, tail, critical section, merge lane
 
 **Run lock**:
 The PID file that stops two Runs, or a Run and a `ticket`, sharing one Target. Target-wide and held for the whole Run, where a Claim is per-Ticket and lives on GitHub.
@@ -99,7 +107,7 @@ The single fix Stage a Ticket is allowed. A failing Check, including one the wal
 _Avoid_: retry budget, fix limit, second chance
 
 **Release**:
-What a rate-limited Stage does to a Ticket instead of handing it to a human: the Claim is undone, `ready-for-agent` goes back on, the branch and worktree stay, and a State file says where to resume. Nothing about the Ticket was wrong, so no Fix budget is spent and nobody is notified. It also ends the Run that made it, because the limit that stopped one Stage will stop the next.
+What a rate-limited Stage does to a Ticket instead of handing it to a human: the Claim is undone, `ready-for-agent` goes back on, the branch and worktree stay, and a State file says where to resume. Nothing about the Ticket was wrong, so no Fix budget is spent and nobody is notified. It also stops the Run that made it claiming any more Tickets, because the limit that stopped one Stage will stop the next; the Lanes still busy finish what they hold.
 _Avoid_: pause, defer, requeue, unclaim
 
 **State file**:
