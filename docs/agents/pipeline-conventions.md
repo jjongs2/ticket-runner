@@ -25,6 +25,10 @@ A Ticket is one issue the pipeline can implement in a single session. It is refu
 - **Blockers as native dependencies** — GitHub's own `blocked by` edges, as `gh issue create --blocked-by <n>` records them. A `Blocked by` section in the body is a human-readable copy and nothing the pipeline reads.
 - **The `ready-for-agent` label** — how a Run finds the Ticket. A Run labels it `in-progress` for as long as it holds it.
 
+## Checks
+
+- The Checks of different Tickets may run at the same time, each in its own worktree, because a Run has as many Lanes as `lanes` says. A Target whose Checks need a port, a database or anything else they would have to share keeps `lanes` at one, or makes them independent of each other.
+
 ## Local directories
 
 Both are `agent-pipeline`'s own, both are gitignored by `agent-pipeline init`, and neither is ever committed.

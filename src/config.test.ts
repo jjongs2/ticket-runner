@@ -20,6 +20,7 @@ describe("loadConfig", () => {
     expect(config.permissionMode).toBe("auto");
     expect(config.ciTimeoutMinutes).toBe(30);
     expect(config.checkTimeoutMinutes).toBe(15);
+    expect(config.lanes).toBe(1);
     expect(config.stages.implement).toEqual({
       model: "claude-opus-5",
       maxTurns: 300,
@@ -143,6 +144,22 @@ describe("loadConfig", () => {
 
       expect(() => loadConfig(root)).toThrowError(ConfigError);
       expect(() => loadConfig(root)).toThrowError(/checkTimeoutMinutes/);
+    },
+  );
+
+  it("takes a configured Lane count as given", () => {
+    const root = repoWith({ [CONFIG_FILENAME]: JSON.stringify({ lanes: 4 }) });
+
+    expect(loadConfig(root).lanes).toBe(4);
+  });
+
+  it.each([0, -1, 1.5, "two"])(
+    "rejects %o as a Lane count with a message naming the field",
+    (value) => {
+      const root = repoWith({ [CONFIG_FILENAME]: JSON.stringify({ lanes: value }) });
+
+      expect(() => loadConfig(root)).toThrowError(ConfigError);
+      expect(() => loadConfig(root)).toThrowError(/lanes/);
     },
   );
 

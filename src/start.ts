@@ -106,7 +106,7 @@ async function execute(options: StartOptions, log: (line: string) => void): Prom
   };
 
   const startedAt = Date.now();
-  log(`agent-pipeline run ${runId}${work.command === "run" ? "" : ` · #${work.ticket}`}`);
+  log(opening(runId, work, config.lanes));
   const summary = (outcomes: TicketOutcome[], stop?: RunStop) =>
     runSummary({
       runId,
@@ -130,6 +130,25 @@ async function execute(options: StartOptions, log: (line: string) => void): Prom
   // unusable Tickets is the job, not a failure to do it.
   if (outcome.outcome === "skipped") return 2;
   return exitCode([outcome]);
+}
+
+/**
+ * The line a Run opens with, and the only place the Lane count is said out loud.
+ *
+ * Everything after it that is about a Ticket starts with that Ticket's number,
+ * so a transcript of interleaved Lanes can be read one Ticket at a time; the
+ * lines about the Run itself — this one, and the summary — carry no number.
+ *
+ * `ticket <n>` names its Ticket instead. It takes the one Ticket it was given
+ * whatever the config says, so a Lane count there would describe a Frontier it
+ * never drains.
+ */
+function opening(runId: string, work: Work, lanes: number): string {
+  const subject =
+    work.command === "run"
+      ? `${lanes} ${lanes === 1 ? "lane" : "lanes"}`
+      : `#${work.ticket}`;
+  return `agent-pipeline run ${runId} · ${subject}`;
 }
 
 /**

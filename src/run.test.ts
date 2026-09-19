@@ -11,6 +11,7 @@ import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./test
 
 function config(): Config {
   return {
+    lanes: 1,
     checks: ["npm test"],
     gates: { checks: true, ci: true },
     stages: {
@@ -280,7 +281,10 @@ describe("a Ticket the rate limit released", () => {
     const result = await processRun(pipeline());
 
     expect(result.stop).toEqual({ reason: "rate-limited" });
-    expect(logged).toContain("run stopped after #4 · rate limit");
+    expect(logged).toContain("#4 stopped the Run · rate limit");
+    // Every line a Run logs about a Ticket leads with that Ticket's number,
+    // this one included, so interleaved Lanes stay readable one at a time.
+    for (const line of logged) expect(line).toMatch(/^#\d+ /);
   });
 
   it("says nothing about a candidate a blocker held back as it stopped", async () => {

@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadConfig } from "./config.js";
+import { CONFIG_FILENAME, loadConfig } from "./config.js";
 import { CLAUDE_SECTION, CONVENTIONS_DOC, CONVENTIONS_PATH } from "./conventions.js";
 import { type Work, startRun } from "./start.js";
 import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./testing/fakes.js";
@@ -67,7 +67,7 @@ async function start(work: Work = { command: "run" }) {
     log: (line) => out.push(line),
     error: (line) => err.push(line),
   });
-  return { code, out: out.join("\n"), err: err.join("\n") };
+  return { code, out: out.join("\n"), lines: out, err: err.join("\n") };
 }
 
 /**
@@ -202,5 +202,51 @@ describe("a Target init has set up", () => {
     await start();
 
     expect(existsSync(join(repoRoot, ".agent-pipeline", "lock.json"))).toBe(false);
+  });
+});
+
+describe("the Run log", () => {
+  it("opens by naming the Lane count", async () => {
+    tracker.addIssue({ number: 4 });
+
+    const { lines } = await start();
+
+    expect(lines[0]).toBe("agent-pipeline run run-1 · 1 lane");
+  });
+
+  it("names a configured Lane count in the plural", async () => {
+    write(CONFIG_FILENAME, JSON.stringify({ lanes: 3 }));
+    tracker.addIssue({ number: 4 });
+
+    const { lines } = await start();
+
+    expect(lines[0]).toBe("agent-pipeline run run-1 · 3 lanes");
+  });
+
+  it("names the Ticket rather than a Lane count for `ticket <n>`", async () => {
+    write(CONFIG_FILENAME, JSON.stringify({ lanes: 3 }));
+    tracker.addIssue({ number: 4 });
+
+    const { lines } = await start({ command: "ticket", ticket: 4 });
+
+    expect(lines[0]).toBe("agent-pipeline run run-1 · #4");
+  });
+
+  it("starts every line between the opening and the summary with a Ticket number", async () => {
+    tracker.addIssue({ number: 4 });
+    tracker.addIssue({ number: 7 });
+    // A Spec offered as a Ticket, so a guard's line is in the log as well.
+    tracker.addIssue({ number: 9, subIssues: 2 });
+
+    const { lines } = await start();
+
+    // Split on newlines as well: an entry a Stage logs in two lines is two
+    // lines in the transcript, and the second one has to carry the number too.
+    const ticketLines = lines.slice(1, -1).flatMap((entry) => entry.split("\n"));
+    // Claimed, verified and merged for each of #4 and #7, and the guard's line
+    // for #9. Counted rather than bounded, so a new Ticket line has to be
+    // looked at here rather than slipping past an inequality.
+    expect(ticketLines).toHaveLength(7);
+    for (const line of ticketLines) expect(line).toMatch(/^#\d+ /);
   });
 });

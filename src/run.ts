@@ -99,7 +99,9 @@ export async function processRun(pipeline: Pipeline): Promise<RunResult> {
  *
  * The Ticket's own release is already logged where it happened; this line says
  * the Run goes no further, so a transcript shows the Frontier was left alone
- * rather than found empty.
+ * rather than found empty. It leads with the Ticket's number all the same: the
+ * Run stopped because of that Ticket, and a transcript read one Ticket at a
+ * time must not lose the line that explains why its Lane was the last.
  */
 function rateLimitedRun(
   pipeline: Pipeline,
@@ -107,7 +109,7 @@ function rateLimitedRun(
   outcome: TicketOutcome,
 ): RunResult | undefined {
   if (outcome.outcome !== "released") return undefined;
-  pipeline.log?.(`run stopped after #${outcome.ticket} · rate limit`);
+  pipeline.log?.(`#${outcome.ticket} stopped the Run · rate limit`);
   return { outcomes, stop: { reason: "rate-limited" } };
 }
 
