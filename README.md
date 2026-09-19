@@ -96,10 +96,11 @@ document starts, and the next `init` brings it up to date.
 `run` drains the **Frontier**: the open Tickets labelled `ready-for-agent` that nobody
 has claimed and whose native `blocked by` issues have all closed. It takes them through its
 **Lanes** — as many Tickets at once as `lanes` says, one per Lane, and one by default. Every
-Lane is filled at the start and refilled the moment its Ticket ends, and the Frontier is
-recomputed at every refill, lowest number first, so a merge that closes a blocker puts the
-Ticket it unblocked into the same Run. A Ticket another Lane is still working is still an
-open blocker: those edges are the whole of what keeps two Tickets out of each other's way.
+Lane is filled at the start and refilled the moment its Ticket ends: the Frontier is
+recomputed at every refill and taken from lowest number first, so a merge that closes a
+blocker puts the Ticket it unblocked into the same Run. A Ticket another Lane is still
+working on has not closed, so it is still an open blocker — and those edges are the whole
+of what keeps two Tickets out of each other's way.
 
 A Ticket that fails is handed off and its Lane takes the next one; one the rate limit
 stopped is released, and the Run fills no Lane after that, though the Lanes still busy
