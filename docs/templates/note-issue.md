@@ -11,6 +11,14 @@ A Note that names the Ticket its own Stage is working on comes here too. That
 Ticket is about to be closed by the Run that made the Note, and a comment on it
 would be filed under work that is finished.
 
+So does a Note whose Ticket nobody would read again: one that is closed, one
+that is claimed — another Lane of this Run, another Run, a human — whose Stage
+read the Ticket when it started and will close it when it lands, or a Spec,
+which is never implemented at all. Each of these takes a comment without
+complaint, which is why the pipeline checks first. That one's provenance line
+carries the number and the reason: `From #<origin> <stage>, meant for #<n>,
+which is claimed` (or `is closed`, `is a Spec`).
+
 So does a Note whose Ticket refused the comment — a number the Stage invented,
 an issue somebody locked. That one's provenance line carries the number it was
 reaching for: `From #<origin> <stage>, meant for #<n>, which would not take the

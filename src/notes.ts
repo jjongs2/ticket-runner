@@ -116,6 +116,8 @@ export interface NoteRouting {
   stage: StageName;
   /** The label a Note with no Ticket opens its issue under. */
   needsTriage: string;
+  /** The label a claimed Ticket wears, which a Note reads as "do not comment here". */
+  inProgress: string;
   log?: (line: string) => void;
 }
 
@@ -156,6 +158,15 @@ export async function routeNotes(
  * the finding under an issue that is about to be closed by the very Run that
  * made it. The triage queue outlives the Run; the Ticket does not.
  *
+ * The same holds for any Ticket nobody will read again. A closed Ticket is
+ * finished. A claimed one has a Stage on it already — this Run's other Lane,
+ * another Run, a human — that read the Ticket when it started and will close it
+ * when it lands, so a comment posted meanwhile is read by nobody. A Spec is
+ * never implemented at all; only its Tickets are. Each of these takes the
+ * comment without complaint, which is exactly the problem: the write succeeds
+ * and the finding is buried. So they go to the queue with the number they were
+ * meant for, and the queue says why.
+ *
  * A Ticket that will not take the comment — a number the Stage invented, an
  * issue somebody locked — falls to the triage queue as well, carrying the
  * number it was meant for. The queue is the fallback for everything, because
@@ -166,10 +177,14 @@ async function route(routing: NoteRouting, note: Note): Promise<RoutedNote> {
   const from = { origin, stage, note: note.note };
 
   if (note.ticket !== undefined && note.ticket !== origin) {
+    let buried: string | undefined;
     try {
-      await tracker.comment(note.ticket, noteComment(from));
-      routing.log?.(`#${origin} noted on #${note.ticket}`);
-      return { origin, stage, issue: note.ticket, opened: false, note: note.note };
+      buried = await buriedOn(routing, note.ticket);
+      if (buried === undefined) {
+        await tracker.comment(note.ticket, noteComment(from));
+        routing.log?.(`#${origin} noted on #${note.ticket}`);
+        return { origin, stage, issue: note.ticket, opened: false, note: note.note };
+      }
     } catch (error) {
       routing.log?.(
         `#${origin} could not comment its Note on #${note.ticket} ` +
@@ -177,9 +192,31 @@ async function route(routing: NoteRouting, note: Note): Promise<RoutedNote> {
       );
       return await openForTriage(routing, { ...from, intended: note.ticket });
     }
+    routing.log?.(
+      `#${origin} will not comment its Note on #${note.ticket}, which ${buried}; ` +
+        "opening an issue for it instead",
+    );
+    return await openForTriage(routing, { ...from, intended: note.ticket, because: buried });
   }
 
   return await openForTriage(routing, from);
+}
+
+/**
+ * Why a comment on this Ticket would be read by nobody, or nothing when it
+ * would be read. The words are the ones the triage issue's provenance line
+ * finishes with, after `which`.
+ *
+ * Claimed is the label alone, not the assignee with it: the pipeline's own
+ * Claim writes both, but a human who took a Ticket may have written only the
+ * label, and either way there is somebody on it.
+ */
+async function buriedOn(routing: NoteRouting, ticket: number): Promise<string | undefined> {
+  const issue = await routing.tracker.getIssue(ticket);
+  if (issue.closed) return "is closed";
+  if (issue.subIssues > 0) return "is a Spec";
+  if (issue.labels.includes(routing.inProgress)) return "is claimed";
+  return undefined;
 }
 
 async function openForTriage(

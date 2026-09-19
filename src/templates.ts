@@ -238,10 +238,16 @@ export interface NoteSubject {
   note: string;
   /**
    * The Ticket this was meant to be a comment on, when that Ticket would not
-   * take it. Set only on the issue a refused comment falls back to, so triage
-   * can see the link the Note was reaching for.
+   * take it or nobody would read it there. Set only on the issue such a Note
+   * falls back to, so triage can see the link the Note was reaching for.
    */
   intended?: number;
+  /**
+   * Why `intended` did not get the comment, as the words after `which`: `is
+   * closed`, `is claimed`, `is a Spec`. Absent when the tracker refused the
+   * write, which is the one reason the pipeline cannot name.
+   */
+  because?: string;
 }
 
 /** {@link UNCHECKED_BOX}, over every line of a Note rather than the first. */
@@ -325,7 +331,8 @@ export function noteIssue(subject: NoteSubject): { title: string; body: string }
   const provenance =
     subject.intended === undefined
       ? noteProvenance(subject)
-      : `${noteProvenance(subject)}, meant for #${subject.intended}, which would not take the comment`;
+      : `${noteProvenance(subject)}, meant for #${subject.intended}, ` +
+        `which ${subject.because ?? "would not take the comment"}`;
 
   return {
     title: noteTitle(subject),

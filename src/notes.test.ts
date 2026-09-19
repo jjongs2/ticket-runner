@@ -10,6 +10,7 @@ function routing(tracker: FakeTracker, log?: (line: string) => void) {
     origin: ORIGIN,
     stage: "implement" as const,
     needsTriage: "needs-triage",
+    inProgress: "in-progress",
     ...(log === undefined ? {} : { log }),
   };
 }
@@ -205,6 +206,41 @@ describe("escaping", () => {
     });
 
     expect(tracker.comments[0]?.body).toContain("the guard reads `- [ ]` as criteria");
+  });
+});
+
+describe("routing a Note that names a Ticket nobody will read again", () => {
+  it.each([
+    ["closed", { closed: true }, "is closed"],
+    ["claimed", { labels: ["in-progress"] }, "is claimed"],
+    ["a Spec", { subIssues: 2 }, "is a Spec"],
+  ])("opens an issue rather than commenting on a Ticket that is %s", async (_, shape, why) => {
+    const tracker = new FakeTracker();
+    tracker.addIssue({ number: 7, ...shape });
+    const lines: string[] = [];
+
+    const routed = await routeNotes(routing(tracker, (line) => lines.push(line)), {
+      notes: [{ ticket: 7, note: "the help drifts" }],
+    });
+
+    expect(tracker.comments).toEqual([]);
+    expect(routed).toEqual([
+      { origin: ORIGIN, stage: "implement", issue: 200, opened: true, note: "the help drifts" },
+    ]);
+    expect(tracker.createdIssues[0]?.body).toContain(
+      `From #10 implement, meant for #7, which ${why}`,
+    );
+    expect(lines.join("\n")).toContain(`will not comment its Note on #7, which ${why}`);
+  });
+
+  it("still comments on a Ticket that is open, unclaimed and not a Spec", async () => {
+    const tracker = new FakeTracker();
+    tracker.addIssue({ number: 7, labels: ["ready-for-agent"], assignees: ["someone"] });
+
+    await routeNotes(routing(tracker), { notes: [{ ticket: 7, note: "the help drifts" }] });
+
+    expect(tracker.comments.map((comment) => comment.issue)).toEqual([7]);
+    expect(tracker.createdIssues).toEqual([]);
   });
 });
 

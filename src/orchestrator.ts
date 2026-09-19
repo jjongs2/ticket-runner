@@ -746,6 +746,7 @@ async function collectNotes(
         origin: ticket,
         stage,
         needsTriage: pipeline.config.labels.needsTriage,
+        inProgress: pipeline.config.labels.inProgress,
         ...(pipeline.log === undefined ? {} : { log: pipeline.log }),
       },
       result.result,
