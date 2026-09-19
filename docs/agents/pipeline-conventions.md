@@ -27,7 +27,7 @@ A Ticket is one issue the pipeline can implement in a single session. It is refu
 
 ## Checks
 
-- The Checks of different Tickets run at the same time when a Run has more than one Lane, each in its own worktree. A Target whose Checks need a port, a database or anything else they would have to share keeps `lanes` at one, or makes them independent of each other.
+- The Checks of different Tickets may run at the same time, each in its own worktree, because a Run has as many Lanes as `lanes` says. A Target whose Checks need a port, a database or anything else they would have to share keeps `lanes` at one, or makes them independent of each other.
 
 ## Local directories
 
