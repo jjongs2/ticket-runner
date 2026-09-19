@@ -115,7 +115,7 @@ What a claimed Ticket keeps under `.agent-pipeline/state/`: the state it reached
 _Avoid_: checkpoint, journal, resume file
 
 **Stranded Ticket**:
-A Ticket whose State file is still there while the Ticket still carries this Target's Claim — the Run that claimed it was killed and released nothing. No Frontier can offer one, because it is claimed, so a Run resumes every one of them in place before it computes the Frontier.
+A Ticket whose State file is still there while the Ticket still carries this Target's Claim — the Run that claimed it was killed and released nothing. No Frontier can offer one, because it is claimed, so a Run sweeps for them before it computes a Frontier at all and resumes every one in place, a free Lane taking one before anything the Frontier holds.
 _Avoid_: orphan, zombie, abandoned Ticket, crashed Ticket, dead Ticket
 
 **Note**:

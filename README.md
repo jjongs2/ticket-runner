@@ -94,12 +94,19 @@ The check is presence, never content: a Target carrying an older copy of the con
 document starts, and the next `init` brings it up to date.
 
 `run` drains the **Frontier**: the open Tickets labelled `ready-for-agent` that nobody
-has claimed and whose native `blocked by` issues have all closed. It takes them one at a
-time, lowest number first, and recomputes the Frontier after each one, so a merge that
-closes a blocker puts the Ticket it unblocked into the same Run. A Ticket that fails is
-handed off and the Run carries on; one the rate limit stopped is released and ends the Run
-there. Otherwise the Run ends when nothing is left to pick — the Frontier is empty, or
-everything still on it is blocked — and prints a summary:
+has claimed and whose native `blocked by` issues have all closed. It takes them through its
+**Lanes** — as many Tickets at once as `lanes` says, one per Lane, and one by default. Every
+Lane is filled at the start and refilled the moment its Ticket ends: the Frontier is
+recomputed at every refill and taken from lowest number first, so a merge that closes a
+blocker puts the Ticket it unblocked into the same Run. A Ticket another Lane is still
+working on has not closed, so it is still an open blocker — and those edges are the whole
+of what keeps two Tickets out of each other's way.
+
+A Ticket that fails is handed off and its Lane takes the next one; one the rate limit
+stopped is released, and the Run fills no Lane after that, though the Lanes still busy
+finish what they hold. Otherwise the Run ends when no Lane is busy and nothing is left to
+pick — the Frontier is empty, or everything still on it is blocked — and prints a summary,
+with a row per Ticket in the order the Tickets ended:
 
 ```
 agent-pipeline run 2026-09-17T09-00-00-000 · 84m
@@ -227,10 +234,12 @@ its branch, and a handed-off Ticket relabelled with its worktree untouched — t
 failure names the worktree the branch is checked out in, since a branch git is holding is
 not one `git branch -D` can take.
 
-The Run the limit stops ends at that Release. It does not wait for the limit to reset, and
-it takes nothing else: the limit that stopped one Stage would stop the next, so walking the
-rest of the Frontier would spend a Claim, a worktree and a doomed Stage per Ticket to learn
-what the first Release already said. Its summary ends with `Rate limited.` instead of
+The Run the limit stops fills no Lane after that Release. It does not wait for the limit to
+reset, and it claims nothing else: the limit that stopped one Stage would stop the next, so
+walking the rest of the Frontier would spend a Claim, a worktree and a doomed Stage per
+Ticket to learn what the first Release already said. The Lanes that were already busy run
+their Tickets to their own end — merged, handed off or released as well — and the Run ends
+when the last of them comes back. Its summary ends with `Rate limited.` instead of
 `Frontier empty.`, and says nothing about the Tickets it never reached — a released one is
 back on the Frontier, an unreached stranded one still wears its Claim, and the Run started
 once the limit has reset picks up both.
@@ -246,12 +255,14 @@ Stage has come back. It is removed when the Ticket merges and when it is handed 
 are the two ways a Ticket stops being resumable.
 
 A Ticket left like that is a **stranded Ticket**: state recorded locally, and the Claim
-still on the board. No Frontier can offer one — it is claimed — so before a `run` computes
-the Frontier at all it sweeps the local State files and resumes every stranded Ticket, in
-ascending number, in the worktree and on the branch it already has. The Claim stays exactly
-as it is: nothing is re-assigned, nothing is relabelled, and nobody is notified.
-`ticket <n>` naming a stranded Ticket resumes it too, where it would otherwise refuse it
-as claimed.
+still on the board. No Frontier can offer one — it is claimed — so a `run` sweeps the local
+State files first and resumes every stranded Ticket it finds, in the worktree and on the
+branch it already has. A free Lane takes a stranded Ticket, in ascending number, before
+anything the Frontier is offering, and the Frontier is not computed at all while there are
+enough of them to fill every Lane — so with more than one Lane a stranded Ticket may still
+be running when a Frontier Ticket starts beside it. The Claim stays exactly as it is: nothing is
+re-assigned, nothing is relabelled, and nobody is notified. `ticket <n>` naming a stranded
+Ticket resumes it too, where it would otherwise refuse it as claimed.
 
 Nothing records a process id. One Run at a time holds the lock for a checkout and the State
 file is local to that checkout, so a Run that holds the lock and finds a Ticket still

@@ -196,6 +196,32 @@ describe("a Target init has set up", () => {
     expect(tracker.createdLabels).toEqual([]);
   });
 
+  it("takes the one Ticket `ticket <n>` names however many Lanes are configured", async () => {
+    write(CONFIG_FILENAME, JSON.stringify({ lanes: 3 }));
+    for (const number of [4, 5, 6]) tracker.addIssue({ number });
+
+    const { code, out } = await start({ command: "ticket", ticket: 4 });
+
+    expect(code).toBe(0);
+    expect(out).toContain("merged   #4");
+    // No Frontier to drain, so the other two are nobody's business here.
+    expect(tracker.calls).not.toContain("listCandidates:ready-for-agent");
+    expect(tracker.calls).not.toContain("assign:5:pipeline-user");
+  });
+
+  it("exits 1 when a Lane handed its Ticket off and 0 when none did", async () => {
+    write(CONFIG_FILENAME, JSON.stringify({ lanes: 2 }));
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    // #4 is handed off; #5 merges, in a Lane of its own.
+    runner.queue("implement", { ok: false, failure: "nonzero-exit" });
+
+    const { code, out } = await start();
+
+    expect(code).toBe(1);
+    expect(out).toContain("handed   #4");
+    expect(out).toContain("merged   #5");
+  });
+
   it("releases the Run lock it took", async () => {
     tracker.addIssue({ number: 4 });
 
