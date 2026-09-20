@@ -17,16 +17,15 @@ function tracker(...queued: Execution[]) {
 
 /** A tracker whose clock is whatever the test hands it; grace is off unless asked for. */
 function trackerWith(options: GhTrackerOptions, ...queued: Execution[]) {
-  return stubbed({ checksGraceMs: 0, ...options }, queued);
+  return ghTracker({ checksGraceMs: 0, ...options }, ...queued);
 }
 
-/** A tracker that keeps the adapter's own grace, which is what such a test grades. */
-function trackerWithDefaultGrace(options: GhTrackerOptions, ...queued: Execution[]) {
-  return stubbed(options, queued);
-}
-
-/** A tracker whose `gh` calls are recorded and answered from `queued` in order. */
-function stubbed(options: GhTrackerOptions, queued: Execution[]) {
+/**
+ * A tracker whose `gh` calls are recorded and answered from `queued` in order.
+ * Nothing but those stubs is set, so the adapter's own defaults stand — which is
+ * what a test of the grace default wants, and why `trackerWith` turns it off.
+ */
+function ghTracker(options: GhTrackerOptions, ...queued: Execution[]) {
   responses = [...queued];
   return new GhTracker({
     run: async (_command: string, args: string[], _options: ExecOptions) => {
@@ -864,7 +863,7 @@ describe("waiting for CI", () => {
   };
 
   it("grades a PR on checks GitHub registers four minutes into the wait", async () => {
-    const outcome = await trackerWithDefaultGrace(
+    const outcome = await ghTracker(
       { ...waitingClock(), pollIntervalMs: 60_000 },
       failedExecution(NO_CHECKS),
       failedExecution(NO_CHECKS),
@@ -877,8 +876,8 @@ describe("waiting for CI", () => {
     expect(calls).toHaveLength(5);
   });
 
-  it("gives the grace five minutes when the Target configured none", async () => {
-    const outcome = await trackerWithDefaultGrace(
+  it("falls back to a five-minute grace when the caller sets none", async () => {
+    const outcome = await ghTracker(
       { ...waitingClock(), pollIntervalMs: 120_000 },
       failedExecution(NO_CHECKS),
       failedExecution(NO_CHECKS),

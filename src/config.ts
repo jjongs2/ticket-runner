@@ -130,8 +130,11 @@ const DEFAULT_CHECK_TIMEOUT_MINUTES = 15;
  * taken over three minutes to register a check run (#119), and the Landing is
  * serialized, so this is long enough to cover that and short enough that a
  * Target with no CI workflow does not hold the other Lanes up for a CI timeout.
+ *
+ * Exported because the tracker falls back to it too, for a caller that hands it
+ * no grace: one number, so the documented default cannot drift from the real one.
  */
-const DEFAULT_CI_GRACE_MINUTES = 5;
+export const DEFAULT_CI_GRACE_MINUTES = 5;
 
 /**
  * The Lane count a Target that says nothing gets: one, which is a Run that takes
