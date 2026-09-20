@@ -1,0 +1,26 @@
+name: Version PR
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  version-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Every tag, and the base branch the number is measured against.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # A pull request that leaves the number alone passes untouched; a Version
+      # PR is failed with every reason it may not merge.
+      - run: npx tsx scripts/version.ts check
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
