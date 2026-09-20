@@ -4,6 +4,24 @@ One section per Version, newest first, written in the Version PR that cut it and
 published as the body of that Version's GitHub Release (ADR-0007). The shape is
 `docs/templates/version-notes.md`.
 
+## 0.4.0 (2026-09-20)
+
+### Versions
+
+- A Version is cut by merging a Version PR; the push to `main` tags it and publishes the Release; ADR-0007 (#94, #95, #102, #106)
+- `agent-pipeline --version` says which Version this is, and the Run summary, Progress comments, `init` report and State files carry it (#100)
+- An install follows the highest tag rather than `main`, so the install line changed (#102)
+- A Run and `init` say when a newer Version is out, or the Target's conventions document is from another one, and refuse nothing over it (#104)
+
+### Fixes
+
+- A Stage is told a Note's first sentence becomes its issue title (#107)
+
+### After upgrading
+
+- Reinstall with the new line, which follows tags: `npm install -g "github:jjongs2/agent-pipeline#semver:*"`.
+- Run `agent-pipeline init` again in every Target; the conventions document now carries the Version that wrote it, and a Run warns until it does.
+
 ## 0.3.1 (2026-09-20)
 
 ### Stop
