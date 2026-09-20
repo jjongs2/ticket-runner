@@ -944,7 +944,7 @@ describe("a Run a human stopped", () => {
     implementing.release();
     await run;
 
-    expect(stopLines()).toEqual(["#4 #5 finish the Run · stopped"]);
+    expect(stopLines()).toEqual(["#4 #5 left to finish · stopped"]);
   });
 
   it("answers a second SIGTERM with nothing, and goes on finishing", async () => {
@@ -960,7 +960,7 @@ describe("a Run a human stopped", () => {
     implementing.release();
     const result = await run;
 
-    expect(stopLines()).toEqual(["#4 finish the Run · stopped"]);
+    expect(stopLines()).toEqual(["#4 left to finish · stopped"]);
     expect(result.outcomes).toEqual([expect.objectContaining({ outcome: "merged", ticket: 4 })]);
     // The Stop the Run reports is the first one, not the impatient second.
     expect(result.stop).toEqual({
@@ -979,7 +979,7 @@ describe("a Run a human stopped", () => {
 
     expect(result.outcomes).toEqual([]);
     expect(result.stop).toEqual({ reason: "stopped", at: "2026-09-20T22:07:13.000Z", busy: [] });
-    expect(stopLines()).toEqual(["no Lane busy · stopped"]);
+    expect(stopLines()).toEqual(["nothing left to finish · stopped"]);
     expect(runner.requests).toEqual([]);
     // No Candidate listed, and nothing written on GitHub either: a Stop is not
     // news any Ticket has to be told.
@@ -1065,7 +1065,7 @@ describe("a Run a human stopped", () => {
     // happening, and is answered all the same.
     expect(result.stop).toEqual({ reason: "rate-limited" });
     expect(logged).toContain("#4 stopped the Run · rate limit");
-    expect(stopLines()).toEqual(["#5 finish the Run · stopped"]);
+    expect(stopLines()).toEqual(["#5 left to finish · stopped"]);
   });
 
   it("keeps the Stop as the reason when a Lane is released afterwards", async () => {

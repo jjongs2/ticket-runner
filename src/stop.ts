@@ -81,6 +81,6 @@ export function listenForStop(signal: StopSignal, source: StopSource = process):
  * human reading the line, and what is left of the transcript is theirs.
  */
 export function stopLine(busy: number[]): string {
-  if (busy.length === 0) return "no Lane busy · stopped";
-  return `${busy.map((ticket) => `#${ticket}`).join(" ")} finish the Run · stopped`;
+  const held = busy.length === 0 ? "nothing" : busy.map((ticket) => `#${ticket}`).join(" ");
+  return `${held} left to finish · stopped`;
 }

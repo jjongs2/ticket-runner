@@ -339,7 +339,7 @@ describe("runSummary", () => {
       stop: { reason: "stopped", at: "2026-09-20T22:07:13.000Z", busy: [] },
     });
 
-    expect(summary.trimEnd().split("\n").at(-1)).toBe("Stopped at 22:07 · no Lane busy.");
+    expect(summary.trimEnd().split("\n").at(-1)).toBe("Stopped at 22:07 · nothing to finish.");
   });
 
   it("reports nothing but its own Lanes when a Stop ended the Run", () => {

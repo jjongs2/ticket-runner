@@ -88,10 +88,10 @@ describe("listening for SIGTERM", () => {
 
 describe("the line a Run logs", () => {
   it("leads with the Tickets its Lanes hold", () => {
-    expect(stopLine([4, 9])).toBe("#4 #9 finish the Run · stopped");
+    expect(stopLine([4, 9])).toBe("#4 #9 left to finish · stopped");
   });
 
   it("says so when no Lane is busy", () => {
-    expect(stopLine([])).toBe("no Lane busy · stopped");
+    expect(stopLine([])).toBe("nothing left to finish · stopped");
   });
 });

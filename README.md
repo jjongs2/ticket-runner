@@ -251,7 +251,7 @@ and not a kill; everything else — Ctrl-C, SIGKILL, an OOM, a machine that went
 kill ([ADR-0006](docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md)).
 
 A Run that receives SIGTERM logs one line naming the Tickets its Lanes hold at that moment
-— `#4 #9 finish the Run · stopped` — and fills no Lane again, neither from the Frontier nor
+— `#4 #9 left to finish · stopped` — and fills no Lane again, neither from the Frontier nor
 from the stranded Tickets below. The Lanes busy then finish what they hold exactly as they
 would have, to merge, hand-off or Release, and the Run ends when the last of them comes
 back; one with no Lane busy ends at once. Nothing is written to the board because of it, no

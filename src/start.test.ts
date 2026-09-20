@@ -299,7 +299,7 @@ describe("a Run a human stopped", () => {
     implementing.release();
     const { code, out, lines } = await run;
 
-    expect(lines).toContain("#4 finish the Run · stopped");
+    expect(lines).toContain("#4 left to finish · stopped");
     expect(tracker.pullRequest(100).merged).toBe(true);
     expect(tracker.calls).not.toContain("assign:5:pipeline-user");
     expect(out.trimEnd().split("\n").at(-1)).toMatch(/^Stopped at \d\d:\d\d · finishing #4\.$/);
@@ -336,7 +336,7 @@ describe("a Run a human stopped", () => {
     const { code, out, lines } = await run;
 
     expect(code).toBe(0);
-    expect(lines).toContain("#4 finish the Run · stopped");
+    expect(lines).toContain("#4 left to finish · stopped");
     expect(tracker.pullRequest(100).merged).toBe(true);
     // It drains no Frontier, so its summary claims nothing about one, and a
     // Stop that asked it for nothing it was not already doing is no exception.

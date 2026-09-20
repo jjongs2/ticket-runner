@@ -402,7 +402,7 @@ function clockTime(at: string): string {
 
 /** What the Lanes were holding when the Stop arrived, and what to call none. */
 function holding(busy: number[]): string {
-  if (busy.length === 0) return "no Lane busy";
+  if (busy.length === 0) return "nothing to finish";
   return `finishing ${busy.map((ticket) => `#${ticket}`).join(" ")}`;
 }
 

@@ -78,7 +78,7 @@ The time is UTC to the minute, which is the clock the run id in the header is
 already written in. A Run with no Lane busy when the Stop arrived has nothing to
 finish and says so:
 
-Stopped at 22:07 · no Lane busy.
+Stopped at 22:07 · nothing to finish.
 
 Like a Run the limit stopped, a stopped Run prints no `skipped  #<n> blocked`
 rows and no rows for the Tickets it never reached: it stopped before it could
