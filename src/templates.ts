@@ -247,18 +247,22 @@ export function handoffComment(handoff: HandoffComment): string {
 export const HANDOFF_TAKEN_LINE = "_Taken again by a later Run; this hand-off is history._";
 
 /**
- * `body` with {@link HANDOFF_TAKEN_LINE} under its marker, or nothing when the
- * comment already carries the line.
+ * A hand-off comment with {@link HANDOFF_TAKEN_LINE} under its marker, or
+ * nothing when the comment already carries the line.
  *
  * Nothing else about the comment is touched: the failure, the location and the
  * evidence are why the hand-off is worth keeping, and only their currency has
  * changed. Nothing when there is nothing to add is how the caller knows to
  * spend no tracker call on it, which is also what stops a Ticket claimed twice
  * stacking the line.
+ *
+ * The line is looked for directly under the marker rather than anywhere in the
+ * comment, so evidence that happens to quote it is not read as a mark.
  */
-export function markHandoffTaken(body: string): string | undefined {
-  if (body.includes(HANDOFF_TAKEN_LINE)) return undefined;
-  return body.replace(HANDOFF_MARKER, `${HANDOFF_MARKER}\n${HANDOFF_TAKEN_LINE}\n`);
+export function handoffTakenComment(body: string): string | undefined {
+  const marked = `${HANDOFF_MARKER}\n${HANDOFF_TAKEN_LINE}`;
+  if (body.includes(marked)) return undefined;
+  return body.replace(HANDOFF_MARKER, `${marked}\n`);
 }
 
 /** A Note, and where it came from, as both Note templates announce it. */

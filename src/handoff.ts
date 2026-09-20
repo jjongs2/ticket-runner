@@ -15,9 +15,9 @@
  */
 
 import type { IssueComment, Tracker } from "./ports/tracker.js";
-import { HANDOFF_MARKER, findMarkedComments, markHandoffTaken } from "./templates.js";
+import { HANDOFF_MARKER, findMarkedComments, handoffTakenComment } from "./templates.js";
 
-export interface MarkHandoffsTaken {
+export interface HandoffOptions {
   tracker: Tracker;
   ticket: number;
   /** The Ticket's comments as they were when it was claimed. */
@@ -41,9 +41,9 @@ export async function markHandoffsTaken({
   ticket,
   comments,
   log,
-}: MarkHandoffsTaken): Promise<void> {
+}: HandoffOptions): Promise<void> {
   for (const comment of findMarkedComments(comments, HANDOFF_MARKER)) {
-    const body = markHandoffTaken(comment.body);
+    const body = handoffTakenComment(comment.body);
     if (body === undefined || comment.id === undefined) continue;
 
     try {

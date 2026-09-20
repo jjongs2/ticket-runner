@@ -8,7 +8,7 @@ import {
   guardComment,
   guardMarker,
   handoffComment,
-  markHandoffTaken,
+  handoffTakenComment,
   noteComment,
   noteIssue,
   pullRequestBody,
@@ -197,7 +197,7 @@ describe("findMarkedComments", () => {
   });
 });
 
-describe("markHandoffTaken", () => {
+describe("handoffTakenComment", () => {
   const handoff = handoffComment({
     stage: "verify",
     failure: "1 criterion unmet",
@@ -206,7 +206,7 @@ describe("markHandoffTaken", () => {
   });
 
   it("puts the line under the marker, above the failure it qualifies", () => {
-    expect(markHandoffTaken(handoff)?.split("\n").slice(0, 3)).toEqual([
+    expect(handoffTakenComment(handoff)?.split("\n").slice(0, 3)).toEqual([
       HANDOFF_MARKER,
       HANDOFF_TAKEN_LINE,
       "",
@@ -214,13 +214,24 @@ describe("markHandoffTaken", () => {
   });
 
   it("changes nothing else about the comment", () => {
-    const marked = markHandoffTaken(handoff) ?? "";
+    const marked = handoffTakenComment(handoff) ?? "";
 
     expect(marked.replace(`${HANDOFF_TAKEN_LINE}\n\n`, "")).toBe(handoff);
   });
 
   it("gives nothing back for a comment that already carries the line", () => {
-    expect(markHandoffTaken(markHandoffTaken(handoff) ?? "")).toBeUndefined();
+    expect(handoffTakenComment(handoffTakenComment(handoff) ?? "")).toBeUndefined();
+  });
+
+  it("marks a hand-off whose evidence only quotes the line", () => {
+    const quoting = handoffComment({
+      stage: "checks",
+      failure: "`npm test` failed",
+      branch: "agent/2-skeleton",
+      evidence: `a doc under test reads ${HANDOFF_TAKEN_LINE}`,
+    });
+
+    expect(handoffTakenComment(quoting)?.split("\n")[1]).toBe(HANDOFF_TAKEN_LINE);
   });
 });
 
