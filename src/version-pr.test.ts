@@ -5,11 +5,14 @@ import { versionNotes, versionPrRefusals } from "./version-pr.js";
 /** One Version's notes, in the shape `docs/templates/version-notes.md` asks for. */
 const NOTES = `### Lanes
 
-- A Run takes \`lanes\` Tickets at once, default one (#82, #83)
+- A Run takes \`lanes\` Tickets at once, default one ([#82], [#83])
 
 ### After upgrading
 
-- nothing`;
+- nothing
+
+[#82]: https://github.com/jjongs2/agent-pipeline/pull/82
+[#83]: https://github.com/jjongs2/agent-pipeline/pull/83`;
 
 /** A changelog in the template's shape, carrying a section per number given. */
 function changelog(...numbers: string[]): string {
@@ -36,9 +39,9 @@ function templateSection(number: string): string {
   );
   const shape: string[] = [];
   for (const line of template.split("\n")) {
-    // The shape is the headings, the list items and the blank lines between
-    // them; the prose explaining it starts at the first line that is none.
-    if (!/^(#{2,3} |- |$)/.test(line)) break;
+    // The shape is the headings, the list items, the link definitions and the
+    // blank lines between them; the prose starts at the first line that is none.
+    if (!/^(#{2,3} |- |\[# |\[#<|$)/.test(line)) break;
     shape.push(line);
   }
   return shape.join("\n").trim().replace("<number>", number).replace("<yyyy-mm-dd>", "2026-09-20");
@@ -51,6 +54,21 @@ describe("the notes a Version published", () => {
 
   it("returns the oldest section, which no heading follows", () => {
     expect(versionNotes(changelog("0.4.0", "0.3.1", "0.3.0"), "0.3.0")).toBe(NOTES);
+  });
+
+  it("keeps the link definitions the section's numbers are written as", () => {
+    const notes = versionNotes(changelog("0.4.0", "0.3.1"), "0.4.0") ?? "";
+    expect(notes).toContain("[#82]: https://github.com/jjongs2/agent-pipeline/pull/82");
+    expect(notes.indexOf("[#82]:")).toBeGreaterThan(notes.indexOf("### After upgrading"));
+  });
+
+  it("carries a definition for every number every section of this repository's changelog names", () => {
+    for (const number of ["0.1.0", "0.1.1", "0.2.0", "0.3.0", "0.3.1", "0.4.0"]) {
+      const notes = versionNotes(CHANGELOG, number) ?? "";
+      for (const [, pr] of notes.matchAll(/\[#(\d+)\](?!:)/g)) {
+        expect(notes).toContain(`[#${pr}]: https://github.com/jjongs2/agent-pipeline/pull/${pr}`);
+      }
+    }
   });
 
   it("returns nothing when the changelog has no section for the number", () => {
@@ -79,13 +97,17 @@ describe("the notes a Version published", () => {
     // The body GitHub published for that Version, to the character.
     expect(versionNotes(CHANGELOG, "0.2.0")).toBe(`### Any Target
 
-- \`init\` sets a Target up and reports what only a human can (#71)
-- A Run refuses a Target \`init\` has not set up (#72)
-- A Run works against the Target's Base branch; \`baseBranch\` overrides (#70)
+- \`init\` sets a Target up and reports what only a human can ([#71])
+- A Run refuses a Target \`init\` has not set up ([#72])
+- A Run works against the Target's Base branch; \`baseBranch\` overrides ([#70])
 
 ### After upgrading
 
-- Run \`agent-pipeline init\` once in every Target; a Run now refuses one without it.`);
+- Run \`agent-pipeline init\` once in every Target; a Run now refuses one without it.
+
+[#70]: https://github.com/jjongs2/agent-pipeline/pull/70
+[#71]: https://github.com/jjongs2/agent-pipeline/pull/71
+[#72]: https://github.com/jjongs2/agent-pipeline/pull/72`);
   });
 });
 

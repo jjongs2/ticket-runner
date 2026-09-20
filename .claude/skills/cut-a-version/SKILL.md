@@ -41,10 +41,21 @@ the number is written down with the answer that decided it.
 
 ## 3. Draft the notes
 
-`docs/templates/version-notes.md` is the shape; the five sections already in
+`docs/templates/version-notes.md` is the shape; the sections already in
 `CHANGELOG.md` are the measure. Terse: one line per change, about a dozen words,
 ending in its pull request numbers. The new section goes at the top, under the
 heading and the prose, dated today.
+
+Each number is a reference link — `([#94], [#95])` — and every one it names is
+defined at the end of the section, below `After upgrading`:
+
+```markdown
+[#94]: https://github.com/jjongs2/agent-pipeline/pull/94
+```
+
+A bare `#94` is plain text both in this file and in the Release the workflow
+publishes, for the reason the template gives; the definitions travel into the
+Release body and nothing renders them.
 
 `After upgrading` is the line only this repository can write, because the
 pipeline rewrites files in every Target it is set up in. Ask it of every change

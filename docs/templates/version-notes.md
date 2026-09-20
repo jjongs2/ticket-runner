@@ -2,11 +2,13 @@
 
 ### <group the writer names>
 
-- <what changed, for a reader of the pipeline> (#<pr>)
+- <what changed, for a reader of the pipeline> ([#<pr>])
 
 ### After upgrading
 
 - <what a Target or its human has to do> — or the single word: nothing
+
+[#<pr>]: https://github.com/jjongs2/agent-pipeline/pull/<pr>
 
 The Version notes: one section of `CHANGELOG.md`, written in the Version PR and
 published as the body of that Version's GitHub Release (ADR-0007). The skill in
@@ -26,3 +28,12 @@ section with only a handful of lines needs no groups at all. Lines are terse:
 about a dozen words, ending in the pull request numbers the change landed in.
 One line per change, not per pull request — three pull requests that built one
 thing are one line carrying three numbers.
+
+The numbers are links the notes carry themselves, defined at the end of the
+section below `After upgrading`, where the extraction keeps them and nothing
+renders them. GitHub turns a bare `#94` into a link only in conversations, and
+in a private repository only where the author of the text can read what it
+points at: this file is a file, so it never links, and a Release the tag
+workflow publishes is written by `github-actions[bot]`, which cannot, so its
+numbers come out plain. Written as reference links they read as the same words
+wherever the notes are read, and by whoever published them.
