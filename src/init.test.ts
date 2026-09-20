@@ -12,7 +12,8 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadConfig } from "./config.js";
-import { CLAUDE_SECTION, CONVENTIONS_DOC, CONVENTIONS_PATH } from "./conventions.js";
+import { pipelineVersion } from "./adapters/version.js";
+import { CLAUDE_SECTION, CONVENTIONS_PATH, conventionsDoc } from "./conventions.js";
 import { initTarget } from "./init.js";
 import { STAGE_ENV_VAR } from "./stage-guard.js";
 import { FakeAgentRunner, FakeTracker } from "./testing/fakes.js";
@@ -61,14 +62,23 @@ function snapshot(root: string, prefix = ""): Record<string, string> {
 }
 
 /** One `init`, in a human's shell unless the test says otherwise. */
-async function init(overrides: { root?: string; env?: NodeJS.ProcessEnv } = {}) {
+async function init(
+  overrides: {
+    root?: string;
+    env?: NodeJS.ProcessEnv;
+    version?: string;
+    repository?: string;
+  } = {},
+) {
   const root = overrides.root ?? repoRoot;
+  const version = overrides.version ?? VERSION;
   const out: string[] = [];
   const err: string[] = [];
   const code = await initTarget({
     repoRoot: root,
-    version: VERSION,
-    config: loadConfig(root, VERSION),
+    version,
+    ...(overrides.repository === undefined ? {} : { repository: overrides.repository }),
+    config: loadConfig(root, version),
     tracker,
     runner,
     env: overrides.env ?? {},
@@ -96,7 +106,7 @@ describe("what init writes into the Target", () => {
     expect(gitignore).toContain(".worktrees/");
     expect(gitignore).toContain(".agent-pipeline/");
     expect(read(repoRoot, "agent-pipeline.json")).toBe("{}\n");
-    expect(read(repoRoot, CONVENTIONS_PATH)).toBe(CONVENTIONS_DOC);
+    expect(read(repoRoot, CONVENTIONS_PATH)).toBe(conventionsDoc(VERSION));
     expect(read(repoRoot, "CLAUDE.md")).toContain(CONVENTIONS_PATH);
   });
 
@@ -209,12 +219,113 @@ describe("what init writes into the Target", () => {
 
     const { out } = await init();
 
-    expect(read(repoRoot, CONVENTIONS_PATH)).toBe(CONVENTIONS_DOC);
+    expect(read(repoRoot, CONVENTIONS_PATH)).toBe(conventionsDoc(VERSION));
     expect(out).toMatch(new RegExp(`${CONVENTIONS_PATH}: overwritten`));
   });
 
   it("points CLAUDE.md at the document it writes", () => {
     expect(CLAUDE_SECTION).toContain(CONVENTIONS_PATH);
+  });
+});
+
+describe("what init says about another Version", () => {
+  /** The pipeline's own repository, as the CLI reads it off the package. */
+  const REPOSITORY = "jjongs2/agent-pipeline";
+
+  it("prints the newer-Version line first, right after the opening line", async () => {
+    tracker.latestReleaseTag = "v0.5.0";
+
+    const { out } = await init({ repository: REPOSITORY });
+
+    const [opening, notice] = out.split("\n");
+    expect(opening).toContain("init ·");
+    expect(notice).toContain("0.5.0");
+    expect(notice).toContain("0.4.0");
+  });
+
+  it("prints nothing where this copy is the latest Version", async () => {
+    readyToReport(repoRoot);
+    tracker.latestReleaseTag = "v0.4.0";
+
+    const { out, code } = await init({ repository: REPOSITORY });
+
+    expect(out.split("\n")[1]).toBe("");
+    expect(code).toBe(0);
+  });
+
+  it("prints nothing, and sets the Target up anyway, where the lookup fails", async () => {
+    readyToReport(repoRoot);
+    tracker.latestReleaseFails = true;
+
+    const { out, code } = await init({ repository: REPOSITORY });
+
+    expect(out.split("\n")[1]).toBe("");
+    expect(read(repoRoot, CONVENTIONS_PATH)).toBe(conventionsDoc(VERSION));
+    expect(code).toBe(0);
+  });
+
+  it("asks nothing where the package names no repository", async () => {
+    tracker.latestReleaseTag = "v0.5.0";
+
+    await init();
+
+    expect(tracker.releaseLookups).toEqual([]);
+  });
+
+  it("leaves a document a newer pipeline wrote alone, and names the upgrade", async () => {
+    readyToReport(repoRoot);
+    const newer = conventionsDoc("0.5.0");
+    write(repoRoot, CONVENTIONS_PATH, newer);
+
+    const { out, code } = await init();
+
+    expect(read(repoRoot, CONVENTIONS_PATH)).toBe(newer);
+    expect(out).toMatch(new RegExp(`${CONVENTIONS_PATH}: left alone, because 0.5.0`));
+    expect(out).toContain("upgrade `agent-pipeline`");
+    // Nothing a human has to put right before a Run: the Target is set up.
+    expect(code).toBe(0);
+  });
+
+  it("rewrites a document an older pipeline wrote, and names that pipeline", async () => {
+    write(repoRoot, CONVENTIONS_PATH, conventionsDoc("0.3.0"));
+
+    const { out } = await init();
+
+    expect(read(repoRoot, CONVENTIONS_PATH)).toBe(conventionsDoc(VERSION));
+    expect(out).toMatch(
+      new RegExp(`${CONVENTIONS_PATH}: overwritten, because the copy here was left by 0.3.0`),
+    );
+  });
+
+  it("rewrites an unmarked document, and says the copy carried no Version", async () => {
+    write(repoRoot, CONVENTIONS_PATH, "# agent-pipeline conventions\n\nOlder.\n");
+
+    const { out } = await init();
+
+    expect(read(repoRoot, CONVENTIONS_PATH)).toBe(conventionsDoc(VERSION));
+    expect(out).toMatch(
+      new RegExp(`${CONVENTIONS_PATH}: overwritten, because the copy here carried no Version`),
+    );
+  });
+
+  it("writes nothing for a document its own Version already wrote", async () => {
+    write(repoRoot, CONVENTIONS_PATH, conventionsDoc("0.4.0"));
+
+    const { out } = await init();
+
+    expect(out).not.toMatch(new RegExp(`${CONVENTIONS_PATH}:`));
+  });
+
+  /**
+   * A checkout past the Version it reports writes the same document as the
+   * Version itself, so the two are one copy and neither rewrites the other.
+   */
+  it("reads a development checkout of the marked Version as that Version", async () => {
+    write(repoRoot, CONVENTIONS_PATH, conventionsDoc("0.4.0"));
+
+    const { out } = await init({ version: "0.4.0+9999999.dirty" });
+
+    expect(out).not.toMatch(new RegExp(`${CONVENTIONS_PATH}:`));
   });
 });
 
@@ -356,7 +467,7 @@ describe("the reference Target", () => {
       });
       const before = snapshot(copy);
 
-      const { code } = await init({ root: copy });
+      const { code } = await init({ root: copy, version: await pipelineVersion() });
 
       expect(snapshot(copy)).toEqual(before);
       expect(code).toBe(0);

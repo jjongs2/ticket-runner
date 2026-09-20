@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CONFIG_FILENAME, loadConfig } from "./config.js";
-import { CLAUDE_SECTION, CONVENTIONS_DOC, CONVENTIONS_PATH } from "./conventions.js";
+import { CLAUDE_SECTION, CONVENTIONS_PATH, conventionsDoc } from "./conventions.js";
 import { type Work, startRun } from "./start.js";
 import type { StopSource } from "./stop.js";
 import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./testing/fakes.js";
@@ -39,7 +39,7 @@ beforeEach(() => {
   // directories, the conventions document and a `CLAUDE.md` pointing at it.
   write("package.json", JSON.stringify({ scripts: { test: "vitest run" } }));
   write(".gitignore", ".worktrees/\n.agent-pipeline/\n");
-  write(CONVENTIONS_PATH, CONVENTIONS_DOC);
+  write(CONVENTIONS_PATH, conventionsDoc(VERSION));
   write("CLAUDE.md", CLAUDE_SECTION);
 
   tracker = new FakeTracker();
@@ -57,8 +57,15 @@ function write(path: string, contents: string): void {
   writeFileSync(join(repoRoot, path), contents);
 }
 
+/** The pipeline's own repository, as the CLI reads it off the package. */
+const REPOSITORY = "jjongs2/agent-pipeline";
+
 /** One invocation, as the CLI makes it once the arguments are understood. */
-async function start(work: Work = { command: "run" }, signals?: StopSource) {
+async function start(
+  work: Work = { command: "run" },
+  signals?: StopSource,
+  repository?: string,
+) {
   const out: string[] = [];
   const err: string[] = [];
   const code = await startRun({
@@ -70,6 +77,7 @@ async function start(work: Work = { command: "run" }, signals?: StopSource) {
     workspace,
     runId: "run-1",
     version: VERSION,
+    ...(repository === undefined ? {} : { repository }),
     command: "agent-pipeline run",
     log: (line) => out.push(line),
     error: (line) => err.push(line),
@@ -139,6 +147,16 @@ describe("a Target init has not set up", () => {
 
   it("asks only whether the conventions document is there, never what it says", async () => {
     write(CONVENTIONS_PATH, "# Conventions\n\nAn older copy, saying something else.\n");
+    tracker.addIssue({ number: 4 });
+
+    const { code } = await start();
+
+    expect(code).toBe(0);
+    expect(tracker.calls).toContain("listCandidates:ready-for-agent");
+  });
+
+  it("refuses the document's absence, and never what Version wrote it", async () => {
+    write(CONVENTIONS_PATH, conventionsDoc("0.9.0"));
     tracker.addIssue({ number: 4 });
 
     const { code } = await start();
@@ -401,5 +419,121 @@ describe("a Run a human stopped", () => {
     await start({ command: "run" }, signals);
 
     expect(signals.listenerCount("SIGTERM")).toBe(0);
+  });
+});
+
+describe("what a Run says about another Version", () => {
+  it("names both Versions at the top of the log and at the head of the summary", async () => {
+    tracker.latestReleaseTag = "v0.5.0";
+    tracker.addIssue({ number: 4 });
+
+    const { lines, out } = await start({ command: "run" }, undefined, REPOSITORY);
+
+    // Straight after the opening line, and again above the summary's header.
+    expect(lines[0]).toContain("agent-pipeline run run-1");
+    expect(lines[1]).toContain("0.5.0");
+    expect(lines[1]).toContain("0.4.0");
+    const summary = (lines.at(-1) ?? "").trim().split("\n");
+    expect(summary[0]).toBe(lines[1]);
+    expect(summary[1]).toContain(`agent-pipeline ${VERSION} run run-1`);
+  });
+
+  it("says it once to `ticket <n>` as well", async () => {
+    tracker.latestReleaseTag = "v0.5.0";
+    tracker.addIssue({ number: 4 });
+
+    const { lines } = await start({ command: "ticket", ticket: 4 }, undefined, REPOSITORY);
+
+    expect(lines[1]).toContain("0.5.0");
+  });
+
+  it("says nothing where this Run is the latest Version", async () => {
+    tracker.latestReleaseTag = "v0.4.0";
+    tracker.addIssue({ number: 4 });
+
+    const { out, code } = await start({ command: "run" }, undefined, REPOSITORY);
+
+    expect(out).not.toContain("A newer Version");
+    expect(code).toBe(0);
+  });
+
+  it("says nothing and takes the Frontier anyway where the lookup fails", async () => {
+    tracker.latestReleaseFails = true;
+    tracker.addIssue({ number: 4 });
+
+    const { out, code } = await start({ command: "run" }, undefined, REPOSITORY);
+
+    expect(out).not.toContain("A newer Version");
+    expect(out).toContain("merged   #4");
+    expect(code).toBe(0);
+  });
+
+  it("asks nothing at all where the package names no repository", async () => {
+    tracker.latestReleaseTag = "v0.5.0";
+    tracker.addIssue({ number: 4 });
+
+    const { out } = await start();
+
+    expect(tracker.releaseLookups).toEqual([]);
+    expect(out).not.toContain("A newer Version");
+  });
+});
+
+describe("what a Run says about the Target's conventions document", () => {
+  it("says nothing about a document its own Version wrote", async () => {
+    tracker.addIssue({ number: 4 });
+
+    const { err } = await start();
+
+    expect(err).not.toContain(CONVENTIONS_PATH);
+  });
+
+  it("warns once and names `init` for a document an older pipeline left", async () => {
+    write(CONVENTIONS_PATH, conventionsDoc("0.3.0"));
+    tracker.addIssue({ number: 4 });
+
+    const { code, err, out } = await start();
+
+    expect(err).toContain("warning:");
+    expect(err).toContain("0.3.0");
+    expect(err).toContain("agent-pipeline init");
+    expect(err.split("\n").filter((line) => line.includes(CONVENTIONS_PATH))).toHaveLength(1);
+    // Warned, and then the Run did exactly what it came for.
+    expect(out).toContain("merged   #4");
+    expect(code).toBe(0);
+  });
+
+  it("warns and names `init` for a document carrying no mark at all", async () => {
+    write(CONVENTIONS_PATH, "# agent-pipeline conventions\n\nFrom an older pipeline.\n");
+    tracker.addIssue({ number: 4 });
+
+    const { code, err } = await start();
+
+    expect(err).toContain("no Version");
+    expect(err).toContain("agent-pipeline init");
+    expect(code).toBe(0);
+  });
+
+  it("warns and names the upgrade for a document a newer pipeline left", async () => {
+    write(CONVENTIONS_PATH, conventionsDoc("0.5.0"));
+    tracker.addIssue({ number: 4 });
+
+    const { code, err, out } = await start();
+
+    expect(err).toContain("0.5.0");
+    expect(err).toContain("upgrade");
+    expect(err).not.toContain("agent-pipeline init");
+    expect(out).toContain("merged   #4");
+    expect(code).toBe(0);
+  });
+
+  it("rewrites nothing it warned about", async () => {
+    const older = conventionsDoc("0.3.0");
+    write(CONVENTIONS_PATH, older);
+    tracker.addIssue({ number: 4 });
+
+    await start();
+
+    expect(readFileSync(join(repoRoot, CONVENTIONS_PATH), "utf8")).toBe(older);
   });
 });

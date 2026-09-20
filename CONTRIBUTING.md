@@ -30,7 +30,7 @@ Conventions for humans and agents working in this repo. Vocabulary is defined in
 
 ## Versions
 
-- A **Version PR** is the one pull request that reaches `main` without a Ticket number, next to the bootstrap exception above (ADR-0007). Its branch is `version/<number>`, its title and commit subject are `chore: version <number>`, and it carries nothing but the two numbers and the Version's `CHANGELOG.md` section.
+- A **Version PR** is the one pull request that reaches `main` without a Ticket number, next to the bootstrap exception above (ADR-0007). Its branch is `version/<number>`, its title and commit subject are `chore: version <number>`, and it carries nothing but the two numbers, the Version's `CHANGELOG.md` section and the mark on our own copy of the conventions document, which `npx tsx scripts/version.ts mark` rewrites.
 - The number is minor when a Spec has closed since the last Version and patch for everything that shipped between two Specs, whatever its type — a small feature as much as a fix. Did a Spec close, yes or no, is the whole rule; work that deserves a minor deserves a Spec.
 - `/cut-a-version` ([`.claude/skills/cut-a-version/`](.claude/skills/cut-a-version/SKILL.md)) drafts the pull request: the number, the section in the shape [`docs/templates/version-notes.md`](docs/templates/version-notes.md) gives, and both numbers raised together. It never merges — the review and the merge are the maintainer's, and they are what cuts the Version.
 - The check on the pull request refuses a number that is not above every tag, a lock file that disagrees and a missing or incomplete section. The push to `main` tags the commit `v<number>` and publishes the section as that Version's GitHub Release.

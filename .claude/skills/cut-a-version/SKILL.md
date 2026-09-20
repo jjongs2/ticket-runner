@@ -59,12 +59,16 @@ reader of this tool would act on or want to know.
 
 ```bash
 npm version <number> --no-git-tag-version
+npx tsx scripts/version.ts mark
 BASE_REF=main npx tsx scripts/version.ts check
 ```
 
 `npm version` writes `package.json` and `package-lock.json` in one go, and the
-check is the one the pull request will run. Done when it prints that the number
-may merge.
+check is the one the pull request will run. `mark` rewrites this repository's
+own copy of the conventions document, which carries the Version that wrote it:
+this repository is a Target of its own pipeline, and its test suite refuses a
+copy the new number would have written differently. Done when the check prints
+that the number may merge.
 
 ## 5. Open the Version PR
 

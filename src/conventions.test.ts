@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { CONVENTIONS_DOC, CONVENTIONS_PATH } from "./conventions.js";
+import { pipelineVersion } from "./adapters/version.js";
+import { CONVENTIONS_PATH, conventionsDoc, conventionsMark } from "./conventions.js";
 
 describe("the conventions document", () => {
   /**
@@ -8,9 +9,13 @@ describe("the conventions document", () => {
    * whose copy is missing but never reads what it says. Without this the copy
    * drifts silently from the text `init` writes, and the one repository where
    * the difference would be noticed is the one nobody checks.
+   *
+   * Written by this checkout's own Version, because the document carries the
+   * number that wrote it: a Version PR that raises the number and leaves the
+   * copy here alone is a Target `init` would rewrite, and this is what says so.
    */
-  it("is checked in here exactly as `init` writes it", () => {
-    expect(readFileSync(CONVENTIONS_PATH, "utf8")).toBe(CONVENTIONS_DOC);
+  it("is checked in here exactly as `init` writes it", async () => {
+    expect(readFileSync(CONVENTIONS_PATH, "utf8")).toBe(conventionsDoc(await pipelineVersion()));
   });
 
   /**
@@ -20,10 +25,56 @@ describe("the conventions document", () => {
    * the document is free but dropping the warning is not.
    */
   it("warns under Checks that the Lanes of a Run share the Target", () => {
-    const checks = section(CONVENTIONS_DOC, "Checks");
+    const checks = section(conventionsDoc("0.4.0"), "Checks");
 
     expect(checks).toContain("worktree");
     expect(checks).toContain("`lanes`");
+  });
+
+  /**
+   * The mark is the one thing `init` and a Run read the document for, and the
+   * one thing its readers must never meet: it sits on the first line, inside an
+   * HTML comment, so the heading renders as it always did.
+   */
+  it("carries the Version in a hidden marker on its first line", () => {
+    const [first = "", ...rest] = conventionsDoc("0.4.0").split("\n");
+
+    expect(first).toBe("# agent-pipeline conventions <!-- agent-pipeline:version 0.4.0 -->");
+    expect(rest.join("\n")).not.toContain("agent-pipeline:version");
+  });
+
+  it("marks a development checkout with its number and not its commit", () => {
+    expect(conventionsMark(conventionsDoc("0.4.0+331d79c.dirty"))).toBe("0.4.0");
+  });
+
+  it("says nothing about Versions beyond the mark it bears", () => {
+    const body = conventionsDoc("0.4.0").split("\n").slice(1).join("\n");
+
+    expect(body.toLowerCase()).not.toContain("version");
+  });
+});
+
+describe("the mark a Target's copy bears", () => {
+  it("reads the number the document was written by", () => {
+    expect(conventionsMark(conventionsDoc("0.4.0"))).toBe("0.4.0");
+  });
+
+  it("reads nothing from a copy an older pipeline wrote", () => {
+    expect(conventionsMark("# agent-pipeline conventions\n\nWhat it requires.\n")).toBeUndefined();
+  });
+
+  it("reads nothing from a Target that has no copy at all", () => {
+    expect(conventionsMark(undefined)).toBeUndefined();
+  });
+
+  it("reads only the first line, so a document quoting the marker is unmarked", () => {
+    const quoted = "# agent-pipeline conventions\n\n<!-- agent-pipeline:version 9.0.0 -->\n";
+
+    expect(conventionsMark(quoted)).toBeUndefined();
+  });
+
+  it("reads nothing from a mark carrying something that is not a number", () => {
+    expect(conventionsMark("# c <!-- agent-pipeline:version unknown -->\n")).toBeUndefined();
   });
 });
 

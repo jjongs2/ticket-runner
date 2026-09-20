@@ -21,15 +21,38 @@ Not ready: 1 item is yours to put right.
 
 The first line names the Version doing the setting up (ADR-0007), in the shape
 `run-summary.txt` describes, so a Target can be told which pipeline wrote the
-files it is about to gain.
+files it is about to gain. Where a newer Version has been published, one line
+follows it and nothing comes between them:
+
+agent-pipeline <version> init · <repo root>
+A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g "github:jjongs2/agent-pipeline#semver:*"`.
+
+Wrote:
+  ...
+
+It is the same line a Run prints, under the same conditions, and like a Run's it
+refuses nothing: `init` sets the Target up either way.
 
 Three groups, always in this order and always all three, however little each has
 to say.
 
 `Wrote:` has one line per file that changed, and `  nothing to write` when the
 Target already had everything — which is what a second `init` prints. The
-conventions document is the one file rewritten rather than left alone, and says
-so: `overwritten, because the copy here said something else`.
+conventions document is the one file rewritten rather than left alone, and it
+carries the Version that wrote it in a hidden marker on its first line, which is
+read before its text is compared (ADR-0007). Four lines, one per case:
+
+  docs/agents/pipeline-conventions.md: written
+  docs/agents/pipeline-conventions.md: overwritten, because the copy here carried no Version
+  docs/agents/pipeline-conventions.md: overwritten, because the copy here was left by 0.3.0
+  docs/agents/pipeline-conventions.md: left alone, because 0.5.0 set this Target up and this is 0.4.0 — upgrade `agent-pipeline` to rewrite it
+
+A copy marked with the same Version is compared as text and rewritten where it
+differs, as `overwritten, because the copy here said something else`; identical
+text is not a line at all. A copy a newer pipeline wrote is the one this never
+touches: rewriting it would take the Target backwards, so it is left and the
+upgrade is named. None of the four is a `Checked:` item, so none of them changes
+the exit code — a Target is not unready for carrying another Version's copy.
 
 `GitHub:` says which labels were created, or that every one of them was already
 there, and that squash merging is on. Where GitHub could not be asked at all,

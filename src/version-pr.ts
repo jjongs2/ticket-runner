@@ -14,6 +14,8 @@
  * ran git itself could not be tested without one.
  */
 
+import { highestTag, isHigher, tagNumber } from "./version-number.js";
+
 /**
  * The one heading every Version's notes carry, whatever they group the rest by.
  * What a Target or its human has to do after upgrading is the thing a reader of
@@ -52,8 +54,9 @@ export function versionPrRefusals(pr: VersionPr): string[] {
 
   const refusals: string[] = [];
   const highest = highestTag(pr.tags);
-  if (highest !== undefined && !isHigher(pr.number, highest)) {
-    refusals.push(`\`${pr.number}\` is not higher than every Version tag; \`v${highest}\` exists.`);
+  const highestNumber = highest === undefined ? undefined : tagNumber(highest);
+  if (highest !== undefined && highestNumber !== undefined && !isHigher(pr.number, highestNumber)) {
+    refusals.push(`\`${pr.number}\` is not higher than every Version tag; \`${highest}\` exists.`);
   }
   if (pr.lockNumber !== pr.number) {
     refusals.push(`\`package-lock.json\` says \`${pr.lockNumber}\`, not \`${pr.number}\`.`);
@@ -96,31 +99,4 @@ function sections(changelog: string): Map<string, string> {
     if (!found.has(number)) found.set(number, body.join("\n"));
   }
   return found;
-}
-
-/**
- * The number of the highest tag shaped `v<x.y.z>`, and undefined where the
- * repository has no Version tag at all — the first Version, which nothing can
- * be measured against.
- *
- * Every other tag is ignored rather than refused: a repository is free to tag
- * whatever else it likes, and only the Versions say what has been cut.
- */
-function highestTag(tags: string[]): string | undefined {
-  const numbers = tags.filter((tag) => /^v\d+\.\d+\.\d+$/.test(tag)).map((tag) => tag.slice(1));
-  return numbers.reduce<string | undefined>(
-    (highest, number) => (highest === undefined || isHigher(number, highest) ? number : highest),
-    undefined,
-  );
-}
-
-/** Whether `number` is above `other`, comparing parts as numbers: `0.10.0` is above `0.9.0`. */
-function isHigher(number: string, other: string): boolean {
-  const parts = number.split(".").map(Number);
-  const others = other.split(".").map(Number);
-  for (const [index, part] of parts.entries()) {
-    const against = others[index] ?? 0;
-    if (part !== against) return part > against;
-  }
-  return false;
 }

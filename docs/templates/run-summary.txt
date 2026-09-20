@@ -18,6 +18,21 @@ checkout — `0.4.0`, `0.4.0+331d79c`, `0.4.0+331d79c.dirty`. Every stamp of one
 Run says the same thing, and `.agent-pipeline/runs/<runId>/version.txt` says it
 again beside the transcripts.
 
+A Run whose Version is below the highest published Release gains one line above
+that header, which is also the first thing it logged hours earlier:
+
+A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g "github:jjongs2/agent-pipeline#semver:*"`.
+agent-pipeline <version> run <runId> · <duration>
+
+  merged   #3 Run: drain the Frontier (PR #12)
+
+Frontier empty.
+
+Nothing is printed where this copy is the latest Version, where it is above it —
+a development checkout runs a commit past the Version it reports, and is
+compared by number only — or where GitHub could not be asked at all. No answer
+is an answer, and none of them stops a Run.
+
 The rows are in the order the Tickets ended, which is the order they were
 claimed in only for a Run with one Lane. A Run with more than one has several
 Tickets in flight at once, and each takes as long as its own Stages take.

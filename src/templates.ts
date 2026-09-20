@@ -347,6 +347,12 @@ export interface RunSummary {
   durationMs: number;
   outcomes: TicketOutcome[];
   /**
+   * The line saying a newer Version is out, where one is. Above the header
+   * rather than below it: the Run already said this hours ago, at the top of a
+   * log this summary is the bottom of (ADR-0007).
+   */
+  newer?: string;
+  /**
    * Why the Run stopped, and with it whatever it can still say about the
    * Frontier. Only a Run has a Frontier, so `ticket <n>` leaves this out and
    * the summary says nothing about what else was pickable.
@@ -367,6 +373,7 @@ export function runSummary({
   runId,
   durationMs,
   outcomes,
+  newer,
   stop,
 }: RunSummary): string {
   const rows = [
@@ -379,6 +386,7 @@ export function runSummary({
   ];
 
   return [
+    ...(newer === undefined ? [] : [newer]),
     `agent-pipeline ${version} run ${runId} · ${Math.round(durationMs / 60_000)}m`,
     "",
     ...(rows.length === 0 ? ["  nothing to do"] : rows),

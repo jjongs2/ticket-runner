@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { PACKAGE_ROOT, pipelineVersion } from "./version.js";
+import { PACKAGE_ROOT, pipelineRepository, pipelineVersion } from "./version.js";
 
 let root: string;
 
@@ -85,10 +85,61 @@ describe("a development checkout", () => {
   });
 });
 
+describe("the repository a newer Version would be published on", () => {
+  /** A package root naming its repository however npm lets it be named. */
+  function repository(field: unknown): void {
+    writeFileSync(join(root, "package.json"), `${JSON.stringify({ repository: field })}\n`);
+  }
+
+  it("reads the git URL `npm init` writes", () => {
+    repository({ type: "git", url: "git+https://github.com/acme/repo.git" });
+
+    expect(pipelineRepository(root)).toBe("acme/repo");
+  });
+
+  it("reads an ssh remote and a plain https one", () => {
+    repository({ url: "git@github.com:acme/repo.git" });
+    expect(pipelineRepository(root)).toBe("acme/repo");
+
+    repository({ url: "https://github.com/acme/repo" });
+    expect(pipelineRepository(root)).toBe("acme/repo");
+  });
+
+  it("reads the shorthands npm takes for a string", () => {
+    repository("acme/repo");
+    expect(pipelineRepository(root)).toBe("acme/repo");
+
+    repository("github:acme/repo");
+    expect(pipelineRepository(root)).toBe("acme/repo");
+  });
+
+  it("reads nothing from a package that names none, and asks nothing of GitHub", () => {
+    packageJson();
+
+    expect(pipelineRepository(root)).toBeUndefined();
+  });
+
+  it("reads nothing from a package that cannot be read at all", () => {
+    expect(pipelineRepository(root)).toBeUndefined();
+  });
+
+  it("reads nothing from a repository hosted somewhere else", () => {
+    repository({ url: "https://gitlab.com/acme/repo.git" });
+
+    expect(pipelineRepository(root)).toBeUndefined();
+  });
+});
+
 describe("the package root", () => {
   it("is the directory this pipeline's own package.json sits in", async () => {
     // The one assertion that reads the real checkout: whatever the CLI computes
     // has to be the number this repository is actually on.
     expect(await pipelineVersion(PACKAGE_ROOT)).toMatch(/^\d+\.\d+\.\d+(\+[0-9a-f]+(\.dirty)?)?$/);
+  });
+
+  it("is where the repository a newer Version is looked up on is read from", () => {
+    // The other assertion that reads the real checkout: the name the Run asks
+    // GitHub about has to be this repository's own.
+    expect(pipelineRepository(PACKAGE_ROOT)).toMatch(/^[\w.-]+\/[\w.-]+$/);
   });
 });

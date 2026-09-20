@@ -53,8 +53,11 @@ It writes the two gitignore lines for `.worktrees/` and `.agent-pipeline/`, an e
 [`docs/agents/pipeline-conventions.md`](docs/agents/pipeline-conventions.md), and a section
 in `CLAUDE.md` pointing at it. The files a human owns only ever gain lines; the conventions
 document is the pipeline's own text, so a Target carrying an older copy is rewritten and told
-that it was. On GitHub it creates whichever of the six triage labels are missing and turns
-squash merging on, touching no other merge setting.
+that it was. The document carries the Version that wrote it in a hidden marker on its first
+line, which is what `init` reads before it compares any text: a copy a *newer* pipeline wrote
+is left exactly as it is, and the report names the upgrade instead (ADR-0007). On GitHub it
+creates whichever of the six triage labels are missing and turns squash merging on, touching
+no other merge setting.
 
 Then it reports one line per item that is yours — whether `gh` is authenticated, `claude`
 runs, the `mattpocock-skills` plugin is installed, a CI workflow exists under
@@ -103,7 +106,20 @@ This Target is not set up: `.gitignore` does not ignore `.worktrees/`. Run
 ```
 
 The check is presence, never content: a Target carrying an older copy of the conventions
-document starts, and the next `init` brings it up to date.
+document starts, and the next `init` brings it up to date. A Run says so on the way past —
+one warning naming the Version that wrote the copy and `agent-pipeline init`, or the upgrade
+where the copy is from a newer pipeline than the Run — and then takes the Frontier as usual.
+
+A Run and `init` also say when a newer Version has been published, in one line naming both
+numbers, at the top of the Run log and again at the head of the Run summary:
+
+```
+A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g "github:jjongs2/agent-pipeline#semver:*"`.
+```
+
+Nothing is refused over either. A development checkout is compared by number alone, so
+running a commit past the latest Version is not stale, and a lookup that could not be made —
+no network, no `gh`, a repository nobody can see — prints nothing and changes nothing.
 
 `run` drains the **Frontier**: the open Tickets labelled `ready-for-agent` that nobody
 has claimed and whose native `blocked by` issues have all closed. It takes them through its

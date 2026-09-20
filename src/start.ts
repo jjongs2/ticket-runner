@@ -9,6 +9,7 @@ import type { Workspace } from "./ports/workspace.js";
 import { readinessRefusal } from "./readiness.js";
 import { writeRunVersion } from "./run-log.js";
 import { type RunStop, processRun } from "./run.js";
+import { conventionsWarning, newerVersionLine } from "./staleness.js";
 import { type StopSource, StopSignal, listenForStop, stopLine } from "./stop.js";
 import { startupMessages } from "./startup.js";
 import { runSummary } from "./templates.js";
@@ -39,6 +40,12 @@ export interface StartOptions {
    * the Run stamps takes it from here, so every stamp says the same thing.
    */
   version: string;
+  /**
+   * The pipeline's own repository, as `owner/name`, which the newer-Version
+   * notice is looked up against. Absent where the package names none, and then
+   * nothing is asked and nothing is said.
+   */
+  repository?: string | undefined;
   /** The command line the Run lock records, for whoever loses it. */
   command: string;
   log?: (line: string) => void;
@@ -67,7 +74,13 @@ export async function startRun(options: StartOptions): Promise<number> {
   }
 
   const { refusal, warnings } = startupMessages(config);
-  for (const warning of warnings) error(`warning: ${warning}`);
+  // The document's Version is a warning and never a refusal, so it joins the
+  // config's own: readiness has already had its say about the Target, and what
+  // that copy of the document says is nothing a Run is worse for (ADR-0007).
+  const stale = conventionsWarning(repoRoot, options.version);
+  for (const warning of [...warnings, ...(stale === undefined ? [] : [stale])]) {
+    error(`warning: ${warning}`);
+  }
   if (refusal !== undefined) {
     error(refusal);
     return 2;
@@ -124,6 +137,14 @@ async function execute(
     log(`could not record the Version beside the transcripts: ${(error as Error).message}`);
   }
 
+  // Asked once, and said twice: at the top of the log a human watches, and
+  // again at the head of the summary they scroll back to hours later.
+  const newer = await newerVersionLine({
+    tracker,
+    version,
+    repository: options.repository,
+  });
+
   // Once per Run, before any Ticket: every branch, rebase, pull request and
   // pull of this Run goes to the branch this answers.
   const baseBranch = await resolveBaseBranch(tracker, config);
@@ -146,12 +167,14 @@ async function execute(
 
   const startedAt = Date.now();
   log(opening(runId, work, config.lanes));
+  if (newer !== undefined) log(newer);
   const summary = (outcomes: TicketOutcome[], stop?: RunStop) =>
     runSummary({
       version,
       runId,
       durationMs: Date.now() - startedAt,
       outcomes,
+      ...(newer === undefined ? {} : { newer }),
       ...(stop === undefined ? {} : { stop }),
     });
 
