@@ -246,6 +246,26 @@ once the limit has reset picks up both.
 
 ## A Run that did not come back
 
+A Run can end early two ways, and they leave opposite things behind. SIGTERM is a **Stop**
+and not a kill; everything else — Ctrl-C, SIGKILL, an OOM, a machine that went away — is a
+kill ([ADR-0006](docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md)).
+
+A Run that receives SIGTERM logs one line naming the Tickets its Lanes hold at that moment
+— `#4 #9 left to finish · stopped` — and fills no Lane again, neither from the Frontier nor
+from the stranded Tickets below. The Lanes busy then finish what they hold exactly as they
+would have, to merge, hand-off or Release, and the Run ends when the last of them comes
+back; one with no Lane busy ends at once. Nothing is written to the board because of it, no
+label and no comment, and the exit code is the outcomes' as usual: 1 if a Ticket was handed
+off, 0 otherwise. Its summary ends with `Stopped at 22:07 · finishing #4 #9.` A second
+SIGTERM is ignored rather than escalated to a kill, and a Stop cannot be taken back: the
+lock is held until the Lanes are back, and a new Run is the way to carry on. `ticket <n>`
+hears it the same way and finishes the one Ticket it was given.
+
+So a stopped Run strands nothing: every Ticket it held ran to an end of its own. A killed
+one strands all of them. Ctrl-C stays a kill on purpose — the Stages are spawned in the
+Run's own process group, so the terminal delivers SIGINT to every `claude` session as well
+as to the Run.
+
 A Run that is killed — Ctrl-C, an OOM, a machine that went away — releases nothing. The
 Ticket it was holding keeps its Claim, and its branch and worktree keep the work. So the
 State file is not written by the release; it is written as part of the Claim and kept
@@ -276,10 +296,10 @@ Not everything the sweep finds is stranded, and it resumes nothing else:
 - a Ticket whose worktree is gone is taken from the top, in place, keeping its Claim —
   which is a hand-off at `setup` when the branch it named is still there
 
-Being killed is still worse than stopping properly: whatever the Stage was doing is lost,
-and a worktree the Run left mid-rebase is aborted back to the branch tip before the Checks
-grade it. What the sweep buys is that no human has to unpick the labels and the assignee
-before the Ticket can move again.
+Being killed is still worse than stopping: whatever the Stage was doing is lost, and a
+worktree the Run left mid-rebase is aborted back to the branch tip before the Checks grade
+it. What the sweep buys is that no human has to unpick the labels and the assignee before
+the Ticket can move again.
 
 ## What a Ticket gets told
 

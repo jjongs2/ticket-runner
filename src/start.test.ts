@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -5,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CONFIG_FILENAME, loadConfig } from "./config.js";
 import { CLAUDE_SECTION, CONVENTIONS_DOC, CONVENTIONS_PATH } from "./conventions.js";
 import { type Work, startRun } from "./start.js";
+import type { StopSource } from "./stop.js";
 import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./testing/fakes.js";
+import { settle } from "./testing/settle.js";
 
 /** The six triage labels, under the names a Target keeps by default. */
 const ALL_LABELS = [
@@ -52,7 +55,7 @@ function write(path: string, contents: string): void {
 }
 
 /** One invocation, as the CLI makes it once the arguments are understood. */
-async function start(work: Work = { command: "run" }) {
+async function start(work: Work = { command: "run" }, signals?: StopSource) {
   const out: string[] = [];
   const err: string[] = [];
   const code = await startRun({
@@ -66,6 +69,7 @@ async function start(work: Work = { command: "run" }) {
     command: "agent-pipeline run",
     log: (line) => out.push(line),
     error: (line) => err.push(line),
+    ...(signals === undefined ? {} : { signals }),
   });
   return { code, out: out.join("\n"), lines: out, err: err.join("\n") };
 }
@@ -274,5 +278,77 @@ describe("the Run log", () => {
     // looked at here rather than slipping past an inequality.
     expect(ticketLines).toHaveLength(7);
     for (const line of ticketLines) expect(line).toMatch(/^#\d+ /);
+  });
+});
+
+/**
+ * SIGTERM, from the Run lock down: these drive the whole invocation, so what
+ * they say is that a signal really does reach the Lanes — the pieces below
+ * `startRun` are held to what a Stop is by their own tests.
+ */
+describe("a Run a human stopped", () => {
+  it("finishes the Ticket in flight and claims no other", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    const signals = new EventEmitter();
+    const implementing = runner.holds("implement");
+
+    const run = start({ command: "run" }, signals);
+    await implementing.started();
+    await settle();
+    signals.emit("SIGTERM");
+    implementing.release();
+    const { code, out, lines } = await run;
+
+    expect(lines).toContain("#4 left to finish · stopped");
+    expect(tracker.pullRequest(100).merged).toBe(true);
+    expect(tracker.calls).not.toContain("assign:5:pipeline-user");
+    expect(out.trimEnd().split("\n").at(-1)).toMatch(/^Stopped at \d\d:\d\d · finishing #4\.$/);
+    // The Stop is not an outcome, so the exit code is the one #4 earned.
+    expect(code).toBe(0);
+  });
+
+  it("still exits 1 when the Ticket it was finishing was handed off", async () => {
+    tracker.addIssue({ number: 4 });
+    workspace.failCheck("npm test", "1 test failed");
+    const signals = new EventEmitter();
+    const implementing = runner.holds("implement");
+
+    const run = start({ command: "run" }, signals);
+    await implementing.started();
+    await settle();
+    signals.emit("SIGTERM");
+    implementing.release();
+    const { code } = await run;
+
+    expect(code).toBe(1);
+  });
+
+  it("lets `ticket <n>` finish its Ticket instead of dying", async () => {
+    tracker.addIssue({ number: 4 });
+    const signals = new EventEmitter();
+    const implementing = runner.holds("implement");
+
+    const run = start({ command: "ticket", ticket: 4 }, signals);
+    await implementing.started();
+    await settle();
+    signals.emit("SIGTERM");
+    implementing.release();
+    const { code, out, lines } = await run;
+
+    expect(code).toBe(0);
+    expect(lines).toContain("#4 left to finish · stopped");
+    expect(tracker.pullRequest(100).merged).toBe(true);
+    // It drains no Frontier, so its summary claims nothing about one, and a
+    // Stop that asked it for nothing it was not already doing is no exception.
+    expect(out).not.toContain("Stopped at");
+  });
+
+  it("stops listening once the Run is over, so the process can exit", async () => {
+    tracker.addIssue({ number: 4 });
+    const signals = new EventEmitter();
+
+    await start({ command: "run" }, signals);
+
+    expect(signals.listenerCount("SIGTERM")).toBe(0);
   });
 });

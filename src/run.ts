@@ -2,6 +2,7 @@ import { branchName } from "./branch.js";
 import { selectFrontier } from "./frontier.js";
 import type { RoutedNote } from "./notes.js";
 import { type Pipeline, type TicketOutcome, processTicket } from "./orchestrator.js";
+import { StopSignal, stopLine } from "./stop.js";
 import { strandedTickets } from "./stranded.js";
 
 /**
@@ -22,8 +23,9 @@ export interface RunResult {
  *
  * A Run that drained the Frontier carries what was left held back; one the rate
  * limit stopped carries nothing, because it ended before it could say a
- * candidate was held back all Run. That is why this is a choice rather than a
- * flag beside the list: the two stops do not report the same things.
+ * candidate was held back all Run; one a human stopped carries the moment it
+ * was asked and what it still had in hand. That is why this is a choice rather
+ * than a flag beside the list: the three stops do not report the same things.
  */
 export type RunStop =
   | {
@@ -31,7 +33,14 @@ export type RunStop =
       /** Candidates still held back by an open blocker when the Run ended. */
       blocked: number[];
     }
-  | { reason: "rate-limited" };
+  | { reason: "rate-limited" }
+  | {
+      reason: "stopped";
+      /** When the Stop reached the Run, ISO-8601. */
+      at: string;
+      /** The Tickets its Lanes were holding at that moment, ascending. */
+      busy: number[];
+    };
 
 /**
  * Drain the Frontier through the Lanes the Target's config gives the Run.
@@ -53,13 +62,22 @@ export type RunStop =
  * finish what they hold, and the Run reports the limit once the last of them
  * comes back.
  *
+ * A Stop is the same shape with a different reason: a human asked for no more
+ * Tickets rather than the subscription, so the Lanes busy at that moment finish
+ * what they hold and the Run takes nothing else — not off the Frontier and not
+ * off the Stranded Tickets, which is what makes a stopped Run leave none of its
+ * own behind where a killed one leaves all of them (ADR-0006).
+ *
  * Before any of that, the Tickets a Run that never came back left claimed are
  * resumed. They are not on the Frontier and never will be — the Claim they still
  * wear is what keeps them off it — so this sweep is the only thing that ever
  * picks them up again, and a free Lane takes one before it takes anything the
  * Frontier is offering.
  */
-export async function processRun(pipeline: Pipeline): Promise<RunResult> {
+export async function processRun(
+  pipeline: Pipeline,
+  stopping: StopSignal = new StopSignal(),
+): Promise<RunResult> {
   const { tracker, config } = pipeline;
 
   const outcomes: TicketOutcome[] = [];
@@ -76,13 +94,26 @@ export async function processRun(pipeline: Pipeline): Promise<RunResult> {
   // that drained the Frontier reports. Replaced at every refill: a candidate a
   // Lane unblocked on the way is not one the Run was still held up by.
   let blocked: number[] = [];
-  // Whether a Release has stopped this Run filling Lanes.
-  let rateLimited = false;
+  // Why this Run stopped, which is also what it reports. Set by whichever of
+  // the Release and the Stop came first and never overwritten: a Stop that
+  // arrives after a Release asked for what was already happening, and a Release
+  // afterwards stopped nothing that was not stopped already. Undefined is a Run
+  // still taking Tickets, which is why it doubles as the guard at every refill.
+  let runStop: RunStop | undefined;
   // A Frontier the tracker refused to list, kept until the Lanes still busy are
   // back. A Run must not walk away from a Ticket mid-Stage to report that `gh`
   // went down, so the error waits for them and is thrown where a Run with one
   // Lane threw it: out of the Run, with nothing else left running.
   let listing: unknown;
+
+  // Registered before the sweep, because a Stop that arrives during it is a Run
+  // that claims nothing at all: the Lanes are empty, so there is nothing to
+  // finish and nothing to report but the request itself.
+  stopping.watch(({ at }) => {
+    const held = [...busy.keys()].sort((first, second) => first - second);
+    pipeline.log?.(stopLine(held));
+    runStop ??= { reason: "stopped", at, busy: held };
+  });
 
   // Taken off the front as Lanes free, so the sweep is a queue rather than a
   // pass of its own: a stranded Ticket and a Frontier Ticket can be in two
@@ -102,13 +133,14 @@ export async function processRun(pipeline: Pipeline): Promise<RunResult> {
   /**
    * Put a Ticket in a Lane, and record what came back when it ends.
    *
-   * The line about the Run stopping is logged by the first Release only. The
-   * Ticket's own release is already logged where it happened; this says the Run
-   * goes no further, so a transcript shows the Frontier was left alone rather
-   * than found empty, and a second Lane released afterwards stops nothing that
-   * was not stopped already. It leads with the Ticket's number all the same: a
-   * transcript of interleaved Lanes must not lose the line that explains why one
-   * Lane was the last to be filled.
+   * The line about the Run stopping is logged by the Release that stopped it and
+   * by no other. The Ticket's own release is already logged where it happened;
+   * this says the Run goes no further, so a transcript shows the Frontier was
+   * left alone rather than found empty, and a Release into a Run that an earlier
+   * Release or a Stop had stopped already claims to have stopped nothing. It
+   * leads with the Ticket's number all the same: a transcript of interleaved
+   * Lanes must not lose the line that explains why one Lane was the last to be
+   * filled.
    */
   function fillLane(ticket: Taken): void {
     taken.add(ticket.number);
@@ -117,8 +149,8 @@ export async function processRun(pipeline: Pipeline): Promise<RunResult> {
       take(pipeline, ticket).then((outcome) => {
         busy.delete(ticket.number);
         outcomes.push(outcome);
-        if (outcome.outcome === "released" && !rateLimited) {
-          rateLimited = true;
+        if (outcome.outcome === "released" && runStop === undefined) {
+          runStop = { reason: "rate-limited" };
           pipeline.log?.(`#${outcome.ticket} stopped the Run · rate limit`);
         }
       }),
@@ -141,9 +173,10 @@ export async function processRun(pipeline: Pipeline): Promise<RunResult> {
     );
     blocked = selection.blocked.map((candidate) => candidate.number);
     // Asked again after the listing, because a Lane that came back while it was
-    // in flight may have been released: the Run fills no Lane after that, and
-    // this selection is one it already had no business taking from.
-    if (rateLimited) return;
+    // in flight may have been released, and a Stop may have arrived: the Run
+    // fills no Lane after either, and this selection is one it already had no
+    // business taking from.
+    if (runStop !== undefined) return;
 
     for (const candidate of selection.frontier) {
       if (!laneFree()) break;
@@ -157,7 +190,7 @@ export async function processRun(pipeline: Pipeline): Promise<RunResult> {
   }
 
   for (;;) {
-    if (!rateLimited && listing === undefined) {
+    if (runStop === undefined && listing === undefined) {
       try {
         await fillLanes();
       } catch (error) {
@@ -171,9 +204,7 @@ export async function processRun(pipeline: Pipeline): Promise<RunResult> {
   }
 
   if (listing !== undefined) throw listing;
-  return rateLimited
-    ? { outcomes, stop: { reason: "rate-limited" } }
-    : { outcomes, stop: { reason: "frontier", blocked } };
+  return { outcomes, stop: runStop ?? { reason: "frontier", blocked } };
 }
 
 /**
