@@ -125,3 +125,13 @@ _Avoid_: orphan, zombie, abandoned Ticket, crashed Ticket, dead Ticket
 **Note**:
 A finding a Stage makes that belongs to another Ticket, or to no Ticket yet. Routed to that Ticket's comments when it is open, unclaimed and not a Spec, and otherwise to a new needs-triage issue; never acted on in the current Ticket.
 _Avoid_: handoff, finding, TODO, side note
+
+### Versions
+
+**Version**:
+A number `main` carries as a tag and an installed copy of the pipeline reports. What a Target's conventions document, a Ticket's State file and a Run's transcripts are stamped with, so each can be traced to the pipeline that wrote it. A development checkout reports the last Version and the commit it actually runs, because between two Versions the number alone says nothing.
+_Avoid_: release (a Release is what a rate-limited Stage does to a Ticket), build, revision, tag (the tag is where a Version lives, not what it is)
+
+**Version PR**:
+The pull request that raises the number; its merge is what cuts a Version. Opened by a human, because when a Version is cut is a Planning decision, not something the pipeline infers from what merged.
+_Avoid_: release PR, bump PR, version bump
