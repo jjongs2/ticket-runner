@@ -1,0 +1,57 @@
+name: Version tag
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  version-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Every tag, so a push that cuts no Version is recognised as one.
+          fetch-depth: 0
+      - id: version
+        name: Which Version this push carries
+        run: |
+          set -euo pipefail
+          tag="v$(node -p "require('./package.json').version")"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "$tag exists; this push cut no Version."
+          else
+            echo "cut=yes" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.version.outputs.cut == 'yes'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - if: steps.version.outputs.cut == 'yes'
+        run: npm ci
+      - name: Cut the Version
+        if: steps.version.outputs.cut == 'yes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # The message is the tag name, so the tags page shows the Version and
+          # not the subject of the commit it points at.
+          git tag -a "$TAG" -m "$TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG"
+          # A Release that fails to publish leaves the tag behind and the job
+          # red: the next push reads the tag as a Version already cut, so the
+          # Release is published by hand from the section.
+          npx tsx scripts/version.ts notes > "$RUNNER_TEMP/version-notes.md"
+          if [ -s "$RUNNER_TEMP/version-notes.md" ]; then
+            gh release create "$TAG" --title "$TAG" --notes-file "$RUNNER_TEMP/version-notes.md"
+          else
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          fi

@@ -1,6 +1,6 @@
 # Pipeline output templates
 
-The exact shapes the pipeline writes to GitHub and the terminal. The orchestrator embeds these; this folder is the source of truth for the shape, so change it here first. Angle-bracket fields are filled in; everything else is literal.
+The exact shapes written to GitHub and the terminal: the pipeline's own, which the orchestrator embeds, and the one a Version PR carries. This folder is the source of truth for every shape, so change it here first. Angle-bracket fields are filled in; everything else is literal.
 
 Humans read all of these, so each stays short: one line of status, details folded away.
 
@@ -19,6 +19,9 @@ Humans read all of these, so each stays short: one line of status, details folde
 | `run-summary.txt` | a Run ends (terminal) | none |
 | `init-report.txt` | `agent-pipeline init` finishes (terminal) | none |
 | `stop-report.txt` | `agent-pipeline stop` asks a Run to stop, or says why it did not (terminal) | none |
+| `version-notes.md` | a Version PR is opened, by the `cut-a-version` skill | none (a `CHANGELOG.md` section) |
+
+`version-notes.md` is the one shape nothing in the pipeline writes. A human cuts a Version, the `cut-a-version` skill drafts that Version's section of `CHANGELOG.md` in this shape, and the tag workflow publishes the section as the Release body (ADR-0007). It is kept here because the check on a Version PR reads the same shape, and a shape two readers share belongs where every other one does.
 
 Markers are how the pipeline finds its own comment again. A marker is the first line of the comment and never changes. `note-comment.md` carries one without ever looking it up: nothing about a Note is edited or posted twice, but a human meeting it on an unrelated Ticket can tell what wrote it.
 

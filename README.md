@@ -27,10 +27,12 @@ What a Target needs before the pipeline can work in it:
 
 ## Install
 
-Once, globally, from GitHub. The same line updates it:
+Once, globally, from GitHub. The range asks npm for the highest Version tag rather
+than `main`, so an installed copy is always a Version it can name (ADR-0007). The same
+line updates it:
 
 ```bash
-npm install -g github:jjongs2/agent-pipeline
+npm install -g "github:jjongs2/agent-pipeline#semver:*"
 ```
 
 ## Set a Target up
@@ -501,8 +503,9 @@ Run that finds one missing refuses too.
 
 ## Development
 
-Working on the pipeline itself runs it out of this checkout rather than off the global
-install:
+`main` is installed nowhere: it is run from a checkout, which is why a development copy
+reports the commit beside its number. Working on the pipeline itself runs it out of this
+checkout rather than off the global install:
 
 ```bash
 npm install
