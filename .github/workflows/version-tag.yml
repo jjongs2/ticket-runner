@@ -20,7 +20,7 @@ jobs:
       # that went red after pushing the tag therefore heals the Version, and so
       # does the next push, whatever it carries.
       - id: version
-        name: Which half of this Version is missing
+        name: What this Version is missing
         env:
           GH_TOKEN: ${{ github.token }}
         # `missing` is `both`, `release` or `nothing`. A GitHub Release with no
