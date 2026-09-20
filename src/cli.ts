@@ -23,6 +23,48 @@ Options:
   -h, --help                   Show this message.
       --version                Show which Version this pipeline is.`;
 
+/** What the command line comes to once it has been read: the options, and the rest. */
+interface CommandLine {
+  positionals: string[];
+  values: { help?: boolean; version?: boolean };
+}
+
+/**
+ * The command line, or nothing when it names an option this CLI does not take.
+ *
+ * `parseArgs` throws over one, and an uncaught throw reaches a terminal as a
+ * stack trace through `node:internal` that says nothing the usage does not say
+ * better. An unknown option is the mistake an unknown command is, made one
+ * character earlier, so it is answered the same way and costs the same exit
+ * code.
+ */
+function parseCommandLine(argv: string[]): CommandLine | undefined {
+  try {
+    return parseArgs({
+      args: argv,
+      options: {
+        help: { type: "boolean", short: "h" },
+        version: { type: "boolean" },
+      },
+      allowPositionals: true,
+    });
+  } catch (error) {
+    console.error(`${argumentComplaint(error)}\n\n${USAGE}`);
+    return undefined;
+  }
+}
+
+/**
+ * Node's own sentence about the argument, and only the first: it follows the
+ * complaint with advice about passing a positional that starts with a `-`,
+ * which no command of this CLI takes.
+ */
+function argumentComplaint(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const [sentence = message] = message.split(". ");
+  return sentence.endsWith(".") ? sentence : `${sentence}.`;
+}
+
 /**
  * Exit codes: 0 nothing handed off, 1 at least one hand-off, 2 nothing was
  * taken at all — the Run never started, or `ticket <n>` named an issue a guard
@@ -39,14 +81,9 @@ async function main(argv: string[]): Promise<number> {
     return 2;
   }
 
-  const { positionals, values } = parseArgs({
-    args: argv,
-    options: {
-      help: { type: "boolean", short: "h" },
-      version: { type: "boolean" },
-    },
-    allowPositionals: true,
-  });
+  const parsed = parseCommandLine(argv);
+  if (parsed === undefined) return 2;
+  const { positionals, values } = parsed;
 
   // Resolved once, here, and handed to everything that stamps it the way the
   // run id is: a Run whose summary, comments, State files and transcripts all
