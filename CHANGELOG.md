@@ -4,6 +4,31 @@ One section per Version, newest first, written in the Version PR that cut it and
 published as the body of that Version's GitHub Release (ADR-0007). The shape is
 `docs/templates/version-notes.md`.
 
+## 0.4.1 (2026-09-21)
+
+### Fixes
+
+- A pull request whose checks GitHub registers late waits out a grace instead of a hand-off ([#120])
+- A hand-off comment left by an earlier Run is marked history when the Ticket is claimed again ([#118])
+- An unknown option answers with the usage, not a stack trace ([#115])
+- The usage explains the pipeline in plain words, and `-v` says the Version ([#117])
+
+### Repository
+
+- A `node_modules` symlink is ignored like the directory, and the broken one on `main` is gone ([#112])
+- Version notes carry a link definition for every pull request they name ([#110])
+
+### After upgrading
+
+- Nothing is required; a Target whose Actions queue registers checks slowly can raise `ciGraceMinutes`, which defaults to 5.
+
+[#110]: https://github.com/jjongs2/agent-pipeline/pull/110
+[#112]: https://github.com/jjongs2/agent-pipeline/pull/112
+[#115]: https://github.com/jjongs2/agent-pipeline/pull/115
+[#117]: https://github.com/jjongs2/agent-pipeline/pull/117
+[#118]: https://github.com/jjongs2/agent-pipeline/pull/118
+[#120]: https://github.com/jjongs2/agent-pipeline/pull/120
+
 ## 0.4.0 (2026-09-20)
 
 ### Versions
