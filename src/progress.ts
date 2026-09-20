@@ -45,16 +45,23 @@ export interface ProgressRow {
 const NO_ANSWER = "–";
 
 export interface ProgressCommentBody {
+  /** The Version reporting, as every line one Run stamps carries it. */
+  version: string;
   runId: string;
   branch: string;
   /** Every row so far, oldest first. */
   rows: ProgressRow[];
 }
 
-export function progressComment({ runId, branch, rows }: ProgressCommentBody): string {
+export function progressComment({
+  version,
+  runId,
+  branch,
+  rows,
+}: ProgressCommentBody): string {
   return [
     PROGRESS_MARKER,
-    `**agent-pipeline** · run \`${runId}\` · \`${branch}\``,
+    `**agent-pipeline** \`${version}\` · run \`${runId}\` · \`${branch}\``,
     "",
     "| Stage | Outcome | Turns | Duration |",
     "|---|---|---|---|",
@@ -96,6 +103,7 @@ export function findProgressComment(comments: IssueComment[]): IssueComment | un
 export interface ProgressOptions {
   tracker: Tracker;
   ticket: number;
+  version: string;
   runId: string;
   branch: string;
   /** The Ticket's comments as they were when it was claimed. */
@@ -127,8 +135,8 @@ export class Progress {
     this.rows.push(row);
     if (this.stopped) return;
 
-    const { tracker, ticket, runId, branch } = this.options;
-    const body = progressComment({ runId, branch, rows: this.rows });
+    const { tracker, ticket, version, runId, branch } = this.options;
+    const body = progressComment({ version, runId, branch, rows: this.rows });
 
     try {
       const id = this.comment?.id;

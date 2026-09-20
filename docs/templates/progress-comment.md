@@ -1,5 +1,5 @@
 <!-- agent-pipeline:progress -->
-**agent-pipeline** · run `<runId>` · `<branch>`
+**agent-pipeline** `<version>` · run `<runId>` · `<branch>`
 
 | Stage | Outcome | Turns | Duration |
 |---|---|---|---|
@@ -19,6 +19,9 @@ Rows are not unique: a fix buys a second pass of the Checks and verify, and each
 rebase conflict adds a `conflict` row and the `checks` row that re-grades what it
 resolved. A Stage that is never reached has no row, which is how the table shows
 where a Ticket stopped.
+
+`<version>` is the Version that wrote the table (ADR-0007), in the shape
+`run-summary.txt` describes.
 
 A later Run finds this comment by its marker and carries on in it, rewriting the
 header and the rows with its own. The table is what the Run reporting now did,

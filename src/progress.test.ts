@@ -5,9 +5,18 @@ import { FakeTracker } from "./testing/fakes.js";
 
 const TICKET = 2;
 const BRANCH = "agent/2-progress-comment";
+/** The Version reporting, which every header the Run writes carries. */
+const VERSION = "0.4.0+331d79c";
 
 function progress(tracker: FakeTracker, comments: IssueComment[] = []): Progress {
-  return new Progress({ tracker, ticket: TICKET, runId: "run-1", branch: BRANCH, comments });
+  return new Progress({
+    tracker,
+    ticket: TICKET,
+    version: VERSION,
+    runId: "run-1",
+    branch: BRANCH,
+    comments,
+  });
 }
 
 function body(tracker: FakeTracker): string {
@@ -15,23 +24,34 @@ function body(tracker: FakeTracker): string {
 }
 
 describe("the comment body", () => {
-  it("starts with the marker and names the Run and the branch", () => {
-    const rendered = progressComment({ runId: "run-1", branch: BRANCH, rows: [] });
+  it("starts with the marker and names the Version, the Run and the branch", () => {
+    const rendered = progressComment({
+      version: VERSION,
+      runId: "run-1",
+      branch: BRANCH,
+      rows: [],
+    });
 
     expect(rendered.split("\n").slice(0, 2)).toEqual([
       PROGRESS_MARKER,
-      `**agent-pipeline** · run \`run-1\` · \`${BRANCH}\``,
+      `**agent-pipeline** \`${VERSION}\` · run \`run-1\` · \`${BRANCH}\``,
     ]);
   });
 
   it("carries the columns Stage, Outcome, Turns and Duration", () => {
-    const rendered = progressComment({ runId: "run-1", branch: BRANCH, rows: [] });
+    const rendered = progressComment({
+      version: VERSION,
+      runId: "run-1",
+      branch: BRANCH,
+      rows: [],
+    });
 
     expect(rendered).toContain("| Stage | Outcome | Turns | Duration |");
   });
 
   it("writes one row per Stage, in the order they finished", () => {
     const rendered = progressComment({
+      version: VERSION,
       runId: "run-1",
       branch: BRANCH,
       rows: [
@@ -46,6 +66,7 @@ describe("the comment body", () => {
 
   it("repeats a Stage that ran twice rather than overwriting its row", () => {
     const rendered = progressComment({
+      version: VERSION,
       runId: "run-1",
       branch: BRANCH,
       rows: [
@@ -60,6 +81,7 @@ describe("the comment body", () => {
 
   it("dashes the cells a row has no answer for", () => {
     const rendered = progressComment({
+      version: VERSION,
       runId: "run-1",
       branch: BRANCH,
       rows: [{ point: "merge", outcome: "✅ #100" }],
@@ -70,6 +92,7 @@ describe("the comment body", () => {
 
   it("escapes a pipe in an outcome so it cannot break the table", () => {
     const rendered = progressComment({
+      version: VERSION,
       runId: "run-1",
       branch: BRANCH,
       rows: [{ point: "checks", outcome: "❌ `npm test | tee log` failed", durationMs: 0 }],
@@ -174,6 +197,7 @@ describe("recording a Stage", () => {
     const recorder = new Progress({
       tracker,
       ticket: TICKET,
+      version: VERSION,
       runId: "run-1",
       branch: BRANCH,
       comments: [],
@@ -195,6 +219,7 @@ describe("recording a Stage", () => {
     const recorder = new Progress({
       tracker,
       ticket: TICKET,
+      version: VERSION,
       runId: "run-1",
       branch: BRANCH,
       comments: [],

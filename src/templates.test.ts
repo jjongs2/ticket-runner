@@ -22,6 +22,9 @@ const verdict = parseVerdict({
   pass: true,
 });
 
+/** The Version the Run ran, which its summary is headed with. */
+const VERSION = "0.4.0+331d79c";
+
 describe("pullRequestBody", () => {
   it("starts with Closes #<n> on its own line so the merge closes the Ticket", () => {
     const body = pullRequestBody({ ticket: 2, verdict, runId: "r1" });
@@ -225,19 +228,21 @@ describe("runSummary", () => {
     notes: [],
   };
 
-  it("heads the summary with the Run and how long it took", () => {
+  it("heads the summary with the Version, the Run and how long it took", () => {
     const summary = runSummary({
+      version: VERSION,
       runId: "r1",
       durationMs: 42 * 60_000,
       outcomes: [],
       stop: { reason: "frontier", blocked: [] },
     });
 
-    expect(summary.split("\n")[0]).toBe("agent-pipeline run r1 · 42m");
+    expect(summary.split("\n")[0]).toBe(`agent-pipeline ${VERSION} run r1 · 42m`);
   });
 
   it("lists merged, handed-off and skipped Tickets by number", () => {
     const summary = runSummary({
+      version: VERSION,
       runId: "r1",
       durationMs: 0,
       outcomes: [merged, handed],
@@ -251,6 +256,7 @@ describe("runSummary", () => {
 
   it("says where the rate limit landed on a released Ticket", () => {
     const summary = runSummary({
+      version: VERSION,
       runId: "r1",
       durationMs: 0,
       outcomes: [released],
@@ -262,6 +268,7 @@ describe("runSummary", () => {
 
   it("names the guard that passed a candidate over", () => {
     const summary = runSummary({
+      version: VERSION,
       runId: "r1",
       durationMs: 0,
       outcomes: [
@@ -276,6 +283,7 @@ describe("runSummary", () => {
 
   it("says the Frontier is empty when nothing was left blocked", () => {
     const summary = runSummary({
+      version: VERSION,
       runId: "r1",
       durationMs: 0,
       outcomes: [merged],
@@ -287,6 +295,7 @@ describe("runSummary", () => {
 
   it("says the Frontier is blocked when candidates were held back", () => {
     const summary = runSummary({
+      version: VERSION,
       runId: "r1",
       durationMs: 0,
       outcomes: [],
@@ -298,6 +307,7 @@ describe("runSummary", () => {
 
   it("says the rate limit stopped a Run a Release ended", () => {
     const summary = runSummary({
+      version: VERSION,
       runId: "r1",
       durationMs: 0,
       outcomes: [released],
@@ -311,6 +321,7 @@ describe("runSummary", () => {
     // A Run stopped this way cannot say a candidate was held back all Run, so
     // the stop carries no candidates to skip and the summary skips none.
     const summary = runSummary({
+      version: VERSION,
       runId: "r1",
       durationMs: 0,
       outcomes: [released],
@@ -322,6 +333,7 @@ describe("runSummary", () => {
 
   it("says when a Stop arrived and what its Lanes were finishing", () => {
     const summary = runSummary({
+      version: VERSION,
       runId: "r1",
       durationMs: 0,
       outcomes: [merged, released],
@@ -333,6 +345,7 @@ describe("runSummary", () => {
 
   it("says no Lane was busy when the Stop arrived to an idle Run", () => {
     const summary = runSummary({
+      version: VERSION,
       runId: "r1",
       durationMs: 0,
       outcomes: [],
@@ -346,6 +359,7 @@ describe("runSummary", () => {
     // Like a Run the limit stopped, it ended before it could say a candidate
     // was held back all Run, so it says nothing about one.
     const summary = runSummary({
+      version: VERSION,
       runId: "r1",
       durationMs: 0,
       outcomes: [merged],
@@ -357,6 +371,7 @@ describe("runSummary", () => {
 
   it("says so when a Run found nothing to take", () => {
     const summary = runSummary({
+      version: VERSION,
       runId: "r1",
       durationMs: 0,
       outcomes: [],
@@ -367,7 +382,7 @@ describe("runSummary", () => {
   });
 
   it("claims nothing about the Frontier when one Ticket was named", () => {
-    const summary = runSummary({ runId: "r1", durationMs: 0, outcomes: [merged] });
+    const summary = runSummary({ version: VERSION, runId: "r1", durationMs: 0, outcomes: [merged] });
 
     expect(summary.trimEnd().split("\n").at(-1)).toBe(
       "  merged   #3 Run: drain the Frontier (PR #12)",
@@ -459,6 +474,7 @@ describe("Notes in a Run summary", () => {
 
   it("follows the row of the Ticket whose Stage made it", () => {
     const summary = runSummary({
+      version: VERSION,
       runId: "r1",
       durationMs: 0,
       outcomes: [{ ...merged, notes: [note] }, handed],
@@ -473,6 +489,7 @@ describe("Notes in a Run summary", () => {
 
   it("says when the Note opened an issue of its own", () => {
     const summary = runSummary({
+      version: VERSION,
       runId: "r1",
       durationMs: 0,
       outcomes: [{ ...merged, notes: [{ ...note, issue: 31, opened: true, note: "no cleanup" }] }],
@@ -484,6 +501,7 @@ describe("Notes in a Run summary", () => {
   it("trims a long Note to one line", () => {
     const long = `worktrees ${"pile ".repeat(40)}up`;
     const summary = runSummary({
+      version: VERSION,
       runId: "r1",
       durationMs: 0,
       outcomes: [{ ...merged, notes: [{ ...note, note: long }] }],
@@ -496,7 +514,7 @@ describe("Notes in a Run summary", () => {
   });
 
   it("says nothing extra for a Ticket whose Stages found nothing", () => {
-    const summary = runSummary({ runId: "r1", durationMs: 0, outcomes: [merged] });
+    const summary = runSummary({ version: VERSION, runId: "r1", durationMs: 0, outcomes: [merged] });
 
     expect(summary).not.toContain("noted");
   });

@@ -9,6 +9,7 @@ import { newRunId } from "./run-log.js";
 import { nestedRunRefusal } from "./stage-guard.js";
 import { type Work, startRun } from "./start.js";
 import { requestStop } from "./stop.js";
+import { pipelineVersion } from "./version.js";
 
 const USAGE = `agent-pipeline — humans plan, the pipeline executes.
 
@@ -19,7 +20,8 @@ Usage:
   agent-pipeline stop          Ask the running Run to finish and take no more.
 
 Options:
-  -h, --help                   Show this message.`;
+  -h, --help                   Show this message.
+      --version                Show which Version this pipeline is.`;
 
 /**
  * Exit codes: 0 nothing handed off, 1 at least one hand-off, 2 nothing was
@@ -39,9 +41,21 @@ async function main(argv: string[]): Promise<number> {
 
   const { positionals, values } = parseArgs({
     args: argv,
-    options: { help: { type: "boolean", short: "h" } },
+    options: {
+      help: { type: "boolean", short: "h" },
+      version: { type: "boolean" },
+    },
     allowPositionals: true,
   });
+
+  // Resolved once, here, and handed to everything that stamps it the way the
+  // run id is: a Run whose summary, comments, State files and transcripts all
+  // read it separately could report four different things (ADR-0007).
+  const version = await pipelineVersion();
+  if (values.version) {
+    console.log(version);
+    return 0;
+  }
 
   if (values.help || positionals.length === 0) {
     console.log(USAGE);
@@ -67,7 +81,8 @@ async function main(argv: string[]): Promise<number> {
     // missing Checks it would refuse over are one of the things `init` reports.
     return initTarget({
       repoRoot: root,
-      config: loadConfig(root),
+      version,
+      config: loadConfig(root, version),
       tracker: new GhTracker({ cwd: root }),
       runner: new ClaudeAgentRunner(),
     });
@@ -87,11 +102,12 @@ async function main(argv: string[]): Promise<number> {
   return startRun({
     work,
     repoRoot,
-    config: loadConfig(repoRoot),
+    config: loadConfig(repoRoot, version),
     tracker: new GhTracker({ cwd: repoRoot }),
     runner: new ClaudeAgentRunner(),
     workspace: new GitWorkspace(repoRoot),
     runId: newRunId(),
+    version,
     command: `agent-pipeline ${positionals.join(" ")}`,
   });
 }

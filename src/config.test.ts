@@ -4,6 +4,9 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { CONFIG_FILENAME, ConfigError, loadConfig } from "./config.js";
 
+/** The Version doing the refusing, which an unknown key is reported with. */
+const VERSION = "0.4.0+331d79c";
+
 function repoWith(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), "agent-pipeline-config-"));
   for (const [name, contents] of Object.entries(files)) {
@@ -14,7 +17,7 @@ function repoWith(files: Record<string, string>): string {
 
 describe("loadConfig", () => {
   it("applies the documented defaults when no config file exists", () => {
-    const config = loadConfig(repoWith({}));
+    const config = loadConfig(repoWith({}), VERSION);
 
     expect(config.gates).toEqual({ checks: true, ci: true });
     expect(config.permissionMode).toBe("auto");
@@ -41,13 +44,13 @@ describe("loadConfig", () => {
   });
 
   it("names no base branch of its own, leaving the Target's default to answer", () => {
-    expect(loadConfig(repoWith({})).baseBranch).toBeUndefined();
+    expect(loadConfig(repoWith({}), VERSION).baseBranch).toBeUndefined();
   });
 
   it("takes the base branch the config file names", () => {
     const root = repoWith({ [CONFIG_FILENAME]: JSON.stringify({ baseBranch: "trunk" }) });
 
-    expect(loadConfig(root).baseBranch).toBe("trunk");
+    expect(loadConfig(root, VERSION).baseBranch).toBe("trunk");
   });
 
   it.each(["", 7, null])(
@@ -55,8 +58,8 @@ describe("loadConfig", () => {
     (value) => {
       const root = repoWith({ [CONFIG_FILENAME]: JSON.stringify({ baseBranch: value }) });
 
-      expect(() => loadConfig(root)).toThrowError(ConfigError);
-      expect(() => loadConfig(root)).toThrowError(/baseBranch/);
+      expect(() => loadConfig(root, VERSION)).toThrowError(ConfigError);
+      expect(() => loadConfig(root, VERSION)).toThrowError(/baseBranch/);
     },
   );
 
@@ -67,7 +70,7 @@ describe("loadConfig", () => {
       }),
     });
 
-    expect(loadConfig(root).checks).toEqual(["npm test", "npm run typecheck"]);
+    expect(loadConfig(root, VERSION).checks).toEqual(["npm test", "npm run typecheck"]);
   });
 
   it("infers no Checks when package.json has neither script", () => {
@@ -75,7 +78,7 @@ describe("loadConfig", () => {
       "package.json": JSON.stringify({ scripts: { build: "tsc" } }),
     });
 
-    expect(loadConfig(root).checks).toEqual([]);
+    expect(loadConfig(root, VERSION).checks).toEqual([]);
   });
 
   it("prefers configured Checks over the inferred ones", () => {
@@ -84,7 +87,7 @@ describe("loadConfig", () => {
       [CONFIG_FILENAME]: JSON.stringify({ checks: ["make check"] }),
     });
 
-    expect(loadConfig(root).checks).toEqual(["make check"]);
+    expect(loadConfig(root, VERSION).checks).toEqual(["make check"]);
   });
 
   it("lets a configured empty Check list opt out of inference", () => {
@@ -93,7 +96,7 @@ describe("loadConfig", () => {
       [CONFIG_FILENAME]: JSON.stringify({ checks: [], gates: { checks: false } }),
     });
 
-    expect(loadConfig(root).checks).toEqual([]);
+    expect(loadConfig(root, VERSION).checks).toEqual([]);
   });
 
   it("merges a partial config over the defaults field by field", () => {
@@ -103,7 +106,7 @@ describe("loadConfig", () => {
         gates: { ci: false },
       }),
     });
-    const config = loadConfig(root);
+    const config = loadConfig(root, VERSION);
 
     expect(config.stages.verify).toEqual({
       model: "claude-opus-5",
@@ -119,7 +122,7 @@ describe("loadConfig", () => {
       [CONFIG_FILENAME]: JSON.stringify({ stages: { conflict: { maxTurns: 40 } } }),
     });
 
-    expect(loadConfig(root).stages.conflict).toEqual({
+    expect(loadConfig(root, VERSION).stages.conflict).toEqual({
       model: "claude-opus-5",
       maxTurns: 40,
       maxMinutes: 30,
@@ -132,7 +135,7 @@ describe("loadConfig", () => {
       [CONFIG_FILENAME]: JSON.stringify({ checkTimeoutMinutes: 3 }),
     });
 
-    expect(loadConfig(root).checkTimeoutMinutes).toBe(3);
+    expect(loadConfig(root, VERSION).checkTimeoutMinutes).toBe(3);
   });
 
   it.each([0, -5, "fifteen"])(
@@ -142,15 +145,15 @@ describe("loadConfig", () => {
         [CONFIG_FILENAME]: JSON.stringify({ checkTimeoutMinutes: value }),
       });
 
-      expect(() => loadConfig(root)).toThrowError(ConfigError);
-      expect(() => loadConfig(root)).toThrowError(/checkTimeoutMinutes/);
+      expect(() => loadConfig(root, VERSION)).toThrowError(ConfigError);
+      expect(() => loadConfig(root, VERSION)).toThrowError(/checkTimeoutMinutes/);
     },
   );
 
   it("takes a configured Lane count as given", () => {
     const root = repoWith({ [CONFIG_FILENAME]: JSON.stringify({ lanes: 4 }) });
 
-    expect(loadConfig(root).lanes).toBe(4);
+    expect(loadConfig(root, VERSION).lanes).toBe(4);
   });
 
   it.each([0, -1, 1.5, "two"])(
@@ -158,8 +161,8 @@ describe("loadConfig", () => {
     (value) => {
       const root = repoWith({ [CONFIG_FILENAME]: JSON.stringify({ lanes: value }) });
 
-      expect(() => loadConfig(root)).toThrowError(ConfigError);
-      expect(() => loadConfig(root)).toThrowError(/lanes/);
+      expect(() => loadConfig(root, VERSION)).toThrowError(ConfigError);
+      expect(() => loadConfig(root, VERSION)).toThrowError(/lanes/);
     },
   );
 
@@ -168,8 +171,8 @@ describe("loadConfig", () => {
       [CONFIG_FILENAME]: JSON.stringify({ ciTimeoutMinutes: "thirty" }),
     });
 
-    expect(() => loadConfig(root)).toThrowError(ConfigError);
-    expect(() => loadConfig(root)).toThrowError(/ciTimeoutMinutes/);
+    expect(() => loadConfig(root, VERSION)).toThrowError(ConfigError);
+    expect(() => loadConfig(root, VERSION)).toThrowError(/ciTimeoutMinutes/);
   });
 
   it("names the offending nested field", () => {
@@ -177,7 +180,7 @@ describe("loadConfig", () => {
       [CONFIG_FILENAME]: JSON.stringify({ stages: { implement: { maxTurns: -1 } } }),
     });
 
-    expect(() => loadConfig(root)).toThrowError(/stages\.implement\.maxTurns/);
+    expect(() => loadConfig(root, VERSION)).toThrowError(/stages\.implement\.maxTurns/);
   });
 
   it("names an unknown field rather than ignoring it", () => {
@@ -185,7 +188,7 @@ describe("loadConfig", () => {
       [CONFIG_FILENAME]: JSON.stringify({ permissionMod: "auto" }),
     });
 
-    expect(() => loadConfig(root)).toThrowError(/permissionMod/);
+    expect(() => loadConfig(root, VERSION)).toThrowError(/permissionMod/);
   });
 
   it("rejects an unknown permission mode by name", () => {
@@ -193,12 +196,45 @@ describe("loadConfig", () => {
       [CONFIG_FILENAME]: JSON.stringify({ permissionMode: "yolo" }),
     });
 
-    expect(() => loadConfig(root)).toThrowError(/permissionMode/);
+    expect(() => loadConfig(root, VERSION)).toThrowError(/permissionMode/);
   });
 
   it("reports malformed JSON as a config error", () => {
     const root = repoWith({ [CONFIG_FILENAME]: "{ not json" });
 
-    expect(() => loadConfig(root)).toThrowError(ConfigError);
+    expect(() => loadConfig(root, VERSION)).toThrowError(ConfigError);
+  });
+});
+
+describe("a key this install does not know", () => {
+  /** The message a refusal came with, which is all a human ever sees of it. */
+  function refusal(config: Record<string, unknown>): string {
+    try {
+      loadConfig(repoWith({ [CONFIG_FILENAME]: JSON.stringify(config) }), VERSION);
+    } catch (error) {
+      return (error as Error).message;
+    }
+    throw new Error("the config was not refused");
+  }
+
+  it("is refused by name, and with the Version that refused it", () => {
+    const message = refusal({ retries: 3 });
+
+    expect(message).toContain("retries");
+    expect(
+      message.endsWith(
+        `Refused by agent-pipeline ${VERSION}, so the key may be newer than this install.`,
+      ),
+    ).toBe(true);
+  });
+
+  it("says the same of a key nested inside one the schema knows", () => {
+    expect(refusal({ gates: { flakes: true } })).toContain(
+      `Refused by agent-pipeline ${VERSION}`,
+    );
+  });
+
+  it("leaves a bad value alone: nothing about that is a stale install", () => {
+    expect(refusal({ lanes: 0 })).not.toContain("newer than this install");
   });
 });

@@ -49,6 +49,11 @@ const FAIL = "✗";
 
 export interface InitOptions {
   repoRoot: string;
+  /**
+   * The Version doing the setting up, which the report's first line names. A
+   * string the CLI resolved, never something read from here (ADR-0007).
+   */
+  version: string;
   config: Config;
   tracker: Tracker;
   runner: AgentRunner;
@@ -70,7 +75,7 @@ export interface InitOptions {
  * shell was refused, 1 when any reported item failed, 0 when none did.
  */
 export async function initTarget(options: InitOptions): Promise<number> {
-  const { repoRoot, config, tracker, runner } = options;
+  const { repoRoot, version, config, tracker, runner } = options;
   const log = options.log ?? ((line: string) => console.log(line));
   const error = options.error ?? ((line: string) => console.error(line));
 
@@ -81,7 +86,7 @@ export async function initTarget(options: InitOptions): Promise<number> {
     return 2;
   }
 
-  log(`agent-pipeline init · ${repoRoot}`);
+  log(`agent-pipeline ${version} init · ${repoRoot}`);
 
   const written = writeTargetFiles(repoRoot);
 

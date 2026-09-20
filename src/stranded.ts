@@ -1,5 +1,5 @@
 import type { Issue, Tracker } from "./ports/tracker.js";
-import { clearTicketState, listTicketStates } from "./resume.js";
+import { type StateFile, clearTicketState, listStateFiles } from "./resume.js";
 
 /**
  * The Tickets a Run that never came back left claimed, and how a later Run finds
@@ -62,7 +62,12 @@ export async function strandedTickets(sweep: StrandedSweep): Promise<StrandedTic
   const { tracker, repoRoot, inProgress } = sweep;
   const log = sweep.log ?? (() => {});
 
-  const recorded = listTicketStates(repoRoot);
+  const files = listStateFiles(repoRoot);
+  // Said before anything is asked of the tracker, because it is the one finding
+  // here that needs nothing of it: the file is all the evidence there is.
+  for (const file of files) if (!file.readable) log(unreadableLine(file));
+
+  const recorded = files.flatMap((file) => (file.readable ? [file.state] : []));
   // Asked only when there is something to ask about, so a Run on a checkout that
   // has never claimed anything spends no call on the sweep.
   if (recorded.length === 0) return [];
@@ -94,4 +99,18 @@ export async function strandedTickets(sweep: StrandedSweep): Promise<StrandedTic
   }
 
   return stranded;
+}
+
+/**
+ * A State file nothing here can read, named rather than dropped.
+ *
+ * The file and the Claim are left exactly where they are. A Ticket carrying a
+ * file this pipeline cannot read is one a newer pipeline probably wrote, and
+ * deleting either would take a Claim off the board that the machine which
+ * understands the file is still counting on (ADR-0007). So the sweep says the
+ * Ticket number and whichever Version the file names, and a human decides.
+ */
+function unreadableLine(file: Extract<StateFile, { readable: false }>): string {
+  const wrote = file.version === undefined ? "naming no Version" : `written by ${file.version}`;
+  return `#${file.ticket} has a State file this Version cannot read, ${wrote}; it and the Claim are left alone`;
 }

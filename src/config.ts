@@ -139,17 +139,14 @@ const LABEL_DEFAULTS: Labels = {
  * from package.json when the config does not name them.
  *
  * Throws {@link ConfigError} naming the offending field when the file is
- * unusable; a missing file is not an error.
+ * unusable; a missing file is not an error. `version` is the Version doing the
+ * refusing, which the message for an unknown key carries.
  */
-export function loadConfig(repoRoot: string): Config {
+export function loadConfig(repoRoot: string, version: string): Config {
   const raw = readJson(join(repoRoot, CONFIG_FILENAME));
   const parsed = configSchema.safeParse(raw ?? {});
   if (!parsed.success) {
-    throw new ConfigError(
-      `Invalid ${CONFIG_FILENAME}: ${parsed.error.issues
-        .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
-        .join("; ")}`,
-    );
+    throw new ConfigError(refusal(parsed.error, version));
   }
 
   const file = parsed.data;
@@ -174,6 +171,24 @@ export function loadConfig(repoRoot: string): Config {
     checkTimeoutMinutes: file.checkTimeoutMinutes ?? DEFAULT_CHECK_TIMEOUT_MINUTES,
     labels: labels(file.labels),
   };
+}
+
+/**
+ * Why the file was refused, and — for an unknown key — which Version refused it.
+ *
+ * The schema is strict, so a key this install has never heard of is refused by
+ * name. That is the right answer to a typo and a confusing one to a key a newer
+ * Version added, and on a machine running a stale install the two look exactly
+ * the same. So the Version is said out loud, and the config file itself is left
+ * without one to carry (ADR-0007).
+ */
+function refusal(error: z.ZodError, version: string): string {
+  const detail = error.issues
+    .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
+    .join("; ");
+  const said = `Invalid ${CONFIG_FILENAME}: ${detail}`;
+  if (!error.issues.some((issue) => issue.code === "unrecognized_keys")) return said;
+  return `${said}. Refused by agent-pipeline ${version}, so the key may be newer than this install.`;
 }
 
 /** Config label overrides win, but only where the file actually names one. */

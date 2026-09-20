@@ -3,9 +3,10 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  type StateFile,
   type TicketState,
   clearTicketState,
-  listTicketStates,
+  listStateFiles,
   readTicketState,
   statePath,
   writeTicketState,
@@ -104,6 +105,21 @@ describe("readTicketState", () => {
     expect(readTicketState(repoRoot, TICKET)).toBeUndefined();
   });
 
+  it("carries the Version that wrote the file", () => {
+    writeTicketState(repoRoot, state({ version: "0.4.0+331d79c" }));
+
+    expect(readTicketState(repoRoot, TICKET)).toEqual(state({ version: "0.4.0+331d79c" }));
+  });
+
+  it("still resumes a file written before a Version was recorded in one", () => {
+    // Every field but the Version, which is what a file from before this
+    // existed looks like. It has to resume, not be started over.
+    writeRaw(JSON.stringify(state()));
+
+    expect(readTicketState(repoRoot, TICKET)).toEqual(state());
+    expect(readTicketState(repoRoot, TICKET)).not.toHaveProperty("version");
+  });
+
   it("keeps reading a file a later pipeline added fields to", () => {
     writeRaw(JSON.stringify({ ...state(), somethingNewer: "from a later version" }));
 
@@ -126,30 +142,62 @@ describe("clearTicketState", () => {
   });
 });
 
-describe("listTicketStates", () => {
+describe("listStateFiles", () => {
+  /** What each file in the list turned out to be, lowest Ticket number first. */
+  function listed(): StateFile[] {
+    return listStateFiles(repoRoot);
+  }
+
   it("reports every Ticket with state recorded, lowest number first", () => {
     for (const ticket of [12, 3, 8]) writeTicketState(repoRoot, state({ ticket }));
 
-    expect(listTicketStates(repoRoot).map((recorded) => recorded.ticket)).toEqual([3, 8, 12]);
+    expect(listed().map(readableState).map((recorded) => recorded?.ticket)).toEqual([3, 8, 12]);
   });
 
   it("reports what each file says, so a sweep needs no second read", () => {
     writeTicketState(repoRoot, state({ ticket: 3, branch: "agent/3-one", fixUsed: true }));
 
-    expect(listTicketStates(repoRoot)).toEqual([
-      state({ ticket: 3, branch: "agent/3-one", fixUsed: true }),
+    expect(listed()).toEqual([
+      { readable: true, state: state({ ticket: 3, branch: "agent/3-one", fixUsed: true }) },
     ]);
   });
 
   it("has nothing to say on a checkout that has never claimed a Ticket", () => {
-    expect(listTicketStates(repoRoot)).toEqual([]);
+    expect(listed()).toEqual([]);
   });
 
-  it("leaves out a file no Run could resume from, rather than failing the sweep", () => {
+  it("reports a file no Run could resume from rather than dropping it", () => {
     writeTicketState(repoRoot, state({ ticket: 3 }));
     writeRaw("{ not json");
 
-    expect(listTicketStates(repoRoot).map((recorded) => recorded.ticket)).toEqual([3]);
+    expect(listed()).toEqual([
+      { readable: true, state: state({ ticket: 3 }) },
+      { readable: false, ticket: TICKET },
+    ]);
+  });
+
+  it("names the Version a file it cannot read says wrote it", () => {
+    writeRaw(JSON.stringify({ version: "9.9.0", somethingNewer: "from a later Version" }));
+
+    expect(listed()).toEqual([{ readable: false, ticket: TICKET, version: "9.9.0" }]);
+  });
+
+  it("names no Version for a file that is not JSON at all", () => {
+    writeRaw("{ not json");
+
+    expect(listed()).toEqual([{ readable: false, ticket: TICKET }]);
+  });
+
+  it("names no Version where the file holds something that is not one", () => {
+    writeRaw(JSON.stringify({ version: 4, state: "merged" }));
+
+    expect(listed()).toEqual([{ readable: false, ticket: TICKET }]);
+  });
+
+  it("reads a file whose Ticket disagrees with its name as one it cannot read", () => {
+    writeRaw(JSON.stringify(state({ ticket: TICKET + 1, version: "0.4.0" })));
+
+    expect(listed()).toEqual([{ readable: false, ticket: TICKET, version: "0.4.0" }]);
   });
 
   it("ignores anything in the directory that is not a Ticket's state", () => {
@@ -157,6 +205,11 @@ describe("listTicketStates", () => {
     mkdirSync(join(repoRoot, ".agent-pipeline", "state"), { recursive: true });
     writeFileSync(join(repoRoot, ".agent-pipeline", "state", "notes.txt"), "a human's note");
 
-    expect(listTicketStates(repoRoot).map((recorded) => recorded.ticket)).toEqual([3]);
+    expect(listed().map(readableState).map((recorded) => recorded?.ticket)).toEqual([3]);
   });
 });
+
+/** The state a file holds, where it holds one a Run could resume from. */
+function readableState(file: StateFile): TicketState | undefined {
+  return file.readable ? file.state : undefined;
+}

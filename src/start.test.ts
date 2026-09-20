@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -19,6 +19,9 @@ const ALL_LABELS = [
   "wontfix",
   "in-progress",
 ];
+
+/** The Version this Run is, as the CLI resolves it once and hands it down. */
+const VERSION = "0.4.0+331d79c";
 
 const PASSING_VERDICT = {
   criteria: [{ text: "it works", status: "met", evidence: "npm test is green" }],
@@ -61,11 +64,12 @@ async function start(work: Work = { command: "run" }, signals?: StopSource) {
   const code = await startRun({
     work,
     repoRoot,
-    config: loadConfig(repoRoot),
+    config: loadConfig(repoRoot, VERSION),
     tracker,
     runner,
     workspace,
     runId: "run-1",
+    version: VERSION,
     command: "agent-pipeline run",
     log: (line) => out.push(line),
     error: (line) => err.push(line),
@@ -232,6 +236,53 @@ describe("a Target init has set up", () => {
     await start();
 
     expect(existsSync(join(repoRoot, ".agent-pipeline", "lock.json"))).toBe(false);
+  });
+});
+
+describe("the Version a Run ran", () => {
+  /** What the file beside this Run's transcripts says, if it is there at all. */
+  function recorded(): string | undefined {
+    const path = join(repoRoot, ".agent-pipeline", "runs", "run-1", "version.txt");
+    return existsSync(path) ? readFileSync(path, "utf8") : undefined;
+  }
+
+  it("is named at the top of the Run's own transcript directory", async () => {
+    tracker.addIssue({ number: 4 });
+
+    await start();
+
+    expect(recorded()).toBe(`${VERSION}\n`);
+  });
+
+  it("is there before the first Stage, so a killed Run still left it", async () => {
+    tracker.addIssue({ number: 4 });
+    let atFirstStage: string | undefined;
+    const runStage = runner.run.bind(runner);
+    runner.run = async (request) => {
+      atFirstStage ??= recorded();
+      return runStage(request);
+    };
+
+    await start();
+
+    expect(atFirstStage).toBe(`${VERSION}\n`);
+  });
+
+  it("heads the summary the Run ends with", async () => {
+    const { lines } = await start();
+
+    expect(lines.at(-1)?.split("\n")[1]).toBe(`agent-pipeline ${VERSION} run run-1 · 0m`);
+  });
+
+  it("is the same string the Progress comment on its Ticket carries", async () => {
+    tracker.addIssue({ number: 4 });
+
+    await start();
+
+    const progress = tracker.updatedComments.at(-1)?.body ?? "";
+    expect(progress.split("\n")[1]).toBe(
+      `**agent-pipeline** \`${VERSION}\` · run \`run-1\` · \`agent/4-ticket-4\``,
+    );
   });
 });
 

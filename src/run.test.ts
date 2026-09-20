@@ -36,6 +36,9 @@ function config(): Config {
   };
 }
 
+/** The Version this Run is, as the CLI resolves it once and hands it down. */
+const VERSION = "0.4.0+331d79c";
+
 const PASSING_VERDICT = {
   criteria: [{ text: "it works", status: "met", evidence: "npm test is green" }],
   pass: true,
@@ -69,6 +72,7 @@ function pipeline(lanes = 1): Pipeline {
     config: { ...config(), lanes },
     repoRoot,
     runId: "run-1",
+    version: VERSION,
     baseBranch: "main",
     landing: new Landing(),
     log: (line) => logged.push(line),

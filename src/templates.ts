@@ -341,6 +341,8 @@ export function noteIssue(subject: NoteSubject): { title: string; body: string }
 }
 
 export interface RunSummary {
+  /** The Version the Run ran, which is what its transcripts are stamped with. */
+  version: string;
   runId: string;
   durationMs: number;
   outcomes: TicketOutcome[];
@@ -360,7 +362,13 @@ const VERB_WIDTH = 9;
  * stopped — the Frontier is empty, everything left on it is blocked, the rate
  * limit released a Ticket and the Run went no further, or a human stopped it.
  */
-export function runSummary({ runId, durationMs, outcomes, stop }: RunSummary): string {
+export function runSummary({
+  version,
+  runId,
+  durationMs,
+  outcomes,
+  stop,
+}: RunSummary): string {
   const rows = [
     ...outcomes.flatMap(ticketRows),
     // Only a Run that reached the end of the Frontier can name what was held
@@ -371,7 +379,7 @@ export function runSummary({ runId, durationMs, outcomes, stop }: RunSummary): s
   ];
 
   return [
-    `agent-pipeline run ${runId} · ${Math.round(durationMs / 60_000)}m`,
+    `agent-pipeline ${version} run ${runId} · ${Math.round(durationMs / 60_000)}m`,
     "",
     ...(rows.length === 0 ? ["  nothing to do"] : rows),
     "",
