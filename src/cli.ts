@@ -13,15 +13,25 @@ import { requestStop } from "./stop.js";
 
 const USAGE = `agent-pipeline — humans plan, the pipeline executes.
 
+It works in the GitHub repository you start it in, on the open issues
+labelled \`ready-for-agent\`. For each one it has a Claude Code session
+implement the issue, runs the repository's tests itself, has a second
+session grade the work against the issue's acceptance criteria, opens a
+pull request, and squash-merges it once CI is green. An issue it cannot
+finish is left to a human, with a draft pull request and a comment.
+
+The repository has to be set up for this first: \`init\` puts in place what
+it can and reports the rest, which is yours to put right.
+
 Usage:
-  agent-pipeline init          Set this Target up, and report what only you can.
-  agent-pipeline run           Drain the Frontier, one Ticket at a time.
-  agent-pipeline ticket <n>    Take one Ticket from claimed to merged.
-  agent-pipeline stop          Ask the running Run to finish and take no more.
+  agent-pipeline init          Set this repository up for the pipeline.
+  agent-pipeline run           Work through every issue that is ready.
+  agent-pipeline ticket <n>    Work through issue <n> and nothing else.
+  agent-pipeline stop          Tell the run in progress to take no more.
 
 Options:
   -h, --help                   Show this message.
-      --version                Show which Version this pipeline is.`;
+  -v, --version                Show which version this pipeline is.`;
 
 /** What the command line comes to once it has been read: the options, and the rest. */
 interface CommandLine {
@@ -44,7 +54,7 @@ function parseCommandLine(argv: string[]): CommandLine | undefined {
       args: argv,
       options: {
         help: { type: "boolean", short: "h" },
-        version: { type: "boolean" },
+        version: { type: "boolean", short: "v" },
       },
       allowPositionals: true,
     });

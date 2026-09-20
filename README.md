@@ -83,16 +83,16 @@ Exit code is `1` while any reported item is failing and `0` once none is, so
 agent-pipeline run         # drain the Frontier
 agent-pipeline ticket 3    # one named Ticket
 agent-pipeline stop        # ask the Run in this Target to finish and take no more
-agent-pipeline --version   # which Version this pipeline is
+agent-pipeline -v          # which Version this pipeline is
 ```
 
-`--version` prints one line and exits `0`. An installed copy is its number, because a
-machine installs a tag: two machines that say `0.4.0` run the same code. A development
-checkout runs whatever commit it has, so it adds that commit and a `dirty` mark when the
-tree has uncommitted changes — `0.4.0`, `0.4.0+331d79c`, `0.4.0+331d79c.dirty`. The same
-string heads the Run summary, every Progress comment, the `init` report and each State
-file a claimed Ticket keeps, so anything the pipeline wrote can be traced to the pipeline
-that wrote it (ADR-0007).
+`-v`, or `--version`, prints one line and exits `0`. An installed copy is its number,
+because a machine installs a tag: two machines that say `0.4.0` run the same code. A
+development checkout runs whatever commit it has, so it adds that commit and a `dirty`
+mark when the tree has uncommitted changes — `0.4.0`, `0.4.0+331d79c`,
+`0.4.0+331d79c.dirty`. The same string heads the Run summary, every Progress comment, the
+`init` report and each State file a claimed Ticket keeps, so anything the pipeline wrote
+can be traced to the pipeline that wrote it (ADR-0007).
 
 `run` and `ticket` refuse a Target `init` has not set up rather than repairing it. A
 gitignore missing one of the two directories, a missing triage label, no conventions
