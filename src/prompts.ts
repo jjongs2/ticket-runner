@@ -42,6 +42,7 @@ const NOTES_GUIDANCE = `Notes for other Tickets: if you discover something that 
 - Record it as a Note instead. Your structured output carries a \`notes\` list, and the pipeline posts each entry where a human will meet it.
 - Set \`ticket\` to the issue number the Note belongs to, and leave it out when you are not sure which one: a Note with no number opens an issue for triage, where a wrong number lands on somebody else's Ticket.
 - Write each \`note\` as plain sentences. No checkboxes: they would read as Acceptance Criteria.
+- Open with one short sentence that names the finding, and put the detail in the sentences after it. A Note with no number opens an issue, and that first sentence becomes the issue's title.
 - Emit \`"notes": []\` when you found nothing. That is the ordinary case and costs you nothing.`;
 
 const VERIFY_INSTRUCTIONS = `You are the verify Stage of an unattended pipeline. Your job is adversarial: try to prove each Acceptance Criterion is NOT met.
