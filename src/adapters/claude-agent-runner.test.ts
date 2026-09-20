@@ -466,6 +466,55 @@ describe("reading the outcome", () => {
     expect(result).toMatchObject({ ok: false, failure: "rate-limited" });
   });
 
+  it("classifies the session limit from the 429 on the result event, however it is worded", async () => {
+    // What the CLI prints once the subscription's five-hour window is spent:
+    // `subtype` still says success, and the message no longer says "usage".
+    const stdout = transcript(
+      { type: "system", subtype: "init", session_id: "abc" },
+      {
+        type: "result",
+        subtype: "success",
+        is_error: true,
+        terminal_reason: "api_error",
+        api_error_status: 429,
+        num_turns: 1,
+        result: "You've hit your session limit · resets 2:40am (Asia/Seoul)",
+      },
+    );
+
+    const result = await runner(execution({ exitCode: 1, stdout })).run(request());
+
+    expect(result).toMatchObject({ ok: false, failure: "rate-limited" });
+  });
+
+  it("classifies a rejected rate_limit_event when the result event says nothing of it", async () => {
+    const stdout = transcript(
+      {
+        type: "rate_limit_event",
+        rate_limit_info: { status: "rejected", resetsAt: 1789839600, rateLimitType: "five_hour" },
+      },
+      { type: "result", subtype: "error", is_error: true, result: "The request was refused." },
+    );
+
+    const result = await runner(execution({ exitCode: 1, stdout })).run(request());
+
+    expect(result).toMatchObject({ ok: false, failure: "rate-limited" });
+  });
+
+  it("does not mistake a session that was only warned about the limit for one it stopped", async () => {
+    const stdout = transcript(
+      {
+        type: "rate_limit_event",
+        rate_limit_info: { status: "allowed_warning", utilization: 0.9, rateLimitType: "five_hour" },
+      },
+      { type: "result", subtype: "error", is_error: true, result: "The tests did not compile." },
+    );
+
+    const result = await runner(execution({ exitCode: 1, stdout })).run(request());
+
+    expect(result).toMatchObject({ ok: false, failure: "nonzero-exit" });
+  });
+
   it("does not mistake a successful session that talks about rate limits for a rate limit", async () => {
     const stdout = transcript({
       type: "result",

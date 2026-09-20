@@ -31,6 +31,17 @@ interface ResultEvent {
   num_turns?: number;
   result?: unknown;
   structured_output?: unknown;
+  /** The HTTP status of the API error that ended the session, when one did. */
+  api_error_status?: number;
+}
+
+/**
+ * A `rate_limit_event` of a stream-json run: the CLI's own word on where the
+ * subscription stands, printed as each request's answer comes back.
+ */
+interface RateLimitEvent {
+  type: "rate_limit_event";
+  rate_limit_info?: { status?: string };
 }
 
 /**
@@ -103,10 +114,11 @@ export class ClaudeAgentRunner implements AgentRunner {
     const log = startStageLog(request, commandLine);
     const execution = await this.spawn(request, args, log);
 
-    log.close(execution, parseEvents(execution.stdout));
+    const events = parseEvents(execution.stdout);
+    log.close(execution, events);
 
-    const results = parseEvents(execution.stdout).filter(isResultEvent);
-    const failure = classify(request, execution, results);
+    const results = events.filter(isResultEvent);
+    const failure = classify(request, execution, events);
     const structured = request.jsonSchema === undefined ? undefined : structuredOutput(results);
     const turns = countTurns(results);
 
@@ -245,18 +257,25 @@ function parseEvents(stdout: string): unknown[] {
 }
 
 function isResultEvent(event: unknown): event is ResultEvent {
+  return isEvent(event, "result");
+}
+
+function isRateLimitEvent(event: unknown): event is RateLimitEvent {
+  return isEvent(event, "rate_limit_event");
+}
+
+function isEvent(event: unknown, type: string): boolean {
   return (
-    typeof event === "object" &&
-    event !== null &&
-    (event as { type?: unknown }).type === "result"
+    typeof event === "object" && event !== null && (event as { type?: unknown }).type === type
   );
 }
 
 function classify(
   request: StageRequest,
   execution: Execution,
-  results: ResultEvent[],
+  events: unknown[],
 ): StageFailure | undefined {
+  const results = events.filter(isResultEvent);
   // How the session ended is what its last event says; see `structuredOutput`
   // for why the last event is not where the rest of the answer is.
   const result = results.at(-1);
@@ -270,10 +289,7 @@ function classify(
   // still succeeds.
   const failed = execution.exitCode !== 0 || result?.is_error === true || result === undefined;
   if (failed) {
-    const text = [result?.subtype ?? "", String(result?.result ?? ""), execution.stderr].join(
-      " ",
-    );
-    if (/usage limit|rate limit|rate_limit/i.test(text)) return "rate-limited";
+    if (rateLimited(execution, events, result)) return "rate-limited";
     return "nonzero-exit";
   }
   // A schema the Stage answered with nothing is only a failure where the
@@ -286,6 +302,31 @@ function classify(
     return "invalid-result";
   }
   return undefined;
+}
+
+/**
+ * Whether a session that failed was stopped by the subscription rate limit.
+ *
+ * The CLI says so in three places, and any one of them is enough: the `result`
+ * event carries the API's 429, a `rate_limit_event` reports the request
+ * `rejected`, or the message it printed names the limit. The message is read
+ * last because it is the least stable of the three: its wording has already
+ * moved from "usage limit" to "session limit" once, and a Run that only knew
+ * the old wording handed off every Ticket it reached instead of releasing the
+ * first. A `rate_limit_event` that merely warns is not a stop: a session near
+ * the limit prints those and finishes.
+ */
+function rateLimited(
+  execution: Execution,
+  events: unknown[],
+  result: ResultEvent | undefined,
+): boolean {
+  if (result?.api_error_status === 429) return true;
+  const rejected = (event: unknown) =>
+    isRateLimitEvent(event) && event.rate_limit_info?.status === "rejected";
+  if (events.some(rejected)) return true;
+  const text = [result?.subtype ?? "", String(result?.result ?? ""), execution.stderr].join(" ");
+  return /usage limit|session limit|rate limit|rate_limit/i.test(text);
 }
 
 /**
