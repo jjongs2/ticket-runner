@@ -29,3 +29,25 @@ fenced because it is raw command output, which would otherwise be read as
 Markdown. A Check the wall-clock limit killed is the one evidence the pipeline
 adds a line of its own to, inside the fence: the output stops mid-run, so
 something has to say that a kill is why.
+
+## Once the Ticket has been taken again
+
+```
+<!-- agent-pipeline:handoff -->
+_Taken again by a later Run; this hand-off is history._
+
+**Handed off.** Failed at **<stage>**.
+...
+```
+
+A hand-off holds while a human holds the Ticket, and stops being current the
+moment the pipeline claims the Ticket again. So the Claim rewrites every
+hand-off comment on the Ticket in place, adding that one line under the marker
+and changing nothing else: the failure, the location and the evidence are
+history worth reading, not noise to remove. An edit notifies nobody, which is
+what makes it cheap enough to do on the way past.
+
+The line is added once. A comment that already carries it is left alone, so a
+Ticket claimed a third time does not stack the line, and a hand-off this Run
+posts afterwards is a new comment below — the only one on the Ticket that then
+reads as current.

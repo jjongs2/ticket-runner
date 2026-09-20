@@ -38,17 +38,24 @@ const GUARD_SENTENCES: Record<GuardReason, string> = {
 };
 
 /**
- * The comment carrying `marker`, if the issue has one.
+ * Every comment carrying `marker`, oldest first.
  *
  * The marker is the first line of every pipeline comment and never changes,
  * which is the whole point of it: this is how the pipeline finds what it has
- * already written rather than writing it again.
+ * already written rather than writing it again. Most markers are on one comment
+ * per Ticket, but a hand-off is a comment of its own every time a Ticket is
+ * handed off, so the marker alone does not promise there is only one.
  */
+export function findMarkedComments(comments: IssueComment[], marker: string): IssueComment[] {
+  return comments.filter((comment) => comment.body.trimStart().startsWith(marker));
+}
+
+/** The first comment carrying `marker`, for the markers only one comment wears. */
 export function findMarkedComment(
   comments: IssueComment[],
   marker: string,
 ): IssueComment | undefined {
-  return comments.find((comment) => comment.body.trimStart().startsWith(marker));
+  return findMarkedComments(comments, marker)[0];
 }
 
 /** Whether a candidate has already been warned about this. */
@@ -228,6 +235,30 @@ export function handoffComment(handoff: HandoffComment): string {
   }
 
   return lines.join("\n");
+}
+
+/**
+ * What a hand-off comment gains when the pipeline takes the Ticket on again.
+ *
+ * Under the marker rather than at the end, so a reader meets it before the
+ * failure it qualifies, and italic so it reads as the pipeline talking about
+ * the comment rather than as another line of the hand-off.
+ */
+export const HANDOFF_TAKEN_LINE = "_Taken again by a later Run; this hand-off is history._";
+
+/**
+ * `body` with {@link HANDOFF_TAKEN_LINE} under its marker, or nothing when the
+ * comment already carries the line.
+ *
+ * Nothing else about the comment is touched: the failure, the location and the
+ * evidence are why the hand-off is worth keeping, and only their currency has
+ * changed. Nothing when there is nothing to add is how the caller knows to
+ * spend no tracker call on it, which is also what stops a Ticket claimed twice
+ * stacking the line.
+ */
+export function markHandoffTaken(body: string): string | undefined {
+  if (body.includes(HANDOFF_TAKEN_LINE)) return undefined;
+  return body.replace(HANDOFF_MARKER, `${HANDOFF_MARKER}\n${HANDOFF_TAKEN_LINE}\n`);
 }
 
 /** A Note, and where it came from, as both Note templates announce it. */

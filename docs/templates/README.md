@@ -9,7 +9,7 @@ Humans read all of these, so each stays short: one line of status, details folde
 | Template | Written when | Marker |
 |---|---|---|
 | `progress-comment.md` | first Stage of a Ticket; edited in place afterwards | `<!-- agent-pipeline:progress -->` |
-| `handoff-comment.md` | a Ticket is handed to a human | `<!-- agent-pipeline:handoff -->` |
+| `handoff-comment.md` | a Ticket is handed to a human; marked as history when the Ticket is claimed again | `<!-- agent-pipeline:handoff -->` |
 | `guard-comment.md` | a candidate is skipped by a guard | `<!-- agent-pipeline:guard:<reason> -->` |
 | `note-comment.md` | a Stage's Note names the Ticket it belongs to | `<!-- agent-pipeline:note -->` |
 | `note-issue.md` | a Stage's Note names no Ticket, so one is opened for it | none (issue body) |
@@ -25,6 +25,6 @@ Humans read all of these, so each stays short: one line of status, details folde
 
 The conventions document `init` writes carries a marker of its own, `<!-- agent-pipeline:version <number> -->`, and is the one that is *on* a first line rather than *being* one: it ends the document's heading, so no reader of the document meets it. It also changes, because what it carries is the Version that wrote the copy — which is what lets `init` leave a Target a newer pipeline set up alone, and a Run warn about a copy from another Version without touching it (ADR-0007). It is not in this folder because no template writes it: `src/conventions.ts` is the document's only shape.
 
-Markers are how the pipeline finds its own comment again. A marker is the first line of the comment and never changes. `note-comment.md` carries one without ever looking it up: nothing about a Note is edited or posted twice, but a human meeting it on an unrelated Ticket can tell what wrote it.
+Markers are how the pipeline finds its own comment again. A marker is the first line of the comment and never changes. A Ticket can carry more than one comment under the same marker: a hand-off is a comment of its own each time, and the Claim marks every one of them as history rather than only the newest. `note-comment.md` carries one without ever looking it up: nothing about a Note is edited or posted twice, but a human meeting it on an unrelated Ticket can tell what wrote it.
 
 The two Note templates are the only ones that quote an agent's prose back to GitHub, so both escape a leading `- [ ]` to `- \[ \]`. A Ticket's checkboxes are its Acceptance Criteria to every part of the pipeline that reads them, and a Note is not asking for any.

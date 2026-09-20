@@ -2,6 +2,7 @@ import { branchName, worktreePath } from "./branch.js";
 import type { Config } from "./config.js";
 import { tickMetCriteria } from "./criteria.js";
 import { type SkipReason, isGuardReason, skipReason } from "./guards.js";
+import { markHandoffsTaken } from "./handoff.js";
 import type { Landing, LandingTurn } from "./landing.js";
 import type { FailureKind, FailurePoint } from "./lifecycle.js";
 import { NOTES_JSON_SCHEMA, type RoutedNote, routeNotes } from "./notes.js";
@@ -266,6 +267,12 @@ async function takeTicket(
     await tracker.removeLabel(ticket, config.labels.readyForAgent);
   }
   log(`#${ticket} ${howItWasTaken(resume, stranded)} · ${branch}`);
+
+  // Whatever hand-off left this Ticket to a human is no longer the last word on
+  // it. Marked here because the comments are already in hand, and because one
+  // place covers both endings: the Ticket that merges from here, and the one
+  // that is handed off a second time below a hand-off that has been defused.
+  await markHandoffsTaken({ tracker, ticket, comments: issue.comments, log });
 
   // A pull request an earlier Run had already opened: without it this Run would
   // try to open a second one for the same branch.

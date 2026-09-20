@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import { UNCHECKED_BOX } from "./acceptance-criteria.js";
 import {
   HANDOFF_MARKER,
+  HANDOFF_TAKEN_LINE,
   NOTE_MARKER,
+  findMarkedComments,
   guardComment,
   guardMarker,
   handoffComment,
+  markHandoffTaken,
   noteComment,
   noteIssue,
   pullRequestBody,
@@ -170,6 +173,54 @@ describe("handoffComment", () => {
   it("says nothing about the budget when no fix Stage ran", () => {
     expect(handoffComment(base)).toContain("Failed at **verify**.");
     expect(handoffComment(base)).not.toMatch(/fix budget/i);
+  });
+});
+
+describe("findMarkedComments", () => {
+  it("gives every comment wearing the marker, oldest first", () => {
+    const comments = [
+      { id: "c1", body: `${HANDOFF_MARKER}\nfirst` },
+      { id: "c2", body: "a human" },
+      { id: "c3", body: `${HANDOFF_MARKER}\nsecond` },
+    ];
+
+    expect(findMarkedComments(comments, HANDOFF_MARKER).map(({ id }) => id)).toEqual([
+      "c1",
+      "c3",
+    ]);
+  });
+
+  it("gives none when the marker is not the first line of any comment", () => {
+    expect(findMarkedComments([{ body: `quoting ${HANDOFF_MARKER}` }], HANDOFF_MARKER)).toEqual(
+      [],
+    );
+  });
+});
+
+describe("markHandoffTaken", () => {
+  const handoff = handoffComment({
+    stage: "verify",
+    failure: "1 criterion unmet",
+    branch: "agent/2-skeleton",
+    evidence: "docs updated — nothing written",
+  });
+
+  it("puts the line under the marker, above the failure it qualifies", () => {
+    expect(markHandoffTaken(handoff)?.split("\n").slice(0, 3)).toEqual([
+      HANDOFF_MARKER,
+      HANDOFF_TAKEN_LINE,
+      "",
+    ]);
+  });
+
+  it("changes nothing else about the comment", () => {
+    const marked = markHandoffTaken(handoff) ?? "";
+
+    expect(marked.replace(`${HANDOFF_TAKEN_LINE}\n\n`, "")).toBe(handoff);
+  });
+
+  it("gives nothing back for a comment that already carries the line", () => {
+    expect(markHandoffTaken(markHandoffTaken(handoff) ?? "")).toBeUndefined();
   });
 });
 
