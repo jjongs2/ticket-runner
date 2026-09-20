@@ -94,12 +94,12 @@ export async function processRun(
   // that drained the Frontier reports. Replaced at every refill: a candidate a
   // Lane unblocked on the way is not one the Run was still held up by.
   let blocked: number[] = [];
-  // Why this Run has stopped filling Lanes, set by whichever of the Release and
-  // the Stop came first and never overwritten: a Stop that arrives after a
-  // Release asked for what was already happening, and a Release afterwards
-  // stopped nothing that was not stopped already. Undefined is a Run still
-  // taking Tickets, which is why it doubles as the guard at every refill.
-  let halted: RunStop | undefined;
+  // Why this Run stopped, which is also what it reports. Set by whichever of
+  // the Release and the Stop came first and never overwritten: a Stop that
+  // arrives after a Release asked for what was already happening, and a Release
+  // afterwards stopped nothing that was not stopped already. Undefined is a Run
+  // still taking Tickets, which is why it doubles as the guard at every refill.
+  let runStop: RunStop | undefined;
   // A Frontier the tracker refused to list, kept until the Lanes still busy are
   // back. A Run must not walk away from a Ticket mid-Stage to report that `gh`
   // went down, so the error waits for them and is thrown where a Run with one
@@ -112,7 +112,7 @@ export async function processRun(
   stopping.watch(({ at }) => {
     const held = [...busy.keys()].sort((first, second) => first - second);
     pipeline.log?.(stopLine(held));
-    halted ??= { reason: "stopped", at, busy: held };
+    runStop ??= { reason: "stopped", at, busy: held };
   });
 
   // Taken off the front as Lanes free, so the sweep is a queue rather than a
@@ -136,8 +136,8 @@ export async function processRun(
    * The line about the Run stopping is logged by the Release that stopped it and
    * by no other. The Ticket's own release is already logged where it happened;
    * this says the Run goes no further, so a transcript shows the Frontier was
-   * left alone rather than found empty, and a Release into a Run already halted
-   * — by an earlier Release or by a Stop — claims to have stopped nothing. It
+   * left alone rather than found empty, and a Release into a Run that an earlier
+   * Release or a Stop had stopped already claims to have stopped nothing. It
    * leads with the Ticket's number all the same: a transcript of interleaved
    * Lanes must not lose the line that explains why one Lane was the last to be
    * filled.
@@ -149,8 +149,8 @@ export async function processRun(
       take(pipeline, ticket).then((outcome) => {
         busy.delete(ticket.number);
         outcomes.push(outcome);
-        if (outcome.outcome === "released" && halted === undefined) {
-          halted = { reason: "rate-limited" };
+        if (outcome.outcome === "released" && runStop === undefined) {
+          runStop = { reason: "rate-limited" };
           pipeline.log?.(`#${outcome.ticket} stopped the Run · rate limit`);
         }
       }),
@@ -176,7 +176,7 @@ export async function processRun(
     // in flight may have been released, and a Stop may have arrived: the Run
     // fills no Lane after either, and this selection is one it already had no
     // business taking from.
-    if (halted !== undefined) return;
+    if (runStop !== undefined) return;
 
     for (const candidate of selection.frontier) {
       if (!laneFree()) break;
@@ -190,7 +190,7 @@ export async function processRun(
   }
 
   for (;;) {
-    if (halted === undefined && listing === undefined) {
+    if (runStop === undefined && listing === undefined) {
       try {
         await fillLanes();
       } catch (error) {
@@ -204,7 +204,7 @@ export async function processRun(
   }
 
   if (listing !== undefined) throw listing;
-  return { outcomes, stop: halted ?? { reason: "frontier", blocked } };
+  return { outcomes, stop: runStop ?? { reason: "frontier", blocked } };
 }
 
 /**

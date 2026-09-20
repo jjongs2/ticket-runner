@@ -89,8 +89,14 @@ export async function startRun(options: StartOptions): Promise<number> {
   try {
     return await execute(options, log, stopping);
   } finally {
-    deafen();
-    lock.release();
+    // The lock goes first: SIGTERM between the two is a kill again, and a kill
+    // that leaves the lock behind costs the next Run a stale holder to reclaim,
+    // where one that leaves the Stop unread costs nothing at all.
+    try {
+      lock.release();
+    } finally {
+      deafen();
+    }
   }
 }
 
