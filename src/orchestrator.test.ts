@@ -14,6 +14,7 @@ import {
   writeTicketState,
 } from "./resume.js";
 import { PROGRESS_MARKER } from "./progress.js";
+import { HANDOFF_MARKER, HANDOFF_TAKEN_LINE, handoffComment } from "./templates.js";
 import type { Pipeline, TicketOutcome } from "./orchestrator.js";
 import type { StageName } from "./ports/agent-runner.js";
 import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./testing/fakes.js";
@@ -2401,6 +2402,98 @@ describe("what stays a separate comment", () => {
     expect(tracker.comments.map(({ body }) => body.split("\n")[0])).toEqual([
       "<!-- agent-pipeline:guard:no-criteria -->",
     ]);
+  });
+});
+
+describe("a hand-off the Ticket was already carrying", () => {
+  /** What the Run that handed the Ticket to a human left on it. */
+  const EARLIER = handoffComment({
+    stage: "verify",
+    failure: "1 criterion unmet",
+    branch: BRANCH,
+    worktree: "/repo/.worktrees/ticket-2",
+    evidence: "docs updated — nothing written",
+  });
+
+  /** A hand-off comment already on the Ticket when this Run claims it. */
+  function carrying(id: string): void {
+    tracker.issue(TICKET).comments.push({ id, body: EARLIER });
+  }
+
+  function onTicket(): string[] {
+    return tracker.issue(TICKET).comments.map(({ body }) => body);
+  }
+
+  it("marks it as history at the Claim, keeping the failure and the evidence", async () => {
+    carrying("c9");
+
+    await run();
+
+    const [marked = ""] = onTicket();
+    expect(marked.split("\n").slice(0, 2)).toEqual([HANDOFF_MARKER, HANDOFF_TAKEN_LINE]);
+    expect(marked).toContain("- Failure: 1 criterion unmet");
+    expect(marked).toContain("worktree `/repo/.worktrees/ticket-2`");
+    expect(marked).toContain("docs updated — nothing written");
+  });
+
+  it("marks it before the first Stage runs, so no Stage reads it as current", async () => {
+    carrying("c9");
+    const seen: string[][] = [];
+    const runStage = runner.run.bind(runner);
+    runner.run = async (request) => {
+      seen.push(onTicket());
+      return runStage(request);
+    };
+
+    await run();
+
+    expect(seen[0]?.[0]).toContain(HANDOFF_TAKEN_LINE);
+  });
+
+  it("marks every hand-off on the Ticket, not only the newest", async () => {
+    carrying("c8");
+    carrying("c9");
+
+    await run();
+
+    expect(onTicket().filter((body) => body.includes(HANDOFF_TAKEN_LINE))).toHaveLength(2);
+  });
+
+  it("leaves the hand-off this Run posts reading as the current one", async () => {
+    carrying("c9");
+    workspace.failCheck("npm test", "1 failing · expected true to be false");
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off" });
+    const handoffs = onTicket().filter((body) => body.startsWith(HANDOFF_MARKER));
+    expect(handoffs).toHaveLength(2);
+    expect(handoffs[0]).toContain(HANDOFF_TAKEN_LINE);
+    expect(handoffs.at(-1)).not.toContain(HANDOFF_TAKEN_LINE);
+  });
+
+  it("writes nothing extra to a Ticket that was never handed off", async () => {
+    await run();
+
+    expect(tracker.updatedComments.every(({ body }) => body.startsWith(PROGRESS_MARKER))).toBe(
+      true,
+    );
+  });
+
+  it("logs an edit the tracker refuses and merges the Ticket anyway", async () => {
+    carrying("c9");
+    const update = tracker.updateComment.bind(tracker);
+    tracker.updateComment = async (id, body) => {
+      if (id === "c9") throw new Error("comment is locked");
+      await update(id, body);
+    };
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(logged).toContainEqual(
+      `#${TICKET} could not mark a hand-off comment as history: comment is locked`,
+    );
   });
 });
 
