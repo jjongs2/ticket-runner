@@ -15,28 +15,43 @@ jobs:
         with:
           # Every tag, so a push that cuts no Version is recognised as one.
           fetch-depth: 0
+      # A Version is two things, the tag and its GitHub Release, so both are
+      # read and a push finishes whichever half is missing. A re-run of a job
+      # that went red after pushing the tag therefore heals the Version, and so
+      # does the next push, whatever it carries.
       - id: version
-        name: Which Version this push carries
+        name: Which half of this Version is missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # `missing` is `both`, `release` or `nothing`. A GitHub Release with no
+        # tag is something GitHub cannot have, so those are all the cases.
         run: |
           set -euo pipefail
           tag="v$(node -p "require('./package.json').version")"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
-            echo "$tag exists; this push cut no Version."
+          if ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "$tag does not exist; this push cuts it."
+            echo "missing=both" >> "$GITHUB_OUTPUT"
+          # A lookup that failed reads as missing rather than as present: the
+          # worst a network blip costs is a red job the next push heals, because
+          # `gh release create` refuses a GitHub Release that is already there.
+          elif ! gh release view "$tag" >/dev/null 2>&1; then
+            echo "$tag exists with no GitHub Release; this push publishes it."
+            echo "missing=release" >> "$GITHUB_OUTPUT"
           else
-            echo "cut=yes" >> "$GITHUB_OUTPUT"
+            echo "$tag is cut; this push carries no Version."
+            echo "missing=nothing" >> "$GITHUB_OUTPUT"
           fi
-      - if: steps.version.outputs.cut == 'yes'
+      - if: steps.version.outputs.missing != 'nothing'
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - if: steps.version.outputs.cut == 'yes'
+      - if: steps.version.outputs.missing != 'nothing'
         run: npm ci
-      - name: Cut the Version
-        if: steps.version.outputs.cut == 'yes'
+      - name: Tag the commit
+        if: steps.version.outputs.missing == 'both'
         env:
-          GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
         run: |
           set -euo pipefail
@@ -46,9 +61,16 @@ jobs:
           # not the subject of the commit it points at.
           git tag -a "$TAG" -m "$TAG" "$GITHUB_SHA"
           git push origin "refs/tags/$TAG"
-          # A Release that fails to publish leaves the tag behind and the job
-          # red: the next push reads the tag as a Version already cut, so the
-          # Release is published by hand from the section.
+      - name: Publish the GitHub Release
+        if: steps.version.outputs.missing != 'nothing'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # The notes are read from this checkout, so a push that heals a half
+          # cut Version publishes the same section the Version PR was reviewed
+          # with.
           npx tsx scripts/version.ts notes > "$RUNNER_TEMP/version-notes.md"
           if [ -s "$RUNNER_TEMP/version-notes.md" ]; then
             gh release create "$TAG" --title "$TAG" --notes-file "$RUNNER_TEMP/version-notes.md"
