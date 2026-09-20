@@ -1,4 +1,4 @@
-agent-pipeline init · <repo root>
+agent-pipeline <version> init · <repo root>
 
 Wrote:
   .gitignore: added `.worktrees/` and `.agent-pipeline/`
@@ -18,6 +18,10 @@ Checked:
   ✓ a Check is configured or inferable: npm test, npm run typecheck
 
 Not ready: 1 item is yours to put right.
+
+The first line names the Version doing the setting up (ADR-0007), in the shape
+`run-summary.txt` describes, so a Target can be told which pipeline wrote the
+files it is about to gain.
 
 Three groups, always in this order and always all three, however little each has
 to say.

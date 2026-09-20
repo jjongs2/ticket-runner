@@ -78,7 +78,16 @@ Exit code is `1` while any reported item is failing and `0` once none is, so
 agent-pipeline run         # drain the Frontier
 agent-pipeline ticket 3    # one named Ticket
 agent-pipeline stop        # ask the Run in this Target to finish and take no more
+agent-pipeline --version   # which Version this pipeline is
 ```
+
+`--version` prints one line and exits `0`. An installed copy is its number, because a
+machine installs a tag: two machines that say `0.4.0` run the same code. A development
+checkout runs whatever commit it has, so it adds that commit and a `dirty` mark when the
+tree has uncommitted changes — `0.4.0`, `0.4.0+331d79c`, `0.4.0+331d79c.dirty`. The same
+string heads the Run summary, every Progress comment, the `init` report and each State
+file a claimed Ticket keeps, so anything the pipeline wrote can be traced to the pipeline
+that wrote it (ADR-0007).
 
 `run` and `ticket` refuse a Target `init` has not set up rather than repairing it. A
 gitignore missing one of the two directories, a missing triage label, no conventions
@@ -136,8 +145,8 @@ started.
 
 A Stage may not start a Run either. Every Stage session runs with `AGENT_PIPELINE_STAGE`
 set to the Stage's name, and while that variable is set the CLI refuses before it looks at
-the repository, the config or `gh` — `--help` included, because there is nothing a Stage
-legitimately needs from this command:
+the repository, the config or `gh` — `--help` and `--version` included, because there is
+nothing a Stage legitimately needs from this command:
 
 ```
 $ agent-pipeline ticket 13
@@ -186,6 +195,9 @@ unassigned, draft PR, branch and worktree preserved. Exit code is `0` when nothi
 handed off, `1` when something was, and `2` when nothing was taken at all — the Run
 never started, or a guard refused the issue named. A `run` that skipped every candidate
 still exits `0`.
+
+A Run names its Version in `.agent-pipeline/runs/<runId>/version.txt` before its first
+Stage, so a transcript sits beside the pipeline that wrote it.
 
 Every Stage writes its exact command line, stdout, stderr and stream-json transcript to
 `.agent-pipeline/runs/<runId>/<n>/`, so any Stage can be reproduced by hand. The command
@@ -321,6 +333,9 @@ Not everything the sweep finds is stranded, and it resumes nothing else:
 - a Ticket somebody else now holds is left alone and logged — a human took it over
 - a Ticket whose worktree is gone is taken from the top, in place, keeping its Claim —
   which is a hand-off at `setup` when the branch it named is still there
+- a Ticket whose State file nothing can resume from is logged with the Version the file
+  names, and both the file and the Claim are left exactly where they are: such a file was
+  probably written by a newer pipeline, and this sweep is the only thing that can ever see it
 
 Being killed is still worse than stopping: whatever the Stage was doing is lost, and a
 worktree the Run left mid-rebase is aborted back to the branch tip before the Checks grade

@@ -1,6 +1,6 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type TicketState, statePath, writeTicketState } from "./resume.js";
 import { holdsClaim, strandedTickets } from "./stranded.js";
@@ -153,6 +153,89 @@ describe("a Ticket that has closed", () => {
 
     expect(await sweep()).toEqual([]);
     expect(existsSync(statePath(repoRoot, 4))).toBe(false);
+  });
+});
+
+describe("a State file the sweep cannot read", () => {
+  /** Whatever an older or newer pipeline left behind, byte for byte. */
+  function writeRaw(ticket: number, contents: string): void {
+    const path = statePath(repoRoot, ticket);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, contents);
+  }
+
+  it("is reported by Ticket number and the Version the file names", async () => {
+    tracker.addIssue({ number: 4, assignees: [tracker.user], labels: [IN_PROGRESS] });
+    writeRaw(4, JSON.stringify({ version: "9.9.0", reached: "something newer" }));
+
+    expect(await sweep()).toEqual([]);
+    expect(logged).toEqual([
+      "#4 has a State file this Version cannot use, written by 9.9.0; it and the Claim are left alone",
+    ]);
+  });
+
+  it("says so when the file names no Version at all", async () => {
+    writeRaw(4, "{ not json");
+
+    expect(logged).toEqual([]);
+    expect(await sweep()).toEqual([]);
+    expect(logged).toEqual([
+      "#4 has a State file this Version cannot use, naming no Version; it and the Claim are left alone",
+    ]);
+  });
+
+  it("leaves the file where it is, and the Claim on the board with it", async () => {
+    tracker.addIssue({ number: 4, assignees: [tracker.user], labels: [IN_PROGRESS] });
+    writeRaw(4, "{ not json");
+
+    await sweep();
+
+    expect(existsSync(statePath(repoRoot, 4))).toBe(true);
+    const issue = await tracker.getIssue(4);
+    expect(issue.assignees).toEqual([tracker.user]);
+    expect(issue.labels).toEqual([IN_PROGRESS]);
+  });
+
+  it("is reported without asking the tracker anything at all", async () => {
+    writeRaw(4, "{ not json");
+    let asked = 0;
+    tracker.currentUser = async () => {
+      asked += 1;
+      return "pipeline-user";
+    };
+
+    expect(await sweep()).toEqual([]);
+    expect(asked).toBe(0);
+    expect(logged).toHaveLength(1);
+  });
+
+  it("says the same of a file that parses but names another Ticket", async () => {
+    // No Version would resume this one either, so it is reported rather than
+    // dropped, in the words that are true of both kinds.
+    writeRaw(
+      4,
+      JSON.stringify({
+        ticket: 5,
+        branch: "agent/5-somebody-copied-a-file",
+        state: "claimed",
+        fixUsed: false,
+        runId: "run-0",
+        version: "0.4.0",
+        updatedAt: "2026-09-17T09:00:00.000Z",
+      }),
+    );
+
+    expect(await sweep()).toEqual([]);
+    expect(logged).toEqual([
+      "#4 has a State file this Version cannot use, written by 0.4.0; it and the Claim are left alone",
+    ]);
+  });
+
+  it("does not stop the Tickets beside it being swept", async () => {
+    claimed(6);
+    writeRaw(4, "{ not json");
+
+    expect((await sweep()).map((ticket) => ticket.number)).toEqual([6]);
   });
 });
 

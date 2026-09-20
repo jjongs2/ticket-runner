@@ -7,6 +7,7 @@ import type { AgentRunner } from "./ports/agent-runner.js";
 import type { Tracker } from "./ports/tracker.js";
 import type { Workspace } from "./ports/workspace.js";
 import { readinessRefusal } from "./readiness.js";
+import { writeRunVersion } from "./run-log.js";
 import { type RunStop, processRun } from "./run.js";
 import { type StopSource, StopSignal, listenForStop, stopLine } from "./stop.js";
 import { startupMessages } from "./startup.js";
@@ -33,6 +34,11 @@ export interface StartOptions {
   runner: AgentRunner;
   workspace: Workspace;
   runId: string;
+  /**
+   * The Version this Run is, resolved once in the CLI (ADR-0007). Everything
+   * the Run stamps takes it from here, so every stamp says the same thing.
+   */
+  version: string;
   /** The command line the Run lock records, for whoever loses it. */
   command: string;
   log?: (line: string) => void;
@@ -105,7 +111,18 @@ async function execute(
   log: (line: string) => void,
   stopping: StopSignal,
 ): Promise<number> {
-  const { work, repoRoot, config, tracker, runner, workspace, runId } = options;
+  const { work, repoRoot, config, tracker, runner, workspace, runId, version } = options;
+
+  // Before the first Stage, and before the tracker is asked anything: a
+  // transcript has to sit beside the pipeline that wrote it, and the Run
+  // summary that says the same thing is a terminal these files outlive.
+  // Logged and nothing more when it fails — a directory that will not take a
+  // one-line file is no reason to take no Ticket at all.
+  try {
+    writeRunVersion(repoRoot, runId, version);
+  } catch (error) {
+    log(`could not record the Version beside the transcripts: ${(error as Error).message}`);
+  }
 
   // Once per Run, before any Ticket: every branch, rebase, pull request and
   // pull of this Run goes to the branch this answers.
@@ -118,6 +135,7 @@ async function execute(
     config,
     repoRoot,
     runId,
+    version,
     baseBranch,
     // Once per Run as well, and for the same reason: the Tickets of one Run
     // take turns between their rebase and their merge, and a Landing made per
@@ -130,6 +148,7 @@ async function execute(
   log(opening(runId, work, config.lanes));
   const summary = (outcomes: TicketOutcome[], stop?: RunStop) =>
     runSummary({
+      version,
       runId,
       durationMs: Date.now() - startedAt,
       outcomes,

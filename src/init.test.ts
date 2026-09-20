@@ -21,6 +21,9 @@ let repoRoot: string;
 let tracker: FakeTracker;
 let runner: FakeAgentRunner;
 
+/** The Version this Run is, as the CLI resolves it once and hands it down. */
+const VERSION = "0.4.0+331d79c";
+
 /** The six triage labels, in the order {@link initTarget} creates them. */
 const ALL_LABELS = [
   "needs-triage",
@@ -64,7 +67,8 @@ async function init(overrides: { root?: string; env?: NodeJS.ProcessEnv } = {}) 
   const err: string[] = [];
   const code = await initTarget({
     repoRoot: root,
-    config: loadConfig(root),
+    version: VERSION,
+    config: loadConfig(root, VERSION),
     tracker,
     runner,
     env: overrides.env ?? {},
@@ -94,6 +98,12 @@ describe("what init writes into the Target", () => {
     expect(read(repoRoot, "agent-pipeline.json")).toBe("{}\n");
     expect(read(repoRoot, CONVENTIONS_PATH)).toBe(CONVENTIONS_DOC);
     expect(read(repoRoot, "CLAUDE.md")).toContain(CONVENTIONS_PATH);
+  });
+
+  it("heads the report with the Version doing the setting up", async () => {
+    const { out } = await init();
+
+    expect(out.split("\n")[0]).toBe(`agent-pipeline ${VERSION} init · ${repoRoot}`);
   });
 
   it("says what it wrote, one line per file", async () => {

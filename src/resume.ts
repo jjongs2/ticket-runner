@@ -58,6 +58,12 @@ export interface TicketState {
   pullRequest?: number;
   /** The Run that last wrote the file, and when — both for a human reading it. */
   runId: string;
+  /**
+   * The Version that wrote the file (ADR-0007). Written on every write, and
+   * optional when read: a file an earlier pipeline left names none, and a
+   * Ticket claimed before this existed still resumes.
+   */
+  version?: string;
   /** ISO 8601. */
   updatedAt: string;
 }
@@ -69,6 +75,7 @@ const stateSchema = z.object({
   fixUsed: z.boolean(),
   pullRequest: z.number().int().positive().optional(),
   runId: z.string(),
+  version: z.string().optional(),
   updatedAt: z.string(),
 });
 
@@ -94,6 +101,25 @@ export function clearTicketState(repoRoot: string, ticket: number): void {
 }
 
 /**
+ * What a State file turned out to be.
+ *
+ * Three cases, not two: no file at all, a file that reads as state a Run can
+ * resume from, and a file that does not. The third used to be the first —
+ * silently dropped — and it is the one that most needs saying out loud: its
+ * Ticket is claimed on the board, so the sweep for Stranded Tickets is the only
+ * thing that could ever have found it (ADR-0007).
+ */
+export type StateFile =
+  | { readable: true; state: TicketState }
+  | {
+      readable: false;
+      /** Read off the file's name, which is the only part of it that parsed. */
+      ticket: number;
+      /** The Version the file names, where it names one a reader can make out. */
+      version?: string;
+    };
+
+/**
  * What an earlier Run recorded about this Ticket, if it can be believed.
  *
  * A file nothing wrote, one that is not JSON, and one a newer pipeline shaped
@@ -101,26 +127,64 @@ export function clearTicketState(repoRoot: string, ticket: number): void {
  * safe, and resuming on a guess is not.
  */
 export function readTicketState(repoRoot: string, ticket: number): TicketState | undefined {
-  const parsed = stateSchema.safeParse(readJson(statePath(repoRoot, ticket)));
-  if (!parsed.success || parsed.data.ticket !== ticket) return undefined;
-
-  // A pull request nobody opened is a key that is not there, not a key holding
-  // nothing: the rest of the pipeline reads these with the same distinction.
-  const { pullRequest, ...state } = parsed.data;
-  return { ...state, ...(pullRequest === undefined ? {} : { pullRequest }) };
+  const file = readStateFile(repoRoot, ticket);
+  return file?.readable === true ? file.state : undefined;
 }
 
 /**
- * Every Ticket this checkout holds state for, in ascending number.
+ * The file itself, and which of the three things it is. Undefined is the first:
+ * nothing has ever recorded this Ticket here.
+ */
+export function readStateFile(repoRoot: string, ticket: number): StateFile | undefined {
+  const contents = readFile(statePath(repoRoot, ticket));
+  if (contents === undefined) return undefined;
+
+  const raw = parseJson(contents);
+  const parsed = stateSchema.safeParse(raw);
+  if (!parsed.success || parsed.data.ticket !== ticket) {
+    const version = namedVersion(raw);
+    return { readable: false, ticket, ...(version === undefined ? {} : { version }) };
+  }
+
+  // A pull request nobody opened, and a Version an older pipeline never wrote,
+  // are keys that are not there rather than keys holding nothing: the rest of
+  // the pipeline reads these with the same distinction.
+  const { pullRequest, version, ...state } = parsed.data;
+  return {
+    readable: true,
+    state: {
+      ...state,
+      ...(pullRequest === undefined ? {} : { pullRequest }),
+      ...(version === undefined ? {} : { version }),
+    },
+  };
+}
+
+/**
+ * The Version a file that will not parse still names, where it names one.
+ *
+ * Read off the raw JSON rather than the schema, because the schema is exactly
+ * what refused the file: a State file a newer pipeline wrote is named by the
+ * Version that wrote it, whatever else about it this one cannot read.
+ */
+function namedVersion(raw: unknown): string | undefined {
+  if (raw === null || typeof raw !== "object" || !("version" in raw)) return undefined;
+  const version = (raw as { version: unknown }).version;
+  return typeof version === "string" && version !== "" ? version : undefined;
+}
+
+/**
+ * Every State file this checkout holds, in ascending Ticket number.
  *
  * Ascending because a Run takes the oldest Ticket first, and the sweep that
- * reads this runs before the Frontier. A file nothing can be resumed from is
- * left out rather than reported, exactly as {@link readTicketState} reads one.
+ * reads this runs before the Frontier. A file that cannot be read is in the
+ * list rather than missing from it: its Ticket is claimed, and the sweep is
+ * what tells a human it is there.
  */
-export function listTicketStates(repoRoot: string): TicketState[] {
+export function listStateFiles(repoRoot: string): StateFile[] {
   return recordedTickets(repoRoot)
     .sort((a, b) => a - b)
-    .flatMap((ticket) => readTicketState(repoRoot, ticket) ?? []);
+    .flatMap((ticket) => readStateFile(repoRoot, ticket) ?? []);
 }
 
 /** The name {@link statePath} writes, read back the other way. */
@@ -140,9 +204,19 @@ function recordedTickets(repoRoot: string): number[] {
   });
 }
 
-function readJson(path: string): unknown {
+/** What is on disk, or undefined where there is no file to read at all. */
+function readFile(path: string): string | undefined {
   try {
-    return JSON.parse(readFileSync(path, "utf8"));
+    return readFileSync(path, "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
+/** The file's JSON, or undefined where it is not JSON — which the schema refuses. */
+function parseJson(contents: string): unknown {
+  try {
+    return JSON.parse(contents);
   } catch {
     return undefined;
   }

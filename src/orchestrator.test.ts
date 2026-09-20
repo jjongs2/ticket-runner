@@ -19,6 +19,9 @@ import type { StageName } from "./ports/agent-runner.js";
 import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./testing/fakes.js";
 import { settle } from "./testing/settle.js";
 
+/** The Version this Run is, as the CLI resolves it once and hands it down. */
+const VERSION = "0.4.0+331d79c";
+
 const TICKET = 2;
 const BRANCH = "agent/2-skeleton-one-ticket-end-to-end";
 const URL = "https://github.com/acme/repo/issues/2";
@@ -145,6 +148,7 @@ async function run(overrides: Partial<Config> = {}): Promise<TicketOutcome> {
       config: settings,
       repoRoot,
       runId: "run-1",
+      version: VERSION,
       baseBranch: await resolveBaseBranch(tracker, settings),
       landing: new Landing(),
       log: (line) => logged.push(line),
@@ -1497,9 +1501,20 @@ describe("the State file a claimed Ticket keeps", () => {
         state: "claimed",
         fixUsed: false,
         runId: "run-1",
+        version: VERSION,
         updatedAt: expect.any(String),
       },
     });
+  });
+
+  it("names the Version that wrote it, on every write", async () => {
+    const seen = stateAtEachStage();
+
+    await run();
+
+    // Every stamp of one Run is the same string, and there is at least one.
+    expect(seen.length).toBeGreaterThan(0);
+    expect([...new Set(seen.map(({ state }) => state?.version))]).toEqual([VERSION]);
   });
 
   it("is on disk before the Claim reaches the board", async () => {
@@ -2611,6 +2626,7 @@ describe("the Landing", () => {
       config: settings,
       repoRoot,
       runId: "run-1",
+      version: VERSION,
       baseBranch: await resolveBaseBranch(tracker, settings),
       landing: new Landing(),
       log: (line) => logged.push(line),

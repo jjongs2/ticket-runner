@@ -93,6 +93,12 @@ export interface Pipeline {
   repoRoot: string;
   runId: string;
   /**
+   * The Version this Run is, resolved once in the CLI and stamped on everything
+   * the Run writes (ADR-0007). A string, never a lookup: nothing here reads
+   * `package.json` or runs git, so every stamp of one Run is the same string.
+   */
+  version: string;
+  /**
    * The branch every Ticket of this Run branches from, rebases onto, merges
    * into and pulls, resolved once before the Run started
    * ({@link import("./base-branch.js").resolveBaseBranch}).
@@ -228,6 +234,7 @@ async function takeTicket(
   const progress = new Progress({
     tracker,
     ticket,
+    version: pipeline.version,
     runId,
     branch,
     comments: issue.comments,
@@ -609,11 +616,16 @@ class ResumeRecord {
     }
   }
 
-  /** The Run and the time belong to the write, not to what the Ticket reached. */
+  /**
+   * The Run, the Version and the time belong to the write, not to what the
+   * Ticket reached: they say which pipeline left the file, so a Run that cannot
+   * read one can still name what wrote it (ADR-0007).
+   */
   private file(): TicketState {
     return {
       ...this.reached,
       runId: this.pipeline.runId,
+      version: this.pipeline.version,
       updatedAt: new Date().toISOString(),
     };
   }
