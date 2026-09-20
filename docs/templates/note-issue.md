@@ -27,7 +27,9 @@ worth preventing is a finding going nowhere.
 
 The title is derived from the Note rather than asked for: the first sentence of
 it, trimmed to fit an issue list. Triage is what turns a Note into a Ticket, so
-the title only has to be good enough to be read.
+the title only has to be good enough to be read. The Stage is told as much, and
+asked to open with one short sentence that names the finding: a title cut off
+mid-thought is read in every issue list until triage renames it.
 
 The body carries the Note whole, under the same `From #<origin> <stage>` line
 the Note comment uses, and with the same `- [ ]` escaping — a fresh issue with

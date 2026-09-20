@@ -210,6 +210,14 @@ describe("the Notes channel", () => {
     expect(implementPrompt(url, BASE, "")).toContain("leave it out when you are not sure");
   });
 
+  it("tells a Stage that a Note's first sentence becomes the issue title", () => {
+    const prompt = implementPrompt(url, BASE, "");
+
+    expect(prompt).toContain("first sentence becomes the issue's title");
+    expect(prompt).toContain("one short sentence");
+    expect(fixPrompt(url, FAILED_CHECK, BASE, "")).toContain("first sentence becomes the issue's title");
+  });
+
   it("tells a Stage that finding nothing is the ordinary case", () => {
     expect(implementPrompt(url, BASE, "")).toContain(`"notes": []`);
   });

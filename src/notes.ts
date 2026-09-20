@@ -75,7 +75,7 @@ export const NOTES_JSON_SCHEMA = {
           note: {
             type: "string",
             description:
-              "What you found and why it matters, in plain sentences. No checkboxes.",
+              "What you found and why it matters, in plain sentences. The first sentence becomes an issue title when no ticket is named, so keep it short and let the detail follow. No checkboxes.",
           },
         },
         required: ["note"],
