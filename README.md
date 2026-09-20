@@ -508,6 +508,12 @@ pulls once they merge — is asked of GitHub once at the start of a Run, so a Ta
 
   "ciTimeoutMinutes": 30,
 
+  // How long a pull request GitHub has registered no check run for still counts
+  // as pending. Default: 5. Raise it on a Target whose Actions queue slowly; it
+  // never outlives `ciTimeoutMinutes`, and a Target with no CI workflow waits it
+  // out once per merge.
+  "ciGraceMinutes": 5,
+
   // Rename the triage vocabulary if this repo uses different label strings.
   "labels": { "inProgress": "in-progress" }
 }

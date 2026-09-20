@@ -22,6 +22,7 @@ describe("loadConfig", () => {
     expect(config.gates).toEqual({ checks: true, ci: true });
     expect(config.permissionMode).toBe("auto");
     expect(config.ciTimeoutMinutes).toBe(30);
+    expect(config.ciGraceMinutes).toBe(5);
     expect(config.checkTimeoutMinutes).toBe(15);
     expect(config.lanes).toBe(1);
     expect(config.stages.implement).toEqual({
@@ -147,6 +148,24 @@ describe("loadConfig", () => {
 
       expect(() => loadConfig(root, VERSION)).toThrowError(ConfigError);
       expect(() => loadConfig(root, VERSION)).toThrowError(/checkTimeoutMinutes/);
+    },
+  );
+
+  it("takes a configured CI grace as given", () => {
+    const root = repoWith({ [CONFIG_FILENAME]: JSON.stringify({ ciGraceMinutes: 8 }) });
+
+    expect(loadConfig(root, VERSION).ciGraceMinutes).toBe(8);
+  });
+
+  it.each([0, -5, "five"])(
+    "rejects %o as a CI grace with a message naming the field",
+    (value) => {
+      const root = repoWith({
+        [CONFIG_FILENAME]: JSON.stringify({ ciGraceMinutes: value }),
+      });
+
+      expect(() => loadConfig(root, VERSION)).toThrowError(ConfigError);
+      expect(() => loadConfig(root, VERSION)).toThrowError(/ciGraceMinutes/);
     },
   );
 
