@@ -110,6 +110,10 @@ _Avoid_: retry budget, fix limit, second chance
 What a rate-limited Stage does to a Ticket instead of handing it to a human: the Claim is undone, `ready-for-agent` goes back on, the branch and worktree stay, and a State file says where to resume. Nothing about the Ticket was wrong, so no Fix budget is spent and nobody is notified. It also stops the Run that made it claiming any more Tickets, because the limit that stopped one Stage will stop the next; the Lanes still busy finish what they hold.
 _Avoid_: pause, defer, requeue, unclaim
 
+**Stop**:
+What a human asks of a running Run: finish the Tickets its Lanes hold, to merge or hand-off, and take no more — not from the Frontier and not from the Stranded Tickets. Nothing about any Ticket changes, so nothing is written to the board and the exit code is the outcomes' as usual. Not a kill: a killed Run leaves Stranded Tickets, a stopped one leaves none.
+_Avoid_: drain (a Run drains the Frontier), pause, cancel, abort, kill, graceful shutdown
+
 **State file**:
 What a claimed Ticket keeps under `.agent-pipeline/state/`: the state it reached, its branch, whether the Fix budget was spent, and the pull request if one is open. Written as part of the Claim and updated as the Ticket advances, so it is there for as long as the Ticket is claimed; removed on merge and on hand-off. Its presence makes the Ticket resumable, and the Claim on GitHub says whether the Ticket was released or stranded.
 _Avoid_: checkpoint, journal, resume file
