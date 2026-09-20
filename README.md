@@ -333,9 +333,9 @@ Not everything the sweep finds is stranded, and it resumes nothing else:
 - a Ticket somebody else now holds is left alone and logged — a human took it over
 - a Ticket whose worktree is gone is taken from the top, in place, keeping its Claim —
   which is a hand-off at `setup` when the branch it named is still there
-- a Ticket whose State file will not read at all is logged with the Version the file names,
-  and both the file and the Claim are left exactly where they are: such a file was probably
-  written by a newer pipeline, and this sweep is the only thing that can ever see it
+- a Ticket whose State file nothing can resume from is logged with the Version the file
+  names, and both the file and the Claim are left exactly where they are: such a file was
+  probably written by a newer pipeline, and this sweep is the only thing that can ever see it
 
 Being killed is still worse than stopping: whatever the Stage was doing is lost, and a
 worktree the Run left mid-rebase is aborted back to the branch tip before the Checks grade

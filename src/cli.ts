@@ -3,13 +3,13 @@ import { ClaudeAgentRunner } from "./adapters/claude-agent-runner.js";
 import { GhTracker } from "./adapters/gh-tracker.js";
 import { GitWorkspace } from "./adapters/git-workspace.js";
 import { findRepoRoot } from "./adapters/repo-root.js";
+import { pipelineVersion } from "./adapters/version.js";
 import { ConfigError, loadConfig } from "./config.js";
 import { initTarget } from "./init.js";
 import { newRunId } from "./run-log.js";
 import { nestedRunRefusal } from "./stage-guard.js";
 import { type Work, startRun } from "./start.js";
 import { requestStop } from "./stop.js";
-import { pipelineVersion } from "./version.js";
 
 const USAGE = `agent-pipeline — humans plan, the pipeline executes.
 

@@ -102,15 +102,19 @@ export async function strandedTickets(sweep: StrandedSweep): Promise<StrandedTic
 }
 
 /**
- * A State file nothing here can read, named rather than dropped.
+ * A State file nothing here can resume from, named rather than dropped.
  *
  * The file and the Claim are left exactly where they are. A Ticket carrying a
- * file this pipeline cannot read is one a newer pipeline probably wrote, and
+ * file this pipeline cannot use is one a newer pipeline probably wrote, and
  * deleting either would take a Claim off the board that the machine which
  * understands the file is still counting on (ADR-0007). So the sweep says the
  * Ticket number and whichever Version the file names, and a human decides.
+ *
+ * `cannot use` rather than `cannot read`, because the two files that land here
+ * are not the same: one will not parse at all, and one parses but names another
+ * Ticket than the file it is in, which no Version would resume either.
  */
 function unreadableLine(file: Extract<StateFile, { readable: false }>): string {
   const wrote = file.version === undefined ? "naming no Version" : `written by ${file.version}`;
-  return `#${file.ticket} has a State file this Version cannot read, ${wrote}; it and the Claim are left alone`;
+  return `#${file.ticket} has a State file this Version cannot use, ${wrote}; it and the Claim are left alone`;
 }

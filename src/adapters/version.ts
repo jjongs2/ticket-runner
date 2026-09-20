@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { exec } from "./adapters/exec.js";
+import { exec } from "./exec.js";
 
 /**
  * Which Version this copy of the pipeline is (ADR-0007).
@@ -12,13 +12,15 @@ import { exec } from "./adapters/exec.js";
  * transcripts — has to say the same thing, and the only way to promise that is
  * to read it once.
  *
- * No port describes this. The number is in this package's own `package.json`
- * and the commit is in this checkout's own git directory, and neither is a
- * Target's file: the pipeline's own files it reads itself (ADR-0004).
+ * No port describes this, and none should: a port is how a Run reaches a
+ * Target, and this reads the pipeline's own package and the git directory it
+ * was started from. That is what {@link import("./repo-root.js").findRepoRoot}
+ * already is, and it lives here for the same reason — the modules that spawn a
+ * process are the adapters, whoever they are asking about.
  */
 
 /** The package root: the directory this package's `package.json` sits in. */
-export const PACKAGE_ROOT = fileURLToPath(new URL("..", import.meta.url));
+export const PACKAGE_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
 /** What a copy with no number to read calls itself, rather than guessing one. */
 const UNKNOWN = "unknown";

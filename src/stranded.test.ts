@@ -170,7 +170,7 @@ describe("a State file the sweep cannot read", () => {
 
     expect(await sweep()).toEqual([]);
     expect(logged).toEqual([
-      "#4 has a State file this Version cannot read, written by 9.9.0; it and the Claim are left alone",
+      "#4 has a State file this Version cannot use, written by 9.9.0; it and the Claim are left alone",
     ]);
   });
 
@@ -180,7 +180,7 @@ describe("a State file the sweep cannot read", () => {
     expect(logged).toEqual([]);
     expect(await sweep()).toEqual([]);
     expect(logged).toEqual([
-      "#4 has a State file this Version cannot read, naming no Version; it and the Claim are left alone",
+      "#4 has a State file this Version cannot use, naming no Version; it and the Claim are left alone",
     ]);
   });
 
@@ -207,6 +207,28 @@ describe("a State file the sweep cannot read", () => {
     expect(await sweep()).toEqual([]);
     expect(asked).toBe(0);
     expect(logged).toHaveLength(1);
+  });
+
+  it("says the same of a file that parses but names another Ticket", async () => {
+    // No Version would resume this one either, so it is reported rather than
+    // dropped, in the words that are true of both kinds.
+    writeRaw(
+      4,
+      JSON.stringify({
+        ticket: 5,
+        branch: "agent/5-somebody-copied-a-file",
+        state: "claimed",
+        fixUsed: false,
+        runId: "run-0",
+        version: "0.4.0",
+        updatedAt: "2026-09-17T09:00:00.000Z",
+      }),
+    );
+
+    expect(await sweep()).toEqual([]);
+    expect(logged).toEqual([
+      "#4 has a State file this Version cannot use, written by 0.4.0; it and the Claim are left alone",
+    ]);
   });
 
   it("does not stop the Tickets beside it being swept", async () => {
