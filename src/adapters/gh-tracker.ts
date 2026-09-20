@@ -11,7 +11,7 @@ import type {
   SquashCommit,
   Tracker,
 } from "../ports/tracker.js";
-import { highestTag } from "../version-number.js";
+import { highestVersion } from "../version-number.js";
 import { type Execution, type RunProcess, exec, throwOnFailure } from "./exec.js";
 
 export interface GhTrackerOptions {
@@ -139,15 +139,17 @@ export class GhTracker implements Tracker {
   }
 
   /**
-   * The highest Release published on `repository`, as its tag.
+   * The tag of the highest Version published on `repository` as a Release.
    *
    * Every failure is the same answer — no answer — because nothing the caller
    * does with it may stop a Run: a rate limit, a repository nobody can see, a
    * `gh` that is not installed. The list is asked for rather than GitHub's own
    * `latest`, which is the newest by date: a patch cut on an old branch after a
-   * minor would otherwise be reported as the Version to upgrade to.
+   * minor would otherwise be reported as the Version to upgrade to. A hundred
+   * of them is every Version this tool is likely to have, and they arrive
+   * newest first, so the highest is among them wherever the count lands.
    */
-  async latestRelease(repository: string): Promise<string | undefined> {
+  async latestVersionTag(repository: string): Promise<string | undefined> {
     try {
       const { exitCode, stdout } = await this.gh(
         [
@@ -164,10 +166,11 @@ export class GhTracker implements Tracker {
       );
       if (exitCode !== 0) return undefined;
       const releases = JSON.parse(stdout) as RawRelease[];
-      return highestTag(
-        releases.filter((release) => !release.isDraft && !release.isPrerelease)
+      return highestVersion(
+        releases
+          .filter((release) => !release.isDraft && !release.isPrerelease)
           .map((release) => release.tagName),
-      );
+      )?.tag;
     } catch {
       return undefined;
     }

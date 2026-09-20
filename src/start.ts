@@ -42,8 +42,7 @@ export interface StartOptions {
   version: string;
   /**
    * The pipeline's own repository, as `owner/name`, which the newer-Version
-   * notice is looked up against. Absent where the package names none, and then
-   * nothing is asked and nothing is said.
+   * notice is looked up against; see {@link import("./staleness.js")}.
    */
   repository?: string | undefined;
   /** The command line the Run lock records, for whoever loses it. */

@@ -424,7 +424,7 @@ describe("a Run a human stopped", () => {
 
 describe("what a Run says about another Version", () => {
   it("names both Versions at the top of the log and at the head of the summary", async () => {
-    tracker.latestReleaseTag = "v0.5.0";
+    tracker.publishedVersionTag = "v0.5.0";
     tracker.addIssue({ number: 4 });
 
     const { lines, out } = await start({ command: "run" }, undefined, REPOSITORY);
@@ -439,7 +439,7 @@ describe("what a Run says about another Version", () => {
   });
 
   it("says it once to `ticket <n>` as well", async () => {
-    tracker.latestReleaseTag = "v0.5.0";
+    tracker.publishedVersionTag = "v0.5.0";
     tracker.addIssue({ number: 4 });
 
     const { lines } = await start({ command: "ticket", ticket: 4 }, undefined, REPOSITORY);
@@ -448,7 +448,7 @@ describe("what a Run says about another Version", () => {
   });
 
   it("says nothing where this Run is the latest Version", async () => {
-    tracker.latestReleaseTag = "v0.4.0";
+    tracker.publishedVersionTag = "v0.4.0";
     tracker.addIssue({ number: 4 });
 
     const { out, code } = await start({ command: "run" }, undefined, REPOSITORY);
@@ -458,7 +458,7 @@ describe("what a Run says about another Version", () => {
   });
 
   it("says nothing and takes the Frontier anyway where the lookup fails", async () => {
-    tracker.latestReleaseFails = true;
+    tracker.versionTagFails = true;
     tracker.addIssue({ number: 4 });
 
     const { out, code } = await start({ command: "run" }, undefined, REPOSITORY);
@@ -469,12 +469,12 @@ describe("what a Run says about another Version", () => {
   });
 
   it("asks nothing at all where the package names no repository", async () => {
-    tracker.latestReleaseTag = "v0.5.0";
+    tracker.publishedVersionTag = "v0.5.0";
     tracker.addIssue({ number: 4 });
 
     const { out } = await start();
 
-    expect(tracker.releaseLookups).toEqual([]);
+    expect(tracker.versionTagLookups).toEqual([]);
     expect(out).not.toContain("A newer Version");
   });
 });

@@ -54,6 +54,20 @@ describe("the conventions document", () => {
   });
 });
 
+describe("a copy with no Version to stamp", () => {
+  /**
+   * A marker nothing can read is a marker that is not there, so none is
+   * written: `init` would otherwise rewrite the same document every time it
+   * ran, reporting each time that the copy carried no Version.
+   */
+  it("carries no marker rather than one saying so", () => {
+    const doc = conventionsDoc("unknown");
+
+    expect(doc.split("\n")[0]).toBe("# agent-pipeline conventions");
+    expect(conventionsMark(doc)).toBeUndefined();
+  });
+});
+
 describe("the mark a Target's copy bears", () => {
   it("reads the number the document was written by", () => {
     expect(conventionsMark(conventionsDoc("0.4.0"))).toBe("0.4.0");

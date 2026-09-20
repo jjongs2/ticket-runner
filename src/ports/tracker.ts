@@ -155,8 +155,13 @@ export interface Tracker {
    */
   defaultBranch(): Promise<string>;
   /**
-   * The highest published Release tag of `repository`, named `owner/name`, or
-   * nothing where GitHub could not be asked.
+   * The tag of the highest Version `repository` has published as a GitHub
+   * Release, named `owner/name`, or nothing where GitHub could not be asked.
+   *
+   * Named for the tag rather than for the Release, because a Release in this
+   * codebase is what a rate-limited Stage does to a Ticket (CONTEXT.md). A
+   * published GitHub Release is what makes a tag a Version anybody can install,
+   * which is why it is the question rather than the tag alone.
    *
    * The one method of this port that is not about the Target: it is asked about
    * the pipeline's own repository, so a Run and `init` can say that a newer
@@ -167,7 +172,7 @@ export interface Tracker {
    * tag comes back as it was cut, `v0.4.0`, because that is what a human would
    * go and look for.
    */
-  latestRelease(repository: string): Promise<string | undefined>;
+  latestVersionTag(repository: string): Promise<string | undefined>;
   listLabels(): Promise<string[]>;
   createLabel(label: LabelSpec): Promise<void>;
   /**

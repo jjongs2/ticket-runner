@@ -70,7 +70,7 @@ describe("reading", () => {
       ),
     );
 
-    expect(await gh.latestRelease("acme/repo")).toBe("v0.10.0");
+    expect(await gh.latestVersionTag("acme/repo")).toBe("v0.10.0");
     expect(calls[0]).toEqual([
       "release",
       "list",
@@ -94,7 +94,7 @@ describe("reading", () => {
       ),
     );
 
-    expect(await gh.latestRelease("acme/repo")).toBe("v0.4.0");
+    expect(await gh.latestVersionTag("acme/repo")).toBe("v0.4.0");
   });
 
   it("ignores a Release tagged as anything but a Version", async () => {
@@ -102,11 +102,11 @@ describe("reading", () => {
       ok(JSON.stringify([{ tagName: "nightly", isDraft: false, isPrerelease: false }])),
     );
 
-    expect(await gh.latestRelease("acme/repo")).toBeUndefined();
+    expect(await gh.latestVersionTag("acme/repo")).toBeUndefined();
   });
 
   it("answers with nothing for a repository that has published none", async () => {
-    expect(await tracker(ok("[]")).latestRelease("acme/repo")).toBeUndefined();
+    expect(await tracker(ok("[]")).latestVersionTag("acme/repo")).toBeUndefined();
   });
 
   /**
@@ -114,7 +114,7 @@ describe("reading", () => {
    * is the same answer: no answer.
    */
   it("answers with nothing rather than throwing when gh fails", async () => {
-    expect(await tracker(failedExecution("HTTP 404")).latestRelease("acme/repo")).toBeUndefined();
+    expect(await tracker(failedExecution("HTTP 404")).latestVersionTag("acme/repo")).toBeUndefined();
   });
 
   it("answers with nothing when gh itself cannot be run", async () => {
@@ -124,11 +124,11 @@ describe("reading", () => {
       },
     });
 
-    expect(await gh.latestRelease("acme/repo")).toBeUndefined();
+    expect(await gh.latestVersionTag("acme/repo")).toBeUndefined();
   });
 
   it("answers with nothing when gh prints something that is not JSON", async () => {
-    expect(await tracker(ok("not json")).latestRelease("acme/repo")).toBeUndefined();
+    expect(await tracker(ok("not json")).latestVersionTag("acme/repo")).toBeUndefined();
   });
 
   it("asks gh who the current user is", async () => {

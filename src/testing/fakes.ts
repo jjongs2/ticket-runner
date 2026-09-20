@@ -52,15 +52,15 @@ export class FakeTracker implements Tracker {
   /** What GitHub calls this Target's default branch; the Run resolves from it. */
   defaultBranchName = "main";
   /**
-   * The highest published Release tag of the pipeline's own repository, as
-   * {@link latestRelease} answers. Nothing by default, which is the answer a
-   * Target with no network gets and the one nothing is said over.
+   * The tag of the highest Version published on the pipeline's own repository,
+   * as {@link latestVersionTag} answers. Nothing by default, which is the
+   * answer a Target with no network gets and the one nothing is said over.
    */
-  latestReleaseTag: string | undefined;
+  publishedVersionTag: string | undefined;
   /** When set, the lookup throws, as a `gh` that is not installed at all does. */
-  latestReleaseFails = false;
-  /** Every repository the Release lookup was asked about, in order. */
-  releaseLookups: string[] = [];
+  versionTagFails = false;
+  /** Every repository the Version lookup was asked about, in order. */
+  versionTagLookups: string[] = [];
   labels = new Set<string>();
   createdLabels: LabelSpec[] = [];
   issues = new Map<number, Issue>();
@@ -128,10 +128,10 @@ export class FakeTracker implements Tracker {
 
   // Not in `calls`: a read, and one about the pipeline's own repository rather
   // than about the Target this log is a record of.
-  async latestRelease(repository: string): Promise<string | undefined> {
-    this.releaseLookups.push(repository);
-    if (this.latestReleaseFails) throw new Error("gh: command not found");
-    return this.latestReleaseTag;
+  async latestVersionTag(repository: string): Promise<string | undefined> {
+    this.versionTagLookups.push(repository);
+    if (this.versionTagFails) throw new Error("gh: command not found");
+    return this.publishedVersionTag;
   }
 
   async listLabels(): Promise<string[]> {

@@ -14,7 +14,7 @@
  * ran git itself could not be tested without one.
  */
 
-import { highestTag, isHigher, tagNumber } from "./version-number.js";
+import { highestVersion, isHigher } from "./version-number.js";
 
 /**
  * The one heading every Version's notes carry, whatever they group the rest by.
@@ -53,10 +53,11 @@ export function versionPrRefusals(pr: VersionPr): string[] {
   if (pr.number === pr.baseNumber) return [];
 
   const refusals: string[] = [];
-  const highest = highestTag(pr.tags);
-  const highestNumber = highest === undefined ? undefined : tagNumber(highest);
-  if (highest !== undefined && highestNumber !== undefined && !isHigher(pr.number, highestNumber)) {
-    refusals.push(`\`${pr.number}\` is not higher than every Version tag; \`${highest}\` exists.`);
+  const highest = highestVersion(pr.tags);
+  if (highest !== undefined && !isHigher(pr.number, highest.number)) {
+    refusals.push(
+      `\`${pr.number}\` is not higher than every Version tag; \`${highest.tag}\` exists.`,
+    );
   }
   if (pr.lockNumber !== pr.number) {
     refusals.push(`\`package-lock.json\` says \`${pr.lockNumber}\`, not \`${pr.number}\`.`);

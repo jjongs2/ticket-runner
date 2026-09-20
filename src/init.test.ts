@@ -233,7 +233,7 @@ describe("what init says about another Version", () => {
   const REPOSITORY = "jjongs2/agent-pipeline";
 
   it("prints the newer-Version line first, right after the opening line", async () => {
-    tracker.latestReleaseTag = "v0.5.0";
+    tracker.publishedVersionTag = "v0.5.0";
 
     const { out } = await init({ repository: REPOSITORY });
 
@@ -245,7 +245,7 @@ describe("what init says about another Version", () => {
 
   it("prints nothing where this copy is the latest Version", async () => {
     readyToReport(repoRoot);
-    tracker.latestReleaseTag = "v0.4.0";
+    tracker.publishedVersionTag = "v0.4.0";
 
     const { out, code } = await init({ repository: REPOSITORY });
 
@@ -255,7 +255,7 @@ describe("what init says about another Version", () => {
 
   it("prints nothing, and sets the Target up anyway, where the lookup fails", async () => {
     readyToReport(repoRoot);
-    tracker.latestReleaseFails = true;
+    tracker.versionTagFails = true;
 
     const { out, code } = await init({ repository: REPOSITORY });
 
@@ -265,11 +265,11 @@ describe("what init says about another Version", () => {
   });
 
   it("asks nothing where the package names no repository", async () => {
-    tracker.latestReleaseTag = "v0.5.0";
+    tracker.publishedVersionTag = "v0.5.0";
 
     await init();
 
-    expect(tracker.releaseLookups).toEqual([]);
+    expect(tracker.versionTagLookups).toEqual([]);
   });
 
   it("leaves a document a newer pipeline wrote alone, and names the upgrade", async () => {
@@ -306,6 +306,32 @@ describe("what init says about another Version", () => {
     expect(out).toMatch(
       new RegExp(`${CONVENTIONS_PATH}: overwritten, because the copy here carried no Version`),
     );
+  });
+
+  it("rewrites a hand-edited copy of its own Version as saying something else", async () => {
+    write(repoRoot, CONVENTIONS_PATH, `${conventionsDoc(VERSION)}\nA line a human added.\n`);
+
+    const { out } = await init();
+
+    expect(read(repoRoot, CONVENTIONS_PATH)).toBe(conventionsDoc(VERSION));
+    expect(out).toMatch(
+      new RegExp(`${CONVENTIONS_PATH}: overwritten, because the copy here said something else`),
+    );
+  });
+
+  /**
+   * A copy with no number to stamp bears no marker, so the document it writes
+   * is the document it compares against: without that, `init` would rewrite it
+   * every time it ran.
+   */
+  it("writes the document once for a copy with no Version to stamp", async () => {
+    await init({ version: "unknown" });
+    const after = read(repoRoot, CONVENTIONS_PATH);
+
+    const { out } = await init({ version: "unknown" });
+
+    expect(read(repoRoot, CONVENTIONS_PATH)).toBe(after);
+    expect(out).toContain("nothing to write");
   });
 
   it("writes nothing for a document its own Version already wrote", async () => {

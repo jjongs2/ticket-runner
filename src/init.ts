@@ -66,8 +66,7 @@ export interface InitOptions {
   version: string;
   /**
    * The pipeline's own repository, as `owner/name`, which the newer-Version
-   * notice is looked up against. Absent where the package names none, and then
-   * nothing is asked and nothing is said.
+   * notice is looked up against; see {@link import("./staleness.js")}.
    */
   repository?: string | undefined;
   config: Config;
@@ -214,13 +213,24 @@ function ensureConventionsDoc(repoRoot: string, version: string): string | undef
 
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, doc);
-  return `${CONVENTIONS_PATH}: ${rewritten(existing, mark)}`;
+  return `${CONVENTIONS_PATH}: ${rewritten(existing, mark, own)}`;
 }
 
-/** Which of the three ways a copy came to be rewritten this one was. */
-function rewritten(existing: string | undefined, mark: string | undefined): string {
+/**
+ * Which of the four ways a copy came to be rewritten this one was.
+ *
+ * A copy marked with this very Version is the odd one: nothing about the
+ * pipeline moved, so the difference is something the Target did to the file,
+ * and saying it was left by the Version now writing it would read as nonsense.
+ */
+function rewritten(
+  existing: string | undefined,
+  mark: string | undefined,
+  own: string | undefined,
+): string {
   if (existing === undefined) return "written";
   if (mark === undefined) return "overwritten, because the copy here carried no Version";
+  if (mark === own) return "overwritten, because the copy here said something else";
   return `overwritten, because the copy here was left by ${mark}`;
 }
 

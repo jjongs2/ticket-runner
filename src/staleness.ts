@@ -1,9 +1,3 @@
-import { join } from "node:path";
-import { CONVENTIONS_PATH, conventionsMark } from "./conventions.js";
-import type { Tracker } from "./ports/tracker.js";
-import { readTargetFile } from "./readiness.js";
-import { isHigher, tagNumber, versionNumber } from "./version-number.js";
-
 /**
  * What a Run and `init` say when something around them is from another Version,
  * and the one thing neither ever does about it.
@@ -21,6 +15,12 @@ import { isHigher, tagNumber, versionNumber } from "./version-number.js";
  * stale the moment its Version was cut.
  */
 
+import { join } from "node:path";
+import { CONVENTIONS_PATH, conventionsMark } from "./conventions.js";
+import type { Tracker } from "./ports/tracker.js";
+import { readTargetFile } from "./readiness.js";
+import { isHigher, tagNumber, versionNumber } from "./version-number.js";
+
 export interface StalenessQuestion {
   tracker: Tracker;
   /** The Version this copy is, as the CLI resolved it once and handed it down. */
@@ -37,9 +37,9 @@ export interface StalenessQuestion {
  * One line naming the Version that is out and the Version running, and nothing
  * at all where this copy is the latest, is ahead of it, or could not ask.
  *
- * The published Release is the question rather than the highest tag, because a
- * tag a workflow has not finished publishing is not a Version anybody can
- * install yet.
+ * What has been published as a GitHub Release is the question rather than the
+ * highest tag, because a tag a workflow has not finished publishing is not a
+ * Version anybody can install yet.
  */
 export async function newerVersionLine({
   tracker,
@@ -49,7 +49,7 @@ export async function newerVersionLine({
   const own = versionNumber(version);
   if (own === undefined || repository === undefined) return undefined;
 
-  const latest = await latestRelease(tracker, repository);
+  const latest = await publishedVersionTag(tracker, repository);
   const published = latest === undefined ? undefined : tagNumber(latest);
   if (published === undefined || !isHigher(published, own)) return undefined;
 
@@ -64,12 +64,12 @@ export async function newerVersionLine({
  * tracker that threw. Both are the same answer here, because the one thing this
  * may not do is stop a Run.
  */
-async function latestRelease(
+async function publishedVersionTag(
   tracker: Tracker,
   repository: string,
 ): Promise<string | undefined> {
   try {
-    return await tracker.latestRelease(repository);
+    return await tracker.latestVersionTag(repository);
   } catch {
     return undefined;
   }

@@ -40,19 +40,24 @@ to say.
 Target already had everything — which is what a second `init` prints. The
 conventions document is the one file rewritten rather than left alone, and it
 carries the Version that wrote it in a hidden marker on its first line, which is
-read before its text is compared (ADR-0007). Four lines, one per case:
+read before its text is compared (ADR-0007). Five lines, one per case:
 
   docs/agents/pipeline-conventions.md: written
   docs/agents/pipeline-conventions.md: overwritten, because the copy here carried no Version
   docs/agents/pipeline-conventions.md: overwritten, because the copy here was left by 0.3.0
+  docs/agents/pipeline-conventions.md: overwritten, because the copy here said something else
   docs/agents/pipeline-conventions.md: left alone, because 0.5.0 set this Target up and this is 0.4.0 — upgrade `agent-pipeline` to rewrite it
 
-A copy marked with the same Version is compared as text and rewritten where it
-differs, as `overwritten, because the copy here said something else`; identical
-text is not a line at all. A copy a newer pipeline wrote is the one this never
-touches: rewriting it would take the Target backwards, so it is left and the
-upgrade is named. None of the four is a `Checked:` item, so none of them changes
-the exit code — a Target is not unready for carrying another Version's copy.
+The fourth is a copy marked with this very Version: nothing about the pipeline
+moved, so whatever the difference is, the Target made it. Identical text is not
+a line at all. A copy a newer pipeline wrote is the one this never touches:
+rewriting it would take the Target backwards, so it is left and the upgrade is
+named. None of the five is a `Checked:` item, so none of them changes the exit
+code — a Target is not unready for carrying another Version's copy.
+
+A copy with no number to stamp — a pipeline that could not read its own package
+— writes no marker at all, so the document it writes is the document it next
+compares against.
 
 `GitHub:` says which labels were created, or that every one of them was already
 there, and that squash merging is on. Where GitHub could not be asked at all,

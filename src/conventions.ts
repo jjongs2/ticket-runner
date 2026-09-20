@@ -42,7 +42,7 @@ export const CLAUDE_SECTION = `## Pipeline conventions
  * An HTML comment, like every other marker the pipeline finds its own writing
  * by, so it is on the line a reader sees and in none of the text they read.
  */
-const MARK = /<!-- agent-pipeline:version ([^\s>]+) -->/;
+const MARKER = /<!-- agent-pipeline:version ([^\s>]+) -->/;
 
 /**
  * The document itself, as {@link CONVENTIONS_PATH} must contain it, marked with
@@ -51,9 +51,15 @@ const MARK = /<!-- agent-pipeline:version ([^\s>]+) -->/;
  * The number alone, never the commit a development checkout adds: two checkouts
  * of one Version write one document, and a Target whose copy was rewritten by
  * every commit would say nothing by having been.
+ *
+ * A copy with no number to stamp carries no marker rather than a marker saying
+ * so. A mark nothing can read is a mark that is not there, and writing one
+ * would leave `init` rewriting the same document every time it ran.
  */
 export function conventionsDoc(version: string): string {
-  return `# agent-pipeline conventions <!-- agent-pipeline:version ${versionNumber(version) ?? version} -->\n${BODY}`;
+  const number = versionNumber(version);
+  const marker = number === undefined ? "" : ` <!-- agent-pipeline:version ${number} -->`;
+  return `# agent-pipeline conventions${marker}\n${BODY}`;
 }
 
 /**
@@ -63,7 +69,7 @@ export function conventionsDoc(version: string): string {
  */
 export function conventionsMark(document: string | undefined): string | undefined {
   const [first = ""] = (document ?? "").split("\n");
-  const marked = MARK.exec(first)?.[1];
+  const marked = MARKER.exec(first)?.[1];
   return marked === undefined ? undefined : versionNumber(marked);
 }
 

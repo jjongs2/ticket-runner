@@ -31,20 +31,27 @@ export function tagNumber(tag: string): string | undefined {
   return tag.startsWith("v") ? versionNumber(tag.slice(1)) : undefined;
 }
 
+/** A Version tag, in both halves its readers want: `v0.4.0` and `0.4.0`. */
+export interface VersionTag {
+  tag: string;
+  number: string;
+}
+
 /**
- * The highest tag shaped `v<x.y.z>`, as the tag, and undefined where there is
- * no Version tag at all — the first Version, which nothing can be measured
+ * The highest Version among tags shaped `v<x.y.z>`, and undefined where there
+ * is no Version tag at all — the first Version, which nothing can be measured
  * against.
  *
  * Every other tag is ignored rather than refused: a repository is free to tag
- * whatever else it likes, and only the Versions say what has been cut.
+ * whatever else it likes, and only the Versions say what has been cut. The tag
+ * comes back beside its number because a message names the tag as it was cut
+ * and the comparison is on the number.
  */
-export function highestTag(tags: string[]): string | undefined {
-  return tags.reduce<string | undefined>((highest, tag) => {
+export function highestVersion(tags: string[]): VersionTag | undefined {
+  return tags.reduce<VersionTag | undefined>((highest, tag) => {
     const number = tagNumber(tag);
     if (number === undefined) return highest;
-    const against = highest === undefined ? undefined : tagNumber(highest);
-    return against === undefined || isHigher(number, against) ? tag : highest;
+    return highest === undefined || isHigher(number, highest.number) ? { tag, number } : highest;
   }, undefined);
 }
 

@@ -29,7 +29,7 @@ function writeDocument(contents: string): void {
 
 describe("a newer Version being out", () => {
   it("names both Versions and how to upgrade", async () => {
-    tracker.latestReleaseTag = "v0.5.0";
+    tracker.publishedVersionTag = "v0.5.0";
 
     const line = await newerVersionLine({ tracker, version: "0.4.0", repository: REPOSITORY });
 
@@ -40,15 +40,15 @@ describe("a newer Version being out", () => {
   });
 
   it("asks about the repository it was given, and only once", async () => {
-    tracker.latestReleaseTag = "v0.5.0";
+    tracker.publishedVersionTag = "v0.5.0";
 
     await newerVersionLine({ tracker, version: "0.4.0", repository: REPOSITORY });
 
-    expect(tracker.releaseLookups).toEqual([REPOSITORY]);
+    expect(tracker.versionTagLookups).toEqual([REPOSITORY]);
   });
 
   it("says nothing to a copy that is the latest", async () => {
-    tracker.latestReleaseTag = "v0.4.0";
+    tracker.publishedVersionTag = "v0.4.0";
 
     expect(
       await newerVersionLine({ tracker, version: "0.4.0", repository: REPOSITORY }),
@@ -56,7 +56,7 @@ describe("a newer Version being out", () => {
   });
 
   it("says nothing to a copy above the latest", async () => {
-    tracker.latestReleaseTag = "v0.4.0";
+    tracker.publishedVersionTag = "v0.4.0";
 
     expect(
       await newerVersionLine({ tracker, version: "0.5.0", repository: REPOSITORY }),
@@ -69,7 +69,7 @@ describe("a newer Version being out", () => {
    * but the number would call it stale the moment its Version was published.
    */
   it("says nothing to a development checkout of the latest Version", async () => {
-    tracker.latestReleaseTag = "v0.4.0";
+    tracker.publishedVersionTag = "v0.4.0";
 
     expect(
       await newerVersionLine({
@@ -81,7 +81,7 @@ describe("a newer Version being out", () => {
   });
 
   it("compares parts as numbers, so 0.10.0 is newer than 0.9.0", async () => {
-    tracker.latestReleaseTag = "v0.10.0";
+    tracker.publishedVersionTag = "v0.10.0";
 
     const line = await newerVersionLine({ tracker, version: "0.9.0", repository: REPOSITORY });
 
@@ -95,7 +95,7 @@ describe("a newer Version being out", () => {
   });
 
   it("says nothing, and refuses nothing, where the lookup fails", async () => {
-    tracker.latestReleaseFails = true;
+    tracker.versionTagFails = true;
 
     expect(
       await newerVersionLine({ tracker, version: "0.4.0", repository: REPOSITORY }),
@@ -103,21 +103,21 @@ describe("a newer Version being out", () => {
   });
 
   it("asks nothing at all where the package names no repository", async () => {
-    tracker.latestReleaseTag = "v0.5.0";
+    tracker.publishedVersionTag = "v0.5.0";
 
     const line = await newerVersionLine({ tracker, version: "0.4.0" });
 
     expect(line).toBeUndefined();
-    expect(tracker.releaseLookups).toEqual([]);
+    expect(tracker.versionTagLookups).toEqual([]);
   });
 
   it("asks nothing at all where this copy has no number to compare", async () => {
-    tracker.latestReleaseTag = "v0.5.0";
+    tracker.publishedVersionTag = "v0.5.0";
 
     const line = await newerVersionLine({ tracker, version: "unknown", repository: REPOSITORY });
 
     expect(line).toBeUndefined();
-    expect(tracker.releaseLookups).toEqual([]);
+    expect(tracker.versionTagLookups).toEqual([]);
   });
 });
 
