@@ -70,6 +70,23 @@ export function acquireLock(
   throw new Error(`another process keeps taking the Run lock at ${path}`);
 }
 
+/**
+ * Who holds the Run lock, when anybody still does.
+ *
+ * Nobody covers all three ways there is no Run to reach: no lock file, a file
+ * too corrupt to name one, and a holder whose process has gone. A dead lock is
+ * left exactly where it is — reclaiming one belongs to `acquireLock`, on behalf
+ * of a Run that is actually starting, where this only reads.
+ */
+export function lockHolder(
+  repoRoot: string,
+  { isAlive = processIsAlive }: LockOptions = {},
+): LockHolder | undefined {
+  const holder = readHolder(lockPath(repoRoot));
+  if (holder === undefined || !isAlive(holder.pid)) return undefined;
+  return holder;
+}
+
 /** The one line the Run that lost prints before exiting. */
 export function lockHeldMessage(holder: LockHolder, repoRoot: string): string {
   return [

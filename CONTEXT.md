@@ -111,7 +111,7 @@ What a rate-limited Stage does to a Ticket instead of handing it to a human: the
 _Avoid_: pause, defer, requeue, unclaim
 
 **Stop**:
-What a human asks of a running Run: finish the Tickets its Lanes hold, to merge or hand-off, and take no more — not from the Frontier and not from the Stranded Tickets. Nothing about any Ticket changes, so nothing is written to the board and the exit code is the outcomes' as usual. Not a kill: a killed Run leaves Stranded Tickets, a stopped one leaves none.
+What a human asks of a running Run: finish the Tickets its Lanes hold, to merge or hand-off, and take no more — not from the Frontier and not from the Stranded Tickets. Nothing about any Ticket changes, so nothing is written to the board and the exit code is the outcomes' as usual. Not a kill: a killed Run leaves Stranded Tickets, a stopped one leaves none. `agent-pipeline stop` is how one is asked for, in the only way there is: SIGTERM to the process the Run lock names.
 _Avoid_: drain (a Run drains the Frontier), pause, cancel, abort, kill, graceful shutdown
 
 **State file**:

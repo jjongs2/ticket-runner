@@ -77,12 +77,13 @@ Exit code is `1` while any reported item is failing and `0` once none is, so
 ```bash
 agent-pipeline run         # drain the Frontier
 agent-pipeline ticket 3    # one named Ticket
+agent-pipeline stop        # ask the Run in this Target to finish and take no more
 ```
 
-Both refuse a Target `init` has not set up rather than repairing it. A gitignore missing one
-of the two directories, a missing triage label, no conventions document, or a `CLAUDE.md`
-that does not point at one: whichever comes first is a refusal with exit code `2` that names
-the item and the command that puts it right.
+`run` and `ticket` refuse a Target `init` has not set up rather than repairing it. A
+gitignore missing one of the two directories, a missing triage label, no conventions
+document, or a `CLAUDE.md` that does not point at one: whichever comes first is a refusal
+with exit code `2` that names the item and the command that puts it right.
 
 ```
 $ agent-pipeline run
@@ -126,6 +127,12 @@ Body text is never read for blockers: only GitHub's native dependencies count
 One Run at a time per Target. A second `run`, or a `ticket` started while a `run` holds the
 lock, exits immediately naming the holder. The lock is a PID file at
 `.agent-pipeline/lock.json`, so a Run that was killed does not block the next one.
+
+`stop` is the other side of that lock, and asks the Run holding it to Stop — see [A Run that
+did not come back](#a-run-that-did-not-come-back) for what a Run does with one. It needs
+nothing of the Target but its root and that file: no config, no `gh`, and none of the
+readiness `run` insists on, because the Run it is stopping answered all of that when it
+started.
 
 A Stage may not start a Run either. Every Stage session runs with `AGENT_PIPELINE_STAGE`
 set to the Stage's name, and while that variable is set the CLI refuses before it looks at
@@ -249,6 +256,25 @@ once the limit has reset picks up both.
 A Run can end early two ways, and they leave opposite things behind. SIGTERM is a **Stop**
 and not a kill; everything else — Ctrl-C, SIGKILL, an OOM, a machine that went away — is a
 kill ([ADR-0006](docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md)).
+
+`agent-pipeline stop`, from any terminal in the Target, is how that SIGTERM is sent: it
+reads the Run lock, signals the process it names, and prints which Run will stop and what
+Ctrl-C would cost instead.
+
+```
+$ agent-pipeline stop
+`agent-pipeline run` (run 2026-09-17T09-00-00-000, pid 4321) will stop once the Tickets it
+holds are finished. It claims no more.
+Ctrl+C in that Run's own terminal stops it at once instead, at the cost of killing the
+Stages it is running and leaving their Tickets stranded for the next Run.
+```
+
+Exit code `0` when the signal went, `2` when there was no Run to send it to — nothing holds
+the lock, or the process it names is gone, in which case the dead lock is left where it is
+for the next Run to reclaim. A lock held by `ticket <n>` is left alone and told about: that
+Run ends with its Ticket anyway, so there is nothing a Stop would add. There is no stop
+file, so a second `stop` prints exactly what the first did and the Run ignores the second
+signal.
 
 A Run that receives SIGTERM logs one line naming the Tickets its Lanes hold at that moment
 — `#4 #9 left to finish · stopped` — and fills no Lane again, neither from the Frontier nor

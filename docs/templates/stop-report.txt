@@ -1,0 +1,32 @@
+`agent-pipeline run` (run <runId>, pid <pid>) will stop once the Tickets it holds are finished. It claims no more.
+Ctrl+C in that Run's own terminal stops it at once instead, at the cost of killing the Stages it is running and leaving their Tickets stranded for the next Run.
+
+Two lines on stdout, and exit code 0: the Stop reached the process the Run lock
+names. The first says which Run was asked, in the three things the lock knows
+about it — the command line it was started with, its run id and its process id.
+The second is the alternative and its price, because a human who wants a Run to
+end now reaches for the terminal it is running in anyway, and what that costs is
+the one thing about a Stop worth saying twice.
+
+Everything else is one line on stderr with exit code 2 and no signal sent. No
+Run holds the lock, or the process it names is gone:
+
+No Run to stop: nothing holds the Run lock at <path>, or the Run that left it there is gone. A lock like that is the next Run's to reclaim, so nothing here removes it.
+
+One line for both, because they are one thing to whoever asked: there is nobody
+to stop. A dead lock is left exactly where it is — reclaiming one belongs to the
+next Run that starts, not to a command that only reads.
+
+A `ticket <n>` holding the lock is named rather than signalled, since a Run
+given one Ticket takes no more whatever happens:
+
+`agent-pipeline ticket 5` (run <runId>, pid <pid>) holds the Run lock, and a Run given one Ticket ends with it anyway. Nothing was sent.
+
+A signal that could not be delivered — the Run ended between the liveness check
+and the SIGTERM, or it belongs to a user this shell may not signal — says why:
+
+Could not ask `agent-pipeline run` (run <runId>, pid <pid>) to stop: <reason>
+
+There is no stop file, so nothing here is written and nothing is read back: a
+second `stop` prints exactly what the first did, and the Run ignores the second
+signal (ADR-0006).

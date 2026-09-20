@@ -8,6 +8,7 @@ import { initTarget } from "./init.js";
 import { newRunId } from "./run-log.js";
 import { nestedRunRefusal } from "./stage-guard.js";
 import { type Work, startRun } from "./start.js";
+import { requestStop } from "./stop.js";
 
 const USAGE = `agent-pipeline — humans plan, the pipeline executes.
 
@@ -15,6 +16,7 @@ Usage:
   agent-pipeline init          Set this Target up, and report what only you can.
   agent-pipeline run           Drain the Frontier, one Ticket at a time.
   agent-pipeline ticket <n>    Take one Ticket from claimed to merged.
+  agent-pipeline stop          Ask the running Run to finish and take no more.
 
 Options:
   -h, --help                   Show this message.`;
@@ -23,7 +25,8 @@ Options:
  * Exit codes: 0 nothing handed off, 1 at least one hand-off, 2 nothing was
  * taken at all — the Run never started, or `ticket <n>` named an issue a guard
  * refused. `init` reads them as its own: 0 every reported item passed, 1 one of
- * them is the human's to put right, 2 a Stage's shell was refused.
+ * them is the human's to put right, 2 a Stage's shell was refused. `stop` reads
+ * 0 as a Stop sent and 2 as no Run there was anything to ask.
  */
 async function main(argv: string[]): Promise<number> {
   // First, before the repo, the config, `gh` or even `--help`: a Stage's shell
@@ -46,9 +49,16 @@ async function main(argv: string[]): Promise<number> {
   }
 
   const [command, ...rest] = positionals;
-  if (command !== "ticket" && command !== "run" && command !== "init") {
+  if (command !== "ticket" && command !== "run" && command !== "init" && command !== "stop") {
     console.error(`Unknown command \`${command}\`.\n\n${USAGE}`);
     return 2;
+  }
+
+  // Before the config and the Target's readiness, which a Stop needs none of:
+  // a Run is already running, so whatever they would have refused it over was
+  // answered when it started.
+  if (command === "stop") {
+    return requestStop({ repoRoot: await findRepoRoot() });
   }
 
   if (command === "init") {
