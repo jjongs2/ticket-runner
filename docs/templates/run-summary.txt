@@ -49,8 +49,9 @@ a `needs-triage` issue of its own. The note itself is trimmed to one line; the
 whole of it is on GitHub.
 
 The last line says why the Run stopped: `Frontier empty.` when nothing is left,
-`Frontier blocked.` when every remaining candidate has an open blocker, and
-`Rate limited.` when a Release ended the Run.
+`Frontier blocked.` when every remaining candidate has an open blocker,
+`Rate limited.` when a Release ended the Run, and `Stopped at <hh:mm> · ...`
+when a human stopped it.
 
 A Run the limit stopped prints no `skipped  #<n> blocked` rows and no rows for
 the Frontier Tickets it never reached: it stopped before it could say a
@@ -61,5 +62,31 @@ The `blocked` rows of any other Run are read off the last Frontier it computed,
 which is the one its final refill asked for. A candidate another Lane unblocked
 on the way was taken rather than held back, so it is not among them.
 
+A Run a human stopped takes no further Ticket, and the Lanes busy when the Stop
+arrived finish what they hold. Its last line names the clock time the Stop
+arrived and the Tickets those Lanes were holding, so the rows above it can be
+read as everything the Run had left to do:
+
+agent-pipeline run <runId> · <duration>
+
+  merged   #3 Run: drain the Frontier (PR #12)
+  merged   #6 Rebase conflict resolution (PR #14)
+
+Stopped at 22:07 · finishing #3 #6.
+
+The time is UTC to the minute, which is the clock the run id in the header is
+already written in. A Run with no Lane busy when the Stop arrived has nothing to
+finish and says so:
+
+Stopped at 22:07 · no Lane busy.
+
+Like a Run the limit stopped, a stopped Run prints no `skipped  #<n> blocked`
+rows and no rows for the Tickets it never reached: it stopped before it could
+say a candidate was held back all Run. A Stop that reaches a Run a Release had
+already stopped leaves the last line `Rate limited.`, because that is what
+stopped it; the Stop only asked for what was already happening.
+
 `ticket <n>` prints the same header and its one row, and stops there: it drains
-no Frontier, so it says nothing about one.
+no Frontier, so it says nothing about one — a Stop included. It takes one Ticket
+whatever happens, so a Stop asks it for nothing it was not already doing, and
+the line it logs when the Stop arrives is the whole of what it says about one.

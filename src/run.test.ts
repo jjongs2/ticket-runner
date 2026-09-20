@@ -7,6 +7,7 @@ import { Landing } from "./landing.js";
 import type { Pipeline } from "./orchestrator.js";
 import { type TicketState, statePath, writeTicketState } from "./resume.js";
 import { processRun } from "./run.js";
+import { StopSignal } from "./stop.js";
 import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./testing/fakes.js";
 import { settle } from "./testing/settle.js";
 
@@ -893,5 +894,200 @@ describe("Lanes", () => {
     // abandoned mid-Ticket to report that `gh` had gone down.
     expect(tracker.pullRequest(100).merged).toBe(true);
     expect(tracker.pullRequest(101).merged).toBe(true);
+  });
+});
+
+/**
+ * A Run a human stopped. A Release already stops a Run filling Lanes, so what
+ * these say is the part a Stop does differently: it can arrive with no Lane
+ * busy at all, it holds the Stranded Tickets back as well as the Frontier, and
+ * it leaves the board untouched.
+ */
+describe("a Run a human stopped", () => {
+  const AT = new Date("2026-09-20T22:07:13.000Z");
+
+  /** The lines a Stop is answered with, which should never be more than one. */
+  function stopLines(): string[] {
+    return logged.filter((line) => line.endsWith("· stopped"));
+  }
+
+  it("lets the busy Lane finish its Ticket and claims nothing after it", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    const implementing = runner.holds("implement");
+    const stopping = new StopSignal();
+
+    const run = processRun(pipeline(), stopping);
+    await implementing.started();
+    await settle();
+    stopping.request(AT);
+    implementing.release();
+    const result = await run;
+
+    expect(processed()).toEqual([4]);
+    expect(result.outcomes).toEqual([expect.objectContaining({ outcome: "merged", ticket: 4 })]);
+    expect(result.stop).toEqual({
+      reason: "stopped",
+      at: "2026-09-20T22:07:13.000Z",
+      busy: [4],
+    });
+  });
+
+  it("logs one line leading with the Tickets its Lanes held at that moment", async () => {
+    for (const number of [4, 5, 6]) tracker.addIssue({ number });
+    const implementing = runner.holds("implement");
+    const stopping = new StopSignal();
+
+    const run = processRun(pipeline(2), stopping);
+    await implementing.started();
+    await settle();
+    stopping.request(AT);
+    implementing.release();
+    await run;
+
+    expect(stopLines()).toEqual(["#4 #5 finish the Run · stopped"]);
+  });
+
+  it("answers a second SIGTERM with nothing, and goes on finishing", async () => {
+    tracker.addIssue({ number: 4 });
+    const implementing = runner.holds("implement");
+    const stopping = new StopSignal();
+
+    const run = processRun(pipeline(), stopping);
+    await implementing.started();
+    await settle();
+    stopping.request(AT);
+    stopping.request(new Date("2026-09-20T22:09:00.000Z"));
+    implementing.release();
+    const result = await run;
+
+    expect(stopLines()).toEqual(["#4 finish the Run · stopped"]);
+    expect(result.outcomes).toEqual([expect.objectContaining({ outcome: "merged", ticket: 4 })]);
+    // The Stop the Run reports is the first one, not the impatient second.
+    expect(result.stop).toEqual({
+      reason: "stopped",
+      at: "2026-09-20T22:07:13.000Z",
+      busy: [4],
+    });
+  });
+
+  it("ends without claiming anything when no Lane is busy", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    const stopping = new StopSignal();
+    stopping.request(AT);
+
+    const result = await processRun(pipeline(), stopping);
+
+    expect(result.outcomes).toEqual([]);
+    expect(result.stop).toEqual({ reason: "stopped", at: "2026-09-20T22:07:13.000Z", busy: [] });
+    expect(stopLines()).toEqual(["no Lane busy · stopped"]);
+    expect(runner.requests).toEqual([]);
+    // No Candidate listed, and nothing written on GitHub either: a Stop is not
+    // news any Ticket has to be told.
+    expect(tracker.calls).toEqual([]);
+    expect(tracker.comments).toEqual([]);
+  });
+
+  it("fills no Lane from a Frontier that was listed as the Stop arrived", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    const stopping = new StopSignal();
+    const listed = tracker.listCandidates.bind(tracker);
+    tracker.listCandidates = async (label) => {
+      const candidates = await listed(label);
+      // The one moment the Run has already committed to filling a Lane from
+      // what comes back, and the Frontier in its hand is one it may not take.
+      stopping.request(AT);
+      return candidates;
+    };
+
+    const result = await processRun(pipeline(2), stopping);
+
+    expect(processed()).toEqual([]);
+    expect(runner.requests).toEqual([]);
+    expect(result.stop).toEqual({ reason: "stopped", at: "2026-09-20T22:07:13.000Z", busy: [] });
+  });
+
+  it("takes no Stranded Ticket either, and leaves every one of them as it is", async () => {
+    stranded(4);
+    stranded(9);
+    const stopping = new StopSignal();
+    stopping.request(AT);
+
+    const result = await processRun(pipeline(2), stopping);
+
+    expect(result.outcomes).toEqual([]);
+    expect(runner.requests).toEqual([]);
+    expect(tracker.issue(4).assignees).toEqual(["pipeline-user"]);
+    expect(existsSync(statePath(repoRoot, 4))).toBe(true);
+    expect(existsSync(statePath(repoRoot, 9))).toBe(true);
+  });
+
+  it("leaves the Ticket it was finishing on the board exactly as a merge does", async () => {
+    tracker.addIssue({ number: 4 });
+    const implementing = runner.holds("implement");
+    const stopping = new StopSignal();
+
+    const run = processRun(pipeline(), stopping);
+    await implementing.started();
+    await settle();
+    stopping.request(AT);
+    implementing.release();
+    await run;
+
+    expect(tracker.pullRequest(100).merged).toBe(true);
+    expect(existsSync(statePath(repoRoot, 4))).toBe(false);
+    expect(tracker.calls).not.toContain("addLabel:4:ready-for-human");
+  });
+
+  it("hands nothing over, so the exit code is the one the outcomes earned", async () => {
+    tracker.addIssue({ number: 4 });
+    const stopping = new StopSignal();
+    stopping.request(AT);
+
+    const result = await processRun(pipeline(), stopping);
+
+    expect(result.outcomes.some((outcome) => outcome.outcome === "handed-off")).toBe(false);
+  });
+
+  it("keeps the rate limit as the reason when a Release stopped the Run first", async () => {
+    for (const number of [4, 5, 6]) tracker.addIssue({ number });
+    runner.queue("implement", { ok: false, failure: "rate-limited" });
+    const verifying = runner.holds("verify");
+    const stopping = new StopSignal();
+
+    const run = processRun(pipeline(2), stopping);
+    await verifying.started();
+    await settle();
+    stopping.request(AT);
+    verifying.release();
+    const result = await run;
+
+    // The Release is what stopped the Run; the Stop asked for what was already
+    // happening, and is answered all the same.
+    expect(result.stop).toEqual({ reason: "rate-limited" });
+    expect(logged).toContain("#4 stopped the Run · rate limit");
+    expect(stopLines()).toEqual(["#5 finish the Run · stopped"]);
+  });
+
+  it("keeps the Stop as the reason when a Lane is released afterwards", async () => {
+    tracker.addIssue({ number: 4 });
+    runner.queue("verify", { ok: false, failure: "rate-limited" });
+    const implementing = runner.holds("implement");
+    const stopping = new StopSignal();
+
+    const run = processRun(pipeline(), stopping);
+    await implementing.started();
+    await settle();
+    stopping.request(AT);
+    implementing.release();
+    const result = await run;
+
+    expect(result.outcomes).toEqual([expect.objectContaining({ outcome: "released", ticket: 4 })]);
+    expect(result.stop).toEqual({
+      reason: "stopped",
+      at: "2026-09-20T22:07:13.000Z",
+      busy: [4],
+    });
+    // The Release stopped nothing that the Stop had not stopped already.
+    expect(logged).not.toContain("#4 stopped the Run · rate limit");
   });
 });

@@ -357,8 +357,8 @@ const VERB_WIDTH = 9;
 
 /**
  * What a Run prints when it ends. One line per Ticket, then why the Run
- * stopped — the Frontier is empty, everything left on it is blocked, or the
- * rate limit released a Ticket and the Run went no further.
+ * stopped — the Frontier is empty, everything left on it is blocked, the rate
+ * limit released a Ticket and the Run went no further, or a human stopped it.
  */
 export function runSummary({ runId, durationMs, outcomes, stop }: RunSummary): string {
   const rows = [
@@ -382,8 +382,28 @@ export function runSummary({ runId, durationMs, outcomes, stop }: RunSummary): s
 
 /** The one line that says why the Run stopped. */
 function lastLine(stop: RunStop): string {
-  if (stop.reason === "rate-limited") return "Rate limited.";
-  return stop.blocked.length === 0 ? "Frontier empty." : "Frontier blocked.";
+  switch (stop.reason) {
+    case "rate-limited":
+      return "Rate limited.";
+    case "stopped":
+      return `Stopped at ${clockTime(stop.at)} · ${holding(stop.busy)}.`;
+    case "frontier":
+      return stop.blocked.length === 0 ? "Frontier empty." : "Frontier blocked.";
+  }
+}
+
+/**
+ * The minute a Stop arrived, in UTC — the clock the run id on the first line of
+ * the summary is already written in, so the two can be read against each other.
+ */
+function clockTime(at: string): string {
+  return at.slice(11, 16);
+}
+
+/** What the Lanes were holding when the Stop arrived, and what to call none. */
+function holding(busy: number[]): string {
+  if (busy.length === 0) return "no Lane busy";
+  return `finishing ${busy.map((ticket) => `#${ticket}`).join(" ")}`;
 }
 
 /**

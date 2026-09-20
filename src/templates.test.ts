@@ -320,6 +320,41 @@ describe("runSummary", () => {
     expect(summary).not.toContain("skipped");
   });
 
+  it("says when a Stop arrived and what its Lanes were finishing", () => {
+    const summary = runSummary({
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [merged, released],
+      stop: { reason: "stopped", at: "2026-09-20T22:07:13.000Z", busy: [3, 6] },
+    });
+
+    expect(summary.trimEnd().split("\n").at(-1)).toBe("Stopped at 22:07 · finishing #3 #6.");
+  });
+
+  it("says no Lane was busy when the Stop arrived to an idle Run", () => {
+    const summary = runSummary({
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [],
+      stop: { reason: "stopped", at: "2026-09-20T22:07:13.000Z", busy: [] },
+    });
+
+    expect(summary.trimEnd().split("\n").at(-1)).toBe("Stopped at 22:07 · no Lane busy.");
+  });
+
+  it("reports nothing but its own Lanes when a Stop ended the Run", () => {
+    // Like a Run the limit stopped, it ended before it could say a candidate
+    // was held back all Run, so it says nothing about one.
+    const summary = runSummary({
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [merged],
+      stop: { reason: "stopped", at: "2026-09-20T22:07:13.000Z", busy: [3] },
+    });
+
+    expect(summary).not.toContain("skipped");
+  });
+
   it("says so when a Run found nothing to take", () => {
     const summary = runSummary({
       runId: "r1",

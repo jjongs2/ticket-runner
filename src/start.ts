@@ -8,6 +8,7 @@ import type { Tracker } from "./ports/tracker.js";
 import type { Workspace } from "./ports/workspace.js";
 import { readinessRefusal } from "./readiness.js";
 import { type RunStop, processRun } from "./run.js";
+import { type StopSource, StopSignal, listenForStop, stopLine } from "./stop.js";
 import { startupMessages } from "./startup.js";
 import { runSummary } from "./templates.js";
 
@@ -37,6 +38,8 @@ export interface StartOptions {
   log?: (line: string) => void;
   /** Warnings and refusals, which the CLI puts on stderr as it always has. */
   error?: (line: string) => void;
+  /** Where SIGTERM comes from. The process itself, unless a test is watching. */
+  signals?: StopSource;
 }
 
 /**
@@ -76,14 +79,26 @@ export async function startRun(options: StartOptions): Promise<number> {
     return 2;
   }
 
+  // Listened for only while the lock is held, because the lock is what names
+  // the process a human sends SIGTERM to, and only a Run holding Tickets has
+  // anything to finish. Stopped again in the same breath as the lock: a signal
+  // handler holds the event loop open, so a Run still listening would print its
+  // summary and never exit.
+  const stopping = new StopSignal();
+  const deafen = listenForStop(stopping, options.signals);
   try {
-    return await execute(options, log);
+    return await execute(options, log, stopping);
   } finally {
+    deafen();
     lock.release();
   }
 }
 
-async function execute(options: StartOptions, log: (line: string) => void): Promise<number> {
+async function execute(
+  options: StartOptions,
+  log: (line: string) => void,
+  stopping: StopSignal,
+): Promise<number> {
   const { work, repoRoot, config, tracker, runner, workspace, runId } = options;
 
   // Once per Run, before any Ticket: every branch, rebase, pull request and
@@ -116,10 +131,16 @@ async function execute(options: StartOptions, log: (line: string) => void): Prom
     });
 
   if (work.command === "run") {
-    const { outcomes, stop } = await processRun(pipeline);
+    const { outcomes, stop } = await processRun(pipeline, stopping);
     log(`\n${summary(outcomes, stop)}`);
     return exitCode(outcomes);
   }
+
+  // `ticket <n>` takes the one Ticket it was given whatever happens, so a Stop
+  // asks it for nothing but to finish — which is what listening for the signal
+  // at all already bought. The line still goes out: a human who asked for a
+  // Stop is owed an answer, and the Ticket in flight is what the answer is.
+  stopping.watch(() => log(stopLine([work.ticket])));
 
   // `ticket <n>` drains no Frontier, so its summary does not claim one.
   const outcome = await processTicket(pipeline, work.ticket);
