@@ -18,6 +18,7 @@ Humans read all of these, so each stays short: one line of status, details folde
 | `squash-commit.txt` | the PR is squash-merged | none (commit message) |
 | `run-summary.txt` | a Run ends (terminal) | none |
 | `init-report.txt` | `agent-pipeline init` finishes (terminal) | none |
+| `stop-report.txt` | `agent-pipeline stop` asks a Run to stop, or says why it did not (terminal) | none |
 
 Markers are how the pipeline finds its own comment again. A marker is the first line of the comment and never changes. `note-comment.md` carries one without ever looking it up: nothing about a Note is edited or posted twice, but a human meeting it on an unrelated Ticket can tell what wrote it.
 

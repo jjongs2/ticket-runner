@@ -1,6 +1,10 @@
 import { EventEmitter } from "node:events";
-import { describe, expect, it } from "vitest";
-import { StopSignal, listenForStop, stopLine } from "./stop.js";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { type LockHolder, acquireLock, lockPath } from "./lock.js";
+import { type StopRequest, StopSignal, listenForStop, requestStop, stopLine } from "./stop.js";
 
 /** A stand-in for the process, so a test raises SIGTERM without sending one. */
 function source(): EventEmitter {
@@ -93,5 +97,142 @@ describe("the line a Run logs", () => {
 
   it("says so when no Lane is busy", () => {
     expect(stopLine([])).toBe("nothing left to finish · stopped");
+  });
+});
+
+describe("asking a Run to stop", () => {
+  let repoRoot: string;
+
+  beforeEach(() => {
+    repoRoot = mkdtempSync(join(tmpdir(), "agent-pipeline-stop-"));
+  });
+
+  afterEach(() => {
+    rmSync(repoRoot, { recursive: true, force: true });
+  });
+
+  /** The Run lock as a Run leaves it, written by the code that writes the real one. */
+  function lock(overrides: Partial<LockHolder> = {}): void {
+    acquireLock(repoRoot, {
+      pid: 4321,
+      command: "agent-pipeline run",
+      runId: "2026-09-17T09-00-00-000",
+      startedAt: "2026-09-17T09:00:00.000Z",
+      ...overrides,
+    });
+  }
+
+  /** One `agent-pipeline stop`, with the process table and the signal faked. */
+  function stop(options: Partial<StopRequest> = {}) {
+    const out: string[] = [];
+    const err: string[] = [];
+    const signalled: number[] = [];
+    const code = requestStop({
+      repoRoot,
+      isAlive: () => true,
+      send: (pid) => signalled.push(pid),
+      log: (line) => out.push(line),
+      error: (line) => err.push(line),
+      ...options,
+    });
+    return { code, signalled, lines: out, out: out.join("\n"), err: err.join("\n") };
+  }
+
+  it("sends SIGTERM to the Run the lock names, and says what it will finish", () => {
+    lock();
+
+    const { code, signalled, lines } = stop();
+
+    expect(signalled).toEqual([4321]);
+    expect(code).toBe(0);
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain("`agent-pipeline run`");
+    expect(lines[0]).toContain("pid 4321");
+    expect(lines[0]).toContain("2026-09-17T09-00-00-000");
+  });
+
+  it("names Ctrl+C as the way to stop at once, and what that costs", () => {
+    lock();
+
+    const { lines } = stop();
+
+    expect(lines[1]).toContain("Ctrl+C");
+    expect(lines[1]).toContain("strand");
+  });
+
+  it("says the same thing twice, because the Run ignores the second signal", () => {
+    lock();
+
+    const first = stop();
+    const second = stop();
+
+    expect(second.out).toBe(first.out);
+    expect(second.code).toBe(0);
+    expect(second.signalled).toEqual([4321]);
+  });
+
+  it("refuses when no Run holds the lock, and sends nothing", () => {
+    const { code, signalled, err, out } = stop();
+
+    expect(code).toBe(2);
+    expect(signalled).toEqual([]);
+    expect(err).toContain("No Run to stop");
+    expect(out).toBe("");
+  });
+
+  it("refuses a lock whose process is gone, and leaves the lock where it is", () => {
+    lock();
+
+    const { code, signalled, err } = stop({ isAlive: () => false });
+
+    expect(code).toBe(2);
+    expect(signalled).toEqual([]);
+    expect(err).toContain("No Run to stop");
+    expect(existsSync(lockPath(repoRoot))).toBe(true);
+  });
+
+  it("leaves a `ticket <n>` Run alone, because it ends with its Ticket anyway", () => {
+    lock({ command: "agent-pipeline ticket 5" });
+
+    const { code, signalled, err } = stop();
+
+    expect(code).toBe(2);
+    expect(signalled).toEqual([]);
+    expect(err).toContain("`agent-pipeline ticket 5`");
+    expect(err).toContain("Ticket");
+  });
+
+  it("asks a holder whose command line names no command, rather than passing it over", () => {
+    // What a lock file with no command line at all reads back as.
+    lock({ command: "agent-pipeline" });
+
+    const { code, signalled } = stop();
+
+    expect(signalled).toEqual([4321]);
+    expect(code).toBe(0);
+  });
+
+  it("reports a signal it could not deliver, and claims nothing was stopped", () => {
+    lock();
+
+    const { code, err, out } = stop({
+      send: () => {
+        throw new Error("kill ESRCH");
+      },
+    });
+
+    expect(code).toBe(2);
+    expect(err).toContain("ESRCH");
+    expect(out).toBe("");
+  });
+
+  it("asks the real process table when no seam is given", () => {
+    lock({ pid: process.pid });
+    const signalled: number[] = [];
+
+    const code = requestStop({ repoRoot, send: (pid) => signalled.push(pid), log: () => {} });
+
+    expect(signalled).toEqual([process.pid]);
+    expect(code).toBe(0);
   });
 });

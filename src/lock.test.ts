@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { acquireLock, lockHeldMessage, lockPath } from "./lock.js";
+import { acquireLock, lockHeldMessage, lockHolder, lockPath } from "./lock.js";
 
 let repoRoot: string;
 
@@ -98,5 +98,38 @@ describe("lockHeldMessage", () => {
     expect(message).toContain("run run-1");
     expect(message).toContain("pid 4321");
     expect(message).toContain(lockPath(repoRoot));
+  });
+});
+
+describe("lockHolder", () => {
+  it("names the Run holding the lock", () => {
+    acquireLock(repoRoot, holder(), everythingAlive);
+
+    expect(lockHolder(repoRoot, everythingAlive)).toEqual(holder());
+  });
+
+  it("names nobody when no Run has taken the lock", () => {
+    expect(lockHolder(repoRoot, everythingAlive)).toBeUndefined();
+  });
+
+  it("names nobody once the holder's process is gone, and leaves the file", () => {
+    acquireLock(repoRoot, holder(), everythingAlive);
+
+    expect(lockHolder(repoRoot, nothingAlive)).toBeUndefined();
+    // Reclaiming a dead lock belongs to the next Run, not to whoever reads it.
+    expect(existsSync(lockPath(repoRoot))).toBe(true);
+  });
+
+  it("names nobody for a lock file too corrupt to name one", () => {
+    acquireLock(repoRoot, holder(), everythingAlive);
+    writeFileSync(lockPath(repoRoot), "{ not json");
+
+    expect(lockHolder(repoRoot, everythingAlive)).toBeUndefined();
+  });
+
+  it("asks the real process table when no seam is given", () => {
+    acquireLock(repoRoot, holder({ pid: process.pid }));
+
+    expect(lockHolder(repoRoot)?.pid).toBe(process.pid);
   });
 });
