@@ -24,7 +24,27 @@ function section(number: string): string {
 /** This repository's own changelog, which the tag workflow publishes from. */
 const CHANGELOG = readFileSync(new URL("../CHANGELOG.md", import.meta.url), "utf8");
 
-describe("versionNotes", () => {
+/**
+ * The shape `docs/templates/version-notes.md` gives, with its fields filled in.
+ * Both functions read that shape, so the template is what the fixtures below
+ * are measured against: a heading renamed there and nowhere else fails a test.
+ */
+function templateSection(number: string): string {
+  const template = readFileSync(
+    new URL("../docs/templates/version-notes.md", import.meta.url),
+    "utf8",
+  );
+  const shape: string[] = [];
+  for (const line of template.split("\n")) {
+    // The shape is the headings, the list items and the blank lines between
+    // them; the prose explaining it starts at the first line that is none.
+    if (!/^(#{2,3} |- |$)/.test(line)) break;
+    shape.push(line);
+  }
+  return shape.join("\n").trim().replace("<number>", number).replace("<yyyy-mm-dd>", "2026-09-20");
+}
+
+describe("the notes a Version published", () => {
   it("returns a Version's section without its number heading", () => {
     expect(versionNotes(changelog("0.4.0", "0.3.1"), "0.4.0")).toBe(NOTES);
   });
@@ -45,10 +65,27 @@ describe("versionNotes", () => {
     expect(versionNotes(changelog("0.4.10"), "0.4.1")).toBeUndefined();
   });
 
+  it("returns a section written in the template's shape", () => {
+    const template = templateSection("0.4.0");
+    expect(versionNotes(`# Changelog\n\n${template}\n`, "0.4.0")).toBe(
+      template.split("\n").slice(2).join("\n"),
+    );
+  });
+
   it("returns the notes of every Version this repository has cut", () => {
     for (const number of ["0.1.0", "0.1.1", "0.2.0", "0.3.0", "0.3.1"]) {
       expect(versionNotes(CHANGELOG, number)).toContain("### After upgrading");
     }
+    // The body GitHub published for that Version, to the character.
+    expect(versionNotes(CHANGELOG, "0.2.0")).toBe(`### Any Target
+
+- \`init\` sets a Target up and reports what only a human can (#71)
+- A Run refuses a Target \`init\` has not set up (#72)
+- A Run works against the Target's Base branch; \`baseBranch\` overrides (#70)
+
+### After upgrading
+
+- Run \`agent-pipeline init\` once in every Target; a Run now refuses one without it.`);
   });
 });
 
@@ -64,7 +101,7 @@ function versionPr(over: Partial<Parameters<typeof versionPrRefusals>[0]> = {}) 
   };
 }
 
-describe("versionPrRefusals", () => {
+describe("judging a pull request that changes the number", () => {
   it("lets a pull request that leaves the number alone through", () => {
     expect(
       versionPrRefusals({
@@ -96,15 +133,17 @@ describe("versionPrRefusals", () => {
   });
 
   it("compares numbers by their parts, not as text", () => {
-    expect(
-      versionPrRefusals(versionPr({ number: "0.10.0", lockNumber: "0.10.0", changelog: changelog("0.10.0") })),
-    ).toEqual([]);
+    const tenth = versionPr({
+      number: "0.10.0",
+      lockNumber: "0.10.0",
+      changelog: changelog("0.10.0"),
+    });
+    expect(versionPrRefusals(tenth)).toEqual([]);
   });
 
   it("weighs only tags that name a Version", () => {
-    expect(
-      versionPrRefusals(versionPr({ tags: ["v0.3.1", "tmp-empty-message-test", "v9-rc"] })),
-    ).toEqual([]);
+    const tagged = versionPr({ tags: ["v0.3.1", "a-tag-of-somebody-else's", "v9-rc"] });
+    expect(versionPrRefusals(tagged)).toEqual([]);
   });
 
   it("refuses a lock file that disagrees with the number", () => {
@@ -134,5 +173,10 @@ describe("versionPrRefusals", () => {
       "`package-lock.json` says `0.1.0`, not `0.2.0`.",
       "`CHANGELOG.md` has no `## 0.2.0` section.",
     ]);
+  });
+
+  it("lets a section written in the template's shape through", () => {
+    const template = versionPr({ changelog: `# Changelog\n\n${templateSection("0.4.0")}\n` });
+    expect(versionPrRefusals(template)).toEqual([]);
   });
 });

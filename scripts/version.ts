@@ -2,8 +2,8 @@
  * The Version plumbing of this repository, as its two workflows call it.
  *
  * `.github/workflows/version-pr.yml` runs `check` on every pull request and
- * `.github/workflows/version-tag.yml` runs `number` and `notes` on every push
- * to `main`. All this does is read — two package files, the tags, the changelog
+ * `.github/workflows/version-tag.yml` runs `notes` on the push that cuts a
+ * Version. All this does is read — two package files, the tags, the changelog
  * — and hand what it read to the pure functions in `src/version-pr.ts`, which
  * is where the judgement is and where the tests are. Nothing here is published:
  * `scripts/` is outside the package's `files`, so an installed pipeline carries
@@ -18,9 +18,6 @@ const BASE_REF = process.env.BASE_REF ?? "main";
 
 const [command] = process.argv.slice(2);
 switch (command) {
-  case "number":
-    console.log(packageNumber(read("package.json")));
-    break;
   case "notes":
     printNotes();
     break;
@@ -28,7 +25,7 @@ switch (command) {
     printRefusals();
     break;
   default:
-    fail(`Usage: version.ts number|notes|check (given \`${command ?? ""}\`)`);
+    fail(`Usage: version.ts notes|check (given \`${command ?? ""}\`)`);
 }
 
 /**
@@ -36,13 +33,13 @@ switch (command) {
  * with any — which is how the check fails the pull request.
  */
 function printRefusals(): void {
-  const number = packageNumber(read("package.json"));
+  const number = thisNumber();
   const refusals = versionPrRefusals({
     number,
     baseNumber: packageNumber(baseFile("package.json")),
     lockNumber: lockNumber(number),
     tags: git(["tag", "--list"]).split("\n").filter(Boolean),
-    changelog: readIfPresent("CHANGELOG.md") ?? "",
+    changelog: thisChangelog(),
   });
   if (refusals.length === 0) {
     console.log(`\`${number}\` may merge.`);
@@ -58,8 +55,18 @@ function printRefusals(): void {
  * cue to publish GitHub's generated notes instead.
  */
 function printNotes(): void {
-  const notes = versionNotes(readIfPresent("CHANGELOG.md") ?? "", packageNumber(read("package.json")));
+  const notes = versionNotes(thisChangelog(), thisNumber());
   if (notes !== undefined) console.log(notes);
+}
+
+/** The number this checkout carries, which both commands are about. */
+function thisNumber(): string {
+  return packageNumber(read("package.json"));
+}
+
+/** The changelog this checkout carries, empty where it has none. */
+function thisChangelog(): string {
+  return readIfPresent("CHANGELOG.md") ?? "";
 }
 
 /** The `version` of a `package.json`, whichever revision it was read from. */
@@ -76,9 +83,11 @@ function packageNumber(text: string): string {
  */
 function lockNumber(number: string): string {
   const lock = JSON.parse(read("package-lock.json"));
-  const numbers: unknown[] = [lock.version, lock.packages?.[""]?.version];
-  const disagreeing = numbers.find((found) => found !== number);
-  return typeof disagreeing === "string" ? disagreeing : number;
+  const numbers = [lock.version, lock.packages?.[""]?.version].filter(
+    (found: unknown): found is string => typeof found === "string",
+  );
+  if (numbers.length === 0) fail("`package-lock.json` carries no number.");
+  return numbers.find((found) => found !== number) ?? number;
 }
 
 /** A file of this checkout, which every command needs to exist. */
@@ -98,17 +107,20 @@ function readIfPresent(path: string): string | undefined {
 }
 
 /**
- * A file as the base branch has it. The checkout fetches every branch, so the
- * remote-tracking ref is the branch the pull request will merge into; a read
- * that fails is reported rather than guessed at, because a check that judged a
- * pull request against a number it invented would refuse them all.
+ * A file as the base branch has it, under either name a checkout gives that
+ * branch. A read that fails is reported rather than guessed at, because a check
+ * that judged a pull request against a number it invented would refuse every
+ * pull request in the repository.
  */
 function baseFile(path: string): string {
-  try {
-    return git(["show", `origin/${BASE_REF}:${path}`]);
-  } catch {
-    return fail(`\`${path}\` could not be read on \`origin/${BASE_REF}\`.`);
+  for (const branch of [`origin/${BASE_REF}`, BASE_REF]) {
+    try {
+      return git(["show", `${branch}:${path}`]);
+    } catch {
+      continue;
+    }
   }
+  return fail(`\`${path}\` could not be read on \`${BASE_REF}\`.`);
 }
 
 /** What git said, trimmed. Throws where git failed. */

@@ -46,6 +46,9 @@ jobs:
           # not the subject of the commit it points at.
           git tag -a "$TAG" -m "$TAG" "$GITHUB_SHA"
           git push origin "refs/tags/$TAG"
+          # A Release that fails to publish leaves the tag behind and the job
+          # red: the next push reads the tag as a Version already cut, so the
+          # Release is published by hand from the section.
           npx tsx scripts/version.ts notes > "$RUNNER_TEMP/version-notes.md"
           if [ -s "$RUNNER_TEMP/version-notes.md" ]; then
             gh release create "$TAG" --title "$TAG" --notes-file "$RUNNER_TEMP/version-notes.md"

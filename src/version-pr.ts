@@ -108,7 +108,10 @@ function sections(changelog: string): Map<string, string> {
  */
 function highestTag(tags: string[]): string | undefined {
   const numbers = tags.filter((tag) => /^v\d+\.\d+\.\d+$/.test(tag)).map((tag) => tag.slice(1));
-  return numbers.sort((a, b) => (isHigher(a, b) ? 1 : -1)).at(-1);
+  return numbers.reduce<string | undefined>(
+    (highest, number) => (highest === undefined || isHigher(number, highest) ? number : highest),
+    undefined,
+  );
 }
 
 /** Whether `number` is above `other`, comparing parts as numbers: `0.10.0` is above `0.9.0`. */

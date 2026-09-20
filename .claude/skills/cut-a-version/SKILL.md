@@ -72,11 +72,14 @@ may merge.
 git switch -c version/<number>
 git commit -a -m "chore: version <number>"
 git push -u origin version/<number>
-gh pr create --base main --title "chore: version <number>" --body-file <notes>
+npx tsx scripts/version.ts notes > "${TMPDIR:-/tmp}/version-notes.md"
+gh pr create --base main --title "chore: version <number>" \
+  --body-file "${TMPDIR:-/tmp}/version-notes.md"
 ```
 
-The body is the section, so the notes are read before they are published. It is
-the one pull request on `main` that carries no Ticket number.
+The body is the section as the tag workflow will extract it, so the notes are
+read in the pull request exactly as they will be published. It is the one pull
+request on `main` that carries no Ticket number.
 
 Done when the pull request is open and its link is handed to the maintainer:
 their review and their merge are what cut the Version.
