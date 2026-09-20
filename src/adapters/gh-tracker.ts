@@ -18,7 +18,10 @@ export interface GhTrackerOptions {
   run?: RunProcess;
   cwd?: string;
   pollIntervalMs?: number;
-  /** How long "no checks yet" counts as pending after the wait starts. */
+  /**
+   * How long "no checks yet" counts as pending after the wait starts. The
+   * Target's `ciGraceMinutes`, in the unit the poll works in.
+   */
   checksGraceMs?: number;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
@@ -96,7 +99,7 @@ export class GhTracker implements Tracker {
     this.runProcess = options.run ?? exec;
     this.cwd = options.cwd;
     this.pollIntervalMs = options.pollIntervalMs ?? 15_000;
-    this.checksGraceMs = options.checksGraceMs ?? 120_000;
+    this.checksGraceMs = options.checksGraceMs ?? 300_000;
     this.sleep =
       options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.now = options.now ?? Date.now;

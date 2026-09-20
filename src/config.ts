@@ -40,6 +40,7 @@ const configSchema = z
       .optional(),
     permissionMode: z.enum(PERMISSION_MODES).optional(),
     ciTimeoutMinutes: z.number().positive().optional(),
+    ciGraceMinutes: z.number().positive().optional(),
     checkTimeoutMinutes: z.number().positive().optional(),
     labels: z
       .object({
@@ -95,6 +96,12 @@ export interface Config {
   permissionMode: PermissionMode;
   ciTimeoutMinutes: number;
   /**
+   * How long a pull request GitHub has registered no check run for still counts
+   * as pending. A Target whose Actions queue slowly raises it; a Target with no
+   * CI workflow pays it once per Landing, so it is not the CI timeout.
+   */
+  ciGraceMinutes: number;
+  /**
    * How long any one Check command may run before it is killed. One number for
    * the whole pipeline, and every command gets the whole of it.
    */
@@ -117,6 +124,14 @@ const STAGE_DEFAULTS = {
  * command hung rather than that it was slow.
  */
 const DEFAULT_CHECK_TIMEOUT_MINUTES = 15;
+
+/**
+ * How long "no checks yet" is given when the config names nothing. GitHub has
+ * taken over three minutes to register a check run (#119), and the Landing is
+ * serialized, so this is long enough to cover that and short enough that a
+ * Target with no CI workflow does not hold the other Lanes up for a CI timeout.
+ */
+const DEFAULT_CI_GRACE_MINUTES = 5;
 
 /**
  * The Lane count a Target that says nothing gets: one, which is a Run that takes
@@ -168,6 +183,7 @@ export function loadConfig(repoRoot: string, version: string): Config {
     },
     permissionMode: file.permissionMode ?? "auto",
     ciTimeoutMinutes: file.ciTimeoutMinutes ?? 30,
+    ciGraceMinutes: file.ciGraceMinutes ?? DEFAULT_CI_GRACE_MINUTES,
     checkTimeoutMinutes: file.checkTimeoutMinutes ?? DEFAULT_CHECK_TIMEOUT_MINUTES,
     labels: labels(file.labels),
   };

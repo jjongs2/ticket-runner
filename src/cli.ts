@@ -150,11 +150,17 @@ async function main(argv: string[]): Promise<number> {
   }
 
   const repoRoot = await findRepoRoot();
+  const config = loadConfig(repoRoot, version);
   return startRun({
     work,
     repoRoot,
-    config: loadConfig(repoRoot, version),
-    tracker: new GhTracker({ cwd: repoRoot }),
+    config,
+    // The one setting an adapter holds rather than being handed per call: the
+    // CI wait's grace is the tracker's own, so the Target's minutes reach it here.
+    tracker: new GhTracker({
+      cwd: repoRoot,
+      checksGraceMs: config.ciGraceMinutes * 60_000,
+    }),
     runner: new ClaudeAgentRunner(),
     workspace: new GitWorkspace(repoRoot),
     runId: newRunId(),

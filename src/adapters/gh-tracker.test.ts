@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { execution, failedExecution } from "../testing/executions.js";
-import { GhTracker } from "./gh-tracker.js";
-import type { ExecOptions, Execution, RunProcess } from "./exec.js";
+import { GhTracker, type GhTrackerOptions } from "./gh-tracker.js";
+import type { ExecOptions, Execution } from "./exec.js";
 
 let calls: string[][];
 let responses: Execution[];
@@ -16,10 +16,17 @@ function tracker(...queued: Execution[]) {
 }
 
 /** A tracker whose clock is whatever the test hands it; grace is off unless asked for. */
-function trackerWith(
-  options: { now?: () => number; checksGraceMs?: number; run?: RunProcess },
-  ...queued: Execution[]
-) {
+function trackerWith(options: GhTrackerOptions, ...queued: Execution[]) {
+  return stubbed({ checksGraceMs: 0, ...options }, queued);
+}
+
+/** A tracker that keeps the adapter's own grace, which is what such a test grades. */
+function trackerWithDefaultGrace(options: GhTrackerOptions, ...queued: Execution[]) {
+  return stubbed(options, queued);
+}
+
+/** A tracker whose `gh` calls are recorded and answered from `queued` in order. */
+function stubbed(options: GhTrackerOptions, queued: Execution[]) {
   responses = [...queued];
   return new GhTracker({
     run: async (_command: string, args: string[], _options: ExecOptions) => {
@@ -28,7 +35,6 @@ function trackerWith(
     },
     sleep: async () => {},
     pollIntervalMs: 0,
-    checksGraceMs: 0,
     ...options,
   });
 }
@@ -844,6 +850,46 @@ describe("waiting for CI", () => {
     expect(outcome).toEqual({ state: "none" });
     expect(calls.length).toBeGreaterThan(1);
     expect(calls.length).toBeLessThan(4);
+  });
+
+  /** A clock that only moves when the wait sleeps, so a test's minutes are the wait's. */
+  const waitingClock = () => {
+    let elapsedMs = 0;
+    return {
+      now: () => elapsedMs,
+      sleep: async (ms: number) => {
+        elapsedMs += ms;
+      },
+    };
+  };
+
+  it("grades a PR on checks GitHub registers four minutes into the wait", async () => {
+    const outcome = await trackerWithDefaultGrace(
+      { ...waitingClock(), pollIntervalMs: 60_000 },
+      failedExecution(NO_CHECKS),
+      failedExecution(NO_CHECKS),
+      failedExecution(NO_CHECKS),
+      failedExecution(NO_CHECKS),
+      ok(checks("pass")),
+    ).waitForCi(12, 60_000 * 30);
+
+    expect(outcome).toEqual({ state: "passed" });
+    expect(calls).toHaveLength(5);
+  });
+
+  it("gives the grace five minutes when the Target configured none", async () => {
+    const outcome = await trackerWithDefaultGrace(
+      { ...waitingClock(), pollIntervalMs: 120_000 },
+      failedExecution(NO_CHECKS),
+      failedExecution(NO_CHECKS),
+      failedExecution(NO_CHECKS),
+      failedExecution(NO_CHECKS),
+    ).waitForCi(12, 60_000 * 30);
+
+    // The sixth minute is past the grace; the fourth reading is the first to be
+    // taken there, so it is the one reported rather than waited out.
+    expect(outcome).toEqual({ state: "none" });
+    expect(calls).toHaveLength(4);
   });
 
   it("never lets the grace period outlive the CI timeout", async () => {

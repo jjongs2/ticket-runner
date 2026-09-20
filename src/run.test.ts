@@ -24,6 +24,7 @@ function config(): Config {
     },
     permissionMode: "auto",
     ciTimeoutMinutes: 30,
+    ciGraceMinutes: 5,
     checkTimeoutMinutes: 15,
     labels: {
       needsTriage: "needs-triage",
