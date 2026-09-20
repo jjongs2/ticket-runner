@@ -1,4 +1,4 @@
-node_modules/
+node_modules
 
 # Pipeline worktrees, one per Ticket.
 .worktrees/
