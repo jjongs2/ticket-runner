@@ -51,6 +51,16 @@ export class FakeTracker implements Tracker {
   squashMergeEnabled = false;
   /** What GitHub calls this Target's default branch; the Run resolves from it. */
   defaultBranchName = "main";
+  /**
+   * The tag of the highest Version published on the pipeline's own repository,
+   * as {@link latestVersionTag} answers. Nothing by default, which is the
+   * answer a Target with no network gets and the one nothing is said over.
+   */
+  publishedVersionTag: string | undefined;
+  /** When set, the lookup throws, as a `gh` that is not installed at all does. */
+  versionTagFails = false;
+  /** Every repository the Version lookup was asked about, in order. */
+  versionTagLookups: string[] = [];
   labels = new Set<string>();
   createdLabels: LabelSpec[] = [];
   issues = new Map<number, Issue>();
@@ -114,6 +124,14 @@ export class FakeTracker implements Tracker {
   // before it touches a Ticket, where the log is about what it wrote.
   async defaultBranch(): Promise<string> {
     return this.defaultBranchName;
+  }
+
+  // Not in `calls`: a read, and one about the pipeline's own repository rather
+  // than about the Target this log is a record of.
+  async latestVersionTag(repository: string): Promise<string | undefined> {
+    this.versionTagLookups.push(repository);
+    if (this.versionTagFails) throw new Error("gh: command not found");
+    return this.publishedVersionTag;
   }
 
   async listLabels(): Promise<string[]> {

@@ -240,6 +240,39 @@ describe("runSummary", () => {
     expect(summary.split("\n")[0]).toBe(`agent-pipeline ${VERSION} run r1 · 42m`);
   });
 
+  /**
+   * Above the header rather than below it: a Run that has been going all night
+   * ends in a summary the human scrolls back to, and the line they most need
+   * out of it is the one saying the pipeline they ran is not the current one.
+   */
+  it("puts the newer-Version line at the head, above the header", () => {
+    const newer = "A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade.";
+    const summary = runSummary({
+      version: VERSION,
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [],
+      newer,
+      stop: { reason: "frontier", blocked: [] },
+    });
+
+    const [first, second] = summary.split("\n");
+    expect(first).toBe(newer);
+    expect(second).toBe(`agent-pipeline ${VERSION} run r1 · 0m`);
+  });
+
+  it("heads the summary with the Run where no newer Version is out", () => {
+    const summary = runSummary({
+      version: VERSION,
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [],
+      stop: { reason: "frontier", blocked: [] },
+    });
+
+    expect(summary.split("\n")[0]).toBe(`agent-pipeline ${VERSION} run r1 · 0m`);
+  });
+
   it("lists merged, handed-off and skipped Tickets by number", () => {
     const summary = runSummary({
       version: VERSION,

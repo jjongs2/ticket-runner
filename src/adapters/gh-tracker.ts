@@ -11,6 +11,7 @@ import type {
   SquashCommit,
   Tracker,
 } from "../ports/tracker.js";
+import { highestVersion } from "../version-number.js";
 import { type Execution, type RunProcess, exec, throwOnFailure } from "./exec.js";
 
 export interface GhTrackerOptions {
@@ -46,6 +47,13 @@ interface RawCandidate {
   pull_request?: unknown;
   /** `blocked_by` counts open blockers only, which is exactly the gate. */
   issue_dependencies_summary?: { blocked_by?: number };
+}
+
+/** One entry of `gh release list --json`, in the three fields a Version needs. */
+interface RawRelease {
+  tagName: string;
+  isDraft: boolean;
+  isPrerelease: boolean;
 }
 
 /** One entry of `gh pr checks --json`. */
@@ -128,6 +136,44 @@ export class GhTracker implements Tracker {
     const branch = stdout.trim();
     if (branch === "") throw new Error("gh reported no default branch for this repository");
     return branch;
+  }
+
+  /**
+   * The tag of the highest Version published on `repository` as a Release.
+   *
+   * Every failure is the same answer — no answer — because nothing the caller
+   * does with it may stop a Run: a rate limit, a repository nobody can see, a
+   * `gh` that is not installed. The list is asked for rather than GitHub's own
+   * `latest`, which is the newest by date: a patch cut on an old branch after a
+   * minor would otherwise be reported as the Version to upgrade to. A hundred
+   * of them is every Version this tool is likely to have, and they arrive
+   * newest first, so the highest is among them wherever the count lands.
+   */
+  async latestVersionTag(repository: string): Promise<string | undefined> {
+    try {
+      const { exitCode, stdout } = await this.gh(
+        [
+          "release",
+          "list",
+          "--repo",
+          repository,
+          "--json",
+          "tagName,isDraft,isPrerelease",
+          "--limit",
+          "100",
+        ],
+        { allowFailure: true },
+      );
+      if (exitCode !== 0) return undefined;
+      const releases = JSON.parse(stdout) as RawRelease[];
+      return highestVersion(
+        releases
+          .filter((release) => !release.isDraft && !release.isPrerelease)
+          .map((release) => release.tagName),
+      )?.tag;
+    } catch {
+      return undefined;
+    }
   }
 
   async listLabels(): Promise<string[]> {

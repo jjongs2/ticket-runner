@@ -40,19 +40,49 @@ export async function pipelineVersion(packageRoot: string = PACKAGE_ROOT): Promi
   return commit === undefined ? number : `${number}+${commit}`;
 }
 
+/**
+ * The pipeline's own repository as `owner/name`, from the `repository` field of
+ * its package, and undefined where the package names none or names one this
+ * cannot read.
+ *
+ * The one thing a Run has to know to ask whether a newer Version is out. It is
+ * read from the package rather than written down here for the same reason the
+ * number is: an installed copy and a checkout answer the same way, and a fork
+ * asks about itself (ADR-0007).
+ */
+export function pipelineRepository(packageRoot: string = PACKAGE_ROOT): string | undefined {
+  const field = packageField(packageRoot, "repository");
+  const url =
+    typeof field === "string"
+      ? field
+      : field !== null && typeof field === "object" && "url" in field
+        ? field.url
+        : undefined;
+  if (typeof url !== "string") return undefined;
+
+  // Every spelling npm takes for a GitHub repository: `owner/name`,
+  // `github:owner/name`, and the git URL `npm init` writes.
+  const match = /(?:github\.com[/:]|^(?:github:)?)([\w.-]+\/[\w.-]+?)(?:\.git)?$/.exec(url);
+  return match?.[1];
+}
+
 /** The number in `package.json`, which is the whole of an installed Version. */
 function packageNumber(packageRoot: string): string {
+  const version = packageField(packageRoot, "version");
+  return typeof version === "string" && version !== "" ? version : UNKNOWN;
+}
+
+/** One field of the package, and undefined where the package cannot be read at all. */
+function packageField(packageRoot: string, field: string): unknown {
   let parsed: unknown;
   try {
     parsed = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
   } catch {
-    return UNKNOWN;
+    return undefined;
   }
-  const version =
-    parsed !== null && typeof parsed === "object" && "version" in parsed
-      ? parsed.version
-      : undefined;
-  return typeof version === "string" && version !== "" ? version : UNKNOWN;
+  return parsed !== null && typeof parsed === "object" && field in parsed
+    ? (parsed as Record<string, unknown>)[field]
+    : undefined;
 }
 
 /**

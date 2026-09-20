@@ -59,6 +59,78 @@ describe("reading", () => {
     expect(await gh.authenticated()).toBe(false);
   });
 
+  it("asks gh for the highest published Release of a named repository", async () => {
+    const gh = tracker(
+      ok(
+        JSON.stringify([
+          { tagName: "v0.3.0", isDraft: false, isPrerelease: false },
+          { tagName: "v0.10.0", isDraft: false, isPrerelease: false },
+          { tagName: "v0.9.0", isDraft: false, isPrerelease: false },
+        ]),
+      ),
+    );
+
+    expect(await gh.latestVersionTag("acme/repo")).toBe("v0.10.0");
+    expect(calls[0]).toEqual([
+      "release",
+      "list",
+      "--repo",
+      "acme/repo",
+      "--json",
+      "tagName,isDraft,isPrerelease",
+      "--limit",
+      "100",
+    ]);
+  });
+
+  it("counts no draft and no pre-release as a published Version", async () => {
+    const gh = tracker(
+      ok(
+        JSON.stringify([
+          { tagName: "v0.6.0", isDraft: true, isPrerelease: false },
+          { tagName: "v0.5.0", isDraft: false, isPrerelease: true },
+          { tagName: "v0.4.0", isDraft: false, isPrerelease: false },
+        ]),
+      ),
+    );
+
+    expect(await gh.latestVersionTag("acme/repo")).toBe("v0.4.0");
+  });
+
+  it("ignores a Release tagged as anything but a Version", async () => {
+    const gh = tracker(
+      ok(JSON.stringify([{ tagName: "nightly", isDraft: false, isPrerelease: false }])),
+    );
+
+    expect(await gh.latestVersionTag("acme/repo")).toBeUndefined();
+  });
+
+  it("answers with nothing for a repository that has published none", async () => {
+    expect(await tracker(ok("[]")).latestVersionTag("acme/repo")).toBeUndefined();
+  });
+
+  /**
+   * Nothing the caller does with this may stop a Run, so every way of failing
+   * is the same answer: no answer.
+   */
+  it("answers with nothing rather than throwing when gh fails", async () => {
+    expect(await tracker(failedExecution("HTTP 404")).latestVersionTag("acme/repo")).toBeUndefined();
+  });
+
+  it("answers with nothing when gh itself cannot be run", async () => {
+    const gh = trackerWith({
+      run: async () => {
+        throw new Error("spawn gh ENOENT");
+      },
+    });
+
+    expect(await gh.latestVersionTag("acme/repo")).toBeUndefined();
+  });
+
+  it("answers with nothing when gh prints something that is not JSON", async () => {
+    expect(await tracker(ok("not json")).latestVersionTag("acme/repo")).toBeUndefined();
+  });
+
   it("asks gh who the current user is", async () => {
     expect(await tracker(ok("octocat\n")).currentUser()).toBe("octocat");
     expect(calls[0]).toEqual(["api", "user", "--jq", ".login"]);

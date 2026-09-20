@@ -154,6 +154,25 @@ export interface Tracker {
    * merges into and pulls, so a repository on `master` needs no config file.
    */
   defaultBranch(): Promise<string>;
+  /**
+   * The tag of the highest Version `repository` has published as a GitHub
+   * Release, named `owner/name`, or nothing where GitHub could not be asked.
+   *
+   * Named for the tag rather than for the Release, because a Release in this
+   * codebase is what a rate-limited Stage does to a Ticket (CONTEXT.md). A
+   * published GitHub Release is what makes a tag a Version anybody can install,
+   * which is why it is the question rather than the tag alone.
+   *
+   * The one method of this port that is not about the Target: it is asked about
+   * the pipeline's own repository, so a Run and `init` can say that a newer
+   * Version is out. Nothing is ever refused over the answer, so no answer is an
+   * answer — a Target with no network is a Target that works (ADR-0007).
+   *
+   * Drafts and pre-releases are not published Versions and are not counted. The
+   * tag comes back as it was cut, `v0.4.0`, because that is what a human would
+   * go and look for.
+   */
+  latestVersionTag(repository: string): Promise<string | undefined>;
   listLabels(): Promise<string[]>;
   createLabel(label: LabelSpec): Promise<void>;
   /**

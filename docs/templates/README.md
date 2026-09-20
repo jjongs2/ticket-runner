@@ -23,6 +23,8 @@ Humans read all of these, so each stays short: one line of status, details folde
 
 `version-notes.md` is the one shape nothing in the pipeline writes. A human cuts a Version, the `cut-a-version` skill drafts that Version's section of `CHANGELOG.md` in this shape, and the tag workflow publishes the section as the Release body (ADR-0007). It is kept here because the check on a Version PR reads the same shape, and a shape two readers share belongs where every other one does.
 
+The conventions document `init` writes carries a marker of its own, `<!-- agent-pipeline:version <number> -->`, and is the one that is *on* a first line rather than *being* one: it ends the document's heading, so no reader of the document meets it. It also changes, because what it carries is the Version that wrote the copy — which is what lets `init` leave a Target a newer pipeline set up alone, and a Run warn about a copy from another Version without touching it (ADR-0007). It is not in this folder because no template writes it: `src/conventions.ts` is the document's only shape.
+
 Markers are how the pipeline finds its own comment again. A marker is the first line of the comment and never changes. `note-comment.md` carries one without ever looking it up: nothing about a Note is edited or posted twice, but a human meeting it on an unrelated Ticket can tell what wrote it.
 
 The two Note templates are the only ones that quote an agent's prose back to GitHub, so both escape a leading `- [ ]` to `- \[ \]`. A Ticket's checkboxes are its Acceptance Criteria to every part of the pipeline that reads them, and a Note is not asking for any.

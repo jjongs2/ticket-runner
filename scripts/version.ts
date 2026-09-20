@@ -8,9 +8,16 @@
  * is where the judgement is and where the tests are. Nothing here is published:
  * `scripts/` is outside the package's `files`, so an installed pipeline carries
  * none of it.
+ *
+ * `mark` is the one command a human runs rather than a workflow, and the one
+ * that writes: this repository is a Target of its own pipeline, so the copy of
+ * the conventions document checked in here bears the Version that wrote it, and
+ * raising the number leaves that copy a Version behind until it is rewritten
+ * (ADR-0007).
  */
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
+import { CONVENTIONS_PATH, conventionsDoc } from "../src/conventions.js";
 import { versionNotes, versionPrRefusals } from "../src/version-pr.js";
 
 /** The branch a pull request is judged against; the workflow passes it. */
@@ -24,8 +31,21 @@ switch (command) {
   case "check":
     printRefusals();
     break;
+  case "mark":
+    markConventionsDoc();
+    break;
   default:
-    fail(`Usage: version.ts notes|check (given \`${command ?? ""}\`)`);
+    fail(`Usage: version.ts notes|check|mark (given \`${command ?? ""}\`)`);
+}
+
+/**
+ * Rewrite this repository's own copy of the conventions document with the
+ * number this checkout now carries, which is what `init` would write here.
+ */
+function markConventionsDoc(): void {
+  const number = thisNumber();
+  writeFileSync(CONVENTIONS_PATH, conventionsDoc(number));
+  console.log(`\`${CONVENTIONS_PATH}\` is marked \`${number}\`.`);
 }
 
 /**
@@ -59,7 +79,7 @@ function printNotes(): void {
   if (notes !== undefined) console.log(notes);
 }
 
-/** The number this checkout carries, which both commands are about. */
+/** The number this checkout carries, which every command here is about. */
 function thisNumber(): string {
   return packageNumber(read("package.json"));
 }

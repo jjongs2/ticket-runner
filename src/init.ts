@@ -1,7 +1,12 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { CONFIG_FILENAME, type Config } from "./config.js";
-import { CLAUDE_SECTION, CONVENTIONS_DOC, CONVENTIONS_PATH } from "./conventions.js";
+import {
+  CLAUDE_SECTION,
+  CONVENTIONS_PATH,
+  conventionsDoc,
+  conventionsMark,
+} from "./conventions.js";
 import { ensureLabels } from "./labels.js";
 import {
   type AgentPreflight,
@@ -16,6 +21,8 @@ import {
   readTargetFile,
 } from "./readiness.js";
 import { nestedRunRefusal } from "./stage-guard.js";
+import { newerVersionLine } from "./staleness.js";
+import { isHigher, versionNumber } from "./version-number.js";
 
 /**
  * `agent-pipeline init`: put in place what a Run will expect to find in a
@@ -30,7 +37,10 @@ import { nestedRunRefusal } from "./stage-guard.js";
  * The files a human owns — `.gitignore`, `CLAUDE.md` — only ever gain lines.
  * The conventions document is the one exception, and it says so in its own
  * first paragraph: it is the pipeline's text, so a Target carrying an older
- * copy is rewritten and told that it was.
+ * copy is rewritten and told that it was. The exception to the exception is a
+ * copy a newer pipeline wrote, which the mark on its first line is how this
+ * knows: rewriting that one would take the Target backwards, so it is left
+ * alone and the upgrade is named instead (ADR-0007).
  *
  * The Target's own files are read and written here rather than through a port,
  * which every other external effect of the pipeline goes through. Setting a
@@ -54,6 +64,11 @@ export interface InitOptions {
    * string the CLI resolved, never something read from here (ADR-0007).
    */
   version: string;
+  /**
+   * The pipeline's own repository, as `owner/name`, which the newer-Version
+   * notice is looked up against; see {@link import("./staleness.js")}.
+   */
+  repository?: string | undefined;
   config: Config;
   tracker: Tracker;
   runner: AgentRunner;
@@ -88,7 +103,17 @@ export async function initTarget(options: InitOptions): Promise<number> {
 
   log(`agent-pipeline ${version} init · ${repoRoot}`);
 
-  const written = writeTargetFiles(repoRoot);
+  // The first thing after the opening line, so a human setting a Target up with
+  // an old copy reads it before the report it is about to change their mind
+  // about. Never a refusal: `init` sets the Target up either way.
+  const newer = await newerVersionLine({
+    tracker,
+    version,
+    repository: options.repository,
+  });
+  if (newer !== undefined) log(newer);
+
+  const written = writeTargetFiles(repoRoot, version);
 
   // Asked before the labels, because every other GitHub call throws without it
   // and a report is more use to the human than a stack trace.
@@ -128,11 +153,11 @@ function logGroup(
 }
 
 /** What the Target gained on disk, one line per file that changed. */
-function writeTargetFiles(repoRoot: string): string[] {
+function writeTargetFiles(repoRoot: string, version: string): string[] {
   return [
     ensureGitignore(repoRoot),
     ensureConfigFile(repoRoot),
-    ensureConventionsDoc(repoRoot),
+    ensureConventionsDoc(repoRoot, version),
     ensureClaudePointer(repoRoot),
   ].filter((line): line is string => line !== undefined);
 }
@@ -164,17 +189,49 @@ function ensureConfigFile(repoRoot: string): string | undefined {
   return `${CONFIG_FILENAME}: created, with every setting left at its default`;
 }
 
-/** The pipeline's own text, so a Target never carries an older copy of it. */
-function ensureConventionsDoc(repoRoot: string): string | undefined {
+/**
+ * The pipeline's own text, so a Target never carries an older copy of it —
+ * unless the copy here is a newer pipeline's, which is the one case where
+ * rewriting would take the Target backwards.
+ *
+ * The mark is read before the text, because it is the only thing that says
+ * which way round the two copies are. Nothing is refused either way: a Target
+ * is not worse for carrying a document from another Version.
+ */
+function ensureConventionsDoc(repoRoot: string, version: string): string | undefined {
   const path = join(repoRoot, CONVENTIONS_PATH);
   const existing = readTargetFile(path);
-  if (existing === CONVENTIONS_DOC) return undefined;
+  const mark = conventionsMark(existing);
+  const own = versionNumber(version);
+
+  if (mark !== undefined && own !== undefined && isHigher(mark, own)) {
+    return `${CONVENTIONS_PATH}: left alone, because ${mark} set this Target up and this is ${own} — upgrade \`agent-pipeline\` to rewrite it`;
+  }
+
+  const doc = conventionsDoc(version);
+  if (existing === doc) return undefined;
 
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, CONVENTIONS_DOC);
-  return existing === undefined
-    ? `${CONVENTIONS_PATH}: written`
-    : `${CONVENTIONS_PATH}: overwritten, because the copy here said something else`;
+  writeFileSync(path, doc);
+  return `${CONVENTIONS_PATH}: ${rewritten(existing, mark, own)}`;
+}
+
+/**
+ * Which of the four ways a copy came to be rewritten this one was.
+ *
+ * A copy marked with this very Version is the odd one: nothing about the
+ * pipeline moved, so the difference is something the Target did to the file,
+ * and saying it was left by the Version now writing it would read as nonsense.
+ */
+function rewritten(
+  existing: string | undefined,
+  mark: string | undefined,
+  own: string | undefined,
+): string {
+  if (existing === undefined) return "written";
+  if (mark === undefined) return "overwritten, because the copy here carried no Version";
+  if (mark === own) return "overwritten, because the copy here said something else";
+  return `overwritten, because the copy here was left by ${mark}`;
 }
 
 /**

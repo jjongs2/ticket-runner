@@ -3,7 +3,7 @@ import { ClaudeAgentRunner } from "./adapters/claude-agent-runner.js";
 import { GhTracker } from "./adapters/gh-tracker.js";
 import { GitWorkspace } from "./adapters/git-workspace.js";
 import { findRepoRoot } from "./adapters/repo-root.js";
-import { pipelineVersion } from "./adapters/version.js";
+import { pipelineRepository, pipelineVersion } from "./adapters/version.js";
 import { ConfigError, loadConfig } from "./config.js";
 import { initTarget } from "./init.js";
 import { newRunId } from "./run-log.js";
@@ -52,6 +52,9 @@ async function main(argv: string[]): Promise<number> {
   // run id is: a Run whose summary, comments, State files and transcripts all
   // read it separately could report four different things (ADR-0007).
   const version = await pipelineVersion();
+  // The repository a newer Version would be published on, read from the same
+  // package the number came from, so a fork asks about itself (ADR-0007).
+  const repository = pipelineRepository();
   if (values.version) {
     console.log(version);
     return 0;
@@ -82,6 +85,7 @@ async function main(argv: string[]): Promise<number> {
     return initTarget({
       repoRoot: root,
       version,
+      repository,
       config: loadConfig(root, version),
       tracker: new GhTracker({ cwd: root }),
       runner: new ClaudeAgentRunner(),
@@ -108,6 +112,7 @@ async function main(argv: string[]): Promise<number> {
     workspace: new GitWorkspace(repoRoot),
     runId: newRunId(),
     version,
+    repository,
     command: `agent-pipeline ${positionals.join(" ")}`,
   });
 }
