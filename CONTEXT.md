@@ -133,5 +133,9 @@ A number `main` carries as a tag and an installed copy of the pipeline reports. 
 _Avoid_: release (a Release is what a rate-limited Stage does to a Ticket), build, revision, tag (the tag is where a Version lives, not what it is)
 
 **Version PR**:
-The pull request that raises the number; its merge is what cuts a Version. Opened by a human, because when a Version is cut is a Planning decision, not something the pipeline infers from what merged.
+The pull request that raises the number and carries the Version notes; its merge is what cuts a Version. Opened by a human with an agent's help: the agent proposes the number by the rule and drafts the notes, and the human's review and merge are the decision, because when a Version is cut is a Planning decision, not something the pipeline infers from what merged.
 _Avoid_: release PR, bump PR, version bump
+
+**Version notes**:
+What a Version PR says about the Version it cuts: what changed since the last one, grouped for a reader rather than listed per pull request, and what a Target or its human has to do after upgrading. Kept in `CHANGELOG.md`, one section per Version, and published as the body of the Version's GitHub Release.
+_Avoid_: release notes, changelog entry, what's changed
