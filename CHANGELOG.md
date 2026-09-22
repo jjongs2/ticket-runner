@@ -4,6 +4,18 @@ One section per Version, newest first, written in the Version PR that cut it and
 published as the body of that Version's GitHub Release (ADR-0007). The shape is
 `docs/templates/version-notes.md`.
 
+## 0.4.3 (2026-09-22)
+
+### Notes
+
+- A Stage is told the bar a Note must clear before writing one, and the verify Stage holds itself to the same evidence standard ([#129])
+
+### After upgrading
+
+- nothing
+
+[#129]: https://github.com/jjongs2/agent-pipeline/pull/129
+
 ## 0.4.2 (2026-09-22)
 
 ### Notes
