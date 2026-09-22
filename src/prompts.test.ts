@@ -206,6 +206,24 @@ describe("the Notes channel", () => {
     expect(fixPrompt(url, FAILED_CHECK, BASE, "")).toContain("Notes for other Tickets");
   });
 
+  it("tells every Stage with the channel that a Note is a defect", () => {
+    for (const prompt of [
+      implementPrompt(url, BASE, ""),
+      fixPrompt(url, FAILED_CHECK, BASE, ""),
+      verifyPrompt(url, ""),
+    ]) {
+      expect(prompt).toContain("A Note is a defect");
+      expect(prompt).toContain("are not Notes");
+    }
+  });
+
+  it("holds a verify Note to the evidence bar a criterion is held to", () => {
+    const prompt = verifyPrompt(url, "");
+
+    expect(prompt).toMatch(/carries the evidence that the defect is real/i);
+    expect(prompt).toContain("something you suspect but did not demonstrate is not a Note");
+  });
+
   it("tells a Stage to leave the number out rather than guess it", () => {
     expect(implementPrompt(url, BASE, "")).toContain("leave it out when you are not sure");
   });
@@ -237,11 +255,12 @@ describe("the Notes channel", () => {
     expect(fixPrompt(url, FAILED_CHECK, BASE, "")).not.toContain("gathered on");
   });
 
-  it("asks for what the standing issue does not record, not for silence", () => {
+  it("asks for what the standing issue does not record, not for another instance of it", () => {
     const prompt = implementPrompt(url, BASE, "", 42);
 
-    expect(prompt).toContain("add what it does not already record");
-    expect(prompt).toContain("a new facet of a condition it already mentions is worth reporting");
+    expect(prompt).toContain("take what it already records as recorded");
+    expect(prompt).toContain("changes what a reader would do about it");
+    expect(prompt).toContain("not when it is another instance of the same thing");
   });
 
   it("passes the number alone, so the prompt does not grow with the backlog", () => {
