@@ -2586,13 +2586,12 @@ describe("Notes a Stage makes", () => {
 
     await run();
 
-    expect(tracker.createdIssues).toEqual([
-      {
-        title: "Notes from the pipeline",
-        body: expect.stringContaining("<!-- agent-pipeline:notes-issue -->") as unknown as string,
-        labels: ["needs-triage"],
-      },
-    ]);
+    expect(tracker.createdIssues).toHaveLength(1);
+    expect(tracker.createdIssues[0]).toMatchObject({
+      title: "Notes from the pipeline",
+      labels: ["needs-triage"],
+    });
+    expect(tracker.createdIssues[0]?.body).toContain("<!-- agent-pipeline:notes-issue -->");
     expect(tracker.comments).toContainEqual({
       issue: 200,
       body: "<!-- agent-pipeline:note -->\nFrom #2 implement\n\nNothing cleans up worktrees.\n",

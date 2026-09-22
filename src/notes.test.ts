@@ -87,7 +87,7 @@ describe("parseNotes", () => {
     expect(item.required).toEqual(["note"]);
   });
 
-  it("no longer tells a Stage its first sentence becomes an issue title", () => {
+  it("promises a Stage nothing about issue titles", () => {
     expect(NOTES_JSON_SCHEMA.properties.notes.items.properties.note.description).not.toContain(
       "title",
     );
@@ -177,13 +177,12 @@ describe("routing a Note that names no Ticket", () => {
 
     await routeNotes(routing(tracker), { notes: [{ note: "no cleanup" }] });
 
-    expect(tracker.createdIssues).toEqual([
-      {
-        title: NOTES_ISSUE_TITLE,
-        body: expect.stringContaining(NOTES_ISSUE_MARKER) as unknown as string,
-        labels: ["needs-triage"],
-      },
-    ]);
+    expect(tracker.createdIssues).toHaveLength(1);
+    expect(tracker.createdIssues[0]).toMatchObject({
+      title: NOTES_ISSUE_TITLE,
+      labels: ["needs-triage"],
+    });
+    expect(tracker.createdIssues[0]?.body).toContain(NOTES_ISSUE_MARKER);
   });
 
   it("opens one issue for many Notes, and says which of them opened it", async () => {
@@ -213,7 +212,7 @@ describe("routing a Note that names no Ticket", () => {
     ]);
   });
 
-  it("derives no issue title from the Note", async () => {
+  it("opens it under the fixed title, never one taken from the Note", async () => {
     const tracker = new FakeTracker();
 
     await routeNotes(routing(tracker), { notes: [{ note: "Worktrees are never cleaned up." }] });
@@ -462,6 +461,28 @@ describe("when a Ticket will not take a Note", () => {
 
     expect(routed.map((note) => note.note)).toEqual(["kept"]);
     expect(lines.join("\n")).toContain("#10 could not route a Note");
+  });
+
+  it("looks again rather than opening a second issue when a create is lost", async () => {
+    const tracker = new FakeTracker();
+    const createIssue = tracker.createIssue.bind(tracker);
+    let lost = true;
+    // The issue reaches GitHub and only the answer is lost, which is the one
+    // failure that could leave two standing issues open.
+    tracker.createIssue = async (issue) => {
+      const ref = await createIssue(issue);
+      if (!lost) return ref;
+      lost = false;
+      throw new Error("gh: connection reset");
+    };
+    const shared = routing(tracker);
+
+    const routed = await routeNotes(shared, { notes: [{ note: "lost" }, { note: "kept" }] });
+
+    expect(tracker.createdIssues).toHaveLength(1);
+    expect(routed).toEqual([
+      { origin: ORIGIN, stage: "implement", issue: OPENED, opened: false, note: "kept" },
+    ]);
   });
 
   it("tries again for the next Note rather than inheriting the outage", async () => {

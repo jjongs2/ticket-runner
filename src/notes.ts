@@ -148,12 +148,55 @@ export interface StandingNotesLookup {
  * for it is lost, as any Note a tracker refuses is, and the next one asks
  * again rather than inheriting an outage that may be over.
  */
+/**
+ * One answer a Run works out at most once.
+ *
+ * The first caller starts the work and every caller after it waits on the same
+ * promise, which is what stops two Lanes asking GitHub the same question twice.
+ * A failure is forgotten rather than remembered: the caller that asked is told,
+ * and the next one may try again rather than inheriting an outage that may be
+ * over.
+ */
+class Once<T> {
+  #attempt: Promise<T> | undefined;
+
+  /** The answer, worked out by this caller if nobody has asked yet. */
+  run(make: () => Promise<T>): Promise<T> {
+    const attempt = (this.#attempt ??= make());
+    return attempt.catch((error: unknown) => {
+      // Only this attempt is forgotten: one started while it was failing is
+      // somebody's live answer, not a stale one.
+      if (this.#attempt === attempt) this.#attempt = undefined;
+      throw error;
+    });
+  }
+
+  /** The answer somebody has already asked for, and nothing when nobody has. */
+  taken(): Promise<T> | undefined {
+    return this.#attempt;
+  }
+
+  /** Forget it, so the next caller works it out again. */
+  forget(): void {
+    this.#attempt = undefined;
+  }
+}
+
 export class StandingNotes {
   /** The search for an issue already open, which a Run runs at most once. */
-  #found: Promise<number | undefined> | undefined;
+  readonly #found = new Once<number | undefined>();
 
   /** The issue this Run resolved, found or opened. */
-  #standing: Promise<Standing> | undefined;
+  readonly #standing = new Once<number>();
+
+  /**
+   * The issue this Run opened, until the Note that opened it has said so.
+   *
+   * One Note reports `opened`, and it is the one that needed the issue put on
+   * GitHub: taken rather than read, so the Notes after it report the comment
+   * they are.
+   */
+  #unreported: number | undefined;
 
   /**
    * The standing Notes issue's number when one is open, and nothing when none
@@ -166,8 +209,7 @@ export class StandingNotes {
    */
   async current(lookup: StandingNotesLookup): Promise<number | undefined> {
     try {
-      if (this.#standing !== undefined) return (await this.#standing).number;
-      return await this.#search(lookup);
+      return await (this.#standing.taken() ?? this.#search(lookup));
     } catch (error) {
       lookup.log?.(
         `could not look up the standing Notes issue: ${(error as Error).message}`,
@@ -183,44 +225,35 @@ export class StandingNotes {
    * for every Note after it, which is what a Run summary reports.
    */
   async resolve(lookup: StandingNotesLookup): Promise<Standing> {
-    const attempt = (this.#standing ??= this.#findOrOpen(lookup));
-    let resolved: Standing;
+    const number = await this.#standing.run(async () => await this.#findOrOpen(lookup));
+    const opened = this.#unreported === number;
+    if (opened) this.#unreported = undefined;
+    return { number, opened };
+  }
+
+  async #findOrOpen(lookup: StandingNotesLookup): Promise<number> {
+    const found = await this.#search(lookup);
+    if (found !== undefined) return found;
+
     try {
-      resolved = await attempt;
+      const issue = await lookup.tracker.createIssue({
+        ...notesIssue(),
+        labels: [lookup.needsTriage],
+      });
+      this.#unreported = issue.number;
+      lookup.log?.(`opened #${issue.number} to gather Notes for triage`);
+      return issue.number;
     } catch (error) {
-      // Only this attempt is forgotten: a Note that started a fresh one while
-      // this was failing keeps it, which is what stops a retry opening a second
-      // issue.
-      if (this.#standing === attempt) this.#standing = undefined;
+      // The issue may be on GitHub and only the answer lost. The search that
+      // found nothing is forgotten with it, so the next Note looks again
+      // instead of opening a second standing issue over the same outage.
+      this.#found.forget();
       throw error;
     }
-    // Read once and spent: the Note that opened the issue is the only one whose
-    // summary row may call it new.
-    const opened = resolved.opened;
-    resolved.opened = false;
-    return { number: resolved.number, opened };
   }
 
-  async #findOrOpen(lookup: StandingNotesLookup): Promise<Standing> {
-    const found = await this.#search(lookup);
-    if (found !== undefined) return { number: found, opened: false };
-
-    const issue = await lookup.tracker.createIssue({
-      ...notesIssue(),
-      labels: [lookup.needsTriage],
-    });
-    lookup.log?.(`opened #${issue.number} to gather Notes for triage`);
-    return { number: issue.number, opened: true };
-  }
-
-  #search(lookup: StandingNotesLookup): Promise<number | undefined> {
-    const attempt: Promise<number | undefined> = (this.#found ??= findStandingNotes(
-      lookup,
-    ).catch((error: unknown) => {
-      if (this.#found === attempt) this.#found = undefined;
-      throw error;
-    }));
-    return attempt;
+  async #search(lookup: StandingNotesLookup): Promise<number | undefined> {
+    return await this.#found.run(async () => await findStandingNotes(lookup));
   }
 }
 

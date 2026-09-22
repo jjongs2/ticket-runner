@@ -215,7 +215,7 @@ describe("the Notes channel", () => {
     expect(fixPrompt(url, FAILED_CHECK, BASE, "")).toContain("one short sentence");
   });
 
-  it("no longer claims a Note's first sentence becomes an issue title", () => {
+  it("promises a Stage nothing about issue titles", () => {
     expect(implementPrompt(url, BASE, "")).not.toContain("issue's title");
     expect(fixPrompt(url, FAILED_CHECK, BASE, "")).not.toContain("issue's title");
     expect(implementPrompt(url, BASE, "", 42)).not.toContain("issue's title");
