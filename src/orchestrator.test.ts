@@ -2565,6 +2565,9 @@ function progressTable(): string {
 describe("Notes a Stage makes", () => {
   const OTHER = 7;
   const noteResult = (notes: unknown[]) => stageResult({ result: { notes } });
+  /** A passing Verdict with Notes beside it, as a verify session emits one. */
+  const verdictWithNotes = (notes: unknown[]) =>
+    stageResult({ result: { ...PASSING_VERDICT, notes } });
 
   beforeEach(() => {
     tracker.addIssue({ number: OTHER, title: "Progress comment" });
@@ -2678,6 +2681,88 @@ describe("Notes a Stage makes", () => {
     expect(outcome).toMatchObject({
       notes: [{ origin: TICKET, stage: "fix", issue: OTHER, note: "found while fixing" }],
     });
+  });
+
+  it("routes the verify Stage's Notes too", async () => {
+    runner.queue("verify", verdictWithNotes([{ ticket: OTHER, note: "found while grading" }]));
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({
+      outcome: "merged",
+      notes: [{ origin: TICKET, stage: "verify", issue: OTHER, note: "found while grading" }],
+    });
+  });
+
+  it("sends a verify Note naming the Ticket it is grading to triage", async () => {
+    runner.queue(
+      "verify",
+      verdictWithNotes([{ ticket: TICKET, note: "the lock file is never read" }]),
+    );
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({
+      notes: [{ origin: TICKET, stage: "verify", issue: 200, opened: true }],
+    });
+    expect(tracker.issue(TICKET).comments.map(({ body }) => body)).not.toContainEqual(
+      expect.stringContaining("the lock file is never read"),
+    );
+  });
+
+  it("routes a failed verify Stage's Notes before handing the Ticket off", async () => {
+    runner.queue("verify", {
+      ...verdictWithNotes([{ ticket: OTHER, note: "noticed before I ran out of turns" }]),
+      ok: false,
+      failure: "turn-capped",
+    });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({
+      outcome: "handed-off",
+      stage: "verify",
+      notes: [{ stage: "verify", issue: OTHER, note: "noticed before I ran out of turns" }],
+    });
+  });
+
+  it("routes the Notes of a verify Stage whose Verdict was unusable", async () => {
+    runner.queue(
+      "verify",
+      stageResult({ result: { notes: [{ ticket: OTHER, note: "graded nothing, saw this" }] } }),
+    );
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({
+      outcome: "handed-off",
+      stage: "verify",
+      notes: [{ stage: "verify", issue: OTHER, note: "graded nothing, saw this" }],
+    });
+  });
+
+  it("merges the Ticket anyway when a verify Note reaches nowhere at all", async () => {
+    tracker.createIssue = async () => {
+      throw new Error("gh: connection reset");
+    };
+    runner.queue("verify", verdictWithNotes([{ note: "lost" }]));
+
+    expect(await run()).toMatchObject({ outcome: "merged", notes: [] });
+  });
+
+  it("tells the verify Stage which issue Notes are gathered on", async () => {
+    tracker.addIssue({
+      number: 50,
+      title: "Notes from the pipeline",
+      body: "<!-- agent-pipeline:notes-issue -->\n**Notes from the pipeline.**\n",
+      labels: ["needs-triage"],
+    });
+
+    await run();
+
+    expect(runner.requests.find((request) => request.stage === "verify")?.prompt).toContain(
+      "gathered on #50",
+    );
   });
 
   it("routes a failed Stage's Notes before handing the Ticket off", async () => {

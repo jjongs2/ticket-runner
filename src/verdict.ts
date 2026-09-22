@@ -1,3 +1,4 @@
+import { NOTES_LIST_SCHEMA } from "./note-schema.js";
 import { z } from "zod";
 
 /**
@@ -20,7 +21,22 @@ export type Criterion = z.infer<typeof criterionSchema>;
 export type Verdict = z.infer<typeof verdictSchema>;
 export type CriterionStatus = Criterion["status"];
 
-/** The `--json-schema` the verify Stage is invoked with. */
+/**
+ * The `--json-schema` the verify Stage is invoked with: the Verdict, and the
+ * Notes channel beside it.
+ *
+ * The `notes` list has to be declared here even though {@link parseVerdict}
+ * strips it and the Notes parser reads it off any object at all, because this
+ * schema closes its top level to additional properties. That closure, not the
+ * parsing, is what would otherwise leave the most adversarial reader in the
+ * pipeline with nowhere to put a finding outside the criteria.
+ *
+ * It is not required, where the criteria and the flag are. The Verdict is the
+ * Stage's product and a session that graded nothing has done none of its job,
+ * so every required key here is a way for a Ticket to lose its Verdict — and a
+ * side channel may never cost one. A Verdict that leaves the list out is a
+ * Verdict from a session that found nothing beside the criteria.
+ */
 export const VERDICT_JSON_SCHEMA = {
   type: "object",
   properties: {
@@ -41,6 +57,7 @@ export const VERDICT_JSON_SCHEMA = {
       },
     },
     pass: { type: "boolean" },
+    notes: NOTES_LIST_SCHEMA,
   },
   required: ["criteria", "pass"],
   additionalProperties: false,

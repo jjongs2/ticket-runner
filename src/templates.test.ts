@@ -609,6 +609,19 @@ describe("Notes in a Run summary", () => {
     ]);
   });
 
+  it("reports a Note the verify Stage made the way it reports the others", () => {
+    const summary = runSummary({
+      version: VERSION,
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [{ ...merged, notes: [{ ...note, stage: "verify" as const }] }],
+    });
+
+    expect(summary).toContain(
+      "  noted    #8 comment · from #3 verify · the CLI help drifts from the README",
+    );
+  });
+
   it("says when the Note opened an issue of its own", () => {
     const summary = runSummary({
       version: VERSION,
