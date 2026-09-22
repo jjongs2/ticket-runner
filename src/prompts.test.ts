@@ -251,8 +251,33 @@ describe("the Notes channel", () => {
     expect(withStanding.length - without.length).toBeLessThan(300);
   });
 
-  it("asks the Stages that only grade or rebase for no Notes", () => {
-    expect(verifyPrompt(url, "")).not.toContain("Notes for other Tickets");
+  it("tells the verify Stage the same, in its own words", () => {
+    const prompt = verifyPrompt(url, "");
+
+    expect(prompt).toContain("Notes for other Tickets");
+    expect(prompt).toContain("`notes`");
+    expect(prompt).toContain("leave it out when you are not sure");
+    expect(prompt).toContain("one short sentence");
+    expect(prompt).toContain(`"notes": []`);
+  });
+
+  it("sends the verify Stage's judgement of a criterion to the Verdict, never to a Note", () => {
+    const prompt = verifyPrompt(url, "");
+
+    expect(prompt).toMatch(/criterion belongs in the Verdict/i);
+    expect(prompt).toMatch(/never in a Note/i);
+  });
+
+  it("leaves the verify Stage fixing, committing and staging nothing", () => {
+    expect(verifyPrompt(url, "")).toMatch(/fix nothing, commit nothing/i);
+  });
+
+  it("names the standing Notes issue to the verify Stage when one is open", () => {
+    expect(verifyPrompt(url, "", 42)).toContain("gathered on #42");
+    expect(verifyPrompt(url, "")).not.toContain("gathered on");
+  });
+
+  it("asks the Stage that only rebases for no Notes", () => {
     expect(conflictPrompt(url, CONFLICT, BASE, "")).not.toContain("Notes for other Tickets");
   });
 });

@@ -7,6 +7,7 @@ import type { Landing, LandingTurn } from "./landing.js";
 import type { FailureKind, FailurePoint } from "./lifecycle.js";
 import {
   NOTES_JSON_SCHEMA,
+  type NotingStage,
   type RoutedNote,
   type StandingNotes,
   type StandingNotesLookup,
@@ -363,7 +364,7 @@ async function takeTicket(
         point = "checks";
         await runChecks(pipeline, worktree, progress);
         point = "verify";
-        verdict = await verify(pipeline, issue, worktree, logDir, progress);
+        verdict = await verify(pipeline, issue, worktree, logDir, progress, notes);
 
         point = "rebase";
         // The Landing, from here until the Base branch has been pulled: the
@@ -766,7 +767,7 @@ async function stageDidNotFinish(
 async function collectNotes(
   pipeline: Pipeline,
   ticket: number,
-  stage: StageName,
+  stage: NotingStage,
   result: StageResult,
   notes: RoutedNote[],
 ): Promise<void> {
@@ -910,14 +911,22 @@ async function verify(
   worktree: string,
   logDir: string,
   progress: Progress,
+  notes: RoutedNote[],
 ): Promise<Verdict> {
   const stage = pipeline.config.stages.verify;
   const result = await runStage(pipeline, "verify", {
-    prompt: verifyPrompt(issue.url, stage.extraPrompt),
+    prompt: verifyPrompt(issue.url, stage.extraPrompt, await standingNotesNumber(pipeline)),
     cwd: worktree,
     logDir,
     jsonSchema: VERDICT_JSON_SCHEMA,
   });
+
+  // Before anything else is done with the Stage at all, as the code Stages do
+  // it: a session that ran out of turns, or came back with a Verdict nothing
+  // can be made of, still noticed whatever it noticed. The scratch work it
+  // noticed it in is about to be discarded, so its Notes are all that is left —
+  // and a worktree that will not discard them is no reason to lose them too.
+  await collectNotes(pipeline, issue.number, "verify", result, notes);
 
   // verify is allowed to write throwaway tests; none of them reach the PR.
   await pipeline.workspace.discardChanges(worktree);

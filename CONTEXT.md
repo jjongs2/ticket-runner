@@ -87,7 +87,7 @@ A rule that rejects a Candidate before it is claimed, because Planning left it u
 _Avoid_: validation, precondition, check (a Check gates a claimed Ticket, a Guard gates the claim)
 
 **Verify**:
-The Stage that adversarially tries to prove a Ticket's Acceptance Criteria are not met, and returns a Verdict.
+The Stage that adversarially tries to prove a Ticket's Acceptance Criteria are not met, and returns a Verdict. What it finds beside the criteria leaves the session as a Note, because the Verdict has a slot per criterion and none for anything else.
 _Avoid_: review, QA, audit
 
 **Conflict Stage**:
@@ -123,7 +123,7 @@ A Ticket whose State file is still there while the Ticket still carries this Tar
 _Avoid_: orphan, zombie, abandoned Ticket, crashed Ticket, dead Ticket
 
 **Note**:
-A finding a Stage makes that belongs to another Ticket, or to no Ticket yet. Routed to that Ticket's comments when it is open, unclaimed and not a Spec, and otherwise to the standing Notes issue, the one `needs-triage` issue every Note that cannot reach a Ticket is gathered on as a comment; never acted on in the current Ticket.
+A finding the implement, verify or fix Stage makes that belongs to another Ticket, or to no Ticket yet. Routed to that Ticket's comments when it is open, unclaimed and not a Spec, and otherwise to the standing Notes issue, the one `needs-triage` issue every Note that cannot reach a Ticket is gathered on as a comment; never acted on in the current Ticket.
 _Avoid_: handoff, finding, TODO, side note
 
 ### Versions

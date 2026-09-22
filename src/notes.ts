@@ -9,12 +9,14 @@
  * will meet it: the comments of the Ticket it belongs to, or the standing
  * Notes issue when it belongs to none yet.
  *
- * Notes ride along with the implement and fix Stages' structured output, which
- * is the only reason those Stages have any. A Stage with nothing to report
- * emits an empty list and is not treated differently for it.
+ * Notes ride along with the structured output of the implement, verify and fix
+ * Stages: the two that write code, which meet what they were not sent to touch,
+ * and the one that grades, whose Verdict has a slot per Acceptance Criterion and
+ * none for anything else it found. A Stage with nothing to report emits an empty
+ * list and is not treated differently for it.
  */
 
-import type { StageName } from "./ports/agent-runner.js";
+import { NOTES_LIST_SCHEMA } from "./note-schema.js";
 import type { Tracker } from "./ports/tracker.js";
 import {
   NOTES_ISSUE_TITLE,
@@ -24,6 +26,15 @@ import {
   notesIssue,
 } from "./templates.js";
 import { z } from "zod";
+
+/**
+ * A Stage that ends with Notes.
+ *
+ * Narrower than a Stage name on purpose: the conflict Stage is given no Notes
+ * channel — it finishes a rebase and touches no file the conflict did not — so
+ * a Note that claimed to come from one would be a Note nothing could have made.
+ */
+export type NotingStage = "implement" | "verify" | "fix";
 
 /** One finding, and the Ticket it belongs to when the Stage knew of one. */
 export interface Note {
@@ -35,7 +46,7 @@ export interface Note {
 export interface RoutedNote {
   /** The Ticket whose Stage made the finding. */
   origin: number;
-  stage: StageName;
+  stage: NotingStage;
   /** The issue the Note reached: the Ticket it named, or the standing Notes issue. */
   issue: number;
   /**
@@ -62,36 +73,13 @@ const noteSchema = z.object({
 /**
  * The `--json-schema` the implement and fix Stages are invoked with.
  *
- * `ticket` is optional on purpose: a Stage that guesses a number puts the Note
- * on an unrelated issue, where a Stage that leaves it out gets a comment on the
- * standing Notes issue a human reads. Not knowing is an answer.
+ * Notes are the whole of it, so the list is required: a Stage that found
+ * nothing says so with an empty one. The verify Stage carries the same list
+ * beside its criteria instead, and requires nothing of it.
  */
 export const NOTES_JSON_SCHEMA = {
   type: "object",
-  properties: {
-    notes: {
-      type: "array",
-      description:
-        "Findings that belong to another Ticket, or to no Ticket yet. Empty when you found none.",
-      items: {
-        type: "object",
-        properties: {
-          ticket: {
-            type: "number",
-            description:
-              "The issue number this belongs to. Omit it unless you are sure which one.",
-          },
-          note: {
-            type: "string",
-            description:
-              "What you found and why it matters, in plain sentences. Open with one short sentence that names the finding and put the detail after it. No checkboxes.",
-          },
-        },
-        required: ["note"],
-        additionalProperties: false,
-      },
-    },
-  },
+  properties: { notes: NOTES_LIST_SCHEMA },
   required: ["notes"],
   additionalProperties: false,
 } as const;
@@ -294,7 +282,7 @@ async function findStandingNotes({
 export interface NoteRouting extends StandingNotesLookup {
   /** The Ticket whose Stage made the findings. */
   origin: number;
-  stage: StageName;
+  stage: NotingStage;
   /** The label a claimed Ticket wears, which a Note reads as "do not comment here". */
   inProgress: string;
   /** The Run's standing Notes issue, which every triage-bound Note goes to. */

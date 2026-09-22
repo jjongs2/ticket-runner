@@ -40,7 +40,30 @@ const implementGuidance = (base: string) => `This session is unattended. Follow 
 const notesGuidance = (standingNotes?: number) => `Notes for other Tickets: if you discover something that belongs to another Ticket, or to no Ticket yet, do not act on it here and do not widen this Ticket to cover it.
 
 - Record it as a Note instead. Your structured output carries a \`notes\` list, and the pipeline posts each entry where a human will meet it.
-- Set \`ticket\` to the issue number the Note belongs to, and leave it out when you are not sure which one: a Note with no number becomes a comment on the issue the pipeline gathers Notes for triage on, where a wrong number lands on somebody else's Ticket.
+${noteEntryGuidance(standingNotes)}`;
+
+/**
+ * The same channel, as the Stage that grades rather than writes reads it.
+ *
+ * The guidance above is written for a Stage that could have fixed what it found
+ * and is told not to. verify could not: it is told to fix nothing in the first
+ * place, and what it has instead of a commit is a Verdict with a slot per
+ * Acceptance Criterion. So this says which findings that Verdict already
+ * carries — every judgement of a criterion — and gives the rest the Notes list,
+ * because a defect outside the criteria has no slot anywhere else.
+ */
+const verifyNotesGuidance = (standingNotes?: number) => `Notes for other Tickets: your Verdict grades this Ticket's Acceptance Criteria and nothing else, so anything you find beside them is lost unless you record it as a Note.
+
+- What you make of a criterion belongs in the Verdict. A criterion you judge \`unmet\` or \`unverifiable\` is reported in its own slot with the evidence you gathered, and never in a Note as well.
+- Everything else you meet — a defect the criteria do not cover, a gap nothing tracks yet — is a Note. Your structured output carries a \`notes\` list beside the criteria, and the pipeline posts each entry where a human will meet it.
+- Writing the Note is all you do about it: fix nothing, commit nothing, stage nothing, exactly as the rest of your brief says.
+${noteEntryGuidance(standingNotes)}`;
+
+/**
+ * What a Note looks like, whichever Stage is writing one. Written once, because
+ * a Stage reading a stale copy is the only place the drift would show.
+ */
+const noteEntryGuidance = (standingNotes?: number) => `- Set \`ticket\` to the issue number the Note belongs to, and leave it out when you are not sure which one: a Note with no number becomes a comment on the issue the pipeline gathers Notes for triage on, where a wrong number lands on somebody else's Ticket.
 - Write each \`note\` as plain sentences. No checkboxes: they would read as Acceptance Criteria.
 - Open with one short sentence that names the finding, and put the detail in the sentences after it.
 - Emit \`"notes": []\` when you found nothing. That is the ordinary case and costs you nothing.${standingLine(standingNotes)}`;
@@ -119,11 +142,16 @@ export function implementPrompt(
 }
 
 /** A fresh session with no plugin skill, graded against the Verdict schema. */
-export function verifyPrompt(issueUrl: string, extraPrompt: string): string {
+export function verifyPrompt(
+  issueUrl: string,
+  extraPrompt: string,
+  standingNotes?: number,
+): string {
   return sections([
     `Ticket: ${issueUrl}`,
     VERIFY_INSTRUCTIONS,
     SELF_HOSTING_GUIDANCE,
+    verifyNotesGuidance(standingNotes),
     extraPrompt,
   ]);
 }

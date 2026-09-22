@@ -392,10 +392,12 @@ left unticked: nobody gathered the evidence that would justify the tick.
 A Stage sent to implement one Ticket keeps meeting things that are not it: a
 defect in code it only had to read, a gap nothing tracks yet. Fixing them widens
 the Ticket past the criteria verify grades, and ignoring them loses them in a
-transcript nobody opens.
+transcript nobody opens. verify meets as many: it runs the code, reads it and
+writes throwaway tests against it, and its Verdict has a slot per criterion and
+none for anything else.
 
-So the implement and fix Stages end with a list of **Notes**, and the pipeline
-routes each one out of the session:
+So the implement, verify and fix Stages end with a list of **Notes**, and the
+pipeline routes each one out of the session:
 
 - a Note that names a Ticket becomes a comment on it, saying which Ticket and
   Stage it came from
@@ -407,7 +409,9 @@ routes each one out of the session:
   about to close
 
 A Note is never acted on where it was found, and never changes the current
-Ticket's scope. Checkboxes in one are escaped before it is posted: `- [ ]` is
+Ticket's scope. What verify makes of a criterion is not one either: that belongs
+in its Verdict, with the evidence, and a Note is for everything the criteria do
+not cover. Checkboxes in one are escaped before it is posted: `- [ ]` is
 Acceptance Criteria to everything that reads a Ticket, and a Note is not asking
 for any. The Run summary lists every Note with the issue it reached, so a night
 of work says what it noticed as well as what it merged.
@@ -430,7 +434,7 @@ opens no second one, and it is never rewritten: triage indexes the body as it
 promotes comments to Tickets and closes the issue when the index covers
 everything, and the next Note opens a fresh one.
 
-The implement and fix Stages are told its number when one is open, so a Stage can
+Each of the three Stages is told its number when one is open, so a Stage can
 read what has already been reported. What they are asked for is what the issue
 does not already record — a second report of a condition already mentioned is
 worth having when it has seen a facet the first did not.

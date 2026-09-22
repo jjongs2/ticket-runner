@@ -34,6 +34,20 @@ describe("parseVerdict", () => {
   it("rejects a missing result", () => {
     expect(() => parseVerdict(undefined)).toThrow();
   });
+
+  it("accepts a Verdict that carries Notes, and keeps nothing of them", () => {
+    const verdict = parseVerdict({
+      criteria: [criterion("met")],
+      pass: true,
+      notes: [{ note: "the help text drifts" }],
+    });
+
+    expect(Object.keys(verdict)).toEqual(["criteria", "pass"]);
+  });
+
+  it("accepts a Verdict with no Notes at all", () => {
+    expect(parseVerdict({ criteria: [criterion("met")], pass: true }).criteria).toHaveLength(1);
+  });
 });
 
 describe("passes", () => {
@@ -93,5 +107,13 @@ describe("VERDICT_JSON_SCHEMA", () => {
       type: "object",
       required: ["criteria", "pass"],
     });
+  });
+
+  it("opens the Notes list beside the criteria", () => {
+    expect(VERDICT_JSON_SCHEMA.properties.notes.type).toBe("array");
+  });
+
+  it("requires the criteria and the pass flag, and never the Notes", () => {
+    expect(VERDICT_JSON_SCHEMA.required).toEqual(["criteria", "pass"]);
   });
 });
