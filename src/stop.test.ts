@@ -113,13 +113,20 @@ describe("asking a Run to stop", () => {
 
   /** The Run lock as a Run leaves it, written by the code that writes the real one. */
   function lock(overrides: Partial<LockHolder> = {}): void {
-    acquireLock(repoRoot, {
-      pid: 4321,
-      command: "agent-pipeline run",
-      runId: "2026-09-17T09-00-00-000",
-      startedAt: "2026-09-17T09:00:00.000Z",
-      ...overrides,
-    });
+    acquireLock(
+      repoRoot,
+      {
+        pid: 4321,
+        command: "agent-pipeline run",
+        runId: "2026-09-17T09-00-00-000",
+        startedAt: "2026-09-17T09:00:00.000Z",
+        ...overrides,
+      },
+      // pid 4321 is fictitious: told it is not alive, so a fixture setting
+      // `processStartedAt` itself is not clobbered by a real-but-unrelated
+      // process that happens to share the pid.
+      { checkProcess: () => ({ alive: false }) },
+    );
   }
 
   /** One `agent-pipeline stop`, with the process table and the signal faked. */
@@ -129,7 +136,7 @@ describe("asking a Run to stop", () => {
     const signalled: number[] = [];
     const code = requestStop({
       repoRoot,
-      isAlive: () => true,
+      checkProcess: () => ({ alive: true, startedAt: undefined }),
       send: (pid) => signalled.push(pid),
       log: (line) => out.push(line),
       error: (line) => err.push(line),
@@ -183,7 +190,20 @@ describe("asking a Run to stop", () => {
   it("refuses a lock whose process is gone, and leaves the lock where it is", () => {
     lock();
 
-    const { code, signalled, err } = stop({ isAlive: () => false });
+    const { code, signalled, err } = stop({ checkProcess: () => ({ alive: false }) });
+
+    expect(code).toBe(2);
+    expect(signalled).toEqual([]);
+    expect(err).toContain("No Run to stop");
+    expect(existsSync(lockPath(repoRoot))).toBe(true);
+  });
+
+  it("answers a recycled pid exactly as a pid that is gone, and leaves the lock where it is", () => {
+    lock({ processStartedAt: "A" });
+
+    const { code, signalled, err } = stop({
+      checkProcess: () => ({ alive: true, startedAt: "B" }),
+    });
 
     expect(code).toBe(2);
     expect(signalled).toEqual([]);

@@ -1,4 +1,4 @@
-import { type LockHolder, lockHolder, lockPath } from "./lock.js";
+import { type LockHolder, type ProcessCheck, lockHolder, lockPath } from "./lock.js";
 
 /**
  * A Stop: how a human asks for one, and how a Run comes to hear about it.
@@ -93,7 +93,7 @@ export function stopLine(busy: number[]): string {
 export interface StopRequest {
   repoRoot: string;
   /** Whether the lock's holder is still there. The real process table by default. */
-  isAlive?: (pid: number) => boolean;
+  checkProcess?: (pid: number) => ProcessCheck;
   /** How the Stop is delivered. A real SIGTERM by default. */
   send?: (pid: number) => void;
   log?: (line: string) => void;
@@ -112,14 +112,14 @@ export interface StopRequest {
  */
 export function requestStop({
   repoRoot,
-  isAlive,
+  checkProcess,
   send = sendStop,
   log = (line: string) => console.log(line),
   error = (line: string) => console.error(line),
 }: StopRequest): number {
   // Spread conditionally rather than passed through: an explicit `undefined`
   // is not an absent seam under `exactOptionalPropertyTypes`.
-  const holder = lockHolder(repoRoot, isAlive === undefined ? {} : { isAlive });
+  const holder = lockHolder(repoRoot, checkProcess === undefined ? {} : { checkProcess });
   if (holder === undefined) {
     error(
       `No Run to stop: nothing holds the Run lock at ${lockPath(repoRoot)}, or the Run that` +

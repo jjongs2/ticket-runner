@@ -16,8 +16,16 @@ function holder(overrides: Partial<Parameters<typeof acquireLock>[1]> = {}) {
   };
 }
 
-const nothingAlive = { isAlive: () => false };
-const everythingAlive = { isAlive: () => true };
+const nothingAlive = { checkProcess: () => ({ alive: false }) as const };
+const everythingAlive = { checkProcess: () => ({ alive: true, startedAt: undefined }) as const };
+
+/** A fake process table: alive with the given start time, dead for any other pid. */
+function processes(byPid: Record<number, string>) {
+  return {
+    checkProcess: (pid: number) =>
+      pid in byPid ? ({ alive: true, startedAt: byPid[pid] } as const) : ({ alive: false } as const),
+  };
+}
 
 beforeEach(() => {
   repoRoot = mkdtempSync(join(tmpdir(), "agent-pipeline-lock-"));
@@ -88,6 +96,50 @@ describe("acquireLock", () => {
 
     expect(acquireLock(repoRoot, holder({ pid: process.pid })).ok).toBe(false);
   });
+
+  it("records the holder's own start time, so a recycled pid cannot forge it", () => {
+    acquireLock(repoRoot, holder({ pid: 111 }), processes({ 111: "A" }));
+
+    expect(JSON.parse(readFileSync(lockPath(repoRoot), "utf8")).processStartedAt).toBe("A");
+  });
+
+  it("takes a lock whose recorded pid is alive but is a different process now", () => {
+    acquireLock(repoRoot, holder({ pid: 111, runId: "crashed" }), processes({ 111: "A" }));
+
+    // pid 111 is alive again, but its start time no longer matches: a stranger.
+    const outcome = acquireLock(
+      repoRoot,
+      holder({ pid: 222, runId: "second" }),
+      processes({ 222: "C", 111: "B" }),
+    );
+
+    expect(outcome.ok).toBe(true);
+    expect(JSON.parse(readFileSync(lockPath(repoRoot), "utf8")).runId).toBe("second");
+  });
+
+  it("still refuses, and still names the holder, when the recorded pid is still it", () => {
+    acquireLock(repoRoot, holder({ pid: 111, runId: "first" }), processes({ 111: "A" }));
+
+    const outcome = acquireLock(
+      repoRoot,
+      holder({ pid: 222 }),
+      processes({ 222: "C", 111: "A" }),
+    );
+
+    expect(outcome).toEqual({
+      ok: false,
+      holder: holder({ pid: 111, runId: "first", processStartedAt: "A" }),
+    });
+  });
+
+  it("takes the lock when the holder's own start time cannot be read", () => {
+    // `everythingAlive` answers alive with no start time, which is exactly
+    // what an unsupported platform, or a pid the read failed for, looks like.
+    const outcome = acquireLock(repoRoot, holder({ pid: 111 }), everythingAlive);
+
+    expect(outcome.ok).toBe(true);
+    expect(JSON.parse(readFileSync(lockPath(repoRoot), "utf8")).processStartedAt).toBeUndefined();
+  });
 });
 
 describe("lockHeldMessage", () => {
@@ -131,5 +183,12 @@ describe("lockHolder", () => {
     acquireLock(repoRoot, holder({ pid: process.pid }));
 
     expect(lockHolder(repoRoot)?.pid).toBe(process.pid);
+  });
+
+  it("names nobody once the recorded pid belongs to a different process, and leaves the file", () => {
+    acquireLock(repoRoot, holder({ pid: 111 }), processes({ 111: "A" }));
+
+    expect(lockHolder(repoRoot, processes({ 111: "B" }))).toBeUndefined();
+    expect(existsSync(lockPath(repoRoot))).toBe(true);
   });
 });
