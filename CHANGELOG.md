@@ -4,6 +4,25 @@ One section per Version, newest first, written in the Version PR that cut it and
 published as the body of that Version's GitHub Release (ADR-0007). The shape is
 `docs/templates/version-notes.md`.
 
+## 0.4.2 (2026-09-22)
+
+### Notes
+
+- A Note that reaches triage becomes a comment on one standing issue instead of opening a new one ([#124])
+- The verify Stage can put what it finds outside the Acceptance Criteria in a Note ([#125])
+
+### Fixes
+
+- The Run lock checks a recycled pid against the holder's recorded start time ([#126])
+
+### After upgrading
+
+- nothing
+
+[#124]: https://github.com/jjongs2/agent-pipeline/pull/124
+[#125]: https://github.com/jjongs2/agent-pipeline/pull/125
+[#126]: https://github.com/jjongs2/agent-pipeline/pull/126
+
 ## 0.4.1 (2026-09-21)
 
 ### Fixes
