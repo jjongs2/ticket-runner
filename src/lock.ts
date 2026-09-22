@@ -29,6 +29,11 @@ export interface LockHolder {
    * what a recycled pid cannot forge. Absent when it could not be read, or
    * when the file predates this field; either way a live pid alone is treated
    * as the holder, which is what this check has always done.
+   *
+   * An opaque token, not a timestamp to parse or display: its shape is
+   * whatever the platform's own record of it looks like (kernel ticks on
+   * Linux, a `ps` field on macOS), good for nothing but comparing a pid's
+   * past and present selves on the same host.
    */
   processStartedAt?: string;
 }
