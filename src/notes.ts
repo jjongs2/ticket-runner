@@ -118,6 +118,13 @@ export function parseNotes(result: unknown): Note[] {
   });
 }
 
+/** The standing Notes issue a Run resolved, and whether resolving it opened it. */
+interface Standing {
+  number: number;
+  /** True for the one Note that needed the issue opened, and false after it. */
+  opened: boolean;
+}
+
 /** What it takes to find the standing Notes issue, or to open one. */
 export interface StandingNotesLookup {
   tracker: Tracker;
@@ -145,8 +152,8 @@ export class StandingNotes {
   /** The search for an issue already open, which a Run runs at most once. */
   #found: Promise<number | undefined> | undefined;
 
-  /** The issue this Run resolved, found or opened, and who gets to say it opened it. */
-  #standing: Promise<{ number: number; opened: boolean }> | undefined;
+  /** The issue this Run resolved, found or opened. */
+  #standing: Promise<Standing> | undefined;
 
   /**
    * The standing Notes issue's number when one is open, and nothing when none
@@ -175,23 +182,26 @@ export class StandingNotes {
    * `opened` is true for the one Note that needed the issue opened and false
    * for every Note after it, which is what a Run summary reports.
    */
-  async resolve(lookup: StandingNotesLookup): Promise<{ number: number; opened: boolean }> {
-    this.#standing ??= this.#findOrOpen(lookup);
-    let resolved: { number: number; opened: boolean };
+  async resolve(lookup: StandingNotesLookup): Promise<Standing> {
+    const attempt = (this.#standing ??= this.#findOrOpen(lookup));
+    let resolved: Standing;
     try {
-      resolved = await this.#standing;
+      resolved = await attempt;
     } catch (error) {
-      this.#standing = undefined;
+      // Only this attempt is forgotten: a Note that started a fresh one while
+      // this was failing keeps it, which is what stops a retry opening a second
+      // issue.
+      if (this.#standing === attempt) this.#standing = undefined;
       throw error;
     }
+    // Read once and spent: the Note that opened the issue is the only one whose
+    // summary row may call it new.
     const opened = resolved.opened;
     resolved.opened = false;
     return { number: resolved.number, opened };
   }
 
-  async #findOrOpen(
-    lookup: StandingNotesLookup,
-  ): Promise<{ number: number; opened: boolean }> {
+  async #findOrOpen(lookup: StandingNotesLookup): Promise<Standing> {
     const found = await this.#search(lookup);
     if (found !== undefined) return { number: found, opened: false };
 
@@ -204,11 +214,13 @@ export class StandingNotes {
   }
 
   #search(lookup: StandingNotesLookup): Promise<number | undefined> {
-    this.#found ??= findStandingNotes(lookup).catch((error: unknown) => {
-      this.#found = undefined;
+    const attempt: Promise<number | undefined> = (this.#found ??= findStandingNotes(
+      lookup,
+    ).catch((error: unknown) => {
+      if (this.#found === attempt) this.#found = undefined;
       throw error;
-    });
-    return this.#found;
+    }));
+    return attempt;
   }
 }
 
