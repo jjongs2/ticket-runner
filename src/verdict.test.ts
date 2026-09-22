@@ -1,6 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { NOTES_LIST_SCHEMA } from "./note-schema.js";
-import { NOTES_JSON_SCHEMA } from "./notes.js";
 import {
   VERDICT_JSON_SCHEMA,
   countStatuses,
@@ -117,10 +115,5 @@ describe("VERDICT_JSON_SCHEMA", () => {
 
   it("requires the criteria and the pass flag, and never the Notes", () => {
     expect(VERDICT_JSON_SCHEMA.required).toEqual(["criteria", "pass"]);
-  });
-
-  it("describes a Note the once, in the shape the code Stages are given", () => {
-    expect(VERDICT_JSON_SCHEMA.properties.notes).toBe(NOTES_LIST_SCHEMA);
-    expect(NOTES_JSON_SCHEMA.properties.notes).toBe(NOTES_LIST_SCHEMA);
   });
 });

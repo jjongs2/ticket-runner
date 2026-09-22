@@ -6,9 +6,8 @@
 import { UNCHECKED_BOX } from "./acceptance-criteria.js";
 import type { GuardReason } from "./guards.js";
 import type { FailurePoint } from "./lifecycle.js";
-import type { RoutedNote } from "./notes.js";
+import type { NotingStage, RoutedNote } from "./notes.js";
 import type { TicketOutcome } from "./orchestrator.js";
-import type { StageName } from "./ports/agent-runner.js";
 import type { IssueComment, SquashCommit } from "./ports/tracker.js";
 import type { RunStop } from "./run.js";
 import { type Criterion, type Verdict, countStatuses } from "./verdict.js";
@@ -296,7 +295,7 @@ export function handoffTakenComment(body: string): string | undefined {
 export interface NoteSubject {
   /** The Ticket whose Stage made the finding. */
   origin: number;
-  stage: StageName;
+  stage: NotingStage;
   note: string;
   /**
    * The Ticket this was meant to be a comment on, when that Ticket would not

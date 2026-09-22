@@ -921,15 +921,15 @@ async function verify(
     jsonSchema: VERDICT_JSON_SCHEMA,
   });
 
+  // Before anything else is done with the Stage at all, as the code Stages do
+  // it: a session that ran out of turns, or came back with a Verdict nothing
+  // can be made of, still noticed whatever it noticed. The scratch work it
+  // noticed it in is about to be discarded, so its Notes are all that is left —
+  // and a worktree that will not discard them is no reason to lose them too.
+  await collectNotes(pipeline, issue.number, "verify", result, notes);
+
   // verify is allowed to write throwaway tests; none of them reach the PR.
   await pipeline.workspace.discardChanges(worktree);
-
-  // Before the Stage is judged and before the Verdict is read, as the code
-  // Stages do it: a session that ran out of turns, or came back with a Verdict
-  // nothing can be made of, still noticed whatever it noticed. The scratch work
-  // it noticed it in has just been discarded, so the Notes are all that is left
-  // of it.
-  await collectNotes(pipeline, issue.number, "verify", result, notes);
 
   if (!result.ok) throw await stageDidNotFinish(pipeline, progress, "verify", result);
 

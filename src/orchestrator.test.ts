@@ -2741,6 +2741,20 @@ describe("Notes a Stage makes", () => {
     });
   });
 
+  it("routes a verify Note before the worktree it was found in is cleaned", async () => {
+    workspace.discardChanges = async () => {
+      throw new Error("git: unable to unlink");
+    };
+    runner.queue("verify", verdictWithNotes([{ ticket: OTHER, note: "noticed while grading" }]));
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({
+      outcome: "handed-off",
+      notes: [{ stage: "verify", issue: OTHER, note: "noticed while grading" }],
+    });
+  });
+
   it("merges the Ticket anyway when a verify Note reaches nowhere at all", async () => {
     tracker.createIssue = async () => {
       throw new Error("gh: connection reset");
