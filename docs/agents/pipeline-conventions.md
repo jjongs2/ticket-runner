@@ -1,4 +1,4 @@
-# agent-pipeline conventions <!-- agent-pipeline:version 0.4.1 -->
+# agent-pipeline conventions <!-- agent-pipeline:version 0.4.2 -->
 
 What `agent-pipeline` requires of this repository, and nothing else. `agent-pipeline init` writes this file and rewrites it whenever those requirements change, so an edit made here does not survive the next `init`. Everything the pipeline leaves to this repository — which commit types and scopes it uses, how it reviews, what it tests — belongs in the repository's own contributing guide.
 
