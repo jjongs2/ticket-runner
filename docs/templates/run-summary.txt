@@ -65,9 +65,11 @@ as `claimed`.
 
 `noted` is a Note a Stage made, and follows the row of the Ticket whose Stage
 made it. Its number is where the Note went, not where it came from: `comment`
-for a Note posted on the Ticket it named, `new` for one that named none and got
-a `needs-triage` issue of its own. The note itself is trimmed to one line; the
-whole of it is on GitHub.
+for a Note that reached an issue already there — the Ticket it named, or a
+standing Notes issue already open — and `new` for the one Note of a Run that
+found no standing Notes issue and opened it. Most of a Run's Notes land on the
+same number as `comment`, which is what gathering them on one issue means. The
+note itself is trimmed to one line; the whole of it is on GitHub.
 
 The last line says why the Run stopped: `Frontier empty.` when nothing is left,
 `Frontier blocked.` when every remaining candidate has an open blocker,

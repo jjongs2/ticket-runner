@@ -19,6 +19,28 @@ export const HANDOFF_MARKER = "<!-- agent-pipeline:handoff -->";
 /** What a Note comment is signed with. Nothing looks it up; a human reads it. */
 export const NOTE_MARKER = "<!-- agent-pipeline:note -->";
 
+/**
+ * How the pipeline finds the standing Notes issue again.
+ *
+ * Distinct from {@link NOTE_MARKER}, which signs the Note comments this issue
+ * collects: one marks the container, the other marks what is in it, and a
+ * lookup that confused them would write Notes into a Note.
+ *
+ * It sits in the issue's body rather than in a comment, which is the one place
+ * a marker survives a human tidying the thread, and it is the only thing the
+ * lookup trusts. The title is a fast path and nothing more.
+ */
+export const NOTES_ISSUE_MARKER = "<!-- agent-pipeline:notes-issue -->";
+
+/**
+ * The title the standing Notes issue is opened with.
+ *
+ * Written once, at the moment it is opened, and never rewritten: a human who
+ * renames it has said something about this issue, and the marker still finds
+ * it.
+ */
+export const NOTES_ISSUE_TITLE = "Notes from the pipeline";
+
 /** How the pipeline finds a warning it has already posted: one marker per reason. */
 export function guardMarker(reason: GuardReason): string {
   return `<!-- agent-pipeline:guard:${reason} -->`;
@@ -47,7 +69,12 @@ const GUARD_SENTENCES: Record<GuardReason, string> = {
  * handed off, so the marker alone does not promise there is only one.
  */
 export function findMarkedComments(comments: IssueComment[], marker: string): IssueComment[] {
-  return comments.filter((comment) => comment.body.trimStart().startsWith(marker));
+  return comments.filter((comment) => carriesMarker(comment.body, marker));
+}
+
+/** Whether a body opens with `marker`, which is the whole of how one is read. */
+function carriesMarker(body: string, marker: string): boolean {
+  return body.trimStart().startsWith(marker);
 }
 
 /** The first comment carrying `marker`, for the markers only one comment wears. */
@@ -265,7 +292,7 @@ export function handoffTakenComment(body: string): string | undefined {
   return body.replace(HANDOFF_MARKER, `${marked}\n`);
 }
 
-/** A Note, and where it came from, as both Note templates announce it. */
+/** A Note, and where it came from, as the comment it becomes announces it. */
 export interface NoteSubject {
   /** The Ticket whose Stage made the finding. */
   origin: number;
@@ -273,8 +300,9 @@ export interface NoteSubject {
   note: string;
   /**
    * The Ticket this was meant to be a comment on, when that Ticket would not
-   * take it or nobody would read it there. Set only on the issue such a Note
-   * falls back to, so triage can see the link the Note was reaching for.
+   * take it or nobody would read it there. Set only on a Note that fell back to
+   * the standing Notes issue, so triage can see the link the Note was reaching
+   * for.
    */
   intended?: number;
   /**
@@ -302,12 +330,21 @@ function escapeCheckboxes(note: string): string {
   return note.replaceAll(NOTE_CHECKBOX, (_, bullet: string) => `${bullet}\\[ \\]`);
 }
 
-/** Where the Note came from, in the one line both Note templates open with. */
-function noteProvenance({ origin, stage }: NoteSubject): string {
-  return `From #${origin} ${stage}`;
+/**
+ * Where the Note came from, in the one line every Note comment opens with.
+ *
+ * A Note that reached the standing Notes issue carries the Ticket it was
+ * reaching for and why that Ticket did not get it, because the comment is all
+ * triage has to go on: without the number, a finding about #7 read on the
+ * standing issue has lost the only thing that placed it.
+ */
+function noteProvenance({ origin, stage, intended, because }: NoteSubject): string {
+  const from = `From #${origin} ${stage}`;
+  if (intended === undefined) return from;
+  return `${from}, meant for #${intended}, which ${because ?? "would not take the comment"}`;
 }
 
-/** One Note, posted on the Ticket it names. */
+/** One Note, as a comment on the Ticket it names or on the standing Notes issue. */
 export function noteComment(subject: NoteSubject): string {
   return [
     NOTE_MARKER,
@@ -318,60 +355,36 @@ export function noteComment(subject: NoteSubject): string {
   ].join("\n");
 }
 
-/** How much of a Note's first sentence fits an issue list untruncated. */
-const TITLE_LIMIT = 72;
-
-/**
- * What a title has to lose from the front of a Note's first line: a heading's
- * hashes, a bullet, the stars around bold text. Deliberately its own copy of
- * what `guards.ts` strips off a `Blocked by` line — that one reads a document a
- * human wrote in a shape the guard has to recognise, where this one is
- * tidying an agent's prose, and the two are free to drift.
- */
-const TITLE_DECORATION = /^[\s>#*_+-]+/;
-
-/** The first sentence, if the Note opens with one short enough to end. */
-const FIRST_SENTENCE = /^(.+?[.!?])(?:\s|$)/;
-
-/** A Note's opening line, which is as much of it as any summary has room for. */
-function firstLine(text: string): string {
-  return (text.split("\n").find((line) => line.trim() !== "") ?? "").trim();
-}
-
-/** `text`, or as much of it as fits with an ellipsis standing in for the rest. */
-function truncate(text: string, limit: number): string {
-  return text.length <= limit ? text : `${text.slice(0, limit - 1).trimEnd()}\u2026`;
+/** Whether an issue's body says it is the standing Notes issue. */
+export function isNotesIssue(body: string): boolean {
+  return carriesMarker(body, NOTES_ISSUE_MARKER);
 }
 
 /**
- * The title a Note's issue gets: its first sentence, trimmed to be read at a
- * glance.
+ * The standing Notes issue, as the Note that needed one opens it. The label is
+ * the caller's.
  *
- * Derived rather than asked for. A Stage that writes a title as well as a note
- * writes two things badly, and triage is where a Note becomes a Ticket with a
- * title worth having — this one only has to be enough to open the issue on.
+ * Fixed text: the Notes themselves are comments under it, and nothing the
+ * pipeline writes afterwards touches this body. What is written here is for
+ * triage — what the issue is, and what emptying it means — because a human
+ * meeting an issue the pipeline opened by itself is owed both.
  */
-function noteTitle(subject: NoteSubject): string {
-  const stripped = firstLine(subject.note).replace(TITLE_DECORATION, "").trim();
-  const sentence = FIRST_SENTENCE.exec(stripped)?.[1] ?? stripped;
-  const title = sentence.replace(/\.$/, "").trim();
-
-  return title === ""
-    ? `Note from #${subject.origin} ${subject.stage}`
-    : truncate(title, TITLE_LIMIT);
-}
-
-/** The issue a Note opens when it names no Ticket. The label is the caller's. */
-export function noteIssue(subject: NoteSubject): { title: string; body: string } {
-  const provenance =
-    subject.intended === undefined
-      ? noteProvenance(subject)
-      : `${noteProvenance(subject)}, meant for #${subject.intended}, ` +
-        `which ${subject.because ?? "would not take the comment"}`;
-
+export function notesIssue(): { title: string; body: string } {
   return {
-    title: noteTitle(subject),
-    body: [provenance, "", escapeCheckboxes(subject.note.trim()), ""].join("\n"),
+    title: NOTES_ISSUE_TITLE,
+    body: [
+      NOTES_ISSUE_MARKER,
+      "**Notes from the pipeline.** Every finding a Stage could not post on a " +
+        "Ticket arrives here as a comment: one that named no Ticket, one whose " +
+        "Ticket would have buried it, and one whose Ticket refused the comment. " +
+        "Each comment says which Ticket and Stage found it.",
+      "",
+      "Triage empties this issue by hand: promote what deserves a Ticket, record " +
+        "the promotion in this body, and close the issue once the body accounts " +
+        "for every comment. The next Note after that opens a fresh one, so only " +
+        "ever one of these is open.",
+      "",
+    ].join("\n"),
   };
 }
 
@@ -468,6 +481,16 @@ function ticketRows(outcome: TicketOutcome): string[] {
     ticketRow(outcome),
     ...(outcome.outcome === "skipped" ? [] : outcome.notes.map(noteRow)),
   ];
+}
+
+/** A Note's opening line, which is as much of it as any summary has room for. */
+function firstLine(text: string): string {
+  return (text.split("\n").find((line) => line.trim() !== "") ?? "").trim();
+}
+
+/** `text`, or as much of it as fits with an ellipsis standing in for the rest. */
+function truncate(text: string, limit: number): string {
+  return text.length <= limit ? text : `${text.slice(0, limit - 1).trimEnd()}\u2026`;
 }
 
 /**

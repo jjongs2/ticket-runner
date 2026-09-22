@@ -87,8 +87,9 @@ export interface PullRequestRef {
 }
 
 /**
- * A new issue the pipeline opens itself. Only ever a Note nobody had a Ticket
- * for, so it arrives untriaged: labelled `needs-triage` and nothing else.
+ * A new issue the pipeline opens itself. Only ever the standing Notes issue,
+ * which the Notes nobody had a Ticket for are gathered on as comments, so it
+ * arrives untriaged: labelled `needs-triage` and nothing else.
  */
 export interface CreateIssue {
   title: string;
@@ -186,7 +187,14 @@ export interface Tracker {
   getIssue(number: number): Promise<Issue>;
   /** Open an issue, and say which one it is so a summary can name it. */
   createIssue(issue: CreateIssue): Promise<IssueRef>;
-  /** Every open issue carrying `label`, in no particular order. */
+  /**
+   * Every open issue carrying `label`, in no particular order.
+   *
+   * The Frontier is computed from the `ready-for-agent` ones; the same call
+   * under `needs-triage` is how a Run finds the standing Notes issue, which is
+   * why being open is part of the question rather than a filter a caller
+   * applies.
+   */
   listCandidates(label: string): Promise<Candidate[]>;
   assign(number: number, user: string): Promise<void>;
   unassign(number: number, user: string): Promise<void>;

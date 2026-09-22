@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { NOTES_JSON_SCHEMA, parseNotes, routeNotes } from "./notes.js";
+import { NOTES_JSON_SCHEMA, StandingNotes, parseNotes, routeNotes } from "./notes.js";
+import { NOTES_ISSUE_MARKER, NOTES_ISSUE_TITLE } from "./templates.js";
 import { FakeTracker } from "./testing/fakes.js";
 
 const ORIGIN = 10;
+
+/** The number the fake gives the first issue the pipeline opens itself. */
+const OPENED = 200;
 
 function routing(tracker: FakeTracker, log?: (line: string) => void) {
   return {
@@ -11,8 +15,25 @@ function routing(tracker: FakeTracker, log?: (line: string) => void) {
     stage: "implement" as const,
     needsTriage: "needs-triage",
     inProgress: "in-progress",
+    standing: new StandingNotes(),
     ...(log === undefined ? {} : { log }),
   };
+}
+
+/** A standing Notes issue already on the Target, as a past Run left it. */
+function seedStandingNotes(
+  tracker: FakeTracker,
+  overrides: { number?: number; title?: string; body?: string; closed?: boolean } = {},
+): number {
+  const number = overrides.number ?? 50;
+  tracker.addIssue({
+    number,
+    title: overrides.title ?? NOTES_ISSUE_TITLE,
+    body: overrides.body ?? `${NOTES_ISSUE_MARKER}\n**Notes from the pipeline.**\n`,
+    labels: ["needs-triage"],
+    ...(overrides.closed === undefined ? {} : { closed: overrides.closed }),
+  });
+  return number;
 }
 
 describe("parseNotes", () => {
@@ -65,6 +86,12 @@ describe("parseNotes", () => {
     expect(Object.keys(item.properties)).toEqual(["ticket", "note"]);
     expect(item.required).toEqual(["note"]);
   });
+
+  it("promises a Stage nothing about issue titles", () => {
+    expect(NOTES_JSON_SCHEMA.properties.notes.items.properties.note.description).not.toContain(
+      "title",
+    );
+  });
 });
 
 describe("routing a Note that names a Ticket", () => {
@@ -106,7 +133,7 @@ describe("routing a Note that names a Ticket", () => {
 });
 
 describe("routing a Note that names the Ticket it came from", () => {
-  it("opens an issue rather than commenting on a Ticket that is closing", async () => {
+  it("sends it to triage rather than commenting on a Ticket that is closing", async () => {
     const tracker = new FakeTracker();
     tracker.addIssue({ number: ORIGIN });
 
@@ -114,13 +141,12 @@ describe("routing a Note that names the Ticket it came from", () => {
       notes: [{ ticket: ORIGIN, note: "the flag needs renaming" }],
     });
 
-    expect(tracker.comments).toEqual([]);
-    expect(tracker.createdIssues).toHaveLength(1);
+    expect(tracker.comments.map((comment) => comment.issue)).toEqual([OPENED]);
     expect(routed).toEqual([
       {
         origin: ORIGIN,
         stage: "implement",
-        issue: 200,
+        issue: OPENED,
         opened: true,
         note: "the flag needs renaming",
       },
@@ -129,51 +155,197 @@ describe("routing a Note that names the Ticket it came from", () => {
 });
 
 describe("routing a Note that names no Ticket", () => {
-  it("opens a needs-triage issue naming the origin Ticket and Stage", async () => {
+  it("comments it on the standing Notes issue", async () => {
     const tracker = new FakeTracker();
 
     await routeNotes(routing(tracker), {
       notes: [{ note: "Nothing cleans up abandoned worktrees. A Run leaks one per hand-off." }],
     });
 
-    expect(tracker.createdIssues).toEqual([
+    expect(tracker.comments).toEqual([
       {
-        title: "Nothing cleans up abandoned worktrees",
+        issue: OPENED,
         body:
-          "From #10 implement\n\n" +
+          "<!-- agent-pipeline:note -->\nFrom #10 implement\n\n" +
           "Nothing cleans up abandoned worktrees. A Run leaks one per hand-off.\n",
-        labels: ["needs-triage"],
       },
     ]);
   });
 
-  it("reports the issue it opened", async () => {
-    const tracker = new FakeTracker();
-
-    const routed = await routeNotes(routing(tracker), { notes: [{ note: "no cleanup" }] });
-
-    expect(routed).toEqual([
-      { origin: ORIGIN, stage: "implement", issue: 200, opened: true, note: "no cleanup" },
-    ]);
-  });
-
-  it("titles the issue with the note itself when it is one short sentence", async () => {
+  it("opens the standing Notes issue when none is open, under needs-triage", async () => {
     const tracker = new FakeTracker();
 
     await routeNotes(routing(tracker), { notes: [{ note: "no cleanup" }] });
 
-    expect(tracker.createdIssues[0]?.title).toBe("no cleanup");
+    expect(tracker.createdIssues).toHaveLength(1);
+    expect(tracker.createdIssues[0]).toMatchObject({
+      title: NOTES_ISSUE_TITLE,
+      labels: ["needs-triage"],
+    });
+    expect(tracker.createdIssues[0]?.body).toContain(NOTES_ISSUE_MARKER);
   });
 
-  it("trims a long first sentence to fit an issue list", async () => {
+  it("opens one issue for many Notes, and says which of them opened it", async () => {
     const tracker = new FakeTracker();
-    const note = `The worktree ${"very ".repeat(30)}long`;
 
-    await routeNotes(routing(tracker), { notes: [{ note }] });
+    const routed = await routeNotes(routing(tracker), {
+      notes: [{ note: "first" }, { note: "second" }, { note: "third" }],
+    });
 
-    const title = tracker.createdIssues[0]?.title as string;
-    expect(title.length).toBeLessThanOrEqual(72);
-    expect(title.endsWith("…")).toBe(true);
+    expect(tracker.createdIssues).toHaveLength(1);
+    expect(routed.map((note) => ({ issue: note.issue, opened: note.opened }))).toEqual([
+      { issue: OPENED, opened: true },
+      { issue: OPENED, opened: false },
+      { issue: OPENED, opened: false },
+    ]);
+  });
+
+  it("opens no issue at all when one is already standing", async () => {
+    const tracker = new FakeTracker();
+    const standing = seedStandingNotes(tracker);
+
+    const routed = await routeNotes(routing(tracker), { notes: [{ note: "no cleanup" }] });
+
+    expect(tracker.createdIssues).toEqual([]);
+    expect(routed).toEqual([
+      { origin: ORIGIN, stage: "implement", issue: standing, opened: false, note: "no cleanup" },
+    ]);
+  });
+
+  it("opens it under the fixed title, never one taken from the Note", async () => {
+    const tracker = new FakeTracker();
+
+    await routeNotes(routing(tracker), { notes: [{ note: "Worktrees are never cleaned up." }] });
+
+    expect(tracker.createdIssues[0]?.title).toBe(NOTES_ISSUE_TITLE);
+  });
+
+  it("never writes over the standing Notes issue's body", async () => {
+    const tracker = new FakeTracker();
+    seedStandingNotes(tracker);
+
+    await routeNotes(routing(tracker), { notes: [{ note: "no cleanup" }, { note: "again" }] });
+
+    expect(tracker.calls.filter((call) => call.startsWith("updateIssueBody"))).toEqual([]);
+  });
+});
+
+describe("finding the standing Notes issue", () => {
+  it("confirms the title with the marker before it writes", async () => {
+    const tracker = new FakeTracker();
+    tracker.addIssue({
+      number: 50,
+      title: NOTES_ISSUE_TITLE,
+      body: "A human wrote this one and it is not the pipeline's.",
+      labels: ["needs-triage"],
+    });
+
+    const routed = await routeNotes(routing(tracker), { notes: [{ note: "no cleanup" }] });
+
+    expect(routed[0]?.issue).toBe(OPENED);
+    expect(tracker.comments.map((comment) => comment.issue)).toEqual([OPENED]);
+  });
+
+  it("finds one a human renamed, by its marker, and opens no second one", async () => {
+    const tracker = new FakeTracker();
+    const standing = seedStandingNotes(tracker, { title: "Pipeline inbox (read me first)" });
+
+    const routed = await routeNotes(routing(tracker), { notes: [{ note: "no cleanup" }] });
+
+    expect(tracker.createdIssues).toEqual([]);
+    expect(routed[0]?.issue).toBe(standing);
+    expect(tracker.issue(standing).title).toBe("Pipeline inbox (read me first)");
+  });
+
+  it("ignores one that is closed and opens a fresh one", async () => {
+    const tracker = new FakeTracker();
+    seedStandingNotes(tracker, { closed: true });
+
+    const routed = await routeNotes(routing(tracker), { notes: [{ note: "no cleanup" }] });
+
+    expect(routed[0]?.issue).toBe(OPENED);
+    expect(tracker.createdIssues).toHaveLength(1);
+  });
+
+  it("looks under the label this Target calls needs-triage", async () => {
+    const tracker = new FakeTracker();
+    const routed = { ...routing(tracker), needsTriage: "inbox" };
+
+    await routeNotes(routed, { notes: [{ note: "no cleanup" }] });
+
+    expect(tracker.calls).toContain("listCandidates:inbox");
+    expect(tracker.createdIssues[0]?.labels).toEqual(["inbox"]);
+  });
+
+  it("looks once however many Notes a Run writes", async () => {
+    const tracker = new FakeTracker();
+    seedStandingNotes(tracker);
+    const shared = routing(tracker);
+
+    await routeNotes(shared, { notes: [{ note: "first" }, { note: "second" }] });
+    await routeNotes({ ...shared, stage: "fix" }, { notes: [{ note: "third" }] });
+
+    expect(tracker.calls.filter((call) => call === "listCandidates:needs-triage")).toHaveLength(1);
+  });
+
+  it("opens at most one when two Lanes route Notes at the same time", async () => {
+    const tracker = new FakeTracker();
+    const shared = routing(tracker);
+
+    const [left, right] = await Promise.all([
+      routeNotes({ ...shared, origin: 4 }, { notes: [{ note: "from one Lane" }] }),
+      routeNotes({ ...shared, origin: 5 }, { notes: [{ note: "from the other" }] }),
+    ]);
+
+    expect(tracker.createdIssues).toHaveLength(1);
+    expect([left[0]?.issue, right[0]?.issue]).toEqual([OPENED, OPENED]);
+    expect([left[0]?.opened, right[0]?.opened].filter(Boolean)).toEqual([true]);
+  });
+});
+
+describe("what a Stage is told about the standing Notes issue", () => {
+  it("is the number when one is open", async () => {
+    const tracker = new FakeTracker();
+    const standing = seedStandingNotes(tracker);
+
+    expect(
+      await new StandingNotes().current({ tracker, needsTriage: "needs-triage" }),
+    ).toBe(standing);
+  });
+
+  it("is nothing when none is, and opens none to answer", async () => {
+    const tracker = new FakeTracker();
+
+    expect(
+      await new StandingNotes().current({ tracker, needsTriage: "needs-triage" }),
+    ).toBeUndefined();
+    expect(tracker.createdIssues).toEqual([]);
+  });
+
+  it("is the one this Run opened, once a Note has needed it", async () => {
+    const tracker = new FakeTracker();
+    const shared = routing(tracker);
+
+    await routeNotes(shared, { notes: [{ note: "no cleanup" }] });
+
+    expect(await shared.standing.current(shared)).toBe(OPENED);
+  });
+
+  it("is nothing when the lookup itself fails, rather than a failed Stage", async () => {
+    const tracker = new FakeTracker();
+    tracker.listCandidates = async () => {
+      throw new Error("gh: connection reset");
+    };
+    const lines: string[] = [];
+
+    const current = await new StandingNotes().current({
+      tracker,
+      needsTriage: "needs-triage",
+      log: (line) => lines.push(line),
+    });
+
+    expect(current).toBeUndefined();
+    expect(lines.join("\n")).toContain("could not look up the standing Notes issue");
   });
 });
 
@@ -189,12 +361,12 @@ describe("escaping", () => {
     expect(tracker.comments[0]?.body).toContain("- \\[ \\] one\n  - \\[ \\] two");
   });
 
-  it("escapes a checkbox in a Note it opens an issue for", async () => {
+  it("escapes a checkbox in a Note it sends to triage", async () => {
     const tracker = new FakeTracker();
 
     await routeNotes(routing(tracker), { notes: [{ note: "todo\n* [ ] one" }] });
 
-    expect(tracker.createdIssues[0]?.body).toContain("* \\[ \\] one");
+    expect(tracker.comments[0]?.body).toContain("* \\[ \\] one");
   });
 
   it("leaves a bracket that is not a checkbox alone", async () => {
@@ -214,7 +386,7 @@ describe("routing a Note that names a Ticket nobody will read again", () => {
     ["closed", { closed: true }, "is closed"],
     ["claimed", { labels: ["in-progress"] }, "is claimed"],
     ["a Spec", { subIssues: 2 }, "is a Spec"],
-  ])("opens an issue rather than commenting on a Ticket that is %s", async (_, shape, why) => {
+  ])("sends a Note to triage when the Ticket it named is %s", async (_, shape, why) => {
     const tracker = new FakeTracker();
     tracker.addIssue({ number: 7, ...shape });
     const lines: string[] = [];
@@ -223,11 +395,11 @@ describe("routing a Note that names a Ticket nobody will read again", () => {
       notes: [{ ticket: 7, note: "the help drifts" }],
     });
 
-    expect(tracker.comments).toEqual([]);
+    expect(tracker.comments.map((comment) => comment.issue)).toEqual([OPENED]);
     expect(routed).toEqual([
-      { origin: ORIGIN, stage: "implement", issue: 200, opened: true, note: "the help drifts" },
+      { origin: ORIGIN, stage: "implement", issue: OPENED, opened: true, note: "the help drifts" },
     ]);
-    expect(tracker.createdIssues[0]?.body).toContain(
+    expect(tracker.comments[0]?.body).toContain(
       `From #10 implement, meant for #7, which ${why}`,
     );
     expect(lines.join("\n")).toContain(`will not comment its Note on #7, which ${why}`);
@@ -245,7 +417,7 @@ describe("routing a Note that names a Ticket nobody will read again", () => {
 });
 
 describe("when a Ticket will not take a Note", () => {
-  it("opens an issue for it rather than losing it", async () => {
+  it("sends it to triage rather than losing it", async () => {
     const tracker = new FakeTracker();
     const lines: string[] = [];
 
@@ -257,7 +429,7 @@ describe("when a Ticket will not take a Note", () => {
       {
         origin: ORIGIN,
         stage: "implement",
-        issue: 200,
+        issue: OPENED,
         opened: true,
         note: "the flag is wrong",
       },
@@ -270,12 +442,12 @@ describe("when a Ticket will not take a Note", () => {
 
     await routeNotes(routing(tracker), { notes: [{ ticket: 404, note: "the flag is wrong" }] });
 
-    expect(tracker.createdIssues[0]?.body).toContain(
+    expect(tracker.comments[0]?.body).toContain(
       "From #10 implement, meant for #404, which would not take the comment",
     );
   });
 
-  it("routes the rest, and says so when the queue will not take it either", async () => {
+  it("routes the rest, and says so when triage will not take it either", async () => {
     const tracker = new FakeTracker();
     tracker.addIssue({ number: 7 });
     tracker.createIssue = async () => {
@@ -290,10 +462,52 @@ describe("when a Ticket will not take a Note", () => {
     expect(routed.map((note) => note.note)).toEqual(["kept"]);
     expect(lines.join("\n")).toContain("#10 could not route a Note");
   });
+
+  it("looks again rather than opening a second issue when a create is lost", async () => {
+    const tracker = new FakeTracker();
+    const createIssue = tracker.createIssue.bind(tracker);
+    let lost = true;
+    // The issue reaches GitHub and only the answer is lost, which is the one
+    // failure that could leave two standing issues open.
+    tracker.createIssue = async (issue) => {
+      const ref = await createIssue(issue);
+      if (!lost) return ref;
+      lost = false;
+      throw new Error("gh: connection reset");
+    };
+    const shared = routing(tracker);
+
+    const routed = await routeNotes(shared, { notes: [{ note: "lost" }, { note: "kept" }] });
+
+    expect(tracker.createdIssues).toHaveLength(1);
+    expect(routed).toEqual([
+      { origin: ORIGIN, stage: "implement", issue: OPENED, opened: false, note: "kept" },
+    ]);
+  });
+
+  it("tries again for the next Note rather than inheriting the outage", async () => {
+    const tracker = new FakeTracker();
+    let attempts = 0;
+    const createIssue = tracker.createIssue.bind(tracker);
+    tracker.createIssue = async (issue) => {
+      attempts += 1;
+      if (attempts === 1) throw new Error("gh: connection reset");
+      return await createIssue(issue);
+    };
+
+    const routed = await routeNotes(routing(tracker), {
+      notes: [{ note: "lost" }, { note: "kept" }],
+    });
+
+    expect(routed.map((note) => note.note)).toEqual(["kept"]);
+    expect(tracker.comments.map((comment) => comment.body)).toEqual([
+      expect.stringContaining("kept"),
+    ]);
+  });
 });
 
 describe("a Stage with nothing to say", () => {
-  it("writes nothing at all", async () => {
+  it("writes nothing at all, and looks nothing up", async () => {
     const tracker = new FakeTracker();
 
     expect(await routeNotes(routing(tracker), { notes: [] })).toEqual([]);

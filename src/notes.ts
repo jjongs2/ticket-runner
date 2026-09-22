@@ -6,8 +6,8 @@
  * Criteria the Verdict grades. Ignoring it loses it. Writing it into the
  * Ticket's own comments buries it under a Ticket that is about to close. So it
  * records a **Note** instead, and the pipeline puts the Note where somebody
- * will meet it: the comments of the Ticket it belongs to, or a fresh
- * `needs-triage` issue when it belongs to none yet.
+ * will meet it: the comments of the Ticket it belongs to, or the standing
+ * Notes issue when it belongs to none yet.
  *
  * Notes ride along with the implement and fix Stages' structured output, which
  * is the only reason those Stages have any. A Stage with nothing to report
@@ -16,7 +16,13 @@
 
 import type { StageName } from "./ports/agent-runner.js";
 import type { Tracker } from "./ports/tracker.js";
-import { type NoteSubject, noteComment, noteIssue } from "./templates.js";
+import {
+  NOTES_ISSUE_TITLE,
+  type NoteSubject,
+  isNotesIssue,
+  noteComment,
+  notesIssue,
+} from "./templates.js";
 import { z } from "zod";
 
 /** One finding, and the Ticket it belongs to when the Stage knew of one. */
@@ -30,9 +36,12 @@ export interface RoutedNote {
   /** The Ticket whose Stage made the finding. */
   origin: number;
   stage: StageName;
-  /** The issue the Note reached: the Ticket it named, or the one opened for it. */
+  /** The issue the Note reached: the Ticket it named, or the standing Notes issue. */
   issue: number;
-  /** Whether the pipeline opened that issue for it. */
+  /**
+   * Whether the pipeline opened that issue for it, which is true of one Note at
+   * most: the one that found no standing Notes issue open and needed one.
+   */
   opened: boolean;
   note: string;
 }
@@ -54,8 +63,8 @@ const noteSchema = z.object({
  * The `--json-schema` the implement and fix Stages are invoked with.
  *
  * `ticket` is optional on purpose: a Stage that guesses a number puts the Note
- * on an unrelated issue, where a Stage that leaves it out gets a triage queue
- * entry a human reads. Not knowing is an answer.
+ * on an unrelated issue, where a Stage that leaves it out gets a comment on the
+ * standing Notes issue a human reads. Not knowing is an answer.
  */
 export const NOTES_JSON_SCHEMA = {
   type: "object",
@@ -75,7 +84,7 @@ export const NOTES_JSON_SCHEMA = {
           note: {
             type: "string",
             description:
-              "What you found and why it matters, in plain sentences. The first sentence becomes an issue title when no ticket is named, so keep it short and let the detail follow. No checkboxes.",
+              "What you found and why it matters, in plain sentences. Open with one short sentence that names the finding and put the detail after it. No checkboxes.",
           },
         },
         required: ["note"],
@@ -109,16 +118,187 @@ export function parseNotes(result: unknown): Note[] {
   });
 }
 
-export interface NoteRouting {
+/** The standing Notes issue a Run resolved, and whether resolving it opened it. */
+interface Standing {
+  number: number;
+  /** True for the one Note that needed the issue opened, and false after it. */
+  opened: boolean;
+}
+
+/** What it takes to find the standing Notes issue, or to open one. */
+export interface StandingNotesLookup {
   tracker: Tracker;
+  /** The label the standing Notes issue wears, and the one it is looked for under. */
+  needsTriage: string;
+  log?: (line: string) => void;
+}
+
+/**
+ * The standing Notes issue of a Run: the one issue every triage-bound Note
+ * becomes a comment on.
+ *
+ * A Run has one of these and every Ticket it drives shares it, so the lookup
+ * happens once however many Notes the night makes, and two Lanes writing Notes
+ * at the same time cannot open two issues: the first call starts the resolution
+ * and the second waits on the same promise. The Run lock already makes two Runs
+ * on one Target impossible, so single-flight in one process is the whole of
+ * what a race needs.
+ *
+ * A failed resolution is forgotten rather than remembered: the Note that asked
+ * for it is lost, as any Note a tracker refuses is, and the next one asks
+ * again rather than inheriting an outage that may be over.
+ */
+/**
+ * One answer a Run works out at most once.
+ *
+ * The first caller starts the work and every caller after it waits on the same
+ * promise, which is what stops two Lanes asking GitHub the same question twice.
+ * A failure is forgotten rather than remembered: the caller that asked is told,
+ * and the next one may try again rather than inheriting an outage that may be
+ * over.
+ */
+class Once<T> {
+  #attempt: Promise<T> | undefined;
+
+  /** The answer, worked out by this caller if nobody has asked yet. */
+  run(make: () => Promise<T>): Promise<T> {
+    const attempt = (this.#attempt ??= make());
+    return attempt.catch((error: unknown) => {
+      // Only this attempt is forgotten: one started while it was failing is
+      // somebody's live answer, not a stale one.
+      if (this.#attempt === attempt) this.#attempt = undefined;
+      throw error;
+    });
+  }
+
+  /** The answer somebody has already asked for, and nothing when nobody has. */
+  taken(): Promise<T> | undefined {
+    return this.#attempt;
+  }
+
+  /** Forget it, so the next caller works it out again. */
+  forget(): void {
+    this.#attempt = undefined;
+  }
+}
+
+export class StandingNotes {
+  /** The search for an issue already open, which a Run runs at most once. */
+  readonly #found = new Once<number | undefined>();
+
+  /** The issue this Run resolved, found or opened. */
+  readonly #standing = new Once<number>();
+
+  /**
+   * The issue this Run opened, until the Note that opened it has said so.
+   *
+   * One Note reports `opened`, and it is the one that needed the issue put on
+   * GitHub: taken rather than read, so the Notes after it report the comment
+   * they are.
+   */
+  #unreported: number | undefined;
+
+  /**
+   * The standing Notes issue's number when one is open, and nothing when none
+   * is. Opens none: this is what a Stage prompt is told, and a prompt is no
+   * reason to put an issue on GitHub.
+   *
+   * A lookup that fails answers with nothing rather than throwing. A Stage that
+   * is not told the number writes its Notes anyway, where a Stage that never
+   * ran writes none at all.
+   */
+  async current(lookup: StandingNotesLookup): Promise<number | undefined> {
+    try {
+      return await (this.#standing.taken() ?? this.#search(lookup));
+    } catch (error) {
+      lookup.log?.(
+        `could not look up the standing Notes issue: ${(error as Error).message}`,
+      );
+      return undefined;
+    }
+  }
+
+  /**
+   * The standing Notes issue's number, opening one when none is open.
+   *
+   * `opened` is true for the one Note that needed the issue opened and false
+   * for every Note after it, which is what a Run summary reports.
+   */
+  async resolve(lookup: StandingNotesLookup): Promise<Standing> {
+    const number = await this.#standing.run(async () => await this.#findOrOpen(lookup));
+    const opened = this.#unreported === number;
+    if (opened) this.#unreported = undefined;
+    return { number, opened };
+  }
+
+  async #findOrOpen(lookup: StandingNotesLookup): Promise<number> {
+    const found = await this.#search(lookup);
+    if (found !== undefined) return found;
+
+    try {
+      const issue = await lookup.tracker.createIssue({
+        ...notesIssue(),
+        labels: [lookup.needsTriage],
+      });
+      this.#unreported = issue.number;
+      lookup.log?.(`opened #${issue.number} to gather Notes for triage`);
+      return issue.number;
+    } catch (error) {
+      // The issue may be on GitHub and only the answer lost. The search that
+      // found nothing is forgotten with it, so the next Note looks again
+      // instead of opening a second standing issue over the same outage.
+      this.#found.forget();
+      throw error;
+    }
+  }
+
+  async #search(lookup: StandingNotesLookup): Promise<number | undefined> {
+    return await this.#found.run(async () => await findStandingNotes(lookup));
+  }
+}
+
+/**
+ * The open issue carrying the standing Notes marker, or nothing.
+ *
+ * The title is a fast path and never a proof: the candidates that carry it are
+ * read first, and an issue that carries it without the marker is somebody
+ * else's and is never written to. Where none of them confirms — there is no
+ * standing issue yet, or a human renamed the one there is — the rest of the
+ * open `needs-triage` issues are read for the marker. That is a read per
+ * candidate, paid once per Run, and only until a marked issue exists to be
+ * found by its title.
+ *
+ * Lowest number first, so two marked issues a human left open resolve to the
+ * same one every time rather than to whichever the tracker listed first.
+ */
+async function findStandingNotes({
+  tracker,
+  needsTriage,
+}: StandingNotesLookup): Promise<number | undefined> {
+  const candidates = [...(await tracker.listCandidates(needsTriage))].sort(
+    (a, b) => a.number - b.number,
+  );
+  const named = (title: string) => title.trim() === NOTES_ISSUE_TITLE;
+  const ordered = [
+    ...candidates.filter((candidate) => named(candidate.title)),
+    ...candidates.filter((candidate) => !named(candidate.title)),
+  ];
+
+  for (const candidate of ordered) {
+    const issue = await tracker.getIssue(candidate.number);
+    if (isNotesIssue(issue.body)) return candidate.number;
+  }
+  return undefined;
+}
+
+export interface NoteRouting extends StandingNotesLookup {
   /** The Ticket whose Stage made the findings. */
   origin: number;
   stage: StageName;
-  /** The label a Note with no Ticket opens its issue under. */
-  needsTriage: string;
   /** The label a claimed Ticket wears, which a Note reads as "do not comment here". */
   inProgress: string;
-  log?: (line: string) => void;
+  /** The Run's standing Notes issue, which every triage-bound Note goes to. */
+  standing: StandingNotes;
 }
 
 /**
@@ -150,13 +330,14 @@ export async function routeNotes(
 }
 
 /**
- * Where one Note goes: the Ticket it names, and otherwise the triage queue.
+ * Where one Note goes: the Ticket it names, and otherwise the standing Notes
+ * issue.
  *
  * A Note that names the Ticket its own Stage is working on names no Ticket, as
  * far as this is concerned. A Stage says that when it has found something the
  * Acceptance Criteria do not cover, and commenting on that Ticket would file
  * the finding under an issue that is about to be closed by the very Run that
- * made it. The triage queue outlives the Run; the Ticket does not.
+ * made it. The standing Notes issue outlives the Run; the Ticket does not.
  *
  * The same holds for any Ticket nobody will read again. A closed Ticket is
  * finished. A claimed one has a Stage on it already — this Run's other Lane,
@@ -164,13 +345,14 @@ export async function routeNotes(
  * when it lands, so a comment posted meanwhile is read by nobody. A Spec is
  * never implemented at all; only its Tickets are. Each of these takes the
  * comment without complaint, which is exactly the problem: the write succeeds
- * and the finding is buried. So they go to the queue with the number they were
- * meant for, and the queue says why.
+ * and the finding is buried. So they go to the standing Notes issue with the
+ * number they were meant for, and the comment says why.
  *
  * A Ticket that will not take the comment — a number the Stage invented, an
- * issue somebody locked — falls to the triage queue as well, carrying the
- * number it was meant for. The queue is the fallback for everything, because
- * the one outcome this module exists to prevent is a finding going nowhere.
+ * issue somebody locked — falls to the standing Notes issue as well, carrying
+ * the number it was meant for. That issue is the fallback for everything,
+ * because the one outcome this module exists to prevent is a finding going
+ * nowhere.
  */
 async function route(routing: NoteRouting, note: Note): Promise<RoutedNote> {
   const { tracker, origin, stage } = routing;
@@ -188,23 +370,23 @@ async function route(routing: NoteRouting, note: Note): Promise<RoutedNote> {
     } catch (error) {
       routing.log?.(
         `#${origin} could not comment its Note on #${note.ticket} ` +
-          `(${(error as Error).message}); opening an issue for it instead`,
+          `(${(error as Error).message}); sending it to triage instead`,
       );
-      return await openForTriage(routing, { ...from, intended: note.ticket });
+      return await sendToTriage(routing, { ...from, intended: note.ticket });
     }
     routing.log?.(
       `#${origin} will not comment its Note on #${note.ticket}, which ${buried}; ` +
-        "opening an issue for it instead",
+        "sending it to triage instead",
     );
-    return await openForTriage(routing, { ...from, intended: note.ticket, because: buried });
+    return await sendToTriage(routing, { ...from, intended: note.ticket, because: buried });
   }
 
-  return await openForTriage(routing, from);
+  return await sendToTriage(routing, from);
 }
 
 /**
  * Why a comment on this Ticket would be read by nobody, or nothing when it
- * would be read. The words are the ones the triage issue's provenance line
+ * would be read. The words are the ones the Note comment's provenance line
  * finishes with, after `which`.
  *
  * Claimed is the label alone, not the assignee with it: the pipeline's own
@@ -219,20 +401,27 @@ async function buriedOn(routing: NoteRouting, ticket: number): Promise<string | 
   return undefined;
 }
 
-async function openForTriage(
+/**
+ * One Note, as a comment on the standing Notes issue — opening that issue first
+ * where this Run is the one that needed it.
+ *
+ * A comment rather than an issue of its own because the same condition is met
+ * by Stage after Stage, and a Target that opens an issue every time makes
+ * triage a job of gathering duplicates rather than reading findings. The facets
+ * are all kept; only the artifact they arrive in is one.
+ */
+async function sendToTriage(
   routing: NoteRouting,
   subject: NoteSubject,
 ): Promise<RoutedNote> {
-  const issue = await routing.tracker.createIssue({
-    ...noteIssue(subject),
-    labels: [routing.needsTriage],
-  });
-  routing.log?.(`#${routing.origin} noted as #${issue.number}`);
+  const { number, opened } = await routing.standing.resolve(routing);
+  await routing.tracker.comment(number, noteComment(subject));
+  routing.log?.(`#${routing.origin} noted on #${number} for triage`);
   return {
     origin: routing.origin,
     stage: routing.stage,
-    issue: issue.number,
-    opened: true,
+    issue: number,
+    opened,
     note: subject.note,
   };
 }
