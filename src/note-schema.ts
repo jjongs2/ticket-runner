@@ -18,7 +18,7 @@
 export const NOTES_LIST_SCHEMA = {
   type: "array",
   description:
-    "Findings that belong to another Ticket, or to no Ticket yet. Empty when you found none.",
+    "Defects that belong to another Ticket, or to no Ticket yet. Empty when you found none, which is the ordinary case.",
   items: {
     type: "object",
     properties: {

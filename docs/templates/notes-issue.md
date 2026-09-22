@@ -1,10 +1,12 @@
 Notes from the pipeline
 
 <!-- agent-pipeline:notes-issue -->
-**Notes from the pipeline.** Every finding a Stage could not post on a Ticket
-arrives here as a comment: one that named no Ticket, one whose Ticket would have
-buried it, and one whose Ticket refused the comment. Each comment says which
-Ticket and Stage found it.
+**Notes from the pipeline.** Every defect a Stage met outside its own Ticket and
+could not post on another one arrives here as a comment: one that named no
+Ticket, one whose Ticket would have buried it, and one whose Ticket refused the
+comment. Each comment says which Ticket and Stage found it. What is not a defect
+— a preference, a refactor, a test that would be nice to have — is not a Note and
+never reaches this issue.
 
 Triage empties this issue by hand: promote what deserves a Ticket, record the
 promotion in this body, and close the issue once the body accounts for every
@@ -24,8 +26,9 @@ after Stage. A Target that opens an issue every time turns triage into gathering
 duplicates: five Notes about one missing config file were five issues, two of
 them with identical titles, all five closed against one hand-written Ticket —
 and the facets they had each seen separately were what that Ticket's Acceptance
-Criteria were made of. So every facet is still written down; only the artifact
-they arrive in is one.
+Criteria were made of. So a facet that changes what a reader would do about a
+condition already recorded here is still written down, and another instance of
+that condition is not; only the artifact they arrive in is one.
 
 Found again by the marker in this body, never by the title. The title is a fast
 path: the open `needs-triage` issues carrying it are read first, and one that

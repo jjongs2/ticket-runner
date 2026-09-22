@@ -55,15 +55,24 @@ ${noteEntryGuidance(standingNotes)}`;
 const verifyNotesGuidance = (standingNotes?: number) => `Notes for other Tickets: your Verdict grades this Ticket's Acceptance Criteria and nothing else, so anything you find beside them is lost unless you record it as a Note.
 
 - What you make of a criterion belongs in the Verdict. A criterion you judge \`unmet\` or \`unverifiable\` is reported in its own slot with the evidence you gathered, and never in a Note as well.
-- Everything else you meet — a defect the criteria do not cover, a gap nothing tracks yet — is a Note. Your structured output carries a \`notes\` list beside the criteria, and the pipeline posts each entry where a human will meet it.
+- A defect the criteria do not cover is a Note. Your structured output carries a \`notes\` list beside the criteria, and the pipeline posts each entry where a human will meet it.
+- A Note of yours carries the evidence that the defect is real, held to the standard you hold a criterion you judge \`unmet\` to. You have the branch and you can run it, so something you suspect but did not demonstrate is not a Note.
 - Writing the Note is all you do about it: fix nothing, commit nothing, stage nothing, exactly as the rest of your brief says.
 ${noteEntryGuidance(standingNotes)}`;
 
 /**
- * What a Note looks like, whichever Stage is writing one. Written once, because
- * a Stage reading a stale copy is the only place the drift would show.
+ * What a Note is and what one looks like, whichever Stage is writing one.
+ * Written once, because a Stage reading a stale copy is the only place the drift
+ * would show.
+ *
+ * The bar leads, because it is the line that decides whether there is a Note at
+ * all. Scope alone — this belongs to another Ticket — was the whole of it once,
+ * and it let a preference through beside a defect: triage then read asides at
+ * the price of a Ticket each, and the Tickets that came out sent Stages back in
+ * to write more.
  */
-const noteEntryGuidance = (standingNotes?: number) => `- Set \`ticket\` to the issue number the Note belongs to, and leave it out when you are not sure which one: a Note with no number becomes a comment on the issue the pipeline gathers Notes for triage on, where a wrong number lands on somebody else's Ticket.
+const noteEntryGuidance = (standingNotes?: number) => `- A Note is a defect — something that behaves wrongly or breaks. A preference of yours, a refactor you would enjoy and a test that would be nice to have are not Notes, however right you are about them.
+- Set \`ticket\` to the issue number the Note belongs to, and leave it out when you are not sure which one: a Note with no number becomes a comment on the issue the pipeline gathers Notes for triage on, where a wrong number lands on somebody else's Ticket.
 - Write each \`note\` as plain sentences. No checkboxes: they would read as Acceptance Criteria.
 - Open with one short sentence that names the finding, and put the detail in the sentences after it.
 - Emit \`"notes": []\` when you found nothing. That is the ordinary case and costs you nothing.${standingLine(standingNotes)}`;
@@ -72,15 +81,18 @@ const noteEntryGuidance = (standingNotes?: number) => `- Set \`ticket\` to the i
  * Where the Notes with no Ticket have been gathered so far, when any have.
  *
  * The number alone, never what is on it: the prompt would otherwise grow with
- * the backlog, and the Stage can read the issue itself. What it is asked for is
- * what the issue does not already record — a second report of a condition
- * already mentioned is worth having when it has seen a facet the first did not,
- * and silence over it is how the facets that become Acceptance Criteria are
- * lost.
+ * the backlog, and the Stage can read the issue itself.
+ *
+ * What it is asked for is what the issue does not already record. A second
+ * report of a condition already there earns its comment by changing what a
+ * reader would do about it — the facets that become Acceptance Criteria are
+ * exactly those, and another instance of the same thing is a duplicate however
+ * differently it is worded. Written when one Stage wrote Notes, the rule
+ * withheld only an exact repeat; three Stages later that is a duplicate mill.
  */
 function standingLine(standingNotes?: number): string {
   if (standingNotes === undefined) return "";
-  return `\n- Notes with no Ticket are gathered on #${standingNotes}. Read it before you write one and add what it does not already record; a new facet of a condition it already mentions is worth reporting, and only an exact repeat is not.`;
+  return `\n- Notes with no Ticket are gathered on #${standingNotes}. Read it first and take what it already records as recorded: write a second Note about a condition it names only when what you saw changes what a reader would do about it, and not when it is another instance of the same thing.`;
 }
 
 const VERIFY_INSTRUCTIONS = `You are the verify Stage of an unattended pipeline. Your job is adversarial: try to prove each Acceptance Criterion is NOT met.
