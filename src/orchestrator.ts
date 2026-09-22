@@ -5,7 +5,13 @@ import { type SkipReason, isGuardReason, skipReason } from "./guards.js";
 import { markHandoffsTaken } from "./handoff.js";
 import type { Landing, LandingTurn } from "./landing.js";
 import type { FailureKind, FailurePoint } from "./lifecycle.js";
-import { NOTES_JSON_SCHEMA, type RoutedNote, routeNotes } from "./notes.js";
+import {
+  NOTES_JSON_SCHEMA,
+  type RoutedNote,
+  type StandingNotes,
+  type StandingNotesLookup,
+  routeNotes,
+} from "./notes.js";
 import type {
   AgentRunner,
   StageFailure,
@@ -111,6 +117,12 @@ export interface Pipeline {
    * the Base branch after its merge at a time (ADR-0005).
    */
   landing: Landing;
+  /**
+   * The Run's standing Notes issue, resolved once and shared by every Ticket:
+   * the Notes of a whole night land on one issue, and the Stages that write
+   * them are told which one it is.
+   */
+  standingNotes: StandingNotes;
   log?: (line: string) => void;
 }
 
@@ -761,16 +773,36 @@ async function collectNotes(
   notes.push(
     ...(await routeNotes(
       {
-        tracker: pipeline.tracker,
+        ...standingNotesLookup(pipeline),
         origin: ticket,
         stage,
-        needsTriage: pipeline.config.labels.needsTriage,
         inProgress: pipeline.config.labels.inProgress,
-        ...(pipeline.log === undefined ? {} : { log: pipeline.log }),
+        standing: pipeline.standingNotes,
       },
       result.result,
     )),
   );
+}
+
+/** What the Run's standing Notes issue is found — and opened — with. */
+function standingNotesLookup(pipeline: Pipeline): StandingNotesLookup {
+  return {
+    tracker: pipeline.tracker,
+    needsTriage: pipeline.config.labels.needsTriage,
+    ...(pipeline.log === undefined ? {} : { log: pipeline.log }),
+  };
+}
+
+/**
+ * The standing Notes issue's number for a Stage's prompt, or nothing when none
+ * is open yet.
+ *
+ * Asked before the Stage rather than after it, because what it buys is a Stage
+ * that reads what has already been reported before it writes a Note of its own.
+ * Nothing is opened for it: an issue is opened when a Note needs one.
+ */
+async function standingNotesNumber(pipeline: Pipeline): Promise<number | undefined> {
+  return await pipeline.standingNotes.current(standingNotesLookup(pipeline));
 }
 
 /**
@@ -793,7 +825,12 @@ async function implement(
 ): Promise<void> {
   const stage = pipeline.config.stages.implement;
   const result = await runStage(pipeline, "implement", {
-    prompt: implementPrompt(issue.url, pipeline.baseBranch, stage.extraPrompt),
+    prompt: implementPrompt(
+      issue.url,
+      pipeline.baseBranch,
+      stage.extraPrompt,
+      await standingNotesNumber(pipeline),
+    ),
     cwd: worktree,
     logDir,
     jsonSchema: NOTES_JSON_SCHEMA,
@@ -953,7 +990,13 @@ async function fix(
   const commitsBefore = await commitCount(pipeline, branch);
 
   const result = await runStage(pipeline, "fix", {
-    prompt: fixPrompt(issue.url, failure, pipeline.baseBranch, stage.extraPrompt),
+    prompt: fixPrompt(
+      issue.url,
+      failure,
+      pipeline.baseBranch,
+      stage.extraPrompt,
+      await standingNotesNumber(pipeline),
+    ),
     cwd: worktree,
     logDir,
     jsonSchema: NOTES_JSON_SCHEMA,

@@ -1,6 +1,7 @@
 import { resolveBaseBranch } from "./base-branch.js";
 import type { Config } from "./config.js";
 import { Landing } from "./landing.js";
+import { StandingNotes } from "./notes.js";
 import { acquireLock, lockHeldMessage } from "./lock.js";
 import { type Pipeline, type TicketOutcome, processTicket } from "./orchestrator.js";
 import type { AgentRunner } from "./ports/agent-runner.js";
@@ -161,6 +162,9 @@ async function execute(
     // take turns between their rebase and their merge, and a Landing made per
     // Ticket would be a queue of one every time (ADR-0005).
     landing: new Landing(),
+    // Once per Run as well: the Notes of every Ticket the night takes land on
+    // one issue, and the Run looks it up once however many it writes.
+    standingNotes: new StandingNotes(),
     log,
   };
 

@@ -3,14 +3,17 @@ import { UNCHECKED_BOX } from "./acceptance-criteria.js";
 import {
   HANDOFF_MARKER,
   HANDOFF_TAKEN_LINE,
+  NOTES_ISSUE_MARKER,
+  NOTES_ISSUE_TITLE,
   NOTE_MARKER,
   findMarkedComments,
   guardComment,
   guardMarker,
   handoffComment,
   handoffTakenComment,
+  isNotesIssue,
   noteComment,
-  noteIssue,
+  notesIssue,
   pullRequestBody,
   runSummary,
   squashCommit,
@@ -509,35 +512,59 @@ describe("noteComment", () => {
   });
 });
 
-describe("noteIssue", () => {
+describe("a Note that fell back to the standing Notes issue", () => {
   const subject = {
     origin: 10,
     stage: "fix" as const,
     note: "Nothing cleans up abandoned worktrees. A Run leaks one per hand-off.",
   };
 
-  it("titles the issue with the Note's first sentence", () => {
-    expect(noteIssue(subject).title).toBe("Nothing cleans up abandoned worktrees");
+  it("names the Ticket it was meant for, and why that Ticket did not get it", () => {
+    const comment = noteComment({ ...subject, intended: 7, because: "is claimed" });
+
+    expect(comment.split("\n")[1]).toBe("From #10 fix, meant for #7, which is claimed");
   });
 
-  it("names the origin Ticket and Stage above the Note", () => {
-    expect(noteIssue(subject).body).toBe(
-      "From #10 fix\n\nNothing cleans up abandoned worktrees. A Run leaks one per hand-off.\n",
+  it("says only that the Ticket refused it when there is no reason to give", () => {
+    const comment = noteComment({ ...subject, intended: 404 });
+
+    expect(comment.split("\n")[1]).toBe(
+      "From #10 fix, meant for #404, which would not take the comment",
     );
   });
 
-  it("carries no marker, since nothing looks an issue up by one", () => {
-    expect(noteIssue(subject).body).not.toContain(NOTE_MARKER);
+  it("carries the Note under the provenance, checkboxes defused", () => {
+    const comment = noteComment({ ...subject, intended: 7, note: "todo\n- [ ] one" });
+
+    expect(comment).toContain("- \\[ \\] one");
+    expect(new RegExp(UNCHECKED_BOX, "m").test(comment)).toBe(false);
+  });
+});
+
+describe("notesIssue", () => {
+  it("opens under the one fixed title", () => {
+    expect(notesIssue().title).toBe(NOTES_ISSUE_TITLE);
   });
 
-  it("defuses a checkbox in the body too", () => {
-    const issue = noteIssue({ ...subject, note: "worktrees\n- [ ] remove them" });
-
-    expect(issue.body).toContain("- \\[ \\] remove them");
+  it("carries the marker it is found again by, on the first line of the body", () => {
+    expect(notesIssue().body.split("\n")[0]).toBe(NOTES_ISSUE_MARKER);
   });
 
-  it("falls back to naming the origin when the Note is all decoration", () => {
-    expect(noteIssue({ ...subject, note: "###" }).title).toBe("Note from #10 fix");
+  it("is not signed with the Note comments' own marker", () => {
+    expect(notesIssue().body).not.toContain(NOTE_MARKER);
+  });
+
+  it("tells triage what the issue is and how it is emptied", () => {
+    const body = notesIssue().body;
+
+    expect(body).toContain("arrives here as a comment");
+    expect(body).toContain("close the issue");
+  });
+
+  it("recognises its own body again, and nothing else", () => {
+    expect(isNotesIssue(notesIssue().body)).toBe(true);
+    expect(isNotesIssue("Notes from the pipeline\n\nsomething a human wrote")).toBe(false);
+    expect(isNotesIssue(`${NOTE_MARKER}\nFrom #10 fix\n`)).toBe(false);
   });
 });
 

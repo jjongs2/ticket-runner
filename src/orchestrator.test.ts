@@ -6,6 +6,7 @@ import { UNCHECKED_BOX } from "./acceptance-criteria.js";
 import { resolveBaseBranch } from "./base-branch.js";
 import type { Config } from "./config.js";
 import { Landing } from "./landing.js";
+import { StandingNotes } from "./notes.js";
 import { processTicket } from "./orchestrator.js";
 import {
   type TicketState,
@@ -153,6 +154,7 @@ async function run(overrides: Partial<Config> = {}): Promise<TicketOutcome> {
       version: VERSION,
       baseBranch: await resolveBaseBranch(tracker, settings),
       landing: new Landing(),
+      standingNotes: new StandingNotes(),
       log: (line) => logged.push(line),
     },
     TICKET,
@@ -2579,18 +2581,56 @@ describe("Notes a Stage makes", () => {
     });
   });
 
-  it("opens a needs-triage issue for a Note that names no Ticket", async () => {
+  it("comments a Note that names no Ticket on the standing Notes issue", async () => {
     runner.queue("implement", noteResult([{ note: "Nothing cleans up worktrees." }]));
 
     await run();
 
     expect(tracker.createdIssues).toEqual([
       {
-        title: "Nothing cleans up worktrees",
-        body: "From #2 implement\n\nNothing cleans up worktrees.\n",
+        title: "Notes from the pipeline",
+        body: expect.stringContaining("<!-- agent-pipeline:notes-issue -->") as unknown as string,
         labels: ["needs-triage"],
       },
     ]);
+    expect(tracker.comments).toContainEqual({
+      issue: 200,
+      body: "<!-- agent-pipeline:note -->\nFrom #2 implement\n\nNothing cleans up worktrees.\n",
+    });
+  });
+
+  it("tells the implement Stage which issue Notes are gathered on", async () => {
+    tracker.addIssue({
+      number: 50,
+      title: "Notes from the pipeline",
+      body: "<!-- agent-pipeline:notes-issue -->\n**Notes from the pipeline.**\n",
+      labels: ["needs-triage"],
+    });
+
+    await run();
+
+    expect(runner.requests.find((request) => request.stage === "implement")?.prompt).toContain(
+      "gathered on #50",
+    );
+  });
+
+  it("tells it nothing when no standing Notes issue is open", async () => {
+    await run();
+
+    expect(runner.requests.find((request) => request.stage === "implement")?.prompt).not.toContain(
+      "gathered on",
+    );
+  });
+
+  it("tells the fix Stage the issue this Run's own Notes opened", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    runner.queue("implement", noteResult([{ note: "Nothing cleans up worktrees." }]));
+
+    await run();
+
+    expect(runner.requests.find((request) => request.stage === "fix")?.prompt).toContain(
+      "gathered on #200",
+    );
   });
 
   it("opens it under the label this repo calls needs-triage", async () => {
@@ -2668,6 +2708,22 @@ describe("Notes a Stage makes", () => {
     });
   });
 
+  it("opens one standing issue for the Notes of both its Stages", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    runner.queue("implement", noteResult([{ note: "worktrees leak" }]));
+    runner.queue("fix", noteResult([{ note: "so does the lock file" }]));
+
+    const outcome = await run();
+
+    expect(tracker.createdIssues).toHaveLength(1);
+    expect(outcome).toMatchObject({
+      notes: [
+        { stage: "implement", issue: 200, opened: true },
+        { stage: "fix", issue: 200, opened: false },
+      ],
+    });
+  });
+
   it("merges the Ticket anyway when a Note reaches nowhere at all", async () => {
     tracker.createIssue = async () => {
       throw new Error("gh: connection reset");
@@ -2723,6 +2779,7 @@ describe("the Landing", () => {
       version: VERSION,
       baseBranch: await resolveBaseBranch(tracker, settings),
       landing: new Landing(),
+      standingNotes: new StandingNotes(),
       log: (line) => logged.push(line),
     };
   });

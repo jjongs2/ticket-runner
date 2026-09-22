@@ -123,7 +123,7 @@ A Ticket whose State file is still there while the Ticket still carries this Tar
 _Avoid_: orphan, zombie, abandoned Ticket, crashed Ticket, dead Ticket
 
 **Note**:
-A finding a Stage makes that belongs to another Ticket, or to no Ticket yet. Routed to that Ticket's comments when it is open, unclaimed and not a Spec, and otherwise to a new needs-triage issue; never acted on in the current Ticket.
+A finding a Stage makes that belongs to another Ticket, or to no Ticket yet. Routed to that Ticket's comments when it is open, unclaimed and not a Spec, and otherwise to the standing Notes issue, the one `needs-triage` issue every Note that cannot reach a Ticket is gathered on as a comment; never acted on in the current Ticket.
 _Avoid_: handoff, finding, TODO, side note
 
 ### Versions

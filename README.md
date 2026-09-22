@@ -399,8 +399,9 @@ routes each one out of the session:
 
 - a Note that names a Ticket becomes a comment on it, saying which Ticket and
   Stage it came from
-- a Note that names none opens an issue labelled `needs-triage`, which is where
-  the triage on-ramp starts
+- a Note that names none becomes a comment on the **standing Notes issue**: one
+  `needs-triage` issue, opened when the first Note needs one and never a second
+  while it is open
 - a Note that names the Ticket its own Stage is working on counts as naming
   none: commenting there would file the finding under an issue this very Run is
   about to close
@@ -411,12 +412,28 @@ Acceptance Criteria to everything that reads a Ticket, and a Note is not asking
 for any. The Run summary lists every Note with the issue it reached, so a night
 of work says what it noticed as well as what it merged.
 
-Routing a Note can never cost a Ticket, and the triage queue is the fallback for
-all of it: a number the Stage invented, or a Ticket that will not take the
-comment, opens an issue carrying the number it was reaching for rather than
-dropping the finding. Only a tracker that refuses that too loses a Note, and it
-loses that one and nothing else. A Stage that fails still has its Notes routed,
-because a session that ran out of turns still noticed whatever it noticed.
+Routing a Note can never cost a Ticket, and the standing Notes issue is the
+fallback for all of it: a number the Stage invented, or a Ticket that will not
+take the comment, becomes a comment there carrying the number it was reaching
+for and why that Ticket did not get it, rather than dropping the finding. Only a
+tracker that refuses that too loses a Note, and it loses that one and nothing
+else. A Stage that fails still has its Notes routed, because a session that ran
+out of turns still noticed whatever it noticed.
+
+One issue rather than one per Note, because the same condition is met by Stage
+after Stage: five Notes about one missing config file were five issues, two with
+identical titles, all closed against a single hand-written Ticket whose
+Acceptance Criteria were made of the facets each had seen separately. So the
+facets are all still written down; only the artifact they arrive in is one. It is
+found again by a marker in its body rather than by its title, so renaming it
+opens no second one, and it is never rewritten: triage indexes the body as it
+promotes comments to Tickets and closes the issue when the index covers
+everything, and the next Note opens a fresh one.
+
+The implement and fix Stages are told its number when one is open, so a Stage can
+read what has already been reported. What they are asked for is what the issue
+does not already record — a second report of a condition already mentioned is
+worth having when it has seen a facet the first did not.
 
 ## Rebase conflicts
 

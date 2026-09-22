@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Config } from "./config.js";
 import { Landing } from "./landing.js";
+import { StandingNotes } from "./notes.js";
 import type { Pipeline } from "./orchestrator.js";
 import { type TicketState, statePath, writeTicketState } from "./resume.js";
 import { processRun } from "./run.js";
@@ -76,6 +77,7 @@ function pipeline(lanes = 1): Pipeline {
     version: VERSION,
     baseBranch: "main",
     landing: new Landing(),
+    standingNotes: new StandingNotes(),
     log: (line) => logged.push(line),
   };
 }
@@ -349,9 +351,13 @@ describe("a Ticket that throws", () => {
     // The Notes are routed first; the Ticket then fails, and the hand-off's own
     // writes are outside processTicket's net, so the tracker going down there
     // throws past the outcome the Notes would otherwise have ridden out on.
+    // Only #4 refuses comments: the standing Notes issue has to take the Note
+    // for there to be a routed one left to report.
     runner.queue("verify", stageResult({ ok: false, failure: "nonzero-exit" }));
-    tracker.comment = async () => {
-      throw new Error("gh: connection reset");
+    const comment = tracker.comment.bind(tracker);
+    tracker.comment = async (number, body) => {
+      if (number === 4) throw new Error("gh: connection reset");
+      return await comment(number, body);
     };
 
     const result = await processRun(pipeline());

@@ -210,16 +210,45 @@ describe("the Notes channel", () => {
     expect(implementPrompt(url, BASE, "")).toContain("leave it out when you are not sure");
   });
 
-  it("tells a Stage that a Note's first sentence becomes the issue title", () => {
-    const prompt = implementPrompt(url, BASE, "");
+  it("asks a Stage to open with one short sentence that names the finding", () => {
+    expect(implementPrompt(url, BASE, "")).toContain("one short sentence");
+    expect(fixPrompt(url, FAILED_CHECK, BASE, "")).toContain("one short sentence");
+  });
 
-    expect(prompt).toContain("first sentence becomes the issue's title");
-    expect(prompt).toContain("one short sentence");
-    expect(fixPrompt(url, FAILED_CHECK, BASE, "")).toContain("first sentence becomes the issue's title");
+  it("no longer claims a Note's first sentence becomes an issue title", () => {
+    expect(implementPrompt(url, BASE, "")).not.toContain("issue's title");
+    expect(fixPrompt(url, FAILED_CHECK, BASE, "")).not.toContain("issue's title");
+    expect(implementPrompt(url, BASE, "", 42)).not.toContain("issue's title");
   });
 
   it("tells a Stage that finding nothing is the ordinary case", () => {
     expect(implementPrompt(url, BASE, "")).toContain(`"notes": []`);
+  });
+
+  it("names the standing Notes issue when one is open", () => {
+    const prompt = implementPrompt(url, BASE, "", 42);
+
+    expect(prompt).toContain("gathered on #42");
+    expect(fixPrompt(url, FAILED_CHECK, BASE, "", 42)).toContain("gathered on #42");
+  });
+
+  it("says nothing about one when none is open", () => {
+    expect(implementPrompt(url, BASE, "")).not.toContain("gathered on");
+    expect(fixPrompt(url, FAILED_CHECK, BASE, "")).not.toContain("gathered on");
+  });
+
+  it("asks for what the standing issue does not record, not for silence", () => {
+    const prompt = implementPrompt(url, BASE, "", 42);
+
+    expect(prompt).toContain("add what it does not already record");
+    expect(prompt).toContain("a new facet of a condition it already mentions is worth reporting");
+  });
+
+  it("passes the number alone, so the prompt does not grow with the backlog", () => {
+    const withStanding = implementPrompt(url, BASE, "", 42);
+    const without = implementPrompt(url, BASE, "");
+
+    expect(withStanding.length - without.length).toBeLessThan(300);
   });
 
   it("asks the Stages that only grade or rebase for no Notes", () => {
