@@ -109,5 +109,5 @@ A Ticket is one issue the pipeline can implement in a single session. It is refu
 Both are \`agent-pipeline\`'s own, both are gitignored by \`agent-pipeline init\`, and neither is ever committed.
 
 - \`.worktrees/ticket-<n>/\` — one git worktree per claimed Ticket, where its Stages run.
-- \`.agent-pipeline/\` — the Run lock, the Run's logs and Stage transcripts, and the State file a claimed Ticket keeps so that a Run killed mid-Ticket can be resumed.
+- \`.agent-pipeline/\` — the Run lock, the Run's logs and Stage transcripts, and the State file a Ticket keeps while its branch has work worth resuming, so that a Run killed mid-Ticket, or a handed-off Ticket relabelled \`ready-for-agent\`, carries on from where it stopped.
 `;
