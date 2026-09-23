@@ -4,6 +4,25 @@ One section per Version, newest first, written in the Version PR that cut it and
 published as the body of that Version's GitHub Release (ADR-0007). The shape is
 `docs/templates/version-notes.md`.
 
+## 0.4.4 (2026-09-23)
+
+### Stages
+
+- A Stage runs `claude-opus-5-5` by default, and a Target can set its effort ([#136])
+
+### Hand-off
+
+- A handed-off Ticket resumes from where it stopped, not from the start ([#135])
+- The conventions document now says a handed-off Ticket keeps its State file too ([#138])
+
+### After upgrading
+
+- Run `agent-pipeline init` again in every Target; the conventions document's State file line now covers a handed-off Ticket too.
+
+[#135]: https://github.com/jjongs2/agent-pipeline/pull/135
+[#136]: https://github.com/jjongs2/agent-pipeline/pull/136
+[#138]: https://github.com/jjongs2/agent-pipeline/pull/138
+
 ## 0.4.3 (2026-09-22)
 
 ### Notes
