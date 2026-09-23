@@ -592,6 +592,12 @@ describe("pull requests", () => {
     expect(calls[0]).toEqual(["pr", "ready", "12", "--undo"]);
   });
 
+  it("takes a drafted PR back out of draft", async () => {
+    await tracker(ok("")).markPullRequestReady(12);
+
+    expect(calls[0]).toEqual(["pr", "ready", "12"]);
+  });
+
   it("rewrites the body of a PR a second pass re-graded", async () => {
     await tracker(ok("")).updatePullRequestBody(12, "Closes #2\n\n**Verdict:** 2 met");
 

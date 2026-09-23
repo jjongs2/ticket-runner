@@ -6,6 +6,7 @@ import {
   NOTES_ISSUE_MARKER,
   NOTES_ISSUE_TITLE,
   NOTE_MARKER,
+  findMarkedComment,
   findMarkedComments,
   guardComment,
   guardMarker,
@@ -197,6 +198,22 @@ describe("findMarkedComments", () => {
     expect(findMarkedComments([{ body: `quoting ${HANDOFF_MARKER}` }], HANDOFF_MARKER)).toEqual(
       [],
     );
+  });
+});
+
+describe("findMarkedComment", () => {
+  it("gives the newest of several, not the oldest", () => {
+    const comments = [
+      { id: "c1", body: `${HANDOFF_MARKER}\nfirst` },
+      { id: "c2", body: "a human" },
+      { id: "c3", body: `${HANDOFF_MARKER}\nsecond` },
+    ];
+
+    expect(findMarkedComment(comments, HANDOFF_MARKER)?.id).toBe("c3");
+  });
+
+  it("gives nothing when no comment wears the marker", () => {
+    expect(findMarkedComment([{ id: "c1", body: "a human" }], HANDOFF_MARKER)).toBeUndefined();
   });
 });
 

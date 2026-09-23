@@ -28,6 +28,13 @@ header and the rows with its own. The table is what the Run reporting now did,
 not a history of every Run the Ticket has had; the transcripts under
 `.agent-pipeline/runs/` are that.
 
+One Run does not: the one taking the Ticket back from a human, which is a Ticket
+carrying a hand-off comment not yet marked as history. It posts a table of its
+own below the one the human read, leaving that one exactly as they read it. So a
+Ticket can carry more than one of these, and the newest is the one being written.
+Every other Run — a released Ticket, a stranded one — rewrites the comment it
+finds, because nobody was handed anything in between.
+
 `–` is what a cell has no answer for: Checks, CI and the merge run no agent, so
 they have no turn count, and the merge takes no measurable time of its own.
 

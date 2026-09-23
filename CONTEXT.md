@@ -51,7 +51,7 @@ One invocation of the pipeline command. Drains the Frontier through its Lanes. E
 _Avoid_: session, batch, loop
 
 **Lane**:
-One of the places a Run has for a Ticket in progress; the Target's config says how many. A Lane holds one Ticket from Claim to merge, hand-off or Release, and is refilled from the Stranded Tickets first and the Frontier second.
+One of the places a Run has for a Ticket in progress; the Target's config says how many. A Lane holds one Ticket from Claim to merge, Hand-off or Release, and is refilled from the Stranded Tickets first and the Frontier second.
 _Avoid_: slot, worker, thread, parallelism
 
 **Landing**:
@@ -103,19 +103,23 @@ The structured result of Verify: one status per criterion (met, unmet, unverifia
 _Avoid_: report, review result, score
 
 **Fix budget**:
-The single fix Stage a Ticket is allowed. A failing Check, including one the wall-clock limit killed, an unmet criterion or a red CI spends it, and processing resumes at the Checks — unless the fix Stage came back without committing anything, which ends the Ticket where it stands rather than re-grading a branch nobody touched. A second failure of any kind is a hand-off.
+The single fix Stage a Ticket is allowed each time the pipeline takes it up. A failing Check, including one the wall-clock limit killed, an unmet criterion or a red CI spends it, and processing resumes at the Checks — unless the fix Stage came back without committing anything, which ends the Ticket where it stands rather than re-grading a branch nobody touched. A second failure of any kind is a Hand-off. A Release carries a spent budget over, having changed nothing about the Ticket; a Hand-off restores it, because the Ticket only comes back through a human's hands and whatever they did to it is what the fresh budget is for.
 _Avoid_: retry budget, fix limit, second chance
 
+**Hand-off**:
+Giving a Ticket to a human, which is how every ending that is not a merge or a Release goes: the Claim is undone, `ready-for-human` goes on, a comment names the failure and where the work is, and an open pull request is put back into draft. The branch, the worktree and the State file stay, so a human who relabels the Ticket `ready-for-agent` hands it back to the pipeline and it carries on from what it reached, rather than paying for the implement Stage a second time. The exception is a Hand-off at setup over a branch the Run refused to branch over: no Stage of it ran there, so there is nothing of the pipeline's to resume and the file goes.
+_Avoid_: handover, escalation, bail-out, failure (a Ticket is handed off for reasons that are nobody's defect too)
+
 **Release**:
-What a rate-limited Stage does to a Ticket instead of handing it to a human: the Claim is undone, `ready-for-agent` goes back on, the branch and worktree stay, and a State file says where to resume. Nothing about the Ticket was wrong, so no Fix budget is spent and nobody is notified. It also stops the Run that made it claiming any more Tickets, because the limit that stopped one Stage will stop the next; the Lanes still busy finish what they hold.
+What a rate-limited Stage does to a Ticket: the Claim is undone, `ready-for-agent` goes back on, and the branch, the worktree and the State file stay. The label is the difference from a Hand-off — the pipeline itself takes the next turn, so nothing is commented, nobody is notified and no Fix budget is spent, the Ticket having done nothing wrong. Alone among the endings it also stops the Run that made it claiming any more Tickets, because the limit that stopped one Stage will stop the next; the Lanes still busy finish what they hold.
 _Avoid_: pause, defer, requeue, unclaim
 
 **Stop**:
-What a human asks of a running Run: finish the Tickets its Lanes hold, to merge or hand-off, and take no more — not from the Frontier and not from the Stranded Tickets. Nothing about any Ticket changes, so nothing is written to the board and the exit code is the outcomes' as usual. Not a kill: a killed Run leaves Stranded Tickets, a stopped one leaves none. `agent-pipeline stop` is how one is asked for, in the only way there is: SIGTERM to the process the Run lock names.
+What a human asks of a running Run: finish the Tickets its Lanes hold, to merge or Hand-off, and take no more — not from the Frontier and not from the Stranded Tickets. Nothing about any Ticket changes, so nothing is written to the board and the exit code is the outcomes' as usual. Not a kill: a killed Run leaves Stranded Tickets, a stopped one leaves none. `agent-pipeline stop` is how one is asked for, in the only way there is: SIGTERM to the process the Run lock names.
 _Avoid_: drain (a Run drains the Frontier), pause, cancel, abort, kill, graceful shutdown
 
 **State file**:
-What a claimed Ticket keeps under `.agent-pipeline/state/`: the state it reached, its branch, whether the Fix budget was spent, and the pull request if one is open. Written as part of the Claim and updated as the Ticket advances, so it is there for as long as the Ticket is claimed; removed on merge and on hand-off. Its presence makes the Ticket resumable, and the Claim on GitHub says whether the Ticket was released or stranded.
+What a Ticket keeps under `.agent-pipeline/state/` for as long as there is work on its branch worth resuming: the state it reached, its branch, whether the Fix budget was spent, and the pull request if one is open. Written as part of the Claim, updated as the Ticket advances, and removed when that work is finished or is not the pipeline's to resume — on merge, when the sweep finds the issue closed, when the worktree it names has gone, and on a Hand-off at setup, where the branch in the way is a human's and no Stage of the Run ever ran. A Hand-off from a worktree the Run itself worked in leaves the file, as a Release does, so neither costs the Stages already paid for. Its presence makes the Ticket resumable; what the board says decides by which road — still claimed is stranded, `ready-for-agent` comes back through the Frontier, and `ready-for-human` waits, inert, until a human relabels it.
 _Avoid_: checkpoint, journal, resume file
 
 **Stranded Ticket**:

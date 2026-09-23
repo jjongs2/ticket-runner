@@ -3,16 +3,20 @@ import { dirname, join } from "node:path";
 import { z } from "zod";
 
 /**
- * The State file a claimed Ticket keeps, and what a later Run makes of it
- * (ADR-0004).
+ * The State file a Ticket keeps while its branch carries work worth resuming,
+ * and what a later Run makes of it (ADR-0004).
  *
- * A Ticket is resumable for as long as it is claimed, so the file is written as
- * part of the Claim and rewritten whenever the Ticket reaches something a later
- * Run should not pay for again. Two Runs read it. One is the Run that finds a
- * Ticket the subscription rate limit released: nothing was wrong with it, so the
- * Claim came off and this file says where to carry on from. The other is the Run
- * that finds a Ticket still claimed — the Run that claimed it was killed and
- * never released anything — and resumes it in place.
+ * A Ticket keeps the file for as long as there is work on its branch worth
+ * resuming, so it is written as part of the Claim and rewritten whenever the
+ * Ticket reaches something a later Run should not pay for again. Three Runs read
+ * it, and what the board says decides which. One finds a Ticket the subscription
+ * rate limit released: nothing was wrong with it, so the Claim came off and this
+ * file says where to carry on from. One finds a Ticket still claimed — the Run
+ * that claimed it was killed and never released anything — and resumes it in
+ * place. One finds a Ticket a human was handed and has relabelled
+ * `ready-for-agent`, which is the human handing it back. A Ticket still sitting
+ * in `ready-for-human` is none of them: its file is inert until a human moves
+ * the label or the issue closes.
  *
  * It lives beside the branch and worktree it is about, and like them it is local
  * and gitignored.
@@ -48,7 +52,8 @@ export interface TicketState {
   state: ReachedState;
   /**
    * Whether the Fix budget has been spent. Resuming must not hand the Ticket a
-   * second fix Stage it never earned.
+   * second fix Stage it never earned — except after a hand-off, which records it
+   * unspent, the Ticket having been through a human's hands since.
    */
   fixUsed: boolean;
   /**
@@ -95,7 +100,11 @@ export function writeTicketState(repoRoot: string, state: TicketState): void {
   writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`);
 }
 
-/** Forget a Ticket is resumable, which every Ticket that ended is. */
+/**
+ * Forget a Ticket is resumable: on merge, when the sweep finds its issue closed,
+ * when the worktree it names has gone, and on a hand-off over a branch no Stage
+ * of the Run ever worked on.
+ */
 export function clearTicketState(repoRoot: string, ticket: number): void {
   rmSync(statePath(repoRoot, ticket), { force: true });
 }

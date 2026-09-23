@@ -48,8 +48,10 @@ export interface StrandedSweep {
  * Four things can be behind a State file, and only one of them is stranded:
  *
  * - the Ticket still carries this user's Claim — stranded, and resumed in place
- * - the Claim has come off — a released Ticket, which the Frontier picks up on
- *   its own terms, so the sweep leaves it where it is
+ * - the Claim has come off — a released Ticket, or one handed to a human, and
+ *   neither is the sweep's: the Frontier picks up whichever of them is labelled
+ *   `ready-for-agent`, and a `ready-for-human` Ticket waits, inert, until a
+ *   human relabels it. Both are passed over in silence
  * - the Ticket has closed — there is nothing left to resume, so the file goes
  * - somebody else holds it now — a human took the Ticket over, and neither the
  *   Ticket nor the file is this Run's to touch; it is logged and left

@@ -46,6 +46,13 @@ export interface Issue {
   closed: boolean;
   labels: string[];
   assignees: string[];
+  /**
+   * Every comment on the issue, oldest first.
+   *
+   * The order is part of the answer: a Ticket can carry more than one comment
+   * wearing the same marker — a second progress table, a second hand-off — and
+   * the newest is the one the pipeline is writing now.
+   */
   comments: IssueComment[];
   /** How many native sub-issues it has; anything above zero is a Spec. */
   subIssues: number;
@@ -213,6 +220,16 @@ export interface Tracker {
   updateIssueBody(number: number, body: string): Promise<void>;
   createPullRequest(pr: CreatePullRequest): Promise<PullRequestRef>;
   convertPullRequestToDraft(number: number): Promise<void>;
+  /**
+   * Take an open pull request back out of draft.
+   *
+   * The other direction of {@link convertPullRequestToDraft}, and what a Run
+   * that takes a handed-off Ticket back from a human owes the pull request the
+   * Hand-off drafted: a draft cannot be merged. Asked before the wait for CI
+   * rather than at the merge, because a draft pull request often runs no
+   * workflows at all, and waiting on one first would read as "no checks".
+   */
+  markPullRequestReady(number: number): Promise<void>;
   /**
    * Replace the body of an open pull request.
    *

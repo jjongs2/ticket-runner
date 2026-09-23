@@ -17,6 +17,32 @@
 import type { IssueComment, Tracker } from "./ports/tracker.js";
 import { HANDOFF_MARKER, findMarkedComments, handoffTakenComment } from "./templates.js";
 
+/**
+ * Every hand-off comment the Ticket is still carrying as current, each with the
+ * body that would mark it as history.
+ *
+ * One question, asked twice: it is what the Claim edits, and it is also what
+ * says a human has been holding the Ticket since the last Run put it down.
+ */
+function unmarkedHandoffs(
+  comments: IssueComment[],
+): { comment: IssueComment; marked: string }[] {
+  return findMarkedComments(comments, HANDOFF_MARKER).flatMap((comment) => {
+    const marked = handoffTakenComment(comment.body);
+    return marked === undefined ? [] : [{ comment, marked }];
+  });
+}
+
+/**
+ * Whether a human has been holding the Ticket since the last Run put it down.
+ *
+ * Asked of the comments as they were when the Ticket was claimed, so the Run
+ * marking them now still sees the hand-off it is answering.
+ */
+export function carriesCurrentHandoff(comments: IssueComment[]): boolean {
+  return unmarkedHandoffs(comments).length > 0;
+}
+
 export interface HandoffOptions {
   tracker: Tracker;
   ticket: number;
@@ -42,12 +68,11 @@ export async function markHandoffsTaken({
   comments,
   log,
 }: HandoffOptions): Promise<void> {
-  for (const comment of findMarkedComments(comments, HANDOFF_MARKER)) {
-    const body = handoffTakenComment(comment.body);
-    if (body === undefined || comment.id === undefined) continue;
+  for (const { comment, marked } of unmarkedHandoffs(comments)) {
+    if (comment.id === undefined) continue;
 
     try {
-      await tracker.updateComment(comment.id, body);
+      await tracker.updateComment(comment.id, marked);
     } catch (error) {
       log?.(
         `#${ticket} could not mark a hand-off comment as history: ${(error as Error).message}`,

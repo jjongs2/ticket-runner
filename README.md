@@ -91,7 +91,7 @@ because a machine installs a tag: two machines that say `0.4.0` run the same cod
 development checkout runs whatever commit it has, so it adds that commit and a `dirty`
 mark when the tree has uncommitted changes — `0.4.0`, `0.4.0+331d79c`,
 `0.4.0+331d79c.dirty`. The same string heads the Run summary, every Progress comment, the
-`init` report and each State file a claimed Ticket keeps, so anything the pipeline wrote
+`init` report and each State file a Ticket keeps, so anything the pipeline wrote
 can be traced to the pipeline that wrote it (ADR-0007).
 
 `run` and `ticket` refuse a Target `init` has not set up rather than repairing it. A
@@ -209,7 +209,9 @@ in the foreground is a defect in that code, which is exactly what a fix Stage is
 that never finishes is somebody else's infrastructure, and stays budget-free.
 
 A failure the fix budget cannot cover hands the Ticket over instead: `ready-for-human`,
-unassigned, draft PR, branch and worktree preserved. Exit code is `0` when nothing was
+unassigned, draft PR, branch and worktree preserved — and the State file kept, so moving
+the label back to `ready-for-agent` hands the Ticket back and the next Run carries on from
+what it reached rather than implementing it again. Exit code is `0` when nothing was
 handed off, `1` when something was, and `2` when nothing was taken at all — the Run
 never started, or a guard refused the issue named. A `run` that skipped every candidate
 still exits `0`.
@@ -263,13 +265,13 @@ A branch nobody can account for is not reused. So before the worktree is created
 pipeline asks whether the Ticket's branch already exists locally, and hands the Ticket
 over at `setup` if it does, with a failure that names the branch and says what to do with
 it: delete it with `git branch -D <branch>` if the work on it is abandoned, or finish it
-by hand, then relabel the Ticket `ready-for-agent`. That is the ordinary hand-off —
-`ready-for-human` on, `in-progress` off, unassigned, State file cleared — and it costs the
-Ticket nothing, because the fix budget is never spent at `setup`. The same refusal meets a
-human who finished a handed-off Ticket and deleted `.worktrees/ticket-<n>` without deleting
-its branch, and a handed-off Ticket relabelled with its worktree untouched — there the
-failure names the worktree the branch is checked out in, since a branch git is holding is
-not one `git branch -D` can take.
+by hand, then relabel the Ticket `ready-for-agent`. It is the one hand-off whose State file
+is cleared — no Stage of the Run ran on that branch, so there is nothing of the pipeline's
+to resume — and it costs the Ticket nothing else, because the fix budget is never spent at
+`setup`. The same refusal meets a human who finished a handed-off Ticket and deleted
+`.worktrees/ticket-<n>` without deleting its branch, and a human branch that happens to
+share the Ticket's name — there the failure names the worktree the branch is checked out
+in, since a branch git is holding is not one `git branch -D` can take.
 
 The Run the limit stops fills no Lane after that Release. It does not wait for the limit to
 reset, and it claims nothing else: the limit that stopped one Stage would stop the next, so
@@ -327,8 +329,9 @@ Ticket it was holding keeps its Claim, and its branch and worktree keep the work
 State file is not written by the release; it is written as part of the Claim and kept
 current as the Ticket advances: `claimed` when the Claim is made, `implemented` once the
 implement Stage has committed, the pull request once one is open, the fix budget once a fix
-Stage has come back. It is removed when the Ticket merges and when it is handed off, which
-are the two ways a Ticket stops being resumable.
+Stage has come back. It is removed when the branch carries nothing left to resume — when
+the Ticket merges, when the sweep finds its issue closed, when the worktree it names has
+gone, and on the one hand-off at `setup` above.
 
 A Ticket left like that is a **stranded Ticket**: state recorded locally, and the Claim
 still on the board. No Frontier can offer one — it is claimed — so a `run` sweeps the local
@@ -346,7 +349,9 @@ wearing this checkout's Claim knows the Run that claimed it is gone.
 
 Not everything the sweep finds is stranded, and it resumes nothing else:
 
-- a Ticket whose Claim has come off is a released Ticket, and is left to the Frontier
+- a Ticket whose Claim has come off is left where it is: `ready-for-agent` means a released
+  Ticket, or one a human handed back, and the Frontier picks either up on its own terms;
+  `ready-for-human` means a human is still holding it, and nothing is said about it
 - a Ticket that has closed has nothing left to resume, so its State file is removed
 - a Ticket somebody else now holds is left alone and logged — a human took it over
 - a Ticket whose worktree is gone is taken from the top, in place, keeping its Claim —
@@ -359,6 +364,25 @@ Being killed is still worse than stopping: whatever the Stage was doing is lost,
 worktree the Run left mid-rebase is aborted back to the branch tip before the Checks grade
 it. What the sweep buys is that no human has to unpick the labels and the assignee before
 the Ticket can move again.
+
+## Handing a Ticket back
+
+A hand-off leaves the branch, the worktree and the State file exactly where they are, so
+moving the label from `ready-for-human` to `ready-for-agent` is the whole of handing the
+Ticket back. The next Run finds it on the Frontier and carries on from the state it had
+reached: a Ticket that got as far as `implemented` goes straight to the Checks, and the
+implement Stage is not paid for a second time. Until that relabel the file is inert —
+no Frontier can offer a `ready-for-human` Ticket, the sweep passes over it in silence,
+and `ticket <n>` naming it is refused as not ready — and the sweep forgets it altogether
+once the issue closes, so finishing the work by hand leaves nothing behind.
+
+Two things about the Ticket are not what the failing Run left. Its fix budget comes back
+unspent, because the Ticket has been through a human's hands and whatever they did to it
+is what a fresh budget is for; the hand-off comment still says the budget was spent, which
+is what happened. And the draft PR the hand-off opened is taken back out of draft before
+CI is awaited, since a draft cannot be merged and often runs no workflows at all. A PR that
+will not come out of draft — one a human closed, say — hands the Ticket straight back: the
+close said the work was not to be continued.
 
 ## What a Ticket gets told
 
@@ -380,8 +404,10 @@ notification, not a dozen, and the table reads top to bottom as the Run happened
 ```
 
 A later Run finds that comment by its marker and carries on in it rather than starting a
-second table. Details never go in a cell: a hand-off, its evidence and a guard warning
-stay comments of their own, because those are the ones worth a notification.
+second table. A Run taking the Ticket back from a human is the exception: it posts a table
+of its own and leaves the one the human read as they read it. Details never go in a cell:
+a hand-off, its evidence and a guard warning stay comments of their own, because those are
+the ones worth a notification.
 
 When the Ticket merges, every criterion the Verdict marked `met` is ticked where it is
 written, in the body or in the comment triage posted it in. An `unverifiable` one is

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PROGRESS_MARKER, Progress, findProgressComment, progressComment } from "./progress.js";
 import type { IssueComment } from "./ports/tracker.js";
+import { HANDOFF_MARKER, HANDOFF_TAKEN_LINE } from "./templates.js";
 import { FakeTracker } from "./testing/fakes.js";
 
 const TICKET = 2;
@@ -123,6 +124,15 @@ describe("finding the comment again", () => {
   it("finds nothing on a Ticket no Stage has reported on", () => {
     expect(findProgressComment([])).toBeUndefined();
   });
+
+  it("finds the newest of several, which is the one this Run posted", () => {
+    const found = findProgressComment([
+      { id: "1", body: `${PROGRESS_MARKER}\nwhat a human read before the hand-off` },
+      { id: "2", body: `${PROGRESS_MARKER}\nwhat the Run that took it back posted` },
+    ]);
+
+    expect(found?.id).toBe("2");
+  });
 });
 
 describe("recording a Stage", () => {
@@ -172,6 +182,37 @@ describe("recording a Stage", () => {
 
     expect(tracker.updatedComments[0]?.body).toContain("run `run-1`");
     expect(tracker.updatedComments[0]?.body).not.toContain("run `run-0`");
+  });
+
+  it("starts a fresh comment when the Ticket is being taken back from a human", async () => {
+    const tracker = new FakeTracker();
+    const issue = tracker.addIssue({ number: TICKET });
+    issue.comments.push({ id: "42", body: `${PROGRESS_MARKER}\nwhat the human read` });
+    issue.comments.push({ id: "43", body: HANDOFF_MARKER + "\n**Handed off.**" });
+
+    await progress(tracker, issue.comments).record({ point: "checks", outcome: "✅ passed" });
+
+    // The table the human was handed stays as they read it; this Run reports
+    // beside it rather than over it.
+    expect(tracker.updatedComments).toEqual([]);
+    expect(tracker.comments).toHaveLength(1);
+  });
+
+  it("carries on in the comment when the hand-off it finds is already history", async () => {
+    const tracker = new FakeTracker();
+    const issue = tracker.addIssue({ number: TICKET });
+    issue.comments.push({ id: "42", body: `${PROGRESS_MARKER}\nwhat an earlier Run wrote` });
+    issue.comments.push({
+      id: "43",
+      body: `${HANDOFF_MARKER}\n${HANDOFF_TAKEN_LINE}\n\n**Handed off.**`,
+    });
+
+    await progress(tracker, issue.comments).record({ point: "checks", outcome: "✅ passed" });
+
+    // A hand-off a Run already took back is not a human holding the Ticket: this
+    // is the same Run's second reading of the Ticket, or a later resume of it.
+    expect(tracker.comments).toEqual([]);
+    expect(tracker.updatedComments.map(({ id }) => id)).toEqual(["42"]);
   });
 
   it("starts a fresh comment when the one already there cannot be edited", async () => {

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { markHandoffsTaken } from "./handoff.js";
+import { carriesCurrentHandoff, markHandoffsTaken } from "./handoff.js";
 import type { IssueComment } from "./ports/tracker.js";
 import { PROGRESS_MARKER } from "./progress.js";
-import { HANDOFF_TAKEN_LINE, handoffComment } from "./templates.js";
+import { HANDOFF_TAKEN_LINE, handoffComment, handoffTakenComment } from "./templates.js";
 import { FakeTracker } from "./testing/fakes.js";
 
 const TICKET = 2;
@@ -133,5 +133,29 @@ describe("marking a hand-off as history", () => {
     await markHandoffsTaken({ tracker, ticket: TICKET, comments });
 
     expect(tracker.calls).toEqual([]);
+  });
+});
+
+describe("a hand-off the Ticket is still carrying", () => {
+  it("is what a Ticket a human is holding looks like", () => {
+    expect(carriesCurrentHandoff([{ id: "c1", body: HANDOFF }])).toBe(true);
+  });
+
+  it("is not one a later Run has already marked as history", () => {
+    const taken = handoffTakenComment(HANDOFF) as string;
+
+    expect(carriesCurrentHandoff([{ id: "c1", body: taken }])).toBe(false);
+  });
+
+  it("is still current when only one of several has been marked", () => {
+    const taken = handoffTakenComment(HANDOFF) as string;
+
+    expect(carriesCurrentHandoff([{ id: "c1", body: taken }, { id: "c2", body: HANDOFF }])).toBe(
+      true,
+    );
+  });
+
+  it("is nothing on a Ticket that was never handed off", () => {
+    expect(carriesCurrentHandoff([{ id: "c1", body: `${PROGRESS_MARKER}\na table` }])).toBe(false);
   });
 });

@@ -97,6 +97,19 @@ describe("what the sweep leaves alone", () => {
     expect(existsSync(statePath(repoRoot, 4))).toBe(true);
   });
 
+  it("passes over a handed-off Ticket in silence, leaving its file and Claim", async () => {
+    tracker.addIssue({ number: 4, labels: ["ready-for-human"] });
+    recorded(4);
+
+    expect(await sweep()).toEqual([]);
+    // Inert: no Frontier can offer it and nothing here touches it, so it waits
+    // exactly as it is until a human relabels it or the issue closes.
+    expect(existsSync(statePath(repoRoot, 4))).toBe(true);
+    expect(tracker.issue(4).labels).toEqual(["ready-for-human"]);
+    expect(tracker.issue(4).assignees).toEqual([]);
+    expect(logged).toEqual([]);
+  });
+
   it("passes over a Ticket assigned to nobody but still labelled in-progress", async () => {
     tracker.addIssue({ number: 4, labels: [IN_PROGRESS] });
     recorded(4);
