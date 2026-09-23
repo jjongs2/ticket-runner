@@ -334,15 +334,18 @@ function rateLimited(
 }
 
 /**
- * The Stage's structured output, from whichever `result` event carries one.
+ * The Stage's structured output, from the last `result` event that carries one.
  *
- * The session answers the schema when its main turn ends, which is the first
- * event; a waking for a background agent ends with an event that carries none.
- * Reading only the last event would drop a Verdict or the Notes over a review
- * the session had waited for.
+ * The session answers the schema when its main turn ends, and may answer it
+ * again from a waking for a background agent, once a review it spawned has
+ * come back. The later answer is the one it stands by: sessions repeat every
+ * Note they keep and add the ones the review turned up, so keeping the first
+ * would drop those. A waking that answers nothing ends with an event that
+ * carries no structured output, and that erases no earlier answer, which is why
+ * reading only the last event would not do either.
  */
 function structuredOutput(results: ResultEvent[]): unknown {
-  for (const result of results) {
+  for (const result of results.toReversed()) {
     const output = structuredOutputOf(result);
     if (output !== undefined) return output;
   }

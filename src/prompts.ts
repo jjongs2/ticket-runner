@@ -25,8 +25,12 @@ export const SELF_HOSTING_GUIDANCE = `This checkout is the pipeline that started
 const implementGuidance = (base: string) => `This session is unattended. Follow this guidance as well as the skill's own:
 
 - Confirm the Ticket title matches what you are about to build before you start.
-- Make an initial commit before running code-review, so the reviewed diff is not empty.
+- Make an initial commit before running \`/mattpocock-skills:code-review\`, so the reviewed diff is not empty.
 - Your first commit's subject becomes the pull request title and the squash commit on \`${base}\`, so write it in the convention \`${CONVENTIONS_PATH}\` states and make it summarise the whole Ticket, not just that first commit.
+- The review the skill asks for is \`/mattpocock-skills:code-review\`. Invoke it by that full name: the short name also matches the CLI's own built-in review skill, which runs neither the Standards review nor the Spec review.
+- Spawn its review sub-agents with \`run_in_background: false\` set explicitly, several in one message so they still run in parallel. Omitting \`run_in_background\` runs them in the background as well, and you would then reach your answer before the review has come back.
+- Do not answer the schema until the review has returned and the fixes you take from it are committed. An answer you have already given does not stop you committing: the pipeline waits for this session to exit before it reads the branch.
+- A later answer replaces an earlier one, so if you answer again, repeat every Note you still stand by.
 - Do not spawn nested review agents beyond what the skill itself does.
 - Do not open pull requests and do not close the issue; the pipeline does both.
 - Commit all of your work to the branch that is already checked out.`;

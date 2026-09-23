@@ -47,6 +47,38 @@ describe("implementPrompt", () => {
     expect(prompt).not.toMatch(/the repo's commit convention/);
   });
 
+  // A bare `/code-review` also matches the CLI's own built-in skill.
+  it("names the review skill by its plugin wherever it refers to it", () => {
+    const mentions = implementPrompt(url, BASE, "").match(/\S*code-review\S*/g) ?? [];
+
+    expect(mentions.length).toBeGreaterThan(0);
+    for (const mention of mentions) {
+      expect(mention).toMatch(/^`?\/mattpocock-skills:code-review\b/);
+    }
+  });
+
+  it("asks for review sub-agents in the foreground, since omitting the flag backgrounds them", () => {
+    const prompt = implementPrompt(url, BASE, "");
+
+    expect(prompt).toContain("`run_in_background: false`");
+    expect(prompt).toMatch(/omitt\w* .*run_in_background.* in the background/i);
+  });
+
+  it("holds the answer until the review has returned and its fixes are committed", () => {
+    const prompt = implementPrompt(url, BASE, "");
+
+    expect(prompt).toMatch(/do not answer .*until .*review has returned/i);
+    expect(prompt).toMatch(/fixes .*committed/i);
+    expect(prompt).toMatch(/answer you have already given does not stop you committing/i);
+  });
+
+  it("says a later answer replaces an earlier one and must repeat the Notes it keeps", () => {
+    const prompt = implementPrompt(url, BASE, "");
+
+    expect(prompt).toMatch(/later answer replaces an earlier one/i);
+    expect(prompt).toMatch(/repeat every Note/i);
+  });
+
   it("appends the configured extra prompt after the guidance", () => {
     const prompt = implementPrompt(url, BASE, "Prefer table-driven tests.");
 
