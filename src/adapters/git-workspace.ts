@@ -146,9 +146,15 @@ export class GitWorkspace implements Workspace {
    * NUL-separated, so a path git would otherwise quote comes back as it is
    * spelt. Ignored files stay out, which is git's default; a whole untracked
    * directory is named once, as the directory, which is also git's default.
+   * The untracked mode is spelt out so a Target's status.showUntrackedFiles
+   * cannot hide an uncommitted file.
    */
   async uncommittedPaths(cwd: string): Promise<string[]> {
-    const { stdout } = await execOrThrow("git", ["status", "--porcelain", "-z"], { cwd });
+    const { stdout } = await execOrThrow(
+      "git",
+      ["status", "--porcelain", "-z", "--untracked-files=normal"],
+      { cwd },
+    );
     const entries = stdout.split("\0");
     const paths: string[] = [];
     for (let i = 0; i < entries.length; i++) {

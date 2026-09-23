@@ -342,6 +342,13 @@ describe("uncommittedPaths", () => {
     expect(await workspace.uncommittedPaths(path)).toEqual(["new file.ts"]);
   });
 
+  it("names an untracked file even where git is configured to hide untracked files", async () => {
+    git(path, "config", "status.showUntrackedFiles", "no");
+    writeFileSync(join(path, "new file.ts"), "untracked\n");
+
+    expect(await workspace.uncommittedPaths(path)).toEqual(["new file.ts"]);
+  });
+
   it("names a renamed file by where it went", async () => {
     git(path, "mv", "README.md", "READ.md");
 
