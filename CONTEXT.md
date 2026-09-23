@@ -103,7 +103,7 @@ The structured result of Verify: one status per criterion (met, unmet, unverifia
 _Avoid_: report, review result, score
 
 **Fix budget**:
-The single fix Stage a Ticket is allowed each time the pipeline takes it up. A failing Check, including one the wall-clock limit killed, an unmet criterion or a red CI spends it, and processing resumes at the Checks — unless the fix Stage came back without committing anything, which ends the Ticket where it stands rather than re-grading a branch nobody touched. A second failure of any kind is a Hand-off. A Release carries a spent budget over, having changed nothing about the Ticket; a Hand-off restores it, because the Ticket only comes back through a human's hands and whatever they did to it is what the fresh budget is for.
+The single fix Stage a Ticket is allowed each time the pipeline takes it up. Uncommitted work a Stage left in the worktree, a failing Check, including one the wall-clock limit killed, an unmet criterion or a red CI spends it, and processing resumes at the Checks — unless the fix Stage came back without committing anything, which ends the Ticket where it stands rather than re-grading a branch nobody touched. A second failure of any kind is a Hand-off. A Release carries a spent budget over, having changed nothing about the Ticket; a Hand-off restores it, because the Ticket only comes back through a human's hands and whatever they did to it is what the fresh budget is for.
 _Avoid_: retry budget, fix limit, second chance
 
 **Hand-off**:

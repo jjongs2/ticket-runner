@@ -88,6 +88,16 @@ export interface Workspace {
    * good.
    */
   runCheck(command: string, cwd: string, timeoutMs: number): Promise<CheckOutcome>;
+  /**
+   * The paths in the worktree at `cwd` that no commit carries: tracked files
+   * modified or staged, and untracked files git does not ignore. None when the
+   * worktree is exactly its branch tip.
+   *
+   * Asked before the Checks grade a pass, because the branch is what lands and
+   * a Stage that left its last changes uncommitted would otherwise be graded on
+   * code the pull request never carries.
+   */
+  uncommittedPaths(cwd: string): Promise<string[]>;
   /** Restore the worktree to its committed state, tracked and untracked. */
   discardChanges(cwd: string): Promise<void>;
   /**

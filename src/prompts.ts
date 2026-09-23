@@ -19,6 +19,14 @@ export const SELF_HOSTING_GUIDANCE = `This checkout is the pipeline that started
 - ${STAGE_ENV_VAR} is set in this shell and the pipeline's own CLI refuses to start while it is. That refusal is expected; do not work around it.`;
 
 /**
+ * How the two Stages that write code are told to finish. A session ends with its
+ * turn and stops every background task it started, so a session that hands its
+ * last commit to a test run it left in the background never makes that commit.
+ */
+const FINISH_GUIDANCE = `- Never end your turn while uncommitted work waits on a background task: the session ends with your turn and stops that task, and the work is never committed. Run your final tests in the foreground, then commit.
+- Leave the worktree clean: commit your work and remove anything else you made. The pipeline refuses a worktree holding changes no commit carries.`;
+
+/**
  * Guidance appended to every implement Stage, working around known defects of
  * the `implement` skill in an unattended session.
  */
@@ -31,6 +39,7 @@ const implementGuidance = (base: string) => `This session is unattended. Follow 
 - Spawn its review sub-agents with \`run_in_background: false\` set explicitly, several in one message so they still run in parallel. Omitting \`run_in_background\` still runs them in the background, and you would then reach your answer before the review has come back.
 - Do not answer the schema until the review has returned and the fixes you take from it are committed. An answer you have already given does not stop you committing: the pipeline waits for this session to exit before it reads the branch.
 - A later answer replaces an earlier one, so if you answer again, repeat every Note you still stand by.
+${FINISH_GUIDANCE}
 - Do not spawn nested review agents beyond what the skill itself does.
 - Do not open pull requests and do not close the issue; the pipeline does both.
 - Commit all of your work to the branch that is already checked out.`;
@@ -114,6 +123,7 @@ const FIX_INSTRUCTIONS = `You are the fix Stage of an unattended pipeline. The T
 - Start from the evidence: reproduce the failure, find what actually causes it, and fix that rather than the symptom.
 - Where the failure is an unmet Acceptance Criterion, add the regression test that would have caught it and commit it with the fix.
 - Stay inside this Ticket's Acceptance Criteria. Anything else you find belongs to another Ticket, not to this session; record it as a Note rather than mending it.
+${FINISH_GUIDANCE}
 - Write commit subjects in the convention \`${CONVENTIONS_PATH}\` states. The pipeline re-runs the Checks and the verify Stage as soon as you finish.`;
 
 const conflictInstructions = (base: string) => `You are the conflict Stage of an unattended pipeline. The Ticket below is already implemented on the branch you are on, and rebasing it onto \`${base}\` stopped on a conflict. That rebase is still in progress in this worktree, and finishing it is the whole of your job.
@@ -126,6 +136,8 @@ const conflictInstructions = (base: string) => `You are the conflict Stage of an
 
 /** How the fix prompt announces each kind of failure. */
 const failureSentences = (base: string): Record<FailureKind, string> => ({
+  "uncommitted-work":
+    "the Stage before you left changes in this worktree it never committed, listed below; commit what belongs to this Ticket and discard the rest",
   "failed-check": "a Check the pipeline runs itself failed",
   "unmet-criteria": "the verify Stage found unmet Acceptance Criteria",
   "failed-ci": "a pull request check failed after the branch was pushed",

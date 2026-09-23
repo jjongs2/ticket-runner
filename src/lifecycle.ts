@@ -22,9 +22,13 @@ export type FailurePoint =
  * came back, a Verdict with no evidence in it, a pull request whose checks
  * timed out or never ran. A rebase conflict is on this list only once the
  * conflict Stage has failed to resolve it, which is what makes it a defect in
- * the branch rather than a state nobody has tried to mend yet.
+ * the branch rather than a state nobody has tried to mend yet. Uncommitted work
+ * is on it because the branch is what lands: a Stage that stopped short of
+ * committing left code the pull request would never carry, and committing it
+ * is a job for a session that can tell what belongs to the Ticket.
  */
 export type FailureKind =
+  | "uncommitted-work"
   | "failed-check"
   | "unmet-criteria"
   | "failed-ci"

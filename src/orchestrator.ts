@@ -173,10 +173,11 @@ function asTicketFailure(error: unknown, point: FailurePoint): TicketFailure {
  * Take one Ticket from claimed to merged, hand it to a human, or pass it over.
  *
  * The happy path is: guards → claim → worktree and branch → implement Stage →
- * Checks → verify Stage → rebase → PR → CI → squash merge → cleanup. A failing
- * Check, an unmet criterion, a red CI or a rebase conflict the conflict Stage
- * could not resolve spends the Ticket's fix budget and starts again at the
- * Checks; every other failure, and every second failure, ends in a hand-off.
+ * Checks → verify Stage → rebase → PR → CI → squash merge → cleanup. Work left
+ * uncommitted, a failing Check, an unmet criterion, a red CI or a rebase
+ * conflict the conflict Stage could not resolve spends the Ticket's fix budget
+ * and starts again at the Checks; every other failure, and every second
+ * failure, ends in a hand-off.
  * Nothing ends in a merge that has not been through a green pass of the whole
  * gauntlet.
  *
@@ -367,6 +368,12 @@ async function takeTicket(
     for (;;) {
       try {
         point = "checks";
+        // Before anything grades the worktree, because what lands is the
+        // branch: a Stage that stopped short of committing would otherwise
+        // pass the Checks and the Verdict on code the pull request never
+        // carries, and verify would then discard it. The Stage that wrote code
+        // last is the one that left it — the fix Stage, once one has run.
+        await requireCommitted(pipeline, worktree, fixUsed ? "fix" : "implement", progress);
         await runChecks(pipeline, worktree, progress);
         point = "verify";
         verdict = await verify(pipeline, issue, worktree, logDir, progress, notes);
@@ -864,6 +871,30 @@ async function implement(
   }
 
   await progress.record(stageRow("implement", result, "✅ committed"));
+}
+
+/**
+ * Refuse a worktree holding changes no commit carries, naming every path.
+ *
+ * Nothing is discarded here: a fix Stage sent in for it decides what belongs
+ * to the Ticket, and a hand-off leaves the changes where a human can find them.
+ */
+async function requireCommitted(
+  pipeline: Pipeline,
+  worktree: string,
+  stage: "implement" | "fix",
+  progress: Progress,
+): Promise<void> {
+  const paths = await pipeline.workspace.uncommittedPaths(worktree);
+  if (paths.length === 0) return;
+
+  await progress.record({ point: "checks", outcome: "❌ uncommitted work" });
+  throw new TicketFailure(
+    "checks",
+    `the ${stage} Stage left changes it never committed`,
+    paths.join("\n"),
+    "uncommitted-work",
+  );
 }
 
 async function runChecks(
