@@ -1249,6 +1249,92 @@ describe("a fix Stage that committed nothing", () => {
   });
 });
 
+describe("uncommitted work", () => {
+  /** How many Checks had run by the time the fix Stage started. */
+  let checksBeforeFix: number | undefined;
+
+  beforeEach(() => {
+    checksBeforeFix = undefined;
+    // A fix Stage that commits what it found and leaves the worktree clean.
+    runner.leaves("fix", () => {
+      checksBeforeFix = workspace.ranChecks.length;
+      workspace.commits.push("fix(cli): commit the review fixes (#2)");
+      workspace.uncommitted = [];
+    });
+  });
+
+  it("sends a fix Stage in with the paths before any Check grades the worktree", async () => {
+    runner.leaves("implement", () => {
+      workspace.uncommitted = ["src/cli.ts", "src/new.test.ts"];
+    });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).toEqual(["implement", "fix", "verify"]);
+    expect(checksBeforeFix).toBe(0);
+    const prompt = runner.prompts("fix")[0] as string;
+    expect(prompt).toMatch(/left changes .*never committed/i);
+    expect(prompt).toContain("src/cli.ts");
+    expect(prompt).toContain("src/new.test.ts");
+    expect(progressTable()).toContain("| checks | ❌ uncommitted work |");
+  });
+
+  it("spends the fix budget on it", async () => {
+    runner.leaves("implement", () => {
+      workspace.uncommitted = ["src/cli.ts"];
+    });
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "verify" });
+    expect(handoffBody()).toContain("after the fix budget was used");
+  });
+
+  it("hands the Ticket off when the fix Stage leaves some too, keeping the changes", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    runner.leaves("fix", () => {
+      workspace.commits.push("fix(cli): mend the thing (#2)");
+      workspace.uncommitted = ["src/cli.ts"];
+    });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "checks" });
+    expect(runner.stages()).toEqual(["implement", "fix"]);
+    expect(workspace.ranChecks.map((check) => check.command)).toEqual(["npm test"]);
+    expect(handoffBody()).toContain("the worktree holds changes no commit carries");
+    expect(handoffBody()).toContain("src/cli.ts");
+    expect(handoffBody()).toContain("after the fix budget was used");
+    expect(workspace.uncommitted).toEqual(["src/cli.ts"]);
+    expect(workspace.calls.some((call) => call.startsWith("discardChanges"))).toBe(false);
+  });
+
+  it("reaches the Checks exactly as before from a clean worktree", async () => {
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).toEqual(["implement", "verify"]);
+    const calls = workspace.calls;
+    expect(calls).toContain(`uncommittedPaths:${worktree}`);
+    expect(calls.indexOf(`uncommittedPaths:${worktree}`)).toBeLessThan(calls.indexOf("runCheck:npm test"));
+    expect(progressTable()).not.toContain("uncommitted");
+  });
+
+  it("still hands off an implement Stage that left no commits at all", async () => {
+    runner.leaves("implement", () => {
+      workspace.commits = [];
+      workspace.uncommitted = ["src/cli.ts"];
+    });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "implement" });
+    expect(handoffBody()).toContain("the implement Stage left no new commits on the branch");
+  });
+});
+
 describe("the fix budget", () => {
   it("is one: a Check that fails twice is handed off", async () => {
     workspace.failCheck("npm test", "FAIL src/a.test.ts");

@@ -142,6 +142,32 @@ export class GitWorkspace implements Workspace {
     return { ok: false, output: result.output, timedOut: result.timedOut };
   }
 
+  /**
+   * NUL-separated, so a path git would otherwise quote comes back as it is
+   * spelt. Ignored files stay out, which is git's default; a whole untracked
+   * directory is named once, as the directory, which is also git's default.
+   * The untracked mode is spelt out so a Target's status.showUntrackedFiles
+   * cannot hide an uncommitted file.
+   */
+  async uncommittedPaths(cwd: string): Promise<string[]> {
+    const { stdout } = await execOrThrow(
+      "git",
+      ["status", "--porcelain", "-z", "--untracked-files=normal"],
+      { cwd },
+    );
+    const entries = stdout.split("\0");
+    const paths: string[] = [];
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i] ?? "";
+      if (entry === "") continue;
+      paths.push(entry.slice(3));
+      // A rename or a copy is followed by the path it came from, which no
+      // longer holds anything to commit.
+      if (/[RC]/.test(entry.slice(0, 2))) i++;
+    }
+    return paths;
+  }
+
   async discardChanges(cwd: string): Promise<void> {
     await execOrThrow("git", ["reset", "--hard"], { cwd });
     // No -x: gitignored files such as node_modules are not the agent's scratch.

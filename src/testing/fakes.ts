@@ -395,6 +395,12 @@ export class FakeWorkspace implements Workspace {
   /** The branch's commit subjects, oldest first, as an implement Stage leaves them. */
   commits = ["feat(cli): do the thing (#2)", "test(cli): cover the thing (#2)"];
   coAuthorList: string[] = [];
+  /**
+   * The paths no commit carries, as a Stage that stopped short of committing
+   * leaves them. Empty is a worktree that is exactly its branch tip, and a
+   * discard empties it, as `git reset --hard && git clean` does.
+   */
+  uncommitted: string[] = [];
   /** Check outcomes that stick, per command; a command with none always passes. */
   checkOutcomes = new Map<string, CheckOutcome>();
   /** Outcomes for the next runs of a command; `checkOutcomes` answers once they run out. */
@@ -500,8 +506,14 @@ export class FakeWorkspace implements Workspace {
     );
   }
 
+  async uncommittedPaths(cwd: string): Promise<string[]> {
+    this.calls.push(`uncommittedPaths:${cwd}`);
+    return [...this.uncommitted];
+  }
+
   async discardChanges(cwd: string): Promise<void> {
     this.calls.push(`discardChanges:${cwd}`);
+    this.uncommitted = [];
   }
 
   async rebase(_cwd: string, base: string): Promise<RebaseOutcome> {

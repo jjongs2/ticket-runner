@@ -52,7 +52,7 @@ Ticket for a later Run to resume.
 |---|---|
 | implement | `✅ committed`, `❌ no commits`, `⏸ rate limited`, `❌ <why the Stage did not finish>` |
 | fix | `✅ committed`, `❌ no commits`, `⏸ rate limited`, `❌ <why the Stage did not finish>` |
-| checks | `✅ passed`, ``❌ `<command>` failed``, ``❌ `<command>` timed out`` |
+| checks | `✅ passed`, `❌ uncommitted work`, ``❌ `<command>` failed``, ``❌ `<command>` timed out`` |
 | verify | `✅ <k> met · <u> unverifiable`, `❌ <k> unmet`, `❌ no evidence`, `❌ no Verdict`, `⏸ rate limited`, `❌ <why the Stage did not finish>` |
 | conflict | `✅ rebased`, `❌ unresolved`, `⏸ rate limited`, `❌ unknown` |
 | ci | `✅ passed`, `❌ failed`, `❌ no checks`, `⚠️ no checks`, `❌ timed out` |
@@ -61,6 +61,11 @@ Ticket for a later Run to resume.
 A `checks` row tells a command that exited non-zero from one the wall-clock
 limit killed: both are the same failure to the fix budget, but a hang is not a
 failing assertion, and a fix Stage is told which it is mending.
+
+`❌ uncommitted work` is the `checks` row no command wrote: the worktree held
+changes no commit carries, so no Check ran. What lands is the branch, and a
+worktree graded with work the branch lacks would pass on code the pull request
+never carries.
 
 `<why the Stage did not finish>` is the short form of a Stage failure: `timed
 out`, `turn capped`, `exited non-zero`, `invalid result`, or `failed` when the

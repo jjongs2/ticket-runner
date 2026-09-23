@@ -21,6 +21,17 @@ const FAILED_CHECK = {
   evidence: "FAIL src/a.test.ts",
 };
 
+/**
+ * What both code Stages are told about finishing: a session ends with its turn
+ * and stops every background task with it, so work waiting on one is lost.
+ */
+function expectsForegroundFinish(prompt: string): void {
+  expect(prompt).toMatch(
+    /never end your turn while uncommitted work waits on a background task/i,
+  );
+  expect(prompt).toMatch(/run your final tests in the foreground/i);
+}
+
 describe("implementPrompt", () => {
   it("begins with the skill invocation and the full issue URL", () => {
     expect(implementPrompt(url, BASE, "").split("\n")[0]).toBe(
@@ -77,6 +88,10 @@ describe("implementPrompt", () => {
 
     expect(prompt).toMatch(/later answer replaces an earlier one/i);
     expect(prompt).toMatch(/repeat every Note/i);
+  });
+
+  it("keeps uncommitted work off a background task and the final tests in the foreground", () => {
+    expectsForegroundFinish(implementPrompt(url, BASE, ""));
   });
 
   it("appends the configured extra prompt after the guidance", () => {
@@ -137,6 +152,29 @@ describe("fixPrompt", () => {
     expect(
       fixPrompt(url, { ...FAILED_CHECK, kind: "unresolved-conflict" }, BASE, ""),
     ).toMatch(/conflicts with main/i);
+    expect(fixPrompt(url, { ...FAILED_CHECK, kind: "uncommitted-work" }, BASE, "")).toMatch(
+      /the Stage before you left changes .*never committed/i,
+    );
+  });
+
+  it("asks for what belongs to the Ticket committed and the rest discarded", () => {
+    const prompt = fixPrompt(
+      url,
+      {
+        kind: "uncommitted-work",
+        summary: "the implement Stage left changes it never committed",
+        evidence: "src/cli.ts",
+      },
+      BASE,
+      "",
+    );
+
+    expect(prompt).toMatch(/commit what belongs to this Ticket and discard the rest/i);
+    expect(prompt).toContain("src/cli.ts");
+  });
+
+  it("keeps uncommitted work off a background task and the final tests in the foreground", () => {
+    expectsForegroundFinish(fixPrompt(url, FAILED_CHECK, BASE, ""));
   });
 
   it("names the conventions document rather than \"the repo's commit convention\"", () => {

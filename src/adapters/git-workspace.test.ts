@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -307,6 +307,52 @@ describe("discardChanges", () => {
     await workspace.discardChanges(path);
 
     expect(existsSync(join(path, "keep.txt"))).toBe(true);
+  });
+});
+
+describe("uncommittedPaths", () => {
+  let path: string;
+
+  beforeEach(async () => {
+    path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
+  });
+
+  it("finds nothing in a worktree whose every change is committed", async () => {
+    commit(path, "a.txt", "a\n", "feat: a (#2)");
+
+    expect(await workspace.uncommittedPaths(path)).toEqual([]);
+  });
+
+  it("names a tracked file that was modified, staged or not", async () => {
+    commit(path, "a.txt", "a\n", "feat: a (#2)");
+    writeFileSync(join(path, "README.md"), "edited\n");
+    writeFileSync(join(path, "a.txt"), "staged\n");
+    git(path, "add", "a.txt");
+
+    expect((await workspace.uncommittedPaths(path)).sort()).toEqual(["README.md", "a.txt"]);
+  });
+
+  it("names an untracked file git does not ignore, and not one it does", async () => {
+    commit(path, ".gitignore", "build/\n", "chore: ignore build (#2)");
+    mkdirSync(join(path, "build"));
+    writeFileSync(join(path, "build", "out.js"), "ignored\n");
+    writeFileSync(join(path, "new file.ts"), "untracked\n");
+
+    expect(await workspace.uncommittedPaths(path)).toEqual(["new file.ts"]);
+  });
+
+  it("names an untracked file even where git is configured to hide untracked files", async () => {
+    git(path, "config", "status.showUntrackedFiles", "no");
+    writeFileSync(join(path, "new file.ts"), "untracked\n");
+
+    expect(await workspace.uncommittedPaths(path)).toEqual(["new file.ts"]);
+  });
+
+  it("names a renamed file by where it went", async () => {
+    git(path, "mv", "README.md", "READ.md");
+
+    expect(await workspace.uncommittedPaths(path)).toEqual(["READ.md"]);
   });
 });
 
