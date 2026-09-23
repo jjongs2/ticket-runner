@@ -18,18 +18,29 @@ import type { IssueComment, Tracker } from "./ports/tracker.js";
 import { HANDOFF_MARKER, findMarkedComments, handoffTakenComment } from "./templates.js";
 
 /**
- * Whether the Ticket is carrying a hand-off nothing has taken back yet — which
- * is to say, whether a human has been holding it since the last Run put it down.
+ * Every hand-off comment the Ticket is still carrying as current, each with the
+ * body that would mark it as history.
  *
- * Read off the comments the Claim marks: one not yet marked as history is the
- * hand-off a human answered by relabelling the Ticket. Asked of the comments as
- * they were when the Ticket was claimed, so the Run marking them now still sees
- * the hand-off it is answering.
+ * One question, asked twice: it is what the Claim edits, and it is also what
+ * says a human has been holding the Ticket since the last Run put it down.
+ */
+function unmarkedHandoffs(
+  comments: IssueComment[],
+): { comment: IssueComment; marked: string }[] {
+  return findMarkedComments(comments, HANDOFF_MARKER).flatMap((comment) => {
+    const marked = handoffTakenComment(comment.body);
+    return marked === undefined ? [] : [{ comment, marked }];
+  });
+}
+
+/**
+ * Whether a human has been holding the Ticket since the last Run put it down.
+ *
+ * Asked of the comments as they were when the Ticket was claimed, so the Run
+ * marking them now still sees the hand-off it is answering.
  */
 export function carriesCurrentHandoff(comments: IssueComment[]): boolean {
-  return findMarkedComments(comments, HANDOFF_MARKER).some(
-    (comment) => handoffTakenComment(comment.body) !== undefined,
-  );
+  return unmarkedHandoffs(comments).length > 0;
 }
 
 export interface HandoffOptions {
@@ -57,12 +68,11 @@ export async function markHandoffsTaken({
   comments,
   log,
 }: HandoffOptions): Promise<void> {
-  for (const comment of findMarkedComments(comments, HANDOFF_MARKER)) {
-    const body = handoffTakenComment(comment.body);
-    if (body === undefined || comment.id === undefined) continue;
+  for (const { comment, marked } of unmarkedHandoffs(comments)) {
+    if (comment.id === undefined) continue;
 
     try {
-      await tracker.updateComment(comment.id, body);
+      await tracker.updateComment(comment.id, marked);
     } catch (error) {
       log?.(
         `#${ticket} could not mark a hand-off comment as history: ${(error as Error).message}`,

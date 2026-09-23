@@ -52,7 +52,7 @@ export interface TicketState {
   state: ReachedState;
   /**
    * Whether the Fix budget has been spent. Resuming must not hand the Ticket a
-   * second fix Stage it never earned — except after a Hand-off, which records it
+   * second fix Stage it never earned — except after a hand-off, which records it
    * unspent, the Ticket having been through a human's hands since.
    */
   fixUsed: boolean;
@@ -102,7 +102,7 @@ export function writeTicketState(repoRoot: string, state: TicketState): void {
 
 /**
  * Forget a Ticket is resumable: on merge, when the sweep finds its issue closed,
- * when the worktree it names has gone, and on a Hand-off over a branch no Stage
+ * when the worktree it names has gone, and on a hand-off over a branch no Stage
  * of the Run ever worked on.
  */
 export function clearTicketState(repoRoot: string, ticket: number): void {

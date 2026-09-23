@@ -1149,7 +1149,7 @@ interface PullRequestSubject {
  * human reads there is the one that will reach the base branch.
  *
  * One that already exists is also taken out of draft, because a Ticket resumed
- * after a Hand-off comes back to the pull request the Hand-off drafted and a
+ * after a hand-off comes back to the pull request the hand-off drafted and a
  * draft cannot be merged. Here rather than at the merge: a draft pull request
  * often runs no workflows at all, so the wait for CI below would read it as
  * "no checks" and end the Ticket before the merge was ever asked for.
@@ -1340,7 +1340,7 @@ async function handOff(
 
   if (pullRequest !== undefined) {
     await tracker.convertPullRequestToDraft(pullRequest);
-  } else if (worktree?.pushable) {
+  } else if (keepsState) {
     // A draft PR is worth trying for, but never worth losing the relabel over.
     try {
       await workspace.push(worktree.path, branch);

@@ -91,7 +91,7 @@ because a machine installs a tag: two machines that say `0.4.0` run the same cod
 development checkout runs whatever commit it has, so it adds that commit and a `dirty`
 mark when the tree has uncommitted changes — `0.4.0`, `0.4.0+331d79c`,
 `0.4.0+331d79c.dirty`. The same string heads the Run summary, every Progress comment, the
-`init` report and each State file a claimed Ticket keeps, so anything the pipeline wrote
+`init` report and each State file a Ticket keeps, so anything the pipeline wrote
 can be traced to the pipeline that wrote it (ADR-0007).
 
 `run` and `ticket` refuse a Target `init` has not set up rather than repairing it. A

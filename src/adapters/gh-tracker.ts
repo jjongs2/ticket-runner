@@ -370,7 +370,13 @@ export class GhTracker implements Tracker {
     await this.gh(["pr", "ready", String(number), "--undo"]);
   }
 
-  /** The same command as the draft direction, without the flag that reverses it. */
+  /**
+   * The same command as the draft direction, without the flag that reverses it.
+   *
+   * `gh` warns and exits zero on a pull request that is already out of draft, so
+   * the second pass a fix Stage buys asks this of a ready pull request for
+   * nothing rather than failing the Ticket at `pr`.
+   */
   async markPullRequestReady(number: number): Promise<void> {
     await this.gh(["pr", "ready", String(number)]);
   }

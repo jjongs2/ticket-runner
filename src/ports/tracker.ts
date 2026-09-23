@@ -46,6 +46,13 @@ export interface Issue {
   closed: boolean;
   labels: string[];
   assignees: string[];
+  /**
+   * Every comment on the issue, oldest first.
+   *
+   * The order is part of the answer: a Ticket can carry more than one comment
+   * wearing the same marker — a second progress table, a second hand-off — and
+   * the newest is the one the pipeline is writing now.
+   */
   comments: IssueComment[];
   /** How many native sub-issues it has; anything above zero is a Spec. */
   subIssues: number;
