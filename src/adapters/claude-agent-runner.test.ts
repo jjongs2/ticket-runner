@@ -280,8 +280,8 @@ describe("logs written while the Stage runs", () => {
 /**
  * A session that spawns a background agent ends its main turn with a `result`
  * event, then wakes once per finished agent and ends each waking with another
- * `result` event that counts only its own waking and carries no structured
- * output.
+ * `result` event that counts only its own waking. A waking usually carries no
+ * structured output, and carries a fresh answer when the session answers again.
  */
 describe("a session that woke for a background agent", () => {
   const mainTurn = {
@@ -300,6 +300,11 @@ describe("a session that woke for a background agent", () => {
     num_turns: 3,
     duration_ms: 45_172,
     result: text,
+  });
+  /** A waking that answers the schema again, as a session does after a review. */
+  const answer = (notes: unknown[]) => ({
+    ...waking(JSON.stringify({ notes })),
+    structured_output: { notes },
   });
   const WOKEN_TWICE = transcript(
     mainTurn,
@@ -322,6 +327,45 @@ describe("a session that woke for a background agent", () => {
 
     expect(result.ok).toBe(true);
     expect(result.result).toEqual({ notes: [{ note: "the glossary drifts" }] });
+  });
+
+  it("keeps a later answer over an earlier one", async () => {
+    const stdout = transcript(
+      answer([]),
+      waking("one review is in"),
+      answer([{ note: "the review found a drift" }]),
+    );
+
+    const result = await runner(execution({ stdout })).run(
+      request({ jsonSchema: { type: "object" }, resultRequired: false }),
+    );
+
+    expect(result.result).toEqual({ notes: [{ note: "the review found a drift" }] });
+  });
+
+  it("keeps the latest answer when the last waking carries none", async () => {
+    const stdout = transcript(
+      answer([]),
+      answer([{ note: "the review found a drift" }]),
+      waking("both are in"),
+    );
+
+    const result = await runner(execution({ stdout })).run(
+      request({ jsonSchema: { type: "object" }, resultRequired: false }),
+    );
+
+    expect(result.result).toEqual({ notes: [{ note: "the review found a drift" }] });
+  });
+
+  it("fails a Stage that needed an answer when no waking gave one", async () => {
+    const stdout = transcript(waking("working on it"), waking("one review is in"));
+
+    const result = await runner(execution({ stdout })).run(
+      request({ stage: "verify", jsonSchema: { type: "object" } }),
+    );
+
+    expect(result).toMatchObject({ ok: false, failure: "invalid-result" });
+    expect(result.result).toBeUndefined();
   });
 
   it("still fails a Stage whose last waking hit the turn cap", async () => {
