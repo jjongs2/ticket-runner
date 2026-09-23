@@ -689,9 +689,9 @@ async function passOver(
 }
 
 /**
- * Start one Stage under the model, turn and wall-clock limits its own config
- * names. Everything a Stage differs in is the prompt, where it runs and where
- * it logs; the limits come from one place so no Stage can quietly skip them.
+ * Start one Stage under the model, effort, turn and wall-clock limits its own
+ * config names. Everything a Stage differs in is the prompt, where it runs and
+ * where it logs; the limits come from one place so no Stage can quietly skip them.
  */
 function runStage(
   pipeline: Pipeline,
@@ -712,6 +712,7 @@ function runStage(
     logDir: request.logDir,
     permissionMode: pipeline.config.permissionMode,
     model: limits.model,
+    effort: limits.effort,
     maxTurns: limits.maxTurns,
     maxMinutes: limits.maxMinutes,
     ...(request.jsonSchema === undefined ? {} : { jsonSchema: request.jsonSchema }),

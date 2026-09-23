@@ -1,12 +1,24 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
-import { PERMISSION_MODES, type PermissionMode } from "./ports/agent-runner.js";
+import {
+  EFFORT_LEVELS,
+  type Effort,
+  PERMISSION_MODES,
+  type PermissionMode,
+} from "./ports/agent-runner.js";
 
 export const CONFIG_FILENAME = "agent-pipeline.json";
 
-/** The default model for every Stage: Opus 5. */
-const DEFAULT_MODEL = "claude-opus-5";
+/** The default model for every Stage: Opus 5.5, what a bare `claude -p` picks. */
+const DEFAULT_MODEL = "claude-opus-5-5";
+
+/**
+ * The default effort for every Stage: `high`, the level Opus 5 ran at before
+ * Opus 5.5 lowered its own default to `medium`. One number for all four Stages
+ * — tuning a Stage against its Ticket is the Target's job, not the pipeline's.
+ */
+const DEFAULT_EFFORT: Effort = "high";
 
 /** Thrown when the config file exists but cannot be used. */
 export class ConfigError extends Error {}
@@ -14,6 +26,7 @@ export class ConfigError extends Error {}
 const stageSchema = z
   .object({
     model: z.string().min(1).optional(),
+    effort: z.enum(EFFORT_LEVELS).optional(),
     maxTurns: z.number().int().positive().optional(),
     maxMinutes: z.number().positive().optional(),
     extraPrompt: z.string().optional(),
@@ -58,6 +71,7 @@ const configSchema = z
 
 export interface StageConfig {
   model: string;
+  effort: Effort;
   maxTurns: number;
   maxMinutes: number;
   extraPrompt: string;
@@ -228,6 +242,7 @@ function stage(
 ): StageConfig {
   return {
     model: configured?.model ?? DEFAULT_MODEL,
+    effort: configured?.effort ?? DEFAULT_EFFORT,
     maxTurns: configured?.maxTurns ?? defaults.maxTurns,
     maxMinutes: configured?.maxMinutes ?? defaults.maxMinutes,
     extraPrompt: configured?.extraPrompt ?? "",

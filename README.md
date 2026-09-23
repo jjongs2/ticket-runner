@@ -538,15 +538,19 @@ pulls once they merge — is asked of GitHub once at the start of a Run, so a Ta
 
   "stages": {
     // Defaults: implement 300 turns / 60 min, verify 80 / 20, fix 150 / 40,
-    // conflict 120 / 30.
+    // conflict 120 / 30. Every Stage defaults to the "claude-opus-5-5" model at
+    // "high" effort, and both are always passed, so a Stage's logged command
+    // line says which model and effort ran it.
     "implement": {
-      "model": "claude-opus-5",
+      "model": "claude-opus-5-5",
+      // How hard the Stage thinks: "low", "medium", "high", "xhigh" or "max".
+      "effort": "high",
       "maxTurns": 300,
       "maxMinutes": 60,
       "extraPrompt": "Repo-specific instructions appended to the Stage prompt."
     },
-    "fix": { "model": "claude-opus-5", "maxTurns": 150, "maxMinutes": 40 },
-    "conflict": { "model": "claude-opus-5", "maxTurns": 120, "maxMinutes": 30 }
+    "fix": { "model": "claude-opus-5-5", "maxTurns": 150, "maxMinutes": 40 },
+    "conflict": { "model": "claude-opus-5-5", "maxTurns": 120, "maxMinutes": 30 }
   },
 
   // Passed to every Stage, which also always runs with `--permission-prompts none`.
