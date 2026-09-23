@@ -17,7 +17,7 @@ published as the body of that Version's GitHub Release (ADR-0007). The shape is
 
 ### After upgrading
 
-- nothing
+- Run `agent-pipeline init` again in every Target; the conventions document's State file line now covers a handed-off Ticket too.
 
 [#135]: https://github.com/jjongs2/agent-pipeline/pull/135
 [#136]: https://github.com/jjongs2/agent-pipeline/pull/136
