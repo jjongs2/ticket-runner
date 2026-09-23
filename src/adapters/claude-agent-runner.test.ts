@@ -52,7 +52,8 @@ function request(overrides: Partial<StageRequest> = {}): StageRequest {
     stage: "implement",
     prompt: "/mattpocock-skills:implement https://example.com/issues/2",
     cwd: "/repo/.worktrees/ticket-2",
-    model: "claude-opus-5",
+    model: "claude-opus-5-5",
+    effort: "high",
     maxTurns: 300,
     maxMinutes: 60,
     permissionMode: "auto",
@@ -127,7 +128,7 @@ describe("the preflight", () => {
 });
 
 describe("the command line", () => {
-  it("runs headless with the prompt, model, limits and permission settings", async () => {
+  it("runs headless with the prompt, model, effort, limits and permission settings", async () => {
     await runner(execution({ stdout: SUCCESS })).run(request());
     const args = calls[0]?.args ?? [];
 
@@ -136,8 +137,15 @@ describe("the command line", () => {
     expect(args).toContain("/mattpocock-skills:implement https://example.com/issues/2");
     expect(args.join(" ")).toContain("--permission-prompts none");
     expect(args.join(" ")).toContain("--permission-mode auto");
-    expect(args.join(" ")).toContain("--model claude-opus-5");
+    expect(args.join(" ")).toContain("--model claude-opus-5-5");
+    expect(args.join(" ")).toContain("--effort high");
     expect(args.join(" ")).toContain("--max-turns 300");
+  });
+
+  it("passes the effort the Stage was given", async () => {
+    await runner(execution({ stdout: SUCCESS })).run(request({ effort: "low" }));
+
+    expect(calls[0]?.args.join(" ")).toContain("--effort low");
   });
 
   it("asks for a stream-json transcript", async () => {

@@ -36,10 +36,34 @@ function config(overrides: Partial<Config> = {}): Config {
     checks: ["npm test", "npm run typecheck"],
     gates: { checks: true, ci: true },
     stages: {
-      implement: { model: "claude-opus-5", maxTurns: 300, maxMinutes: 60, extraPrompt: "" },
-      verify: { model: "claude-opus-5", maxTurns: 80, maxMinutes: 20, extraPrompt: "" },
-      fix: { model: "claude-opus-5", maxTurns: 150, maxMinutes: 40, extraPrompt: "" },
-      conflict: { model: "claude-opus-5", maxTurns: 120, maxMinutes: 30, extraPrompt: "" },
+      implement: {
+        model: "claude-opus-5-5",
+        effort: "high",
+        maxTurns: 300,
+        maxMinutes: 60,
+        extraPrompt: "",
+      },
+      verify: {
+        model: "claude-opus-5-5",
+        effort: "high",
+        maxTurns: 80,
+        maxMinutes: 20,
+        extraPrompt: "",
+      },
+      fix: {
+        model: "claude-opus-5-5",
+        effort: "high",
+        maxTurns: 150,
+        maxMinutes: 40,
+        extraPrompt: "",
+      },
+      conflict: {
+        model: "claude-opus-5-5",
+        effort: "high",
+        maxTurns: 120,
+        maxMinutes: 30,
+        extraPrompt: "",
+      },
     },
     permissionMode: "auto",
     ciTimeoutMinutes: 30,
@@ -401,12 +425,13 @@ describe("the pull request title and the squash commit", () => {
 });
 
 describe("Stage invocation", () => {
-  it("passes each Stage its configured model, turn and time limits", async () => {
+  it("passes each Stage its configured model, effort, turn and time limits", async () => {
     await run();
 
     expect(runner.requests[0]).toMatchObject({
       stage: "implement",
-      model: "claude-opus-5",
+      model: "claude-opus-5-5",
+      effort: "high",
       maxTurns: 300,
       maxMinutes: 60,
       permissionMode: "auto",
@@ -416,6 +441,14 @@ describe("Stage invocation", () => {
       maxTurns: 80,
       maxMinutes: 20,
     });
+  });
+
+  it("gives a Stage the effort its own config names", async () => {
+    const stages = config().stages;
+    await run({ stages: { ...stages, verify: { ...stages.verify, effort: "max" } } });
+
+    expect(runner.requests[0]).toMatchObject({ stage: "implement", effort: "high" });
+    expect(runner.requests[1]).toMatchObject({ stage: "verify", effort: "max" });
   });
 
   it("keys the log directory by run id and Ticket number", async () => {
@@ -1044,7 +1077,7 @@ describe("the fix Stage", () => {
     );
   });
 
-  it("takes its own model, turn and time limits, and its own extra prompt", async () => {
+  it("takes its own model, effort, turn and time limits, and its own extra prompt", async () => {
     workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
 
     await run({
@@ -1052,6 +1085,7 @@ describe("the fix Stage", () => {
         ...config().stages,
         fix: {
           model: "claude-sonnet-5",
+          effort: "low",
           maxTurns: 12,
           maxMinutes: 9,
           extraPrompt: "Keep the diff small.",
@@ -1062,6 +1096,7 @@ describe("the fix Stage", () => {
     expect(fixRequest()).toMatchObject({
       stage: "fix",
       model: "claude-sonnet-5",
+      effort: "low",
       maxTurns: 12,
       maxMinutes: 9,
       permissionMode: "auto",

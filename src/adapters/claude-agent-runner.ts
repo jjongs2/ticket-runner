@@ -174,6 +174,10 @@ function buildArgs(request: StageRequest): string[] {
     request.permissionMode,
     "--model",
     request.model,
+    // Always passed, like the model: a Stage's logged command line is what a
+    // human pastes back, so neither may be left to the host's own default.
+    "--effort",
+    request.effort,
     "--max-turns",
     String(request.maxTurns),
   ];

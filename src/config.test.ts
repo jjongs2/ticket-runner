@@ -26,7 +26,8 @@ describe("loadConfig", () => {
     expect(config.checkTimeoutMinutes).toBe(15);
     expect(config.lanes).toBe(1);
     expect(config.stages.implement).toEqual({
-      model: "claude-opus-5",
+      model: "claude-opus-5-5",
+      effort: "high",
       maxTurns: 300,
       maxMinutes: 60,
       extraPrompt: "",
@@ -110,7 +111,8 @@ describe("loadConfig", () => {
     const config = loadConfig(root, VERSION);
 
     expect(config.stages.verify).toEqual({
-      model: "claude-opus-5",
+      model: "claude-opus-5-5",
+      effort: "high",
       maxTurns: 80,
       maxMinutes: 5,
       extraPrompt: "",
@@ -124,12 +126,45 @@ describe("loadConfig", () => {
     });
 
     expect(loadConfig(root, VERSION).stages.conflict).toEqual({
-      model: "claude-opus-5",
+      model: "claude-opus-5-5",
+      effort: "high",
       maxTurns: 40,
       maxMinutes: 30,
       extraPrompt: "",
     });
   });
+
+  it("takes the effort the config names for one Stage and leaves the rest alone", () => {
+    const root = repoWith({
+      [CONFIG_FILENAME]: JSON.stringify({ stages: { verify: { effort: "max" } } }),
+    });
+    const config = loadConfig(root, VERSION);
+
+    expect(config.stages.verify.effort).toBe("max");
+    expect(config.stages.implement.effort).toBe("high");
+    expect(config.stages.fix.effort).toBe("high");
+    expect(config.stages.conflict.effort).toBe("high");
+  });
+
+  it.each(["low", "medium", "high", "xhigh", "max"])("takes %o as an effort", (level) => {
+    const root = repoWith({
+      [CONFIG_FILENAME]: JSON.stringify({ stages: { implement: { effort: level } } }),
+    });
+
+    expect(loadConfig(root, VERSION).stages.implement.effort).toBe(level);
+  });
+
+  it.each(["", "highest", "HIGH", 3, null])(
+    "rejects %o as an effort with a message naming the field",
+    (value) => {
+      const root = repoWith({
+        [CONFIG_FILENAME]: JSON.stringify({ stages: { fix: { effort: value } } }),
+      });
+
+      expect(() => loadConfig(root, VERSION)).toThrowError(ConfigError);
+      expect(() => loadConfig(root, VERSION)).toThrowError(/stages\.fix\.effort/);
+    },
+  );
 
   it("takes a configured Check limit as given", () => {
     const root = repoWith({

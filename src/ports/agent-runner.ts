@@ -16,6 +16,15 @@ export const PERMISSION_MODES = ["auto", "acceptEdits", "bypassPermissions"] as 
 export type PermissionMode = (typeof PERMISSION_MODES)[number];
 
 /**
+ * How hard a Stage thinks, as `claude --effort` takes it, from the cheapest to
+ * the most thorough. The Target's dial for trading a Stage's cost against how
+ * much of a Ticket it gets through.
+ */
+export const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"] as const;
+
+export type Effort = (typeof EFFORT_LEVELS)[number];
+
+/**
  * Why a Stage did not finish cleanly. `rate-limited` is singled out because the
  * pipeline releases a claim rather than blaming the Ticket for it.
  */
@@ -32,6 +41,7 @@ export interface StageRequest {
   /** The worktree the session runs in. */
   cwd: string;
   model: string;
+  effort: Effort;
   maxTurns: number;
   maxMinutes: number;
   permissionMode: PermissionMode;
