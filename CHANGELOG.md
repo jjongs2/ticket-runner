@@ -4,6 +4,20 @@ One section per Version, newest first, written in the Version PR that cut it and
 published as the body of that Version's GitHub Release (ADR-0007). The shape is
 `docs/templates/version-notes.md`.
 
+## 0.4.5 (2026-09-23)
+
+### Fixes
+
+- The Checks now catch uncommitted work left in the worktree and spend the fix budget on it ([#143])
+- The implement Stage's review now lands before it answers, and a later answer keeps every earlier Note ([#141])
+
+### After upgrading
+
+- nothing
+
+[#141]: https://github.com/jjongs2/agent-pipeline/pull/141
+[#143]: https://github.com/jjongs2/agent-pipeline/pull/143
+
 ## 0.4.4 (2026-09-23)
 
 ### Stages
