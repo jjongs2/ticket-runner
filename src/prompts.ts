@@ -28,7 +28,7 @@ const implementGuidance = (base: string) => `This session is unattended. Follow 
 - Make an initial commit before running \`/mattpocock-skills:code-review\`, so the reviewed diff is not empty.
 - Your first commit's subject becomes the pull request title and the squash commit on \`${base}\`, so write it in the convention \`${CONVENTIONS_PATH}\` states and make it summarise the whole Ticket, not just that first commit.
 - The review the skill asks for is \`/mattpocock-skills:code-review\`. Invoke it by that full name: the short name also matches the CLI's own built-in review skill, which runs neither the Standards review nor the Spec review.
-- Spawn its review sub-agents with \`run_in_background: false\` set explicitly, several in one message so they still run in parallel. Omitting \`run_in_background\` runs them in the background as well, and you would then reach your answer before the review has come back.
+- Spawn its review sub-agents with \`run_in_background: false\` set explicitly, several in one message so they still run in parallel. Omitting \`run_in_background\` still runs them in the background, and you would then reach your answer before the review has come back.
 - Do not answer the schema until the review has returned and the fixes you take from it are committed. An answer you have already given does not stop you committing: the pipeline waits for this session to exit before it reads the branch.
 - A later answer replaces an earlier one, so if you answer again, repeat every Note you still stand by.
 - Do not spawn nested review agents beyond what the skill itself does.
