@@ -76,12 +76,20 @@ function carriesMarker(body: string, marker: string): boolean {
   return body.trimStart().startsWith(marker);
 }
 
-/** The first comment carrying `marker`, for the markers only one comment wears. */
+/**
+ * The newest comment carrying `marker`, for the markers one comment wears at a
+ * time.
+ *
+ * The newest rather than the first, because "one at a time" is not "one ever": a
+ * Ticket taken back from a human starts a progress comment of its own beside the
+ * table the human read, and the Run writing now must edit the one it just
+ * posted rather than the one it deliberately left alone.
+ */
 export function findMarkedComment(
   comments: IssueComment[],
   marker: string,
 ): IssueComment | undefined {
-  return findMarkedComments(comments, marker)[0];
+  return findMarkedComments(comments, marker).at(-1);
 }
 
 /** Whether a candidate has already been warned about this. */

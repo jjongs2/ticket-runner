@@ -4,13 +4,16 @@
  * A Run reports on a Ticket a dozen times, and a comment per report would make
  * the Ticket unreadable and notify its watchers every time. So there is one
  * comment, found by a hidden marker and rewritten in place as each Stage
- * finishes: only the first Stage notifies anyone. Everything a human has to act
- * on — a hand-off, a guard warning — stays a comment of its own, because those
- * are exactly the ones a notification is worth.
+ * finishes: only the first Stage notifies anyone. The one Run that starts a
+ * second is the one taking the Ticket back from a human, which leaves the table
+ * that human read exactly as they read it. Everything a human has to act on — a
+ * hand-off, a guard warning — stays a comment of its own, because those are
+ * exactly the ones a notification is worth.
  *
  * `docs/templates/progress-comment.md` is the source of truth for the shape.
  */
 
+import { carriesCurrentHandoff } from "./handoff.js";
 import type { IssueComment, Tracker } from "./ports/tracker.js";
 import { findMarkedComment } from "./templates.js";
 
@@ -127,7 +130,13 @@ export class Progress {
   private stopped = false;
 
   constructor(private readonly options: ProgressOptions) {
-    this.comment = findProgressComment(options.comments);
+    // A Ticket taken back from a human keeps the table that human read: a Run
+    // resuming one rewrites nothing and starts a comment of its own. Every
+    // other Run — a released Ticket, a stranded one, a second pass of this one
+    // — carries on in the comment it finds, which is what the one table is for.
+    this.comment = carriesCurrentHandoff(options.comments)
+      ? undefined
+      : findProgressComment(options.comments);
   }
 
   /** Append a row, and show it on the Ticket. */

@@ -1478,11 +1478,13 @@ describe("releasing a rate-limited Ticket", () => {
     expect(progressTable()).toContain("| conflict | ✅ rebased |");
   });
 
-  it("leaves no State file behind when the Ticket is handed off instead", async () => {
+  it("leaves a State file behind when the Ticket is handed off instead", async () => {
     runner.queue("implement", { ok: false, failure: "turn-capped" });
 
+    // A hand-off keeps the file too; the label is what tells the two apart, and
+    // a Release is not the only ending a later Run resumes from.
     expect(await run()).toMatchObject({ outcome: "handed-off" });
-    expect(state()).toBeUndefined();
+    expect(state()).toMatchObject({ state: "claimed", branch: BRANCH });
   });
 
   it("leaves no State file behind when the Ticket merges", async () => {
@@ -1619,11 +1621,18 @@ describe("the State file a claimed Ticket keeps", () => {
     expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
   });
 
-  it("is gone once the Ticket is handed off", async () => {
+  it("is kept once the Ticket is handed off, with the Fix budget given back", async () => {
     workspace.failCheck("npm test", "FAIL src/a.test.ts");
 
+    // The fix Stage ran and failed the Checks a second time, so the budget was
+    // spent — and the file says otherwise, because the Ticket only comes back
+    // through a human's hands and the fresh budget is for what they did to it.
     expect(await run()).toMatchObject({ outcome: "handed-off" });
-    expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
+    expect(readTicketState(repoRoot, TICKET)).toMatchObject({
+      state: "implemented",
+      branch: BRANCH,
+      fixUsed: false,
+    });
   });
 
   it("is never written for a candidate a guard passed over", async () => {
@@ -1697,7 +1706,9 @@ describe("resuming a stranded Ticket", () => {
 
     expect(outcome).toMatchObject({ outcome: "handed-off", stage: "checks" });
     expect(runner.stages()).toEqual([]);
-    expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
+    // Kept, and with the budget back: the human this is handed to is the reason
+    // the next Run gets to buy a fix Stage again.
+    expect(readTicketState(repoRoot, TICKET)).toMatchObject({ fixUsed: false });
   });
 
   it("still pushes and opens a draft PR when it is handed off in its own worktree", async () => {
@@ -1899,13 +1910,16 @@ describe("resuming a released Ticket", () => {
     expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
   });
 
-  it("clears the State file when the resumed Ticket is handed off", async () => {
+  it("keeps the State file when the resumed Ticket is handed off", async () => {
     released({ fixUsed: true });
     workspace.failCheck("npm test", "FAIL src/a.test.ts");
 
     await run();
 
-    expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
+    expect(readTicketState(repoRoot, TICKET)).toMatchObject({
+      state: "implemented",
+      fixUsed: false,
+    });
     expect(tracker.issue(TICKET).labels).toEqual(["ready-for-human"]);
   });
 
@@ -2007,8 +2021,9 @@ describe("a branch that outlived its worktree", () => {
   });
 
   it("names the worktree instead when the branch is still checked out in one", async () => {
-    // What a hand-off leaves: the worktree and the branch kept for a human, the
-    // State file cleared. Relabelling the Ticket brings it back here.
+    // A branch of the Ticket's name checked out in its worktree with nothing
+    // recorded beside it: a human's work, since a Ticket the pipeline handed
+    // off keeps its State file and resumes without ever reaching here.
     workspace.worktrees.set(worktree, BRANCH);
 
     const outcome = await run();
@@ -2025,6 +2040,9 @@ git branch -D ${BRANCH}\`, then relabel the Ticket ready-for-agent`,
     expect(workspace.calls).not.toContain(`createWorktree:${BRANCH}`);
     // The worktree is on disk here, so the hand-off still sends the human to it.
     expect(handoffBody()).toContain(`worktree \`${worktree}\``);
+    // And the State file the Claim wrote goes, alone among hand-offs: no Stage
+    // of this Run ran in there, so a later resume would implement over a human.
+    expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
   });
 
   it("pushes nothing and opens no draft PR over the worktree it names", async () => {
@@ -2126,6 +2144,152 @@ describe("a Ticket released and then resumed", () => {
     // first Run reported is not history the second one keeps.
     expect(progressTable()).not.toContain("⏸");
     expect(progressTable()).toContain("| merge | ✅ #100 |");
+  });
+});
+
+/**
+ * A hand-off and the relabel that answers it, in one test: the second `run()` is
+ * the next Run meeting a Ticket a human has handed back by moving the label to
+ * `ready-for-agent`. What the hand-off left — the branch, the worktree, the
+ * draft pull request and the State file — is what that Run picks up.
+ */
+describe("a Ticket handed off and then handed back", () => {
+  /** Every Stage both Runs asked for, so the second Run's shortcuts are visible. */
+  const stages = () => runner.stages();
+
+  /** Every progress table on the Ticket, oldest first. */
+  const tables = () =>
+    tracker
+      .issue(TICKET)
+      .comments.filter(({ body }) => body.startsWith(PROGRESS_MARKER))
+      .map(({ body }) => body);
+
+  /** A first Run that spends the Fix budget and is handed off at the Checks. */
+  async function handedOff(): Promise<void> {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "checks" });
+  }
+
+  /** The relabel a human does, which is the whole of handing a Ticket back. */
+  function handedBack(): void {
+    tracker.issue(TICKET).labels = ["ready-for-agent"];
+  }
+
+  it("keeps the branch, the worktree, the draft PR and the State file", async () => {
+    await handedOff();
+
+    expect(workspace.worktrees.get(worktree)).toBe(BRANCH);
+    expect(tracker.pullRequest(100).draft).toBe(true);
+    expect(readTicketState(repoRoot, TICKET)).toMatchObject({
+      state: "implemented",
+      branch: BRANCH,
+      pullRequest: 100,
+      fixUsed: false,
+    });
+  });
+
+  it("is inert until a human relabels it: naming it by hand is refused", async () => {
+    await handedOff();
+
+    // `ready-for-human` is not `ready-for-agent`, and the sweep cannot see it
+    // either, the Claim having come off. Nothing moves until the human does.
+    expect(await run()).toMatchObject({ outcome: "skipped", reason: "not-ready" });
+    expect(existsSync(statePath(repoRoot, TICKET))).toBe(true);
+  });
+
+  it("resumes from what it reached rather than implementing a second time", async () => {
+    await handedOff();
+    handedBack();
+
+    expect(await run()).toMatchObject({ outcome: "merged", pullRequest: 100 });
+    // One implement Stage across both Runs, which is the whole of what this
+    // saves, and the one worktree the first Run made.
+    expect(stages()).toEqual(["implement", "fix", "verify"]);
+    expect(workspace.calls.filter((call) => call === `createWorktree:${BRANCH}`)).toHaveLength(1);
+  });
+
+  it("takes the pull request out of draft before it waits for CI", async () => {
+    await handedOff();
+    handedBack();
+
+    await run();
+
+    // A draft pull request often runs no workflows at all, so waiting first
+    // would read as "no checks" and end the Ticket short of the merge.
+    expect(tracker.pullRequest(100).draft).toBe(false);
+    expect(tracker.calls.indexOf("markPullRequestReady:100")).toBeLessThan(
+      tracker.calls.indexOf("waitForCi:100"),
+    );
+    expect(tracker.pullRequests).toHaveLength(1);
+  });
+
+  it("hands the Ticket off again when the pull request cannot be taken out of draft", async () => {
+    await handedOff();
+    handedBack();
+    tracker.markPullRequestReady = async () => {
+      throw new Error("gh: pull request is closed");
+    };
+
+    // Closing the pull request said the work was not to be continued, so the
+    // failure is the answer rather than something to work around.
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "pr" });
+  });
+
+  it("buys a fresh fix Stage, the Ticket having been through a human's hands", async () => {
+    await handedOff();
+    handedBack();
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(stages()).toEqual(["implement", "fix", "fix", "verify"]);
+  });
+
+  it("posts a progress comment of its own, leaving the one the human read", async () => {
+    await handedOff();
+    const [handed] = tables();
+    handedBack();
+
+    await run();
+
+    expect(tables()).toEqual([handed, expect.stringContaining("| merge | ✅ #100 |")]);
+  });
+
+  it("marks the hand-off it is answering as history", async () => {
+    await handedOff();
+    handedBack();
+
+    await run();
+
+    const handoffs = tracker
+      .issue(TICKET)
+      .comments.filter(({ body }) => body.startsWith(HANDOFF_MARKER));
+    expect(handoffs).toHaveLength(1);
+    expect(handoffs[0]?.body).toContain(HANDOFF_TAKEN_LINE);
+  });
+
+  it("edits the newest table, not the oldest, once the Ticket carries two", async () => {
+    await handedOff();
+    handedBack();
+    // A second Run that gets as far as verify and is then released, so a third
+    // Run resumes a Ticket carrying two tables and a hand-off already history.
+    runner.queue("verify", { ok: false, failure: "rate-limited" });
+    expect(await run()).toMatchObject({ outcome: "released" });
+    const [handed] = tables();
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+
+    expect(tables()).toEqual([handed, expect.stringContaining("| merge | ✅ #100 |")]);
+  });
+
+  it("clears the State file once the Ticket it took back merges", async () => {
+    await handedOff();
+    handedBack();
+
+    await run();
+
+    expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
   });
 });
 

@@ -370,6 +370,11 @@ export class GhTracker implements Tracker {
     await this.gh(["pr", "ready", String(number), "--undo"]);
   }
 
+  /** The same command as the draft direction, without the flag that reverses it. */
+  async markPullRequestReady(number: number): Promise<void> {
+    await this.gh(["pr", "ready", String(number)]);
+  }
+
   async updatePullRequestBody(number: number, body: string): Promise<void> {
     await this.gh(["pr", "edit", String(number), "--body", body]);
   }

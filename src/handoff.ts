@@ -17,6 +17,21 @@
 import type { IssueComment, Tracker } from "./ports/tracker.js";
 import { HANDOFF_MARKER, findMarkedComments, handoffTakenComment } from "./templates.js";
 
+/**
+ * Whether the Ticket is carrying a hand-off nothing has taken back yet — which
+ * is to say, whether a human has been holding it since the last Run put it down.
+ *
+ * Read off the comments the Claim marks: one not yet marked as history is the
+ * hand-off a human answered by relabelling the Ticket. Asked of the comments as
+ * they were when the Ticket was claimed, so the Run marking them now still sees
+ * the hand-off it is answering.
+ */
+export function carriesCurrentHandoff(comments: IssueComment[]): boolean {
+  return findMarkedComments(comments, HANDOFF_MARKER).some(
+    (comment) => handoffTakenComment(comment.body) !== undefined,
+  );
+}
+
 export interface HandoffOptions {
   tracker: Tracker;
   ticket: number;

@@ -244,6 +244,11 @@ export class FakeTracker implements Tracker {
     this.pullRequest(number).draft = true;
   }
 
+  async markPullRequestReady(number: number): Promise<void> {
+    this.calls.push(`markPullRequestReady:${number}`);
+    this.pullRequest(number).draft = false;
+  }
+
   async updatePullRequestBody(number: number, body: string): Promise<void> {
     this.calls.push(`updatePullRequestBody:${number}`);
     this.pullRequest(number).body = body;

@@ -182,7 +182,10 @@ function asTicketFailure(error: unknown, point: FailurePoint): TicketFailure {
  *
  * A Stage the subscription rate limit stopped ends none of that: the Ticket is
  * released, and a Run started once the limit has reset resumes it from the state
- * it had reached rather than from the top.
+ * it had reached rather than from the top. A hand-off keeps that state too, so a
+ * human who relabels the Ticket `ready-for-agent` hands it back and the next Run
+ * carries on from what it reached rather than paying for the implement Stage a
+ * second time.
  *
  * The guards come before the claim, so an issue the pipeline will not take is
  * never marked as taken. A Run has already dropped the claimed and the
@@ -256,8 +259,9 @@ async function takeTicket(
   });
 
   // The State file, written as part of the Claim and kept current from here on,
-  // so a Run that is killed mid-Ticket still leaves the next one something to
-  // resume. A resumed Ticket carries on from what it had already reached.
+  // so a Run that is killed mid-Ticket — or a human handed the Ticket — still
+  // leaves the next Run something to resume. A resumed Ticket carries on from
+  // what it had already reached.
   //
   // First of the two, because a Claim no State file names is the one thing this
   // has to rule out: a crash between the writes then leaves a Ticket nobody has
@@ -321,9 +325,10 @@ async function takeTicket(
       // into a hand-off that says whose branch it is and what to do with it.
       if (await workspace.hasBranch(branch)) {
         // Where the branch is decides what the human is asked to do about it:
-        // a hand-off keeps the worktree and the branch while clearing the State
-        // file, so a Ticket relabelled after one arrives here with both still
-        // there, and a branch that is checked out cannot simply be deleted.
+        // a branch that is checked out cannot simply be deleted, so the human
+        // is sent to the worktree holding it instead. Nothing the pipeline left
+        // is here — a Ticket it handed off keeps its State file and resumes
+        // without ever reaching this — so the branch is a human's either way.
         const checkedOutAt = (await workspace.hasWorktree({ path: worktree, branch }))
           ? worktree
           : undefined;
@@ -462,6 +467,7 @@ async function takeTicket(
       pullRequest,
       failure: asTicketFailure(error, point),
       fixUsed,
+      record,
       notes,
     });
   }
@@ -578,12 +584,13 @@ type Reached = Omit<TicketState, "runId" | "updatedAt">;
 type Advance = Partial<Pick<Reached, "state" | "fixUsed" | "pullRequest">>;
 
 /**
- * The State file a claimed Ticket keeps, and the one place a Ticket writes it.
+ * The State file a Ticket keeps, and the one place a Ticket writes it.
  *
- * A Ticket is resumable for as long as it is claimed, so the file is written as
- * part of the Claim and rewritten whenever the Ticket reaches something a later
- * Run should not pay for again. The release is one more such write rather than
- * the only one, which is what makes a Run that was killed recoverable too.
+ * A Ticket is resumable for as long as its branch carries work worth resuming,
+ * so the file is written as part of the Claim and rewritten whenever the Ticket
+ * reaches something a later Run should not pay for again. The release is one
+ * more such write rather than the only one, which is what makes a Run that was
+ * killed recoverable too, and the hand-off is another.
  *
  * A write that does not land is logged and nothing more. What is on disk is then
  * an earlier state of the same Ticket, and resuming from further back costs a
@@ -1140,6 +1147,12 @@ interface PullRequestSubject {
  * A second pass comes back to a pull request that already exists: the push is
  * what GitHub re-runs its checks on, and the body is rewritten so the Verdict a
  * human reads there is the one that will reach the base branch.
+ *
+ * One that already exists is also taken out of draft, because a Ticket resumed
+ * after a Hand-off comes back to the pull request the Hand-off drafted and a
+ * draft cannot be merged. Here rather than at the merge: a draft pull request
+ * often runs no workflows at all, so the wait for CI below would read it as
+ * "no checks" and end the Ticket before the merge was ever asked for.
  */
 async function publishPullRequest(
   pipeline: Pipeline,
@@ -1151,6 +1164,7 @@ async function publishPullRequest(
 
   if (existing !== undefined) {
     await pipeline.tracker.updatePullRequestBody(existing, body);
+    await pipeline.tracker.markPullRequestReady(existing);
     return existing;
   }
 
@@ -1272,12 +1286,16 @@ interface HandOff {
   failure: TicketFailure;
   /** Whether the Ticket's fix budget had already been spent when this failure came. */
   fixUsed: boolean;
+  /** The Ticket's State file, which the hand-off either leaves current or removes. */
+  record: ResumeRecord;
   notes: RoutedNote[];
 }
 
 /**
  * Hand the Ticket to a human: a draft PR to review, a comment naming where the
- * work is, and the labels a human filters on. The worktree and branch stay put.
+ * work is, and the labels a human filters on. The branch, the worktree and the
+ * State file stay put, so a human who relabels the Ticket `ready-for-agent`
+ * hands it back and the next Run carries on from what it reached.
  *
  * A Ticket handed over before its worktree was created has none: nothing was
  * branched, so there is no directory to name and nothing to push a draft PR out
@@ -1288,24 +1306,36 @@ interface HandOff {
  * Ticket refused at setup over a branch still checked out somewhere names that
  * worktree and stops there: the work in it is a human's, and pushing it or
  * opening a PR that says `Closes #<n>` over it would claim it for this Run.
+ *
+ * That same fact decides the State file. A worktree this Run may push out of is
+ * one a Stage of it worked in, and what it left is the pipeline's to resume; a
+ * worktree it may not, or no worktree at all, leaves nothing of the pipeline's
+ * behind, and a file kept over it would let a later Run resume into a human's
+ * work and run an implement Stage over it — which is what refusing at setup
+ * exists to prevent.
  */
 async function handOff(
   pipeline: Pipeline,
-  { issue, user, branch, worktree, pullRequest, failure, fixUsed, notes }: HandOff,
+  { issue, user, branch, worktree, pullRequest, failure, fixUsed, record, notes }: HandOff,
 ): Promise<TicketOutcome> {
   const { tracker, workspace, config } = pipeline;
   const ticket = issue.number;
+  // Whether what the Run leaves behind is the pipeline's to resume, which is
+  // the same question the draft pull request is decided by.
+  const keepsState = worktree?.pushable === true;
 
-  // The Ticket is a human's from here on, so nothing may leave it looking
-  // resumable: the next Run must not pick up what somebody else is holding.
+  // Nothing of this Run's is on the branch, so nothing may leave the Ticket
+  // looking resumable: the next Run must not implement over what a human holds.
   // Wrapped because the hand-off itself — the draft PR, the comment, the labels
   // — is what a human is waiting for, and no file is worth losing it over.
-  try {
-    clearTicketState(pipeline.repoRoot, ticket);
-  } catch (error) {
-    pipeline.log?.(
-      `#${ticket} handed off, but clearing its State file failed: ${(error as Error).message}`,
-    );
+  if (!keepsState) {
+    try {
+      clearTicketState(pipeline.repoRoot, ticket);
+    } catch (error) {
+      pipeline.log?.(
+        `#${ticket} handed off, but clearing its State file failed: ${(error as Error).message}`,
+      );
+    }
   }
 
   if (pullRequest !== undefined) {
@@ -1331,6 +1361,20 @@ async function handOff(
     } catch (error) {
       pipeline.log?.(`#${ticket} could not open a draft PR: ${(error as Error).message}`);
     }
+  }
+
+  if (keepsState) {
+    // Written after the draft pull request, because that pull request is part of
+    // what a resuming Run must not open a second one beside.
+    //
+    // The Fix budget goes back unspent: the Ticket only comes back through a
+    // human's hands, and whatever they did to it is what the fresh budget is
+    // for. Nothing is lost by it — the hand-off comment says the budget was
+    // spent, and the Claim only marks that comment as history.
+    record.advance({
+      fixUsed: false,
+      ...(pullRequest === undefined ? {} : { pullRequest }),
+    });
   }
 
   await tracker.comment(

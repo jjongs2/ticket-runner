@@ -53,7 +53,7 @@ Write issue titles in the glossary's words and keep them short. Describe behavio
 
 ## Worktrees and local state
 
-- Pipeline worktrees live under `.worktrees/ticket-<n>`; Run logs and state under `.agent-pipeline/`, where a claimed Ticket's resume state is `.agent-pipeline/state/ticket-<n>.json` (ADR-0004). A Ticket keeps that file from the Claim until it merges or is handed off, so it is also what a Run killed mid-Ticket leaves behind for the next one to resume from. Both directories are gitignored and safe to delete when no Ticket is handed off, released or stranded — deleting a stranded Ticket's state costs the Claim a human then has to take off by hand.
+- Pipeline worktrees live under `.worktrees/ticket-<n>`; Run logs and state under `.agent-pipeline/`, where a Ticket's resume state is `.agent-pipeline/state/ticket-<n>.json` (ADR-0004). A Ticket keeps that file from the Claim until its branch carries nothing left to resume — it merges, its issue closes, its worktree goes, or it is handed off at setup over a branch no Stage of the Run worked on — so it is also what a Run killed mid-Ticket, and a Ticket handed to a human, leave behind for the next Run. Both directories are gitignored and safe to delete when no Ticket is handed off, released or stranded — deleting a handed-off Ticket's state costs the implement Stage a relabel would otherwise have saved, and a stranded Ticket's costs the Claim a human then has to take off by hand.
 - Attended work also happens in a worktree when a Run may be active, so the main checkout stays clean for the pipeline to pull.
 
 ## Code
@@ -61,7 +61,7 @@ Write issue titles in the glossary's words and keep them short. Describe behavio
 - TypeScript, strict, ESM. Tests are vitest files named `*.test.ts` beside the code they test.
 - The orchestrator depends on the three ports (`Tracker`, `AgentRunner`, `Workspace`) as interfaces. Adapters are thin: argument building and output parsing.
 - Tests reach the orchestrator through in-memory fakes of the ports. The git-backed `Workspace` is tested against a real temporary repository. Tests never spawn `gh` or `claude`.
-- Every external effect goes through a port. The pipeline's own local state under `.agent-pipeline/` does not: the Run lock and a claimed Ticket's State file are plain files it reads and writes itself (ADR-0004), so the tests that reach those paths give the orchestrator a temporary repo root.
+- Every external effect goes through a port. The pipeline's own local state under `.agent-pipeline/` does not: the Run lock and a Ticket's State file are plain files it reads and writes itself (ADR-0004), so the tests that reach those paths give the orchestrator a temporary repo root.
 - `scripts/` is this repository's own plumbing, what a workflow runs and no install carries. It stays thin: the judgement it needs is a module in `src/`, where the tests are.
 - Name things with the glossary. A concept that needs a new word is a signal to update `CONTEXT.md` first.
 

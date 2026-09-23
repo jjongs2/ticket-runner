@@ -214,6 +214,16 @@ export interface Tracker {
   createPullRequest(pr: CreatePullRequest): Promise<PullRequestRef>;
   convertPullRequestToDraft(number: number): Promise<void>;
   /**
+   * Take an open pull request back out of draft.
+   *
+   * The other direction of {@link convertPullRequestToDraft}, and what a Run
+   * that takes a handed-off Ticket back from a human owes the pull request the
+   * Hand-off drafted: a draft cannot be merged. Asked before the wait for CI
+   * rather than at the merge, because a draft pull request often runs no
+   * workflows at all, and waiting on one first would read as "no checks".
+   */
+  markPullRequestReady(number: number): Promise<void>;
+  /**
    * Replace the body of an open pull request.
    *
    * A Ticket that spends its fix budget is graded twice, and the body carries
