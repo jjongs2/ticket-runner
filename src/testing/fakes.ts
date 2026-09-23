@@ -506,8 +506,8 @@ export class FakeWorkspace implements Workspace {
     );
   }
 
-  async uncommittedPaths(): Promise<string[]> {
-    this.calls.push("uncommittedPaths");
+  async uncommittedPaths(cwd: string): Promise<string[]> {
+    this.calls.push(`uncommittedPaths:${cwd}`);
     return [...this.uncommitted];
   }
 

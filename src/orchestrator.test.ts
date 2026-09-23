@@ -1304,7 +1304,7 @@ describe("uncommitted work", () => {
     expect(outcome).toMatchObject({ outcome: "handed-off", stage: "checks" });
     expect(runner.stages()).toEqual(["implement", "fix"]);
     expect(workspace.ranChecks.map((check) => check.command)).toEqual(["npm test"]);
-    expect(handoffBody()).toContain("the fix Stage left changes it never committed");
+    expect(handoffBody()).toContain("the worktree holds changes no commit carries");
     expect(handoffBody()).toContain("src/cli.ts");
     expect(handoffBody()).toContain("after the fix budget was used");
     expect(workspace.uncommitted).toEqual(["src/cli.ts"]);
@@ -1317,8 +1317,8 @@ describe("uncommitted work", () => {
     expect(outcome).toMatchObject({ outcome: "merged" });
     expect(runner.stages()).toEqual(["implement", "verify"]);
     const calls = workspace.calls;
-    expect(calls).toContain("uncommittedPaths");
-    expect(calls.indexOf("uncommittedPaths")).toBeLessThan(calls.indexOf("runCheck:npm test"));
+    expect(calls).toContain(`uncommittedPaths:${worktree}`);
+    expect(calls.indexOf(`uncommittedPaths:${worktree}`)).toBeLessThan(calls.indexOf("runCheck:npm test"));
     expect(progressTable()).not.toContain("uncommitted");
   });
 

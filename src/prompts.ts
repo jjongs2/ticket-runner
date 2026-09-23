@@ -24,7 +24,7 @@ export const SELF_HOSTING_GUIDANCE = `This checkout is the pipeline that started
  * last commit to a test run it left in the background never makes that commit.
  */
 const FINISH_GUIDANCE = `- Never end your turn while uncommitted work waits on a background task: the session ends with your turn and stops that task, and the work is never committed. Run your final tests in the foreground, then commit.
-- Leave the worktree clean: commit your work and remove anything else you made. The pipeline refuses a worktree holding changes no commit carries.`;
+- Leave the worktree clean: commit your work and remove whatever else no commit carries, test output included. The pipeline refuses a worktree holding changes no commit carries.`;
 
 /**
  * Guidance appended to every implement Stage, working around known defects of

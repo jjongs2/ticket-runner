@@ -368,12 +368,9 @@ async function takeTicket(
     for (;;) {
       try {
         point = "checks";
-        // Before anything grades the worktree, because what lands is the
-        // branch: a Stage that stopped short of committing would otherwise
-        // pass the Checks and the Verdict on code the pull request never
-        // carries, and verify would then discard it. The Stage that wrote code
-        // last is the one that left it — the fix Stage, once one has run.
-        await requireCommitted(pipeline, worktree, fixUsed ? "fix" : "implement", progress);
+        // Before anything grades the worktree, and so before verify discards
+        // what a Stage left uncommitted.
+        await requireCommitted(pipeline, worktree, progress);
         await runChecks(pipeline, worktree, progress);
         point = "verify";
         verdict = await verify(pipeline, issue, worktree, logDir, progress, notes);
@@ -878,11 +875,12 @@ async function implement(
  *
  * Nothing is discarded here: a fix Stage sent in for it decides what belongs
  * to the Ticket, and a hand-off leaves the changes where a human can find them.
+ * The summary names no Stage, because a resumed Ticket cannot say which one
+ * left them: a fix Stage the rate limit stopped spent no budget.
  */
 async function requireCommitted(
   pipeline: Pipeline,
   worktree: string,
-  stage: "implement" | "fix",
   progress: Progress,
 ): Promise<void> {
   const paths = await pipeline.workspace.uncommittedPaths(worktree);
@@ -891,7 +889,7 @@ async function requireCommitted(
   await progress.record({ point: "checks", outcome: "❌ uncommitted work" });
   throw new TicketFailure(
     "checks",
-    `the ${stage} Stage left changes it never committed`,
+    "the worktree holds changes no commit carries",
     paths.join("\n"),
     "uncommitted-work",
   );

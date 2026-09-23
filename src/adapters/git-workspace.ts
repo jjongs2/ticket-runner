@@ -157,7 +157,7 @@ export class GitWorkspace implements Workspace {
       paths.push(entry.slice(3));
       // A rename or a copy is followed by the path it came from, which no
       // longer holds anything to commit.
-      if (entry[0] === "R" || entry[0] === "C") i++;
+      if (/[RC]/.test(entry.slice(0, 2))) i++;
     }
     return paths;
   }
