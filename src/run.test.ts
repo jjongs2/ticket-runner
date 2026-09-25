@@ -308,6 +308,67 @@ describe("a Ticket that fails", () => {
   });
 });
 
+/**
+ * A Ticket a Run on one Host left, taken up by a Run on another: the State and
+ * the branch are on the remote, and this Host has no worktree of it at all.
+ */
+describe("a Ticket another Host left", () => {
+  /** Carry on as a Run on another Host, which shares only the remote with this one. */
+  function moveToAnotherHost(): void {
+    workspace = workspace.anotherHost();
+  }
+
+  it("is swept up when stranded there, and resumed from its branch on the remote", async () => {
+    stranded(4);
+    workspace.remoteBranches.add("agent/4-ticket-4");
+    moveToAnotherHost();
+
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes).toEqual([expect.objectContaining({ outcome: "merged", ticket: 4 })]);
+    expect(runner.stages()).toEqual(["verify"]);
+    expect(workspace.calls).toContain("worktreeFromRemote:agent/4-ticket-4");
+    expect(workspace.calls).not.toContain("createWorktree:agent/4-ticket-4");
+  });
+
+  it("is resumed through the Frontier from what it reached when released there", async () => {
+    tracker.addIssue({ number: 4 });
+    runner.queue("verify", { ok: false, failure: "rate-limited" });
+    expect((await processRun(pipeline())).outcomes).toEqual([
+      expect.objectContaining({ outcome: "released", ticket: 4 }),
+    ]);
+    moveToAnotherHost();
+
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes).toEqual([expect.objectContaining({ outcome: "merged", ticket: 4 })]);
+    // One implement Stage across both Hosts, which is the whole of what the
+    // State on the remote saves.
+    expect(runner.stages()).toEqual(["implement", "verify", "verify"]);
+    expect(workspace.calls).not.toContain("createWorktree:agent/4-ticket-4");
+    expect(workspace.states.has(4)).toBe(false);
+  });
+
+  it("is resumed through the Frontier from what it reached when handed off there and handed back", async () => {
+    tracker.addIssue({ number: 4 });
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    expect((await processRun(pipeline())).outcomes).toEqual([
+      expect.objectContaining({ outcome: "handed-off", ticket: 4 }),
+    ]);
+    tracker.issue(4).labels = ["ready-for-agent"];
+    moveToAnotherHost();
+
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes).toEqual([
+      expect.objectContaining({ outcome: "merged", ticket: 4, pullRequest: 100 }),
+    ]);
+    expect(runner.stages()).toEqual(["implement", "fix", "verify"]);
+    expect(workspace.calls).not.toContain("createWorktree:agent/4-ticket-4");
+  });
+});
+
 describe("a Ticket the rate limit released", () => {
   beforeEach(() => {
     for (const number of [4, 5]) tracker.addIssue({ number });

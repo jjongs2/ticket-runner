@@ -231,7 +231,7 @@ async function takeTicket(
   const user = await tracker.currentUser();
 
   // What an earlier Run left behind, read before the guards because it decides
-  // one of them: a Ticket this checkout still holds with state recorded for it is
+  // one of them: a Ticket this pipeline still holds with state recorded for it is
   // stranded — the Claim on it is this pipeline's own, left by a Run that never
   // came back — and the refusals must not read it as somebody else's.
   const recorded = await workspace.readState(ticket);
@@ -684,10 +684,10 @@ type Advance = Partial<Pick<Reached, "state" | "fixUsed" | "pullRequest">>;
  * more such write rather than the only one, which is what makes a Run that was
  * killed recoverable too, and the hand-off is another.
  *
- * A write that does not land is logged and nothing more. What is on disk is then
- * an earlier state of the same Ticket, and resuming from further back costs a
- * Stage rather than being wrong — where failing the Ticket over a local file
- * would throw away the work the Stages have already done.
+ * A write that does not land is logged and nothing more. What the remote holds
+ * is then an earlier state of the same Ticket, and resuming from further back
+ * costs a Stage rather than being wrong — where failing the Ticket over its
+ * bookkeeping would throw away the work the Stages have already done.
  */
 class ResumeRecord {
   /** What the Ticket has; the Run and the time are what each write adds to it. */
@@ -705,7 +705,7 @@ class ResumeRecord {
    * keeps it current.
    *
    * The one write that is allowed to fail the Ticket. It runs before the Claim,
-   * so a disk that will not take the file costs nothing at all: the Ticket ends
+   * so a remote that will not take the file costs nothing at all: the Ticket ends
    * at setup with nothing claimed, where carrying on would put a Claim on the
    * board that no later Run could ever resume — which is the state this record
    * exists to rule out.
@@ -719,10 +719,10 @@ class ResumeRecord {
   /**
    * Move the record on, and put it where the next Run will look for it.
    *
-   * A write that does not land here is logged and nothing more: what is on disk
-   * is an earlier state of the same Ticket, so resuming from further back costs
-   * a Stage rather than being wrong — where failing a Ticket mid-flight over a
-   * local file would throw away the Stages that have already succeeded.
+   * A write that does not land here is logged and nothing more: what the remote
+   * holds is an earlier state of the same Ticket, so resuming from further back
+   * costs a Stage rather than being wrong — where failing a Ticket mid-flight
+   * over its bookkeeping would throw away the Stages that have already succeeded.
    */
   async advance(reached: Advance): Promise<void> {
     Object.assign(this.reached, reached);

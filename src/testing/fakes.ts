@@ -443,10 +443,11 @@ export class FakeWorkspace implements Workspace {
   /** The branch each post-merge pull brought the main checkout to, in order. */
   pulledBase: string[] = [];
   /**
-   * Each Ticket's State, as a later Run would read it. A test seeds one to
-   * stand for what an earlier Run left, readable or not. Reads and writes of it
-   * stay out of `calls`: a Ticket touches its State at every step, and a test
-   * reading the order of its git would otherwise have to step round them.
+   * Each Ticket's State on the remote's state branch, as a Run on any Host
+   * would read it. A test seeds one to stand for what an earlier Run left,
+   * readable or not. Reads and writes of it stay out of `calls`: a Ticket
+   * touches its State at every step, and a test reading the order of its git
+   * would otherwise have to step round them.
    */
   states = new Map<number, StateFile>();
   /** What every write of the State fails with, when set: storage that will not take it. */
@@ -456,6 +457,19 @@ export class FakeWorkspace implements Workspace {
    * Undefined is a lock nobody holds.
    */
   lock: { holder: LockHolder; running: boolean } | undefined;
+
+  /**
+   * The same Target seen from another Host: the remote — its branches and every
+   * Ticket's State — shared with this one, and none of this Host's worktrees
+   * or branches. What a Run on this Host pushes or records, a Run on that one
+   * finds.
+   */
+  anotherHost(): FakeWorkspace {
+    const other = new FakeWorkspace();
+    other.remoteBranches = this.remoteBranches;
+    other.states = this.states;
+    return other;
+  }
 
   /** The State `ticket` keeps, when it is one a Run can resume from. */
   state(ticket: number): TicketState | undefined {

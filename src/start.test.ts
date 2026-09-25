@@ -198,6 +198,47 @@ describe("a Target init has not set up", () => {
   });
 });
 
+/**
+ * A Target an earlier pipeline left State files in, under the run directory:
+ * resume state lives on the remote now, and nothing migrates them (ADR-0004).
+ */
+describe("a Target with State files left in its checkout", () => {
+  it("refuses to start, naming the Tickets they belong to, and takes nothing", async () => {
+    write(".agent-pipeline/state/ticket-9.json", "{}");
+    write(".agent-pipeline/state/ticket-4.json", "{}");
+    tracker.addIssue({ number: 6 });
+
+    const { code, err } = await start();
+
+    expect(code).toBe(2);
+    expect(err).toContain("#4, #9");
+    expect(err).toContain(join(".agent-pipeline", "state"));
+    expect(lockTaken()).toBe(false);
+    expect(tracker.calls).toEqual([]);
+  });
+
+  it("refuses `ticket <n>` too", async () => {
+    write(".agent-pipeline/state/ticket-4.json", "{}");
+    tracker.addIssue({ number: 4 });
+
+    const { code, err } = await start({ command: "ticket", ticket: 4 });
+
+    expect(code).toBe(2);
+    expect(err).toContain("#4");
+    expect(lockTaken()).toBe(false);
+  });
+
+  it("starts as usual once the directory holds no Ticket's State", async () => {
+    write(".agent-pipeline/state/notes.txt", "a human's note");
+    tracker.addIssue({ number: 6 });
+
+    const { code } = await start();
+
+    expect(code).toBe(0);
+    expect(lockTaken()).toBe(true);
+  });
+});
+
 describe("a Target init has set up", () => {
   it("takes the Frontier and creates no label on the way", async () => {
     tracker.addIssue({ number: 4 });

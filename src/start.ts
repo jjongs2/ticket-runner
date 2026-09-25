@@ -8,6 +8,7 @@ import type { AgentRunner } from "./ports/agent-runner.js";
 import type { Tracker } from "./ports/tracker.js";
 import type { Workspace } from "./ports/workspace.js";
 import { readinessRefusal } from "./readiness.js";
+import { LOCAL_STATE_DIR, localStateTickets } from "./resume.js";
 import { writeRunVersion } from "./run-log.js";
 import { type RunStop, processRun } from "./run.js";
 import { conventionsWarning, newerVersionLine } from "./staleness.js";
@@ -58,9 +59,10 @@ export interface StartOptions {
 /**
  * Start a Run, and answer with the exit code it earned.
  *
- * Both refusals come before the lock: a Target `init` has not set up, and a
- * Target with nothing to gate a merge. Neither is a Run that went wrong, so
- * neither should leave a lock behind for the next one to reclaim.
+ * Every refusal comes before the lock: a Target `init` has not set up, one
+ * holding State files an earlier pipeline left in the checkout, and one with
+ * nothing to gate a merge. None is a Run that went wrong, so none should leave
+ * a lock behind for the next one to reclaim.
  */
 export async function startRun(options: StartOptions): Promise<number> {
   const { repoRoot, config, tracker, workspace } = options;
@@ -70,6 +72,12 @@ export async function startRun(options: StartOptions): Promise<number> {
   const notReady = await readinessRefusal({ repoRoot, labels: config.labels, tracker });
   if (notReady !== undefined) {
     error(notReady);
+    return 2;
+  }
+
+  const leftBehind = localStateTickets(repoRoot);
+  if (leftBehind.length > 0) {
+    error(localStateMessage(leftBehind));
     return 2;
   }
 
@@ -206,6 +214,25 @@ async function execute(
   // unusable Tickets is the job, not a failure to do it.
   if (outcome.outcome === "skipped") return 2;
   return exitCode([outcome]);
+}
+
+/**
+ * Why a Run will not start over State files a pipeline before the state branch
+ * left in the checkout, and what the human does about it.
+ *
+ * Each is a Ticket that pipeline could resume and this one cannot see, since
+ * resume state lives on the Target's remote now and nothing migrates it
+ * (ADR-0004). A Run that went ahead would take a released one from the top, over
+ * the branch it left, and never sweep a stranded one at all.
+ */
+function localStateMessage(tickets: number[]): string {
+  const named = tickets.map((ticket) => `#${ticket}`).join(", ");
+  return (
+    `${LOCAL_STATE_DIR} holds State files for ${named}, which this Version no longer reads: ` +
+    "a Ticket's resume state lives on the Target's remote now. Finish those Tickets with " +
+    `the Version that wrote the files, or hand them to a human, then delete ${LOCAL_STATE_DIR} ` +
+    "and run again."
+  );
 }
 
 /**
