@@ -4,6 +4,35 @@ One section per Version, newest first, written in the Version PR that cut it and
 published as the body of that Version's GitHub Release (ADR-0007). The shape is
 `docs/templates/version-notes.md`.
 
+## 0.5.0 (2026-09-25)
+
+### Cloud Host
+
+- ADR-0008 records the cloud Host as a Claude Code cloud session; CONTEXT.md defines Host and Operator ([#145])
+- The Tracker reads and writes issues, pull requests and the default branch over REST ([#158], [#159], [#170])
+- The Operator's skill starts a Run or a Ticket in the background and installs `gh` when missing ([#166], [#172])
+
+### Run lock and resume state
+
+- The Run lock and a Ticket's resume state move to GitHub, behind a new Workspace port ([#160], [#164], [#162])
+- A Ticket's branch pushes after every committing Stage and resumes from the remote, transcripts included ([#161], [#163])
+
+### After upgrading
+
+- Run `agent-pipeline init` again in every Target; readiness now refuses one missing branch deletion, a Version stamp, or the Operator's skill.
+
+[#145]: https://github.com/jjongs2/agent-pipeline/pull/145
+[#158]: https://github.com/jjongs2/agent-pipeline/pull/158
+[#159]: https://github.com/jjongs2/agent-pipeline/pull/159
+[#160]: https://github.com/jjongs2/agent-pipeline/pull/160
+[#161]: https://github.com/jjongs2/agent-pipeline/pull/161
+[#162]: https://github.com/jjongs2/agent-pipeline/pull/162
+[#163]: https://github.com/jjongs2/agent-pipeline/pull/163
+[#164]: https://github.com/jjongs2/agent-pipeline/pull/164
+[#166]: https://github.com/jjongs2/agent-pipeline/pull/166
+[#170]: https://github.com/jjongs2/agent-pipeline/pull/170
+[#172]: https://github.com/jjongs2/agent-pipeline/pull/172
+
 ## 0.4.5 (2026-09-23)
 
 ### Fixes
