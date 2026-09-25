@@ -4,7 +4,7 @@ One section per Version, newest first, written in the Version PR that cut it and
 published as the body of that Version's GitHub Release (ADR-0007). The shape is
 `docs/templates/version-notes.md`.
 
-## 0.4.6 (2026-09-25)
+## 0.5.0 (2026-09-25)
 
 ### Cloud Host
 
