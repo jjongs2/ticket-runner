@@ -12,6 +12,7 @@ import type {
   Tracker,
 } from "../ports/tracker.js";
 import { DEFAULT_CI_GRACE_MINUTES } from "../config.js";
+import { type HostKind, hostKind } from "../host.js";
 import { highestVersion } from "../version-number.js";
 import { type Execution, type RunProcess, exec, throwOnFailure } from "./exec.js";
 
@@ -26,6 +27,11 @@ export interface GhTrackerOptions {
   checksGraceMs?: number;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
+  /**
+   * The Host the Run is on, which only draft and ready depend on. Whatever the
+   * environment says unless a test says otherwise.
+   */
+  host?: HostKind;
 }
 
 /**
@@ -58,23 +64,59 @@ interface Blocker {
   open: boolean;
 }
 
-/** One entry of `gh release list --json`, in the three fields a Version needs. */
+/** One entry of the REST release list, in the three fields a Version needs. */
 interface RawRelease {
-  tagName: string;
-  isDraft: boolean;
-  isPrerelease: boolean;
+  tag_name: string;
+  draft: boolean;
+  prerelease: boolean;
 }
 
-/** One entry of `gh pr checks --json`. */
+/** A pull request as REST reports it, in the fields the pipeline reads. */
+interface RawPullRequest {
+  number: number;
+  html_url: string;
+  /** The GraphQL id, which a workstation's draft and ready mutations take. */
+  node_id: string;
+  draft: boolean;
+  head: { sha: string };
+}
+
+/** One check run on a commit, as the REST check-runs list reports it. */
+interface RawCheckRun {
+  name: string;
+  /** `queued`, `in_progress`, `completed` and the like; only `completed` has a conclusion. */
+  status: string;
+  conclusion: string | null;
+  /** Where the check reports; for an Actions job, the job's own page. */
+  details_url?: string | null;
+  html_url?: string | null;
+}
+
+/** One commit status, as the REST combined status reports it: the latest per context. */
+interface RawStatus {
+  context: string;
+  /** `success`, `failure`, `error` or `pending`. */
+  state: string;
+  target_url?: string | null;
+}
+
+/**
+ * The bucket `gh pr checks` sorted a check into, which is still the vocabulary
+ * a reading is made of now that the checks come from REST.
+ */
+type Bucket = "pass" | "fail" | "cancel" | "skipping" | "pending";
+
+/** One check on a pull request's head commit, a check run or a commit status alike. */
 interface CiCheck {
   name: string;
-  bucket: string;
+  bucket: Bucket;
   /** Where the check reports; an Actions job's is the only one a log is behind. */
   link?: string;
 }
 
 /**
- * What one reading of `gh pr checks` settled on, before any log is fetched.
+ * What one reading of the head commit's checks settled on, before any log is
+ * fetched.
  *
  * A failed reading keeps the checks themselves rather than only their names,
  * because the log fetch happens once, after the polling loop is over, and it
@@ -100,6 +142,7 @@ export class GhTracker implements Tracker {
   private readonly checksGraceMs: number;
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly now: () => number;
+  private readonly host: HostKind;
 
   constructor(options: GhTrackerOptions = {}) {
     this.runProcess = options.run ?? exec;
@@ -109,6 +152,7 @@ export class GhTracker implements Tracker {
     this.sleep =
       options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.now = options.now ?? Date.now;
+    this.host = options.host ?? hostKind(process.env);
   }
 
   /**
@@ -162,29 +206,21 @@ export class GhTracker implements Tracker {
    * `latest`, which is the newest by date: a patch cut on an old branch after a
    * minor would otherwise be reported as the Version to upgrade to. A hundred
    * of them is every Version this tool is likely to have, and they arrive
-   * newest first, so the highest is among them wherever the count lands.
+   * newest first, so the highest is among them wherever the count lands: one
+   * page, never every page.
    */
   async latestVersionTag(repository: string): Promise<string | undefined> {
     try {
       const { exitCode, stdout } = await this.gh(
-        [
-          "release",
-          "list",
-          "--repo",
-          repository,
-          "--json",
-          "tagName,isDraft,isPrerelease",
-          "--limit",
-          "100",
-        ],
+        ["api", "--method", "GET", `repos/${repository}/releases`, "-F", "per_page=100"],
         { allowFailure: true },
       );
       if (exitCode !== 0) return undefined;
       const releases = JSON.parse(stdout) as RawRelease[];
       return highestVersion(
         releases
-          .filter((release) => !release.isDraft && !release.isPrerelease)
-          .map((release) => release.tagName),
+          .filter((release) => !release.draft && !release.prerelease)
+          .map((release) => release.tag_name),
       )?.tag;
     } catch {
       return undefined;
@@ -358,51 +394,49 @@ export class GhTracker implements Tracker {
     await this.rest("PATCH", `repos/{owner}/{repo}/issues/${number}`, [`body=${body}`]);
   }
 
+  /**
+   * Open a pull request through REST, and read its number back out of the
+   * answer rather than off anything printed.
+   */
   async createPullRequest(pr: CreatePullRequest): Promise<PullRequestRef> {
-    const args = [
-      "pr",
-      "create",
-      "--base",
-      pr.base,
-      "--head",
-      pr.head,
-      "--title",
-      pr.title,
-      "--body",
-      pr.body,
-    ];
-    if (pr.draft) args.push("--draft");
-
-    const { stdout } = await this.gh(args);
-    const ref = refFromOutput(stdout);
-    if (!ref) {
+    const { stdout } = await this.rest(
+      "POST",
+      "repos/{owner}/{repo}/pulls",
+      [`base=${pr.base}`, `head=${pr.head}`, `title=${pr.title}`, `body=${pr.body}`],
+      { typed: [`draft=${pr.draft}`] },
+    );
+    const created = JSON.parse(stdout) as Partial<RawPullRequest>;
+    if (typeof created.number !== "number" || typeof created.html_url !== "string") {
       throw new Error(`could not read a pull request number from gh output: ${stdout}`);
     }
-    return ref;
+    return { number: created.number, url: created.html_url };
   }
 
   async convertPullRequestToDraft(number: number): Promise<void> {
-    await this.gh(["pr", "ready", String(number), "--undo"]);
+    await this.setDraft(number, true);
   }
 
   /**
-   * The same command as the draft direction, without the flag that reverses it.
+   * The draft direction reversed.
    *
-   * `gh` warns and exits zero on a pull request that is already out of draft, so
-   * the second pass a fix Stage buys asks this of a ready pull request for
-   * nothing rather than failing the Ticket at `pr`.
+   * A pull request already out of draft is left as it is, as `gh pr ready` left
+   * it, so the second pass a fix Stage buys asks this of a ready pull request
+   * for nothing rather than failing the Ticket at `pr`.
    */
   async markPullRequestReady(number: number): Promise<void> {
-    await this.gh(["pr", "ready", String(number)]);
+    await this.setDraft(number, false);
   }
 
   async updatePullRequestBody(number: number, body: string): Promise<void> {
-    await this.gh(["pr", "edit", String(number), "--body", body]);
+    await this.rest("PATCH", `repos/{owner}/{repo}/pulls/${number}`, [`body=${body}`]);
   }
 
   /**
    * Poll the PR's CI until it settles or the timeout runs out. A PR with no
    * checks is reported as such, never as a pass.
+   *
+   * The checks are the head commit's check runs and commit statuses, which is
+   * everything `gh pr checks` read through GraphQL.
    *
    * Right after a PR opens, GitHub answers "no checks" for a while before the
    * workflow's check run exists, so "no checks" only counts once the grace
@@ -412,14 +446,12 @@ export class GhTracker implements Tracker {
     const startedAt = this.now();
     const deadline = startedAt + timeoutMs;
     const graceUntil = startedAt + Math.min(this.checksGraceMs, timeoutMs);
+    // Read once: the pipeline pushed before it waits, and nothing else pushes to
+    // a Ticket's branch while it does.
+    const { head } = await this.pullRequest(number);
 
     for (;;) {
-      const result = await this.gh(
-        ["pr", "checks", String(number), "--json", "name,bucket,state,link"],
-        { allowFailure: true },
-      );
-
-      const reading = readCi(result);
+      const reading = readCi(await this.checks(head.sha));
       const stillRegistering = reading !== "pending" && reading.state === "none" && this.now() < graceUntil;
       if (reading !== "pending" && !stillRegistering) return this.withEvidence(reading);
       // Checks that never appeared are "none", not a timeout: nothing was ever pending.
@@ -446,13 +478,15 @@ export class GhTracker implements Tracker {
   }
 
   /**
-   * The tail of each failing Actions job's failed steps, best effort.
+   * The tail of each failing Actions job's log, or a line saying it could not
+   * be had and where the job is.
    *
    * Evidence is worth a few extra calls and nothing more: a Ticket whose CI
    * really is red has a failure to report whether or not a log came back, so
-   * every way this can go wrong — a check that is not an Actions job, a `gh`
-   * that fails or is not there, an empty log — yields no excerpt rather than
-   * an error.
+   * every way the fetch can go wrong — a `gh` that fails or is not there, a
+   * proxy that will not follow the log's redirect, an empty log — is reported
+   * to the fix Stage as a log it has to go and look at rather than as an error.
+   * A check that is not an Actions job has no log to fetch and yields nothing.
    *
    * The cap counts the jobs a log could be fetched for, not the red checks: a
    * PR whose external checks went red alongside one Actions job still gets the
@@ -460,37 +494,138 @@ export class GhTracker implements Tracker {
    * a leg at a time, each leg with the same log.
    */
   private async failedJobLogs(failed: CiCheck[]): Promise<string> {
-    const jobs = failed
-      .map((check) => ({ name: check.name, job: actionsJobId(check.link) }))
-      .filter((check): check is { name: string; job: string } => check.job !== undefined);
+    const jobs = failed.flatMap((check) => {
+      const job = actionsJobId(check.link);
+      return job === undefined || check.link === undefined
+        ? []
+        : [{ name: check.name, job, link: check.link }];
+    });
 
     const logs: string[] = [];
-    for (const { name, job } of jobs.slice(0, MAX_LOG_JOBS)) {
-      try {
-        const result = await this.gh(["run", "view", "--job", job, "--log-failed"], {
-          allowFailure: true,
-        });
-        if (result.exitCode !== 0) continue;
-        const log = result.stdout.trim();
-        if (log !== "") logs.push(`${name}\n${tail(log)}`);
-      } catch {
-        // `gh` itself could not be run. The failure still stands; the log does not.
-      }
+    for (const { name, job, link } of jobs.slice(0, MAX_LOG_JOBS)) {
+      const log = await this.jobLog(job);
+      logs.push(
+        log === undefined
+          ? `${name}\n(the log was unavailable; the job is at ${link})`
+          : `${name}\n${tail(log)}`,
+      );
     }
     return logs.join("\n\n");
   }
 
+  /**
+   * One Actions job's log through REST, up to the last line the runner marked
+   * as an error, or nothing when there is no log to be had.
+   *
+   * REST gives the whole job where `gh run view --log-failed` gave the failed
+   * steps, so what the post-job cleanup printed after the failure is cut off:
+   * otherwise it would be the tail that is kept.
+   */
+  private async jobLog(job: string): Promise<string | undefined> {
+    try {
+      const result = await this.gh(["api", `repos/{owner}/{repo}/actions/jobs/${job}/logs`], {
+        allowFailure: true,
+      });
+      if (result.exitCode !== 0) return undefined;
+      const log = throughLastError(result.stdout).trim();
+      return log === "" ? undefined : log;
+    } catch {
+      // `gh` itself could not be run. The failure still stands; the log does not.
+      return undefined;
+    }
+  }
+
+  /**
+   * Squash-merge through REST, with the subject and body the pipeline composed
+   * as the commit's title and message.
+   */
   async squashMerge(number: number, commit: SquashCommit): Promise<void> {
-    await this.gh([
-      "pr",
-      "merge",
-      String(number),
-      "--squash",
-      "--subject",
-      commit.subject,
-      "--body",
-      commit.body,
+    await this.rest("PUT", `repos/{owner}/{repo}/pulls/${number}/merge`, [
+      "merge_method=squash",
+      `commit_title=${commit.subject}`,
+      `commit_message=${commit.body}`,
     ]);
+  }
+
+  /** One pull request, read through REST. */
+  private async pullRequest(number: number): Promise<RawPullRequest> {
+    const { stdout } = await this.gh(["api", `repos/{owner}/{repo}/pulls/${number}`]);
+    return JSON.parse(stdout) as RawPullRequest;
+  }
+
+  /**
+   * Put a pull request into draft or take it out, and leave one already there
+   * as it is.
+   *
+   * The one call that depends on the Host: GitHub's REST API has no form of it,
+   * so a workstation uses the GraphQL mutation `gh pr ready` used, and a cloud
+   * Host, where GraphQL is refused, the proxy's own routes (ADR-0008). The
+   * state is read first on either, which is also where GraphQL's id comes from.
+   */
+  private async setDraft(number: number, draft: boolean): Promise<void> {
+    const pr = await this.pullRequest(number);
+    if (pr.draft === draft) return;
+
+    if (this.host === "cloud") {
+      const route = draft ? "convert_to_draft" : "ready_for_review";
+      await this.rest("POST", `repos/{owner}/{repo}/pulls/${number}/ccr/${route}`, []);
+      return;
+    }
+
+    const mutation = draft ? "convertPullRequestToDraft" : "markPullRequestReadyForReview";
+    await this.gh([
+      "api",
+      "graphql",
+      "-f",
+      `query=mutation($id: ID!) { ${mutation}(input: {pullRequestId: $id}) { pullRequest { isDraft } } }`,
+      "-f",
+      `id=${pr.node_id}`,
+    ]);
+  }
+
+  /**
+   * Every check on a commit — its check runs and its commit statuses — or
+   * nothing when GitHub would not say, which reads as no checks.
+   *
+   * Check runs come from the `latest` filter REST applies by default, so a job
+   * re-run after failing counts as its re-run, as `gh pr checks` counted it.
+   */
+  private async checks(sha: string): Promise<CiCheck[] | undefined> {
+    const runs = await this.nested(`repos/{owner}/{repo}/commits/${sha}/check-runs`, "check_runs");
+    const statuses = await this.nested(`repos/{owner}/{repo}/commits/${sha}/status`, "statuses");
+    if (runs === undefined || statuses === undefined) return undefined;
+    return [
+      ...(runs as RawCheckRun[]).map((run) => ({
+        name: run.name,
+        bucket: checkRunBucket(run),
+        ...linked(run.details_url ?? run.html_url),
+      })),
+      ...(statuses as RawStatus[]).map((status) => ({
+        name: status.context,
+        bucket: statusBucket(status.state),
+        ...linked(status.target_url),
+      })),
+    ];
+  }
+
+  /**
+   * Every page of a list REST wraps in an object under `key`, one entry per
+   * line as `--jq` prints them, or nothing when the call failed.
+   */
+  private async nested(path: string, key: string): Promise<unknown[] | undefined> {
+    const result = await this.gh(
+      ["api", "--paginate", "--method", "GET", path, "-F", "per_page=100", "--jq", `.${key}[]`],
+      { allowFailure: true },
+    );
+    if (result.exitCode !== 0) return undefined;
+    try {
+      return result.stdout
+        .split("\n")
+        .filter((line) => line.trim() !== "")
+        .map((line) => JSON.parse(line) as unknown);
+    } catch {
+      throw new Error(`could not read the checks gh reported: ${result.output.trim()}`);
+    }
   }
 
   /**
@@ -514,17 +649,25 @@ export class GhTracker implements Tracker {
 
   /**
    * One REST write, every field raw with `-f`, so a body is never read as a
-   * file or a number whatever it starts with.
+   * file or a number whatever it starts with. The `typed` ones are the few
+   * that must reach GitHub as a boolean, and go with `-F`.
    */
   private rest(
-    method: "POST" | "PATCH" | "DELETE",
+    method: "POST" | "PATCH" | "PUT" | "DELETE",
     path: string,
     fields: string[],
-    options: { allowFailure?: boolean } = {},
+    options: { allowFailure?: boolean; typed?: string[] } = {},
   ): Promise<Execution> {
     return this.gh(
-      ["api", "--method", method, path, ...fields.flatMap((field) => ["-f", field])],
-      options,
+      [
+        "api",
+        "--method",
+        method,
+        path,
+        ...fields.flatMap((field) => ["-f", field]),
+        ...(options.typed ?? []).flatMap((field) => ["-F", field]),
+      ],
+      options.allowFailure ? { allowFailure: true } : {},
     );
   }
 
@@ -557,9 +700,6 @@ export class GhTracker implements Tracker {
   }
 }
 
-/** The URL `gh pr create` prints, and the number it ends in. */
-const PULL_REQUEST_URL = /^https?:\/\/[^\s/]+\/[^\s/]+\/[^\s/]+\/pull\/(\d+)$/;
-
 /** The Actions job a check's link points at: `.../actions/runs/<run>/job/<job>`. */
 const ACTIONS_JOB_URL = /\/actions\/runs\/\d+\/job\/(\d+)(?:[?#]|$)/;
 
@@ -577,31 +717,6 @@ const MAX_LOG_LINES = 40;
 
 /** Characters kept from the tail of one job's log, for lines long enough to need it. */
 const MAX_LOG_CHARS = 4_000;
-
-/** The one line of `gh` output that carries the handle it gives back. */
-function lastLine(stdout: string): string {
-  return stdout.trim().split("\n").at(-1)?.trim() ?? "";
-}
-
-/**
- * The pull request `gh` just opened, read off the last line of its output, or
- * nothing when that line is not the URL of one.
- *
- * A number read loosely is worse than none: taken segment by segment, `3 files
- * changed` is pull request 3, and a URL with trailing text yields a number
- * while keeping the text in the URL. Either way the pipeline goes on to wait
- * for CI on, comment on, or merge whatever happens to carry that number. So the
- * whole line has to be the URL, and anything else becomes the refusal the call
- * site throws.
- *
- * Only the path shape is matched — host, owner, repo, the number — so
- * an Enterprise host reads the same as github.com without being named here.
- */
-function refFromOutput(stdout: string): PullRequestRef | undefined {
-  const url = lastLine(stdout);
-  const match = PULL_REQUEST_URL.exec(url);
-  return match ? { number: Number(match[1]), url } : undefined;
-}
 
 /**
  * A comment's id, as the string {@link Tracker.updateComment} takes, or nothing
@@ -634,38 +749,76 @@ function subIssues(issue: RawIssue): number {
   return total;
 }
 
-/** `pending` means "ask again"; everything else is an answer. */
-function readCi(result: Execution): CiReading | "pending" {
-  if (/no checks reported/i.test(result.stderr)) return { state: "none" };
+/**
+ * `pending` means "ask again"; everything else is an answer. Checks GitHub
+ * would not report read as none, as a failing `gh pr checks` did, so the grace
+ * period still covers a wait that starts before the checks exist.
+ */
+function readCi(checks: CiCheck[] | undefined): CiReading | "pending" {
+  if (checks === undefined || checks.length === 0) return { state: "none" };
 
-  let runs: CiCheck[];
-  try {
-    runs = JSON.parse(result.stdout) as CiCheck[];
-  } catch {
-    if (result.exitCode !== 0) return { state: "none" };
-    throw new Error(`could not read gh pr checks output: ${result.output.trim()}`);
-  }
-
-  if (runs.length === 0) return { state: "none" };
-
-  const failed = runs.filter((run) => run.bucket === "fail" || run.bucket === "cancel");
+  const failed = checks.filter((check) => check.bucket === "fail" || check.bucket === "cancel");
   if (failed.length > 0) {
     return {
       state: "failed",
       summary: failed
-        .map((run) => `${run.name} ${run.bucket === "cancel" ? "cancelled" : "failed"}`)
+        .map((check) => `${check.name} ${check.bucket === "cancel" ? "cancelled" : "failed"}`)
         .join(", "),
       failed,
     };
   }
-  if (runs.some((run) => run.bucket === "pending")) return "pending";
+  if (checks.some((check) => check.bucket === "pending")) return "pending";
   return { state: "passed" };
+}
+
+/**
+ * A check run's bucket, as `gh pr checks` sorted it: by conclusion once it has
+ * completed, and pending until then. A conclusion GitHub adds later is pending
+ * too, which the timeout bounds, rather than a pass nobody saw.
+ */
+function checkRunBucket(run: RawCheckRun): Bucket {
+  if (run.status !== "completed") return "pending";
+  switch (run.conclusion) {
+    case "success":
+      return "pass";
+    case "skipped":
+    case "neutral":
+      return "skipping";
+    case "cancelled":
+      return "cancel";
+    case "failure":
+    case "timed_out":
+    case "action_required":
+    case "startup_failure":
+      return "fail";
+    default:
+      return "pending";
+  }
+}
+
+/** A commit status's bucket: `error` and `failure` are red, and `pending` is pending. */
+function statusBucket(state: string): Bucket {
+  if (state === "success") return "pass";
+  if (state === "failure" || state === "error") return "fail";
+  return "pending";
+}
+
+/** A check's link, left out rather than empty when GitHub reported none. */
+function linked(url: string | null | undefined): { link?: string } {
+  return url ? { link: url } : {};
+}
+
+/** Everything up to the last line an Actions runner marked `##[error]`, or all of it. */
+function throughLastError(log: string): string {
+  const lines = log.split("\n");
+  const last = lines.findLastIndex((line) => line.includes("##[error]"));
+  return last === -1 ? log : lines.slice(0, last + 1).join("\n");
 }
 
 /**
  * The Actions job id behind a check's link, or nothing when the check does not
  * report from one. An external app's check has a link of its own shape and no
- * log `gh` can read, which is a reason to skip it and never a reason to fail.
+ * log REST can give, which is a reason to skip it and never a reason to fail.
  */
 function actionsJobId(link: string | undefined): string | undefined {
   const match = link === undefined ? null : ACTIONS_JOB_URL.exec(link);

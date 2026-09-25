@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { execution, failedExecution } from "../testing/executions.js";
 import { GhTracker, type GhTrackerOptions } from "./gh-tracker.js";
-import type { ExecOptions, Execution } from "./exec.js";
+import type { ExecOptions, Execution, RunProcess } from "./exec.js";
 
 let calls: string[][];
 let responses: Execution[];
@@ -83,27 +83,25 @@ describe("reading", () => {
     expect(await gh.authenticated()).toBe(false);
   });
 
-  it("asks gh for the highest published Release of a named repository", async () => {
+  it("asks REST for the highest published Release of a named repository", async () => {
     const gh = tracker(
       ok(
         JSON.stringify([
-          { tagName: "v0.3.0", isDraft: false, isPrerelease: false },
-          { tagName: "v0.10.0", isDraft: false, isPrerelease: false },
-          { tagName: "v0.9.0", isDraft: false, isPrerelease: false },
+          { tag_name: "v0.3.0", draft: false, prerelease: false },
+          { tag_name: "v0.10.0", draft: false, prerelease: false },
+          { tag_name: "v0.9.0", draft: false, prerelease: false },
         ]),
       ),
     );
 
     expect(await gh.latestVersionTag("acme/repo")).toBe("v0.10.0");
     expect(calls[0]).toEqual([
-      "release",
-      "list",
-      "--repo",
-      "acme/repo",
-      "--json",
-      "tagName,isDraft,isPrerelease",
-      "--limit",
-      "100",
+      "api",
+      "--method",
+      "GET",
+      "repos/acme/repo/releases",
+      "-F",
+      "per_page=100",
     ]);
   });
 
@@ -111,9 +109,9 @@ describe("reading", () => {
     const gh = tracker(
       ok(
         JSON.stringify([
-          { tagName: "v0.6.0", isDraft: true, isPrerelease: false },
-          { tagName: "v0.5.0", isDraft: false, isPrerelease: true },
-          { tagName: "v0.4.0", isDraft: false, isPrerelease: false },
+          { tag_name: "v0.6.0", draft: true, prerelease: false },
+          { tag_name: "v0.5.0", draft: false, prerelease: true },
+          { tag_name: "v0.4.0", draft: false, prerelease: false },
         ]),
       ),
     );
@@ -123,7 +121,7 @@ describe("reading", () => {
 
   it("ignores a Release tagged as anything but a Version", async () => {
     const gh = tracker(
-      ok(JSON.stringify([{ tagName: "nightly", isDraft: false, isPrerelease: false }])),
+      ok(JSON.stringify([{ tag_name: "nightly", draft: false, prerelease: false }])),
     );
 
     expect(await gh.latestVersionTag("acme/repo")).toBeUndefined();
@@ -579,329 +577,576 @@ describe("writing", () => {
 });
 
 describe("pull requests", () => {
-  it("opens a PR against the base branch it is given and reads its number from the URL", async () => {
-    const pr = await tracker(ok("https://github.com/acme/repo/pull/12\n")).createPullRequest({
+  /** A pull request as REST reports it, with whatever the test sets over it. */
+  const restPullRequest = (overrides: Record<string, unknown> = {}) =>
+    JSON.stringify({
+      number: 12,
+      html_url: "https://github.com/acme/repo/pull/12",
+      node_id: "PR_kw12",
+      draft: false,
+      head: { sha: "abc123" },
+      ...overrides,
+    });
+
+  const opened = (draft: boolean) =>
+    tracker(ok(restPullRequest({ draft }))).createPullRequest({
       base: "main",
       head: "agent/2-skeleton",
       title: "Skeleton (#2)",
       body: "Closes #2",
-      draft: false,
+      draft,
     });
+
+  it("opens a PR against the base branch it is given through REST and reads its number off the answer", async () => {
+    const pr = await opened(false);
 
     expect(pr).toEqual({ number: 12, url: "https://github.com/acme/repo/pull/12" });
     expect(calls[0]).toEqual([
-      "pr",
-      "create",
-      "--base",
-      "main",
-      "--head",
-      "agent/2-skeleton",
-      "--title",
-      "Skeleton (#2)",
-      "--body",
-      "Closes #2",
+      "api",
+      "--method",
+      "POST",
+      "repos/{owner}/{repo}/pulls",
+      "-f",
+      "base=main",
+      "-f",
+      "head=agent/2-skeleton",
+      "-f",
+      "title=Skeleton (#2)",
+      "-f",
+      "body=Closes #2",
+      "-F",
+      "draft=false",
     ]);
   });
 
-  it("refuses a last line that starts with digits but is not a URL", async () => {
-    await expect(
-      tracker(ok("3 files changed\n")).createPullRequest({
-        base: "main",
-        head: "agent/2-skeleton",
-        title: "Skeleton (#2)",
-        body: "Closes #2",
-        draft: false,
-      }),
-    ).rejects.toThrow("could not read a pull request number");
-  });
-
-  it("refuses a URL whose path is not a pull request's", async () => {
-    await expect(
-      tracker(ok("https://github.com/acme/repo/pull/9/pull/12\n")).createPullRequest({
-        base: "main",
-        head: "agent/2-skeleton",
-        title: "Skeleton (#2)",
-        body: "Closes #2",
-        draft: false,
-      }),
-    ).rejects.toThrow("could not read a pull request number");
-  });
-
-  it("refuses a URL the last line carries trailing text after", async () => {
-    await expect(
-      tracker(ok("https://github.com/acme/repo/pull/12 (draft)\n")).createPullRequest({
-        base: "main",
-        head: "agent/2-skeleton",
-        title: "Skeleton (#2)",
-        body: "Closes #2",
-        draft: false,
-      }),
-    ).rejects.toThrow("could not read a pull request number");
-  });
-
-  it("reads the number off the last line when gh printed something before it", async () => {
-    const pr = await tracker(
-      ok("Creating pull request into main\nhttps://github.com/acme/repo/pull/12\n"),
-    ).createPullRequest({
-      base: "main",
-      head: "agent/2-skeleton",
-      title: "Skeleton (#2)",
-      body: "Closes #2",
-      draft: false,
-    });
-
-    expect(pr).toEqual({ number: 12, url: "https://github.com/acme/repo/pull/12" });
-  });
-
   it("opens a draft PR when the Ticket is being handed off", async () => {
-    await tracker(ok("https://github.com/acme/repo/pull/12\n")).createPullRequest({
-      base: "main",
-      head: "agent/2-skeleton",
-      title: "Skeleton (#2)",
-      body: "Closes #2",
-      draft: true,
-    });
+    await opened(true);
 
-    expect(calls[0]).toContain("--draft");
+    expect(calls[0]?.slice(-2)).toEqual(["-F", "draft=true"]);
   });
 
-  it("converts an open PR back to a draft", async () => {
-    await tracker(ok("")).convertPullRequestToDraft(12);
-
-    expect(calls[0]).toEqual(["pr", "ready", "12", "--undo"]);
+  it("refuses an answer it cannot read a pull request number from", async () => {
+    await expect(
+      tracker(ok(JSON.stringify({ message: "Validation Failed" }))).createPullRequest({
+        base: "main",
+        head: "agent/2-skeleton",
+        title: "Skeleton (#2)",
+        body: "Closes #2",
+        draft: false,
+      }),
+    ).rejects.toThrow("could not read a pull request number");
   });
 
-  it("takes a drafted PR back out of draft", async () => {
-    await tracker(ok("")).markPullRequestReady(12);
+  it("rewrites the body of a PR a second pass re-graded through REST", async () => {
+    await tracker(ok("{}")).updatePullRequestBody(12, "Closes #2\n\n**Verdict:** 2 met");
 
-    expect(calls[0]).toEqual(["pr", "ready", "12"]);
+    expect(calls[0]).toEqual([
+      "api",
+      "--method",
+      "PATCH",
+      "repos/{owner}/{repo}/pulls/12",
+      "-f",
+      "body=Closes #2\n\n**Verdict:** 2 met",
+    ]);
   });
 
-  it("rewrites the body of a PR a second pass re-graded", async () => {
-    await tracker(ok("")).updatePullRequestBody(12, "Closes #2\n\n**Verdict:** 2 met");
-
-    expect(calls[0]).toEqual(["pr", "edit", "12", "--body", "Closes #2\n\n**Verdict:** 2 met"]);
-  });
-
-  it("squash-merges with the subject and body the pipeline composed", async () => {
-    await tracker(ok("")).squashMerge(12, {
+  it("squash-merges through REST with the subject and body the pipeline composed", async () => {
+    await tracker(ok("{}")).squashMerge(12, {
       subject: "feat(cli): add a flag",
       body: "Closes #2\n\nVerdict: 1 met · 0 unmet · 0 unverifiable\n",
     });
 
     expect(calls[0]).toEqual([
-      "pr",
-      "merge",
-      "12",
-      "--squash",
-      "--subject",
-      "feat(cli): add a flag",
-      "--body",
-      "Closes #2\n\nVerdict: 1 met · 0 unmet · 0 unverifiable\n",
+      "api",
+      "--method",
+      "PUT",
+      "repos/{owner}/{repo}/pulls/12/merge",
+      "-f",
+      "merge_method=squash",
+      "-f",
+      "commit_title=feat(cli): add a flag",
+      "-f",
+      "commit_message=Closes #2\n\nVerdict: 1 met · 0 unmet · 0 unverifiable\n",
     ]);
+  });
+
+  describe("on a workstation", () => {
+    const workstation = (...queued: Execution[]) =>
+      trackerWith({ host: "workstation" }, ...queued);
+
+    it("reads the PR's state through REST, then converts it to a draft through GraphQL", async () => {
+      await workstation(ok(restPullRequest({ draft: false })), ok("{}")).convertPullRequestToDraft(12);
+
+      expect(calls[0]).toEqual(["api", "repos/{owner}/{repo}/pulls/12"]);
+      expect(calls[1]?.slice(0, 2)).toEqual(["api", "graphql"]);
+      expect(calls[1]?.join(" ")).toContain("convertPullRequestToDraft");
+      expect(calls[1]).toContain("id=PR_kw12");
+    });
+
+    it("takes a drafted PR back out of draft through GraphQL", async () => {
+      await workstation(ok(restPullRequest({ draft: true })), ok("{}")).markPullRequestReady(12);
+
+      expect(calls[1]?.slice(0, 2)).toEqual(["api", "graphql"]);
+      expect(calls[1]?.join(" ")).toContain("markPullRequestReadyForReview");
+      expect(calls[1]).toContain("id=PR_kw12");
+    });
+  });
+
+  describe("on a cloud Host", () => {
+    const cloud = (...queued: Execution[]) => trackerWith({ host: "cloud" }, ...queued);
+
+    it("converts a PR to a draft through the proxy's own route", async () => {
+      await cloud(ok(restPullRequest({ draft: false })), ok("{}")).convertPullRequestToDraft(12);
+
+      expect(calls[1]).toEqual([
+        "api",
+        "--method",
+        "POST",
+        "repos/{owner}/{repo}/pulls/12/ccr/convert_to_draft",
+      ]);
+    });
+
+    it("takes a drafted PR back out of draft through the proxy's own route", async () => {
+      await cloud(ok(restPullRequest({ draft: true })), ok("{}")).markPullRequestReady(12);
+
+      expect(calls[1]).toEqual([
+        "api",
+        "--method",
+        "POST",
+        "repos/{owner}/{repo}/pulls/12/ccr/ready_for_review",
+      ]);
+    });
+  });
+
+  it.each(["workstation", "cloud"] as const)(
+    "leaves a PR already in the state asked for as it is, on a %s",
+    async (host) => {
+      const gh = trackerWith(
+        { host },
+        ok(restPullRequest({ draft: false })),
+        ok(restPullRequest({ draft: true })),
+      );
+
+      await gh.markPullRequestReady(12);
+      await gh.convertPullRequestToDraft(12);
+
+      expect(calls).toEqual([
+        ["api", "repos/{owner}/{repo}/pulls/12"],
+        ["api", "repos/{owner}/{repo}/pulls/12"],
+      ]);
+    },
+  );
+
+  it("fails a draft or ready GitHub refused rather than handing off as if it held", async () => {
+    await expect(
+      trackerWith(
+        { host: "cloud" },
+        ok(restPullRequest({ draft: false })),
+        failedExecution("HTTP 404"),
+      ).convertPullRequestToDraft(12),
+    ).rejects.toThrow();
+  });
+
+  /** Every pull-request call of the port once, and the release list, on `host`. */
+  async function everyPullRequestCall(host: "workstation" | "cloud") {
+    const gh = trackerWith(
+      { host },
+      ok(restPullRequest()),
+      ok("{}"),
+      ok(restPullRequest({ draft: false })),
+      ok("{}"),
+      ok(restPullRequest({ draft: true })),
+      ok("{}"),
+      ok(restPullRequest()),
+      ok(JSON.stringify({ name: "ci", status: "completed", conclusion: "success" })),
+      ok(""),
+      ok("{}"),
+      ok("[]"),
+    );
+    await gh.createPullRequest({ base: "main", head: "b", title: "t", body: "b", draft: false });
+    await gh.updatePullRequestBody(12, "b");
+    await gh.convertPullRequestToDraft(12);
+    await gh.markPullRequestReady(12);
+    expect(await gh.waitForCi(12, 60_000)).toEqual({ state: "passed" });
+    await gh.squashMerge(12, { subject: "s", body: "b" });
+    await gh.latestVersionTag("acme/repo");
+    expect(calls).toHaveLength(11);
+  }
+
+  /** The calls that are not `gh api` REST: another subcommand, or GraphQL. */
+  const notRest = () => calls.filter((args) => args[0] !== "api" || args.includes("graphql"));
+
+  it("runs nothing but REST for any pull-request call on a cloud Host", async () => {
+    await everyPullRequestCall("cloud");
+
+    expect(notRest()).toEqual([]);
+  });
+
+  it("runs GraphQL for draft and ready alone on a workstation", async () => {
+    await everyPullRequestCall("workstation");
+
+    expect(notRest().map((args) => args[1])).toEqual(["graphql", "graphql"]);
   });
 });
 
 describe("waiting for CI", () => {
-  const checks = (...buckets: string[]) =>
-    JSON.stringify(
-      buckets.map((bucket, i) => ({
-        name: `check-${i}`,
-        bucket,
-        state: bucket,
-        link: `https://github.com/acme/repo/actions/runs/99/job/${100 + i}`,
-      })),
-    );
+  /** The head commit every pull request here points at. */
+  const HEAD = "abc123";
 
-  const log = (lines: number) =>
-    Array.from({ length: lines }, (_, i) => `step\tline ${i + 1}`).join("\n");
+  /** One reading of the head commit: its check runs and its commit statuses. */
+  interface Reading {
+    runs?: object[];
+    statuses?: object[];
+  }
+
+  /** What `gh --paginate --jq '.key[]'` prints: one entry per line. */
+  const lines = (entries: object[]) => entries.map((entry) => JSON.stringify(entry)).join("\n");
+
+  /** An Actions job's check run, in the state a `gh pr checks` bucket names. */
+  const run = (bucket: string, i = 0) => {
+    const [status, conclusion] = {
+      pass: ["completed", "success"],
+      fail: ["completed", "failure"],
+      cancel: ["completed", "cancelled"],
+      skipping: ["completed", "skipped"],
+      pending: ["in_progress", null],
+    }[bucket] as [string, string | null];
+    return {
+      name: `check-${i}`,
+      status,
+      conclusion,
+      details_url: `https://github.com/acme/repo/actions/runs/99/job/${100 + i}`,
+      html_url: `https://github.com/acme/repo/runs/${100 + i}`,
+    };
+  };
+
+  const checks = (...buckets: string[]): Reading => ({
+    runs: buckets.map((bucket, i) => run(bucket, i)),
+  });
+
+  /** GitHub would not answer for the commit's checks. */
+  const UNANSWERED = "unanswered" as const;
+
+  const log = (count: number) =>
+    Array.from({ length: count }, (_, i) => `step line ${i + 1}`).join("\n");
+
+  /**
+   * A `gh` answered by what each call asks for: the pull request, the head
+   * commit's checks — one reading after another, the last repeating — or a
+   * job's log out of `logs`, where a job not named has none.
+   */
+  function answering(
+    readings: (Reading | typeof UNANSWERED)[],
+    logs: Record<string, Execution | Error> = {},
+  ): RunProcess {
+    const queue = [...readings];
+    let current: Reading | typeof UNANSWERED = {};
+    return async (_command: string, args: string[]) => {
+      calls.push(args);
+      const path = args.find((arg) => arg.startsWith("repos/")) ?? "";
+      if (path === "repos/{owner}/{repo}/pulls/12") {
+        return ok(JSON.stringify({ number: 12, draft: false, head: { sha: HEAD } }));
+      }
+      if (path.endsWith("/check-runs")) {
+        current = (queue.length > 1 ? queue.shift() : queue[0]) ?? {};
+        return current === UNANSWERED ? failedExecution("HTTP 502") : ok(lines(current.runs ?? []));
+      }
+      if (path.endsWith("/status")) {
+        return current === UNANSWERED
+          ? failedExecution("HTTP 502")
+          : ok(lines(current.statuses ?? []));
+      }
+      const job = /actions\/jobs\/(\d+)\/logs$/.exec(path)?.[1];
+      if (job !== undefined) {
+        const answer = logs[job];
+        if (answer instanceof Error) throw answer;
+        return answer ?? failedExecution("HTTP 404");
+      }
+      throw new Error(`unexpected gh call: ${args.join(" ")}`);
+    };
+  }
+
+  /** A tracker over {@link answering}; grace is off unless asked for. */
+  function ci(
+    options: GhTrackerOptions,
+    readings: (Reading | typeof UNANSWERED)[],
+    logs: Record<string, Execution | Error> = {},
+  ) {
+    return new GhTracker({
+      run: answering(readings, logs),
+      sleep: async () => {},
+      pollIntervalMs: 0,
+      checksGraceMs: 0,
+      ...options,
+    });
+  }
+
+  /** How many times the head commit's checks were read. */
+  const readingsTaken = () => calls.filter((args) => args.some((arg) => arg.endsWith("/check-runs"))).length;
+
+  /** What the fix Stage is told in place of check-0's log. */
+  const UNAVAILABLE =
+    "(the log was unavailable; the job is at https://github.com/acme/repo/actions/runs/99/job/100)";
+
+  const excerptOf = (outcome: unknown) => (outcome as { excerpt: string }).excerpt;
+
+  it("reads the head commit's check runs and status through REST", async () => {
+    await ci({}, [checks("pass")]).waitForCi(12, 60_000);
+
+    expect(calls).toEqual([
+      ["api", "repos/{owner}/{repo}/pulls/12"],
+      [
+        "api",
+        "--paginate",
+        "--method",
+        "GET",
+        `repos/{owner}/{repo}/commits/${HEAD}/check-runs`,
+        "-F",
+        "per_page=100",
+        "--jq",
+        ".check_runs[]",
+      ],
+      [
+        "api",
+        "--paginate",
+        "--method",
+        "GET",
+        `repos/{owner}/{repo}/commits/${HEAD}/status`,
+        "-F",
+        "per_page=100",
+        "--jq",
+        ".statuses[]",
+      ],
+    ]);
+  });
 
   it("passes once every check is in the pass bucket", async () => {
-    const outcome = await tracker(ok(checks("pass", "skipping"))).waitForCi(12, 60_000);
+    expect(await ci({}, [checks("pass", "skipping")]).waitForCi(12, 60_000)).toEqual({
+      state: "passed",
+    });
+  });
 
-    expect(outcome).toEqual({ state: "passed" });
-    expect(calls[0]?.slice(0, 3)).toEqual(["pr", "checks", "12"]);
+  it("counts a neutral check run as skipped, not as pending", async () => {
+    const neutral = { ...run("pass"), conclusion: "neutral" };
+
+    expect(await ci({}, [{ runs: [neutral] }]).waitForCi(12, 60_000)).toEqual({ state: "passed" });
   });
 
   it("polls while checks are pending and passes when they finish", async () => {
-    const outcome = await tracker(
-      ok(checks("pending"), { exitCode: 8 }),
-      ok(checks("pass")),
-    ).waitForCi(12, 60_000);
+    const outcome = await ci({}, [checks("pending"), checks("pass")]).waitForCi(12, 60_000);
 
     expect(outcome).toEqual({ state: "passed" });
-    expect(calls).toHaveLength(2);
+    expect(readingsTaken()).toBe(2);
+  });
+
+  it("reads the head commit once for the whole wait", async () => {
+    await ci({}, [checks("pending"), checks("pending"), checks("pass")]).waitForCi(12, 60_000);
+
+    expect(calls.filter((args) => args[1] === "repos/{owner}/{repo}/pulls/12")).toHaveLength(1);
+  });
+
+  it.each([
+    ["timed_out", "failed"],
+    ["action_required", "failed"],
+    ["startup_failure", "failed"],
+    ["cancelled", "cancelled"],
+  ])("reports a check run that concluded %s as %s", async (conclusion, word) => {
+    const outcome = await ci({}, [{ runs: [{ ...run("fail"), conclusion }] }]).waitForCi(12, 60_000);
+
+    expect(outcome).toMatchObject({ state: "failed", summary: `check-0 ${word}` });
+  });
+
+  it("counts a commit status as a check, in the same buckets", async () => {
+    const status = (state: string) => ({
+      context: "ci/legacy",
+      state,
+      target_url: "https://ci.example.com/build/1",
+    });
+
+    expect(await ci({}, [{ statuses: [status("success")] }]).waitForCi(12, 60_000)).toEqual({
+      state: "passed",
+    });
+    expect(
+      await ci({}, [{ statuses: [status("pending")] }, { statuses: [status("error")] }]).waitForCi(
+        12,
+        60_000,
+      ),
+    ).toEqual({ state: "failed", summary: "ci/legacy failed", excerpt: "" });
   });
 
   it("names the failing checks", async () => {
-    const outcome = await tracker(
-      ok(checks("pass", "fail"), { exitCode: 1 }),
-      ok("api\tRun tests\tassertion failed"),
-    ).waitForCi(12, 60_000);
+    const outcome = await ci({}, [checks("pass", "fail")], {
+      "101": ok("Run tests\n##[error]assertion failed"),
+    }).waitForCi(12, 60_000);
 
     expect(outcome).toEqual({
       state: "failed",
       summary: "check-1 failed",
-      excerpt: "check-1\napi\tRun tests\tassertion failed",
+      excerpt: "check-1\nRun tests\n##[error]assertion failed",
     });
   });
 
-  it("fetches the failed steps of the failing check's Actions job", async () => {
-    await tracker(
-      ok(checks("pass", "fail"), { exitCode: 1 }),
-      ok("api\tRun tests\tassertion failed"),
-    ).waitForCi(12, 60_000);
+  it("fetches the failing check's Actions job log through REST", async () => {
+    await ci({}, [checks("pass", "fail")], { "101": ok("boom") }).waitForCi(12, 60_000);
 
-    expect(calls[0]).toEqual(["pr", "checks", "12", "--json", "name,bucket,state,link"]);
-    expect(calls[1]).toEqual(["run", "view", "--job", "101", "--log-failed"]);
-    expect(calls).toHaveLength(2);
+    expect(calls.at(-1)).toEqual(["api", "repos/{owner}/{repo}/actions/jobs/101/logs"]);
+  });
+
+  it("keeps the log up to the last error, not the cleanup the runner printed after it", async () => {
+    const outcome = await ci({}, [checks("fail")], {
+      "100": ok(
+        [
+          "Run npm test",
+          "assertion failed",
+          "##[error]Process completed with exit code 1.",
+          "Post job cleanup.",
+          "Cleaning up orphan processes",
+        ].join("\n"),
+      ),
+    }).waitForCi(12, 60_000);
+
+    expect(excerptOf(outcome)).toBe(
+      "check-0\nRun npm test\nassertion failed\n##[error]Process completed with exit code 1.",
+    );
   });
 
   it("keeps the tail of a long log and says how much it dropped", async () => {
-    const outcome = await tracker(
-      ok(checks("fail"), { exitCode: 1 }),
-      ok(log(60)),
-    ).waitForCi(12, 60_000);
+    const outcome = await ci({}, [checks("fail")], { "100": ok(log(60)) }).waitForCi(12, 60_000);
 
-    const excerpt = (outcome as { excerpt: string }).excerpt;
+    const excerpt = excerptOf(outcome);
     expect(excerpt).toContain("(20 earlier lines omitted)");
-    expect(excerpt).toContain("step\tline 60");
-    expect(excerpt).not.toContain("step\tline 20");
+    expect(excerpt).toContain("step line 60");
+    expect(excerpt).not.toContain("step line 20\n");
     expect(excerpt.split("\n")).toHaveLength(42);
   });
 
   it("does not say it dropped anything from a log that fits", async () => {
-    const outcome = await tracker(
-      ok(checks("fail"), { exitCode: 1 }),
-      ok(log(3)),
-    ).waitForCi(12, 60_000);
+    const outcome = await ci({}, [checks("fail")], { "100": ok(log(3)) }).waitForCi(12, 60_000);
 
-    expect((outcome as { excerpt: string }).excerpt).toBe(
-      `check-0\n${log(3)}`,
-    );
+    expect(excerptOf(outcome)).toBe(`check-0\n${log(3)}`);
   });
 
   it("still reports the failure when the check is not an Actions job", async () => {
-    const outcome = await tracker(
-      ok(
-        JSON.stringify([
-          { name: "vercel", bucket: "fail", state: "fail", link: "https://vercel.com/x/y" },
-        ]),
-        { exitCode: 1 },
-      ),
-    ).waitForCi(12, 60_000);
+    const vercel = {
+      name: "vercel",
+      status: "completed",
+      conclusion: "failure",
+      details_url: "https://vercel.com/x/y",
+    };
+    const outcome = await ci({}, [{ runs: [vercel] }]).waitForCi(12, 60_000);
 
     expect(outcome).toEqual({ state: "failed", summary: "vercel failed", excerpt: "" });
-    expect(calls).toHaveLength(1);
+    expect(calls.some((args) => args.some((arg) => arg.includes("/logs")))).toBe(false);
   });
 
-  it("still reports the failure when the log cannot be fetched", async () => {
-    const outcome = await tracker(
-      ok(checks("fail"), { exitCode: 1 }),
-      failedExecution("could not find any workflow run"),
-    ).waitForCi(12, 60_000);
+  it("carries on without the log when it cannot be fetched, naming where the job is", async () => {
+    const outcome = await ci({}, [checks("fail")], {
+      "100": failedExecution("HTTP 403: host not allowed"),
+    }).waitForCi(12, 60_000);
 
-    expect(outcome).toEqual({ state: "failed", summary: "check-0 failed", excerpt: "" });
-  });
-
-  it("still reports the failure when fetching the log throws", async () => {
-    const failing = trackerWith(
-      {
-        run: async (_command: string, args: string[]) => {
-          calls.push(args);
-          const next = responses.shift();
-          if (next === undefined) throw new Error("gh: not found");
-          return next;
-        },
-      },
-      ok(checks("fail"), { exitCode: 1 }),
-    );
-
-    expect(await failing.waitForCi(12, 60_000)).toEqual({
+    expect(outcome).toEqual({
       state: "failed",
       summary: "check-0 failed",
-      excerpt: "",
+      excerpt: `check-0\n${UNAVAILABLE}`,
+    });
+  });
+
+  it("carries on without the log when fetching it throws", async () => {
+    const outcome = await ci({}, [checks("fail")], { "100": new Error("spawn gh ENOENT") }).waitForCi(
+      12,
+      60_000,
+    );
+
+    expect(excerptOf(outcome)).toContain("the log was unavailable");
+  });
+
+  it("calls an empty log unavailable too", async () => {
+    const outcome = await ci({}, [checks("cancel")], { "100": ok("") }).waitForCi(12, 60_000);
+
+    expect(outcome).toEqual({
+      state: "failed",
+      summary: "check-0 cancelled",
+      excerpt: `check-0\n${UNAVAILABLE}`,
     });
   });
 
   it("fetches the Actions job's log past checks that have none", async () => {
-    const outcome = await tracker(
-      ok(
-        JSON.stringify([
-          { name: "vercel", bucket: "fail", state: "fail", link: "https://vercel.com/x/y" },
-          { name: "codecov", bucket: "fail", state: "fail", link: "https://codecov.io/x/y" },
-          { name: "netlify", bucket: "fail", state: "fail", link: "https://netlify.com/x/y" },
-          {
-            name: "build",
-            bucket: "fail",
-            state: "fail",
-            link: "https://github.com/acme/repo/actions/runs/99/job/7",
-          },
-        ]),
-        { exitCode: 1 },
-      ),
-      ok("boom"),
+    const external = (name: string) => ({
+      name,
+      status: "completed",
+      conclusion: "failure",
+      details_url: `https://${name}.example.com/x/y`,
+    });
+    const outcome = await ci(
+      {},
+      [
+        {
+          runs: [
+            external("vercel"),
+            external("codecov"),
+            external("netlify"),
+            {
+              ...run("fail"),
+              name: "build",
+              details_url: "https://github.com/acme/repo/actions/runs/99/job/7",
+            },
+          ],
+        },
+      ],
+      { "7": ok("boom") },
     ).waitForCi(12, 60_000);
 
-    expect((outcome as { excerpt: string }).excerpt).toBe("build\nboom");
-    expect(calls[1]).toEqual(["run", "view", "--job", "7", "--log-failed"]);
+    expect(excerptOf(outcome)).toBe("build\nboom");
   });
 
   it("keeps the tail of one line too long to carry whole", async () => {
-    const outcome = await tracker(
-      ok(checks("fail"), { exitCode: 1 }),
-      ok(`${"x".repeat(5_000)}assertion failed`),
-    ).waitForCi(12, 60_000);
+    const outcome = await ci({}, [checks("fail")], {
+      "100": ok(`${"x".repeat(5_000)}assertion failed`),
+    }).waitForCi(12, 60_000);
 
-    const excerpt = (outcome as { excerpt: string }).excerpt;
+    const excerpt = excerptOf(outcome);
     expect(excerpt).toContain("(the start of this line omitted)");
     expect(excerpt).toMatch(/assertion failed$/);
     expect(excerpt.length).toBeLessThan(4_100);
   });
 
-  it("reports a cancelled check as a failure, with whatever log it has", async () => {
-    const outcome = await tracker(
-      ok(checks("cancel"), { exitCode: 1 }),
-      ok(""),
-    ).waitForCi(12, 60_000);
-
-    expect(outcome).toEqual({ state: "failed", summary: "check-0 cancelled", excerpt: "" });
-  });
-
   it("caps how many failing jobs it fetches a log for", async () => {
-    const outcome = await tracker(
-      ok(checks("fail", "fail", "fail", "fail"), { exitCode: 1 }),
-      ok("first"),
-      ok("second"),
-      ok("third"),
-      ok("fourth"),
-    ).waitForCi(12, 60_000);
+    const outcome = await ci({}, [checks("fail", "fail", "fail", "fail")], {
+      "100": ok("first"),
+      "101": ok("second"),
+      "102": ok("third"),
+      "103": ok("fourth"),
+    }).waitForCi(12, 60_000);
 
-    expect((outcome as { excerpt: string }).excerpt).not.toContain("fourth");
-    expect(calls).toHaveLength(4);
+    expect(excerptOf(outcome)).not.toContain("fourth");
+    expect(calls.filter((args) => args.some((arg) => arg.endsWith("/logs")))).toHaveLength(3);
   });
 
   it("never fetches a log while the checks are still pending", async () => {
-    await tracker(
-      ok(checks("pending"), { exitCode: 8 }),
-      ok(checks("fail"), { exitCode: 1 }),
-      ok("boom"),
-    ).waitForCi(12, 60_000);
+    await ci({}, [checks("pending"), checks("fail")], { "100": ok("boom") }).waitForCi(12, 60_000);
 
-    expect(calls.map((args) => args[0])).toEqual(["pr", "pr", "run"]);
+    const logFetches = calls.flatMap((args, i) => (args.some((arg) => arg.endsWith("/logs")) ? [i] : []));
+    expect(logFetches).toEqual([calls.length - 1]);
+    expect(readingsTaken()).toBe(2);
   });
-
-  /** What `gh pr checks` says when GitHub has registered none yet. */
-  const NO_CHECKS = "no checks reported on the 'agent/2-x' branch";
 
   it("reports a PR with no checks rather than treating it as green", async () => {
-    const outcome = await tracker(failedExecution(NO_CHECKS)).waitForCi(12, 60_000);
-
-    expect(outcome).toEqual({ state: "none" });
+    expect(await ci({}, [{}]).waitForCi(12, 60_000)).toEqual({ state: "none" });
   });
 
-  it("reports an empty check list as no checks", async () => {
-    expect(await tracker(ok("[]")).waitForCi(12, 60_000)).toEqual({ state: "none" });
+  it("reads checks GitHub would not report as none", async () => {
+    expect(await ci({}, [UNANSWERED]).waitForCi(12, 60_000)).toEqual({ state: "none" });
+  });
+
+  it("refuses check output it cannot read", async () => {
+    const gh = trackerWith(
+      {},
+      ok(JSON.stringify({ number: 12, head: { sha: HEAD } })),
+      ok("not json"),
+      ok(""),
+    );
+
+    await expect(gh.waitForCi(12, 60_000)).rejects.toThrow("could not read the checks");
   });
 
   /** A clock that advances by `stepMs` every time it is read. */
@@ -911,29 +1156,25 @@ describe("waiting for CI", () => {
   };
 
   it("keeps waiting while GitHub has not registered the checks yet", async () => {
-    const outcome = await trackerWith(
-      { now: ticking(1_000), checksGraceMs: 120_000 },
-      failedExecution(NO_CHECKS),
-      failedExecution(NO_CHECKS),
-      ok(checks("pass")),
-    ).waitForCi(12, 60_000 * 30);
+    const outcome = await ci({ now: ticking(1_000), checksGraceMs: 120_000 }, [
+      {},
+      {},
+      checks("pass"),
+    ]).waitForCi(12, 60_000 * 30);
 
     expect(outcome).toEqual({ state: "passed" });
-    expect(calls).toHaveLength(3);
+    expect(readingsTaken()).toBe(3);
   });
 
   it("reports no checks once the grace period has passed", async () => {
-    const outcome = await trackerWith(
-      { now: ticking(50_000), checksGraceMs: 120_000 },
-      failedExecution(NO_CHECKS),
-      failedExecution(NO_CHECKS),
-      failedExecution(NO_CHECKS),
-      failedExecution(NO_CHECKS),
-    ).waitForCi(12, 60_000 * 30);
+    const outcome = await ci({ now: ticking(50_000), checksGraceMs: 120_000 }, [{}]).waitForCi(
+      12,
+      60_000 * 30,
+    );
 
     expect(outcome).toEqual({ state: "none" });
-    expect(calls.length).toBeGreaterThan(1);
-    expect(calls.length).toBeLessThan(4);
+    expect(readingsTaken()).toBeGreaterThan(1);
+    expect(readingsTaken()).toBeLessThan(4);
   });
 
   /** A clock that only moves when the wait sleeps, so a test's minutes are the wait's. */
@@ -948,51 +1189,41 @@ describe("waiting for CI", () => {
   };
 
   it("grades a PR on checks GitHub registers four minutes into the wait", async () => {
-    const outcome = await ghTracker(
-      { ...waitingClock(), pollIntervalMs: 60_000 },
-      failedExecution(NO_CHECKS),
-      failedExecution(NO_CHECKS),
-      failedExecution(NO_CHECKS),
-      failedExecution(NO_CHECKS),
-      ok(checks("pass")),
+    const outcome = await ci(
+      { ...waitingClock(), pollIntervalMs: 60_000, checksGraceMs: 5 * 60_000 },
+      [{}, {}, {}, {}, checks("pass")],
     ).waitForCi(12, 60_000 * 30);
 
     expect(outcome).toEqual({ state: "passed" });
-    expect(calls).toHaveLength(5);
+    expect(readingsTaken()).toBe(5);
   });
 
   it("falls back to a five-minute grace when the caller sets none", async () => {
-    const outcome = await ghTracker(
-      { ...waitingClock(), pollIntervalMs: 120_000 },
-      failedExecution(NO_CHECKS),
-      failedExecution(NO_CHECKS),
-      failedExecution(NO_CHECKS),
-      failedExecution(NO_CHECKS),
-    ).waitForCi(12, 60_000 * 30);
+    const outcome = await new GhTracker({
+      run: answering([{}]),
+      ...waitingClock(),
+      pollIntervalMs: 120_000,
+    }).waitForCi(12, 60_000 * 30);
 
     // The sixth minute is past the grace; the fourth reading is the first to be
     // taken there, so it is the one reported rather than waited out.
     expect(outcome).toEqual({ state: "none" });
-    expect(calls).toHaveLength(4);
+    expect(readingsTaken()).toBe(4);
   });
 
   it("never lets the grace period outlive the CI timeout", async () => {
-    const outcome = await trackerWith(
-      { now: ticking(1_000), checksGraceMs: 120_000 },
-      failedExecution(NO_CHECKS),
-      failedExecution(NO_CHECKS),
-    ).waitForCi(12, 1_500);
+    const outcome = await ci({ now: ticking(1_000), checksGraceMs: 120_000 }, [{}]).waitForCi(
+      12,
+      1_500,
+    );
 
     expect(outcome).toEqual({ state: "none" });
   });
 
   it("gives up when the checks stay pending past the timeout", async () => {
-    const outcome = await tracker(
-      ok(checks("pending"), { exitCode: 8 }),
-      ok(checks("pending"), { exitCode: 8 }),
-    ).waitForCi(12, 0);
+    const outcome = await ci({}, [checks("pending")]).waitForCi(12, 0);
 
     expect(outcome).toEqual({ state: "timed-out" });
-    expect(calls).toHaveLength(1);
+    expect(readingsTaken()).toBe(1);
   });
 });
