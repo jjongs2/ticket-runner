@@ -9,9 +9,9 @@
  * they left them, because a cloud Host's transcripts go with its VM and those
  * sections are then all that says what that Run did. The one Run that starts a
  * second comment is the one taking the Ticket back from a human, which leaves
- * the comment that human read exactly as they read it. Everything a human has to act on — a
- * hand-off, a guard warning — stays a comment of its own, because those are
- * exactly the ones a notification is worth.
+ * the comment that human read exactly as they read it. Everything a human has
+ * to act on — a hand-off, a guard warning — stays a comment of its own, because
+ * those are exactly the ones a notification is worth.
  *
  * `docs/templates/progress-comment.md` is the source of truth for the shape.
  */
@@ -186,8 +186,13 @@ export class Progress {
     if (this.stopped) return;
 
     const { tracker, ticket, version, runId, branch } = this.options;
-    const { earlier } = this;
-    const body = progressComment({ version, runId, branch, rows: this.rows, earlier });
+    const body = progressComment({
+      version,
+      runId,
+      branch,
+      rows: this.rows,
+      earlier: this.earlier,
+    });
 
     try {
       const id = this.comment?.id;

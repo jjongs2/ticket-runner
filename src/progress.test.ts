@@ -9,12 +9,16 @@ const BRANCH = "agent/2-progress-comment";
 /** The Version reporting, which every header the Run writes carries. */
 const VERSION = "0.4.0+331d79c";
 
-function progress(tracker: FakeTracker, comments: IssueComment[] = []): Progress {
+function progress(
+  tracker: FakeTracker,
+  comments: IssueComment[] = [],
+  runId = "run-1",
+): Progress {
   return new Progress({
     tracker,
     ticket: TICKET,
     version: VERSION,
-    runId: "run-1",
+    runId,
     branch: BRANCH,
     comments,
   });
@@ -202,12 +206,13 @@ describe("recording a Stage", () => {
   it("shows three Runs as three sections, oldest first", async () => {
     const tracker = new FakeTracker();
     const issue = tracker.addIssue({ number: TICKET });
-    const runOf = (runId: string, comments: IssueComment[]) =>
-      new Progress({ tracker, ticket: TICKET, version: VERSION, runId, branch: BRANCH, comments });
 
-    await runOf("run-1", []).record({ point: "implement", outcome: "⏸ rate limited" });
-    await runOf("run-2", issue.comments).record({ point: "implement", outcome: "✅ committed" });
-    await runOf("run-3", issue.comments).record({ point: "checks", outcome: "✅ passed" });
+    await progress(tracker, [], "run-1").record({ point: "implement", outcome: "⏸ rate limited" });
+    await progress(tracker, issue.comments, "run-2").record({
+      point: "implement",
+      outcome: "✅ committed",
+    });
+    await progress(tracker, issue.comments, "run-3").record({ point: "checks", outcome: "✅ passed" });
 
     expect(tracker.comments).toHaveLength(1);
     expect([...body(tracker).matchAll(/run `(run-\d)`/g)].map((match) => match[1])).toEqual([

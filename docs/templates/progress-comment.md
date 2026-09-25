@@ -44,7 +44,8 @@ runId — rewrites that section rather than starting a second. A comment an
 earlier Version wrote, with one header and one table, is one earlier section.
 
 The header names no Host. The runId finds it: every commit on the
-`agent-pipeline/lock` branch says ``Held by run <runId> on <Host>``.
+`agent-pipeline/lock` branch that takes the lock opens ``Held by run <runId> on
+<Host>``.
 
 One Run does not carry on: the one taking the Ticket back from a human, which is
 a Ticket carrying a hand-off comment not yet marked as history. It posts a
