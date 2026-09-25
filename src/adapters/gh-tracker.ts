@@ -79,6 +79,11 @@ interface RawPullRequest {
   node_id: string;
   draft: boolean;
   head: { sha: string };
+  /**
+   * Whether GitHub can merge the pull request into its base: `false` when the
+   * two conflict. GitHub works it out lazily and answers `null` until it has.
+   */
+  mergeable?: boolean | null;
 }
 
 /** One check run on a commit, as the REST check-runs list reports it. */
@@ -115,6 +120,16 @@ interface CiCheck {
 }
 
 /**
+ * One look at a pull request: its head commit's checks, or nothing when GitHub
+ * would not report them, and whether GitHub has found it conflicting with its
+ * base.
+ */
+interface CiSnapshot {
+  checks: CiCheck[] | undefined;
+  conflicting: boolean;
+}
+
+/**
  * What one reading of the head commit's checks settled on, before any log is
  * fetched.
  *
@@ -125,6 +140,7 @@ interface CiCheck {
 type CiReading =
   | { state: "passed" }
   | { state: "none" }
+  | { state: "conflicting" }
   | { state: "failed"; summary: string; failed: CiCheck[] };
 
 /**
@@ -446,7 +462,9 @@ export class GhTracker implements Tracker {
    *
    * Right after a PR opens, GitHub answers "no checks" for a while before the
    * workflow's check run exists, so "no checks" only counts once the grace
-   * period has passed.
+   * period has passed. A PR GitHub finds conflicting with its base is the
+   * exception: GitHub runs no `pull_request` workflow for it, so no check is
+   * coming and the wait ends as soon as the conflict is seen.
    */
   async waitForCi(number: number, timeoutMs: number): Promise<CiOutcome> {
     const startedAt = this.now();
@@ -454,7 +472,7 @@ export class GhTracker implements Tracker {
     const graceUntil = startedAt + Math.min(this.checksGraceMs, timeoutMs);
 
     for (;;) {
-      const reading = readCi(await this.checks(number));
+      const reading = readCi(await this.ciSnapshot(number));
       const stillRegistering = reading !== "pending" && reading.state === "none" && this.now() < graceUntil;
       if (reading !== "pending" && !stillRegistering) return this.withEvidence(reading);
       // Checks that never appeared are "none", not a timeout: nothing was ever pending.
@@ -589,24 +607,26 @@ export class GhTracker implements Tracker {
   /**
    * Every check on a pull request's head commit — its check runs and its
    * commit statuses — or nothing when GitHub would not say, which reads as no
-   * checks.
+   * checks; and whether GitHub has found the pull request conflicting.
    *
    * The head is read afresh each time, as `gh pr checks` read it, so a failed
    * read costs one reading rather than the wait. Check runs come from the
    * `latest` filter REST applies by default, so a job re-run after failing
    * counts as its re-run, as `gh pr checks` counted it.
    */
-  private async checks(number: number): Promise<CiCheck[] | undefined> {
+  private async ciSnapshot(number: number): Promise<CiSnapshot> {
     const pr = await this.gh(["api", `repos/{owner}/{repo}/pulls/${number}`], {
       allowFailure: true,
     });
-    if (pr.exitCode !== 0) return undefined;
-    const { sha } = (JSON.parse(pr.stdout) as RawPullRequest).head;
-    const commit = `repos/{owner}/{repo}/commits/${sha}`;
+    if (pr.exitCode !== 0) return { checks: undefined, conflicting: false };
+    const { head, mergeable } = JSON.parse(pr.stdout) as RawPullRequest;
+    // `null` is GitHub still working it out, which is no conflict yet.
+    const conflicting = mergeable === false;
+    const commit = `repos/{owner}/{repo}/commits/${head.sha}`;
     const runs = await this.wrappedList(`${commit}/check-runs`, "check_runs");
     const statuses = await this.wrappedList(`${commit}/status`, "statuses");
-    if (runs === undefined || statuses === undefined) return undefined;
-    return [
+    if (runs === undefined || statuses === undefined) return { checks: undefined, conflicting };
+    const checks = [
       ...(runs as RawCheckRun[]).map((run) => ({
         name: run.name,
         bucket: checkRunBucket(run),
@@ -618,6 +638,7 @@ export class GhTracker implements Tracker {
         ...linked(status.target_url),
       })),
     ];
+    return { checks, conflicting };
   }
 
   /**
@@ -767,10 +788,14 @@ function subIssues(issue: RawIssue): number {
 /**
  * `pending` means "ask again"; everything else is an answer. Checks GitHub
  * would not report read as none, as a failing `gh pr checks` did, so the grace
- * period still covers a wait that starts before the checks exist.
+ * period still covers a wait that starts before the checks exist. No checks on
+ * a PR GitHub finds conflicting is the conflict, since that is why there are
+ * none; checks it does have are read as they are.
  */
-function readCi(checks: CiCheck[] | undefined): CiReading | "pending" {
-  if (checks === undefined || checks.length === 0) return { state: "none" };
+function readCi({ checks, conflicting }: CiSnapshot): CiReading | "pending" {
+  if (checks === undefined || checks.length === 0) {
+    return conflicting ? { state: "conflicting" } : { state: "none" };
+  }
 
   const failed = checks.filter((check) => check.bucket === "fail" || check.bucket === "cancel");
   if (failed.length > 0) {

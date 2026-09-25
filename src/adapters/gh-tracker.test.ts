@@ -863,10 +863,15 @@ describe("waiting for CI", () => {
   /** The head commit every pull request here points at. */
   const HEAD = "abc123";
 
-  /** One reading of the head commit: its check runs and its commit statuses. */
+  /**
+   * One reading: the head commit's check runs and commit statuses, and what
+   * the pull request says of merging it, as far as GitHub has worked it out.
+   */
   interface Reading {
     runs?: object[];
     statuses?: object[];
+    mergeable?: boolean | null;
+    mergeable_state?: string;
   }
 
   /** What `gh --paginate --jq '.key[]'` prints: one entry per line. */
@@ -901,9 +906,10 @@ describe("waiting for CI", () => {
     Array.from({ length: count }, (_, i) => `step line ${i + 1}`).join("\n");
 
   /**
-   * A `gh` answered by what each call asks for: the pull request, the head
-   * commit's checks — one reading after another, the last repeating — or a
-   * job's log out of `logs`, where a job not named has none.
+   * A `gh` answered by what each call asks for: the pull request and the head
+   * commit's checks — one reading after another, taken as the pull request is
+   * read, the last repeating — or a job's log out of `logs`, where a job not
+   * named has none.
    */
   function answering(
     readings: (Reading | typeof UNANSWERED)[],
@@ -915,10 +921,14 @@ describe("waiting for CI", () => {
       calls.push(args);
       const path = args.find((arg) => arg.startsWith("repos/")) ?? "";
       if (path === "repos/{owner}/{repo}/pulls/12") {
-        return ok(JSON.stringify({ number: 12, draft: false, head: { sha: HEAD } }));
+        current = (queue.length > 1 ? queue.shift() : queue[0]) ?? {};
+        const mergeability =
+          current === UNANSWERED
+            ? {}
+            : { mergeable: current.mergeable, mergeable_state: current.mergeable_state };
+        return ok(JSON.stringify({ number: 12, draft: false, head: { sha: HEAD }, ...mergeability }));
       }
       if (path.endsWith("/check-runs")) {
-        current = (queue.length > 1 ? queue.shift() : queue[0]) ?? {};
         return current === UNANSWERED ? failedExecution("HTTP 502") : ok(lines(current.runs ?? []));
       }
       if (path.endsWith("/status")) {
@@ -1245,6 +1255,55 @@ describe("waiting for CI", () => {
     expect(outcome).toEqual({ state: "none" });
     expect(readingsTaken()).toBeGreaterThan(1);
     expect(readingsTaken()).toBeLessThan(4);
+  });
+
+  /** What GitHub says of a pull request that conflicts with its base. */
+  const CONFLICTING = { mergeable: false, mergeable_state: "dirty" } as const;
+
+  /** What GitHub says of a pull request whose mergeability it has not worked out yet. */
+  const UNSETTLED = { mergeable: null, mergeable_state: "unknown" } as const;
+
+  it("reports a PR GitHub finds conflicting without waiting out the grace period", async () => {
+    const outcome = await ci({ now: ticking(1_000), checksGraceMs: 120_000 }, [
+      CONFLICTING,
+    ]).waitForCi(12, 60_000 * 30);
+
+    expect(outcome).toEqual({ state: "conflicting" });
+    expect(readingsTaken()).toBe(1);
+  });
+
+  it("keeps waiting while GitHub has not worked out whether the PR conflicts", async () => {
+    const outcome = await ci({ now: ticking(1_000), checksGraceMs: 120_000 }, [
+      UNSETTLED,
+      UNSETTLED,
+      CONFLICTING,
+    ]).waitForCi(12, 60_000 * 30);
+
+    expect(outcome).toEqual({ state: "conflicting" });
+    expect(readingsTaken()).toBe(3);
+  });
+
+  it("reports no checks for a PR GitHub never settled on, once the grace period has passed", async () => {
+    const outcome = await ci({ now: ticking(50_000), checksGraceMs: 120_000 }, [
+      UNSETTLED,
+    ]).waitForCi(12, 60_000 * 30);
+
+    expect(outcome).toEqual({ state: "none" });
+  });
+
+  it("reports no checks for a PR that merges cleanly", async () => {
+    const outcome = await ci({ now: ticking(50_000), checksGraceMs: 120_000 }, [
+      { mergeable: true, mergeable_state: "clean" },
+    ]).waitForCi(12, 60_000 * 30);
+
+    expect(outcome).toEqual({ state: "none" });
+    expect(readingsTaken()).toBeGreaterThan(1);
+  });
+
+  it("reads the checks of a PR that has them, conflicting or not", async () => {
+    expect(await ci({}, [{ ...checks("pass"), ...CONFLICTING }]).waitForCi(12, 60_000)).toEqual({
+      state: "passed",
+    });
   });
 
   /** A clock that only moves when the wait sleeps, so a test's minutes are the wait's. */

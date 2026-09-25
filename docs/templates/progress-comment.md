@@ -73,12 +73,18 @@ Ticket for a later Run to resume.
 | checks | `✅ passed`, `❌ uncommitted work`, ``❌ `<command>` failed``, ``❌ `<command>` timed out`` |
 | verify | `✅ <k> met · <u> unverifiable`, `❌ <k> unmet`, `❌ no evidence`, `❌ no Verdict`, `⏸ rate limited`, `❌ <why the Stage did not finish>` |
 | conflict | `✅ rebased`, `❌ unresolved`, `⏸ rate limited`, `❌ unknown` |
-| ci | `✅ passed`, `❌ failed`, `❌ no checks`, `⚠️ no checks`, `❌ timed out` |
+| ci | `✅ passed`, `❌ failed`, `❌ conflicting`, `❌ no checks`, `⚠️ no checks`, `❌ timed out` |
 | merge | `✅ #<pr>` |
 
 A `checks` row tells a command that exited non-zero from one the wall-clock
 limit killed: both are the same failure to the fix budget, but a hang is not a
 failing assertion, and a fix Stage is told which it is mending.
+
+`❌ conflicting` is the `ci` row for a pull request GitHub reports as
+conflicting with the Base branch, which has moved since the rebase — a human
+merging on GitHub meanwhile, say. GitHub runs no workflow for such a pull
+request, so it is not `❌ no checks`, and it is not the `conflict` Stage: that
+row is the rebase before the pull request, and this one comes after it.
 
 `❌ uncommitted work` is the `checks` row no command wrote: the worktree held
 changes no commit carries, so no Check ran. What lands is the branch, and a

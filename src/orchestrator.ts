@@ -1365,8 +1365,9 @@ async function publishPullRequest(
 }
 
 /**
- * A red or unfinished pull request is a failure whatever the gates say. Turning
- * `gates.ci` off only tolerates a pull request that has no checks at all.
+ * A red, unfinished or conflicting pull request is a failure whatever the
+ * gates say. Turning `gates.ci` off only tolerates a pull request that has no
+ * checks at all.
  */
 async function requireGreenCi(
   pipeline: Pipeline,
@@ -1395,6 +1396,15 @@ async function requireGreenCi(
       throw new TicketFailure(
         "ci",
         `the pull request checks did not finish within ${pipeline.config.ciTimeoutMinutes} minutes`,
+      );
+    case "conflicting":
+      // The Landing keeps the Run's own Tickets from moving the Base branch
+      // under a pull request, but not a human merging on GitHub meanwhile. A
+      // fix Stage has nothing to act on, so no fix kind: a human takes it.
+      await record("❌ conflicting");
+      throw new TicketFailure(
+        "ci",
+        `the pull request conflicts with \`${pipeline.baseBranch}\`, so GitHub will neither run its checks nor merge it`,
       );
     case "none":
       // A gate switched off is worth a row of its own: the Ticket merged on
