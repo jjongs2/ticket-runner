@@ -118,8 +118,7 @@ gh pr create --base main --title "chore: version <number>" \
 
 The body is the notes file the maintainer approved: the section as the tag
 workflow will extract it, so the notes are read in the pull request exactly as
-they will be published. It is the one pull request on `main` that carries no
-Ticket number.
+they will be published.
 
 Done when the pull request is open and its link is handed to the maintainer:
 their review and their merge are what cut the Version.
