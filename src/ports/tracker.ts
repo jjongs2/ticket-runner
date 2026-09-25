@@ -184,7 +184,15 @@ export interface Tracker {
    */
   latestVersionTag(repository: string): Promise<string | undefined>;
   listLabels(): Promise<string[]>;
-  createLabel(label: LabelSpec): Promise<void>;
+  /**
+   * Create a label, and say whether this call is what made it.
+   *
+   * A label the Target already has answers `false` rather than throwing, and is
+   * left as it is: GitHub seeds a new repository's default labels a few seconds
+   * after making it, so one can arrive between a listing that lacked it and
+   * this create. Every other refusal still throws.
+   */
+  createLabel(label: LabelSpec): Promise<boolean>;
   /**
    * Allow squash merging on the Target, and change no other merge setting.
    *

@@ -77,6 +77,12 @@ export class FakeTracker implements Tracker {
   /** Every repository the Version lookup was asked about, in order. */
   versionTagLookups: string[] = [];
   labels = new Set<string>();
+  /**
+   * Labels GitHub adds after {@link listLabels} answers and before a create, as
+   * it does while seeding a repository made seconds ago: not listed, but
+   * there by the time one is created.
+   */
+  labelsArriving = new Set<string>();
   createdLabels: LabelSpec[] = [];
   issues = new Map<number, Issue>();
   comments: { issue: number; body: string }[] = [];
@@ -153,10 +159,13 @@ export class FakeTracker implements Tracker {
     return [...this.labels];
   }
 
-  async createLabel(label: LabelSpec): Promise<void> {
+  async createLabel(label: LabelSpec): Promise<boolean> {
     this.calls.push(`createLabel:${label.name}`);
+    if (this.labelsArriving.delete(label.name)) this.labels.add(label.name);
+    if (this.labels.has(label.name)) return false;
     this.createdLabels.push(label);
     this.labels.add(label.name);
+    return true;
   }
 
   async enableSquashMerge(): Promise<void> {

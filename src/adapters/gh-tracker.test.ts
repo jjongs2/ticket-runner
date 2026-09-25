@@ -426,6 +426,48 @@ describe("writing", () => {
     ]);
   });
 
+  it("reports a label it made as created", async () => {
+    const gh = tracker(ok('{"name":"in-progress"}'));
+
+    expect(await gh.createLabel({ name: "in-progress", color: "1d76db", description: "" })).toBe(
+      true,
+    );
+  });
+
+  it("takes a label GitHub refuses as already there as present, and not created", async () => {
+    // GitHub seeds a new repository's default labels a few seconds after it
+    // exists, so one can arrive between the listing and the create.
+    const gh = tracker(
+      failedExecution("gh: Validation Failed (HTTP 422)", {
+        stdout:
+          '{"message":"Validation Failed","errors":[{"resource":"Label","code":"already_exists","field":"name"}],"documentation_url":"https://docs.github.com/rest/issues/labels#create-a-label","status":"422"}',
+      }),
+    );
+
+    expect(await gh.createLabel({ name: "wontfix", color: "cfd3d7", description: "" })).toBe(false);
+  });
+
+  it("still fails a create GitHub refused as invalid for any other reason", async () => {
+    const gh = tracker(
+      failedExecution("gh: Validation Failed (HTTP 422)", {
+        stdout:
+          '{"message":"Validation Failed","errors":[{"resource":"Label","code":"invalid","field":"color"}],"status":"422"}',
+      }),
+    );
+
+    await expect(
+      gh.createLabel({ name: "wontfix", color: "nope", description: "" }),
+    ).rejects.toThrow(/Validation Failed/);
+  });
+
+  it("still fails a create GitHub refused outright", async () => {
+    const gh = tracker(failedExecution("gh: Resource not accessible by integration (HTTP 403)"));
+
+    await expect(
+      gh.createLabel({ name: "wontfix", color: "cfd3d7", description: "" }),
+    ).rejects.toThrow(/HTTP 403/);
+  });
+
   it("assigns, unassigns and moves labels through REST", async () => {
     const gh = tracker(ok(assigned("octocat")), ok("{}"), ok("[]"), ok("[]"));
     await gh.assign(2, "octocat");

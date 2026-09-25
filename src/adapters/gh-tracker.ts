@@ -228,12 +228,18 @@ export class GhTracker implements Tracker {
     return labels.map((label) => label.name);
   }
 
-  async createLabel(label: LabelSpec): Promise<void> {
-    await this.rest("POST", "repos/{owner}/{repo}/labels", [
-      `name=${label.name}`,
-      `color=${label.color}`,
-      `description=${label.description}`,
-    ]);
+  /**
+   * GitHub refuses a name it already has with a 422 whose error code is
+   * `already_exists`. Every other failure, another 422 included, still throws.
+   */
+  async createLabel(label: LabelSpec): Promise<boolean> {
+    const result = await this.rest(
+      "POST",
+      "repos/{owner}/{repo}/labels",
+      [`name=${label.name}`, `color=${label.color}`, `description=${label.description}`],
+      { tolerate: /"code"\s*:\s*"already_exists"/ },
+    );
+    return result.exitCode === 0;
   }
 
   /**
@@ -374,9 +380,7 @@ export class GhTracker implements Tracker {
    */
   async removeLabel(number: number, label: string): Promise<void> {
     const path = `repos/{owner}/{repo}/issues/${number}/labels/${encodeURIComponent(label)}`;
-    const result = await this.rest("DELETE", path, [], { allowFailure: true });
-    if (/Label does not exist/.test(result.output)) return;
-    throwOnFailure("gh", ["api", "--method", "DELETE", path], result);
+    await this.rest("DELETE", path, [], { tolerate: /Label does not exist/ });
   }
 
   /** REST answers with the new comment, whose id is what it is edited by later. */
@@ -659,24 +663,28 @@ export class GhTracker implements Tracker {
    * One REST write, every field raw with `-f`, so a body is never read as a
    * file or a number whatever it starts with. The `typed` ones are the few
    * that must reach GitHub as a boolean, and go with `-F`.
+   *
+   * `tolerate` names the one failure a caller takes as an answer rather than
+   * an error: a run that failed with output matching it comes back instead of
+   * throwing, and every other failure still throws.
    */
-  private rest(
+  private async rest(
     method: "POST" | "PATCH" | "PUT" | "DELETE",
     path: string,
     fields: string[],
-    options: { allowFailure?: boolean; typed?: string[] } = {},
+    options: { allowFailure?: boolean; typed?: string[]; tolerate?: RegExp } = {},
   ): Promise<Execution> {
-    return this.gh(
-      [
-        "api",
-        "--method",
-        method,
-        path,
-        ...fields.flatMap((field) => ["-f", field]),
-        ...(options.typed ?? []).flatMap((field) => ["-F", field]),
-      ],
-      options.allowFailure ? { allowFailure: true } : {},
-    );
+    const args = [
+      "api",
+      "--method",
+      method,
+      path,
+      ...fields.flatMap((field) => ["-f", field]),
+      ...(options.typed ?? []).flatMap((field) => ["-F", field]),
+    ];
+    const result = await this.gh(args, { allowFailure: true });
+    if (options.allowFailure || options.tolerate?.test(result.output)) return result;
+    return throwOnFailure("gh", args, result);
   }
 
   /**
