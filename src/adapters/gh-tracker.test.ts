@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { execution, failedExecution } from "../testing/executions.js";
+import type { HostKind } from "../host.js";
 import { GhTracker, type GhTrackerOptions } from "./gh-tracker.js";
 import type { ExecOptions, Execution, RunProcess } from "./exec.js";
 
@@ -718,7 +719,7 @@ describe("pull requests", () => {
     });
   });
 
-  it.each(["workstation", "cloud"] as const)(
+  it.each<HostKind>(["workstation", "cloud"])(
     "leaves a PR already in the state asked for as it is, on a %s",
     async (host) => {
       const gh = trackerWith(
@@ -748,7 +749,7 @@ describe("pull requests", () => {
   });
 
   /** Every pull-request call of the port once, and the release list, on `host`. */
-  async function everyPullRequestCall(host: "workstation" | "cloud") {
+  async function everyPullRequestCall(host: HostKind) {
     const gh = trackerWith(
       { host },
       ok(restPullRequest()),
@@ -939,10 +940,10 @@ describe("waiting for CI", () => {
     expect(readingsTaken()).toBe(2);
   });
 
-  it("reads the head commit once for the whole wait", async () => {
-    await ci({}, [checks("pending"), checks("pending"), checks("pass")]).waitForCi(12, 60_000);
+  it("reads a head commit GitHub would not report as no checks, not as a failed wait", async () => {
+    const gh = trackerWith({}, failedExecution("HTTP 502"));
 
-    expect(calls.filter((args) => args[1] === "repos/{owner}/{repo}/pulls/12")).toHaveLength(1);
+    expect(await gh.waitForCi(12, 60_000)).toEqual({ state: "none" });
   });
 
   it.each([
@@ -1146,7 +1147,7 @@ describe("waiting for CI", () => {
       ok(""),
     );
 
-    await expect(gh.waitForCi(12, 60_000)).rejects.toThrow("could not read the checks");
+    await expect(gh.waitForCi(12, 60_000)).rejects.toThrow("could not read the check_runs");
   });
 
   /** A clock that advances by `stepMs` every time it is read. */

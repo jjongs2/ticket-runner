@@ -247,14 +247,7 @@ export class GhTracker implements Tracker {
    * a repository that also allows merge commits keeps allowing them.
    */
   async enableSquashMerge(): Promise<void> {
-    await this.gh([
-      "api",
-      "--method",
-      "PATCH",
-      "repos/{owner}/{repo}",
-      "-F",
-      "allow_squash_merge=true",
-    ]);
+    await this.rest("PATCH", "repos/{owner}/{repo}", [], { typed: ["allow_squash_merge=true"] });
   }
 
   /**
@@ -446,12 +439,9 @@ export class GhTracker implements Tracker {
     const startedAt = this.now();
     const deadline = startedAt + timeoutMs;
     const graceUntil = startedAt + Math.min(this.checksGraceMs, timeoutMs);
-    // Read once: the pipeline pushed before it waits, and nothing else pushes to
-    // a Ticket's branch while it does.
-    const { head } = await this.pullRequest(number);
 
     for (;;) {
-      const reading = readCi(await this.checks(head.sha));
+      const reading = readCi(await this.checks(number));
       const stillRegistering = reading !== "pending" && reading.state === "none" && this.now() < graceUntil;
       if (reading !== "pending" && !stillRegistering) return this.withEvidence(reading);
       // Checks that never appeared are "none", not a timeout: nothing was ever pending.
@@ -584,15 +574,24 @@ export class GhTracker implements Tracker {
   }
 
   /**
-   * Every check on a commit — its check runs and its commit statuses — or
-   * nothing when GitHub would not say, which reads as no checks.
+   * Every check on a pull request's head commit — its check runs and its
+   * commit statuses — or nothing when GitHub would not say, which reads as no
+   * checks.
    *
-   * Check runs come from the `latest` filter REST applies by default, so a job
-   * re-run after failing counts as its re-run, as `gh pr checks` counted it.
+   * The head is read afresh each time, as `gh pr checks` read it, so a failed
+   * read costs one reading rather than the wait. Check runs come from the
+   * `latest` filter REST applies by default, so a job re-run after failing
+   * counts as its re-run, as `gh pr checks` counted it.
    */
-  private async checks(sha: string): Promise<CiCheck[] | undefined> {
-    const runs = await this.nested(`repos/{owner}/{repo}/commits/${sha}/check-runs`, "check_runs");
-    const statuses = await this.nested(`repos/{owner}/{repo}/commits/${sha}/status`, "statuses");
+  private async checks(number: number): Promise<CiCheck[] | undefined> {
+    const pr = await this.gh(["api", `repos/{owner}/{repo}/pulls/${number}`], {
+      allowFailure: true,
+    });
+    if (pr.exitCode !== 0) return undefined;
+    const { sha } = (JSON.parse(pr.stdout) as RawPullRequest).head;
+    const commit = `repos/{owner}/{repo}/commits/${sha}`;
+    const runs = await this.wrappedList(`${commit}/check-runs`, "check_runs");
+    const statuses = await this.wrappedList(`${commit}/status`, "statuses");
     if (runs === undefined || statuses === undefined) return undefined;
     return [
       ...(runs as RawCheckRun[]).map((run) => ({
@@ -610,13 +609,13 @@ export class GhTracker implements Tracker {
 
   /**
    * Every page of a list REST wraps in an object under `key`, one entry per
-   * line as `--jq` prints them, or nothing when the call failed.
+   * line as `--jq` prints them, or nothing when the call failed: `--paginate`
+   * joins arrays, not the objects around them.
    */
-  private async nested(path: string, key: string): Promise<unknown[] | undefined> {
-    const result = await this.gh(
-      ["api", "--paginate", "--method", "GET", path, "-F", "per_page=100", "--jq", `.${key}[]`],
-      { allowFailure: true },
-    );
+  private async wrappedList(path: string, key: string): Promise<unknown[] | undefined> {
+    const result = await this.gh([...pagedGet(path), "--jq", `.${key}[]`], {
+      allowFailure: true,
+    });
     if (result.exitCode !== 0) return undefined;
     try {
       return result.stdout
@@ -624,7 +623,7 @@ export class GhTracker implements Tracker {
         .filter((line) => line.trim() !== "")
         .map((line) => JSON.parse(line) as unknown);
     } catch {
-      throw new Error(`could not read the checks gh reported: ${result.output.trim()}`);
+      throw new Error(`could not read the ${key} gh listed: ${result.output.trim()}`);
     }
   }
 
@@ -676,16 +675,7 @@ export class GhTracker implements Tracker {
    * `--method GET` is spelled out because fields would otherwise make it a POST.
    */
   private async list<T>(path: string, fields: string[] = []): Promise<T[]> {
-    const { stdout } = await this.gh([
-      "api",
-      "--paginate",
-      "--method",
-      "GET",
-      path,
-      "-F",
-      "per_page=100",
-      ...fields,
-    ]);
+    const { stdout } = await this.gh([...pagedGet(path), ...fields]);
     return JSON.parse(stdout) as T[];
   }
 
@@ -698,6 +688,14 @@ export class GhTracker implements Tracker {
     });
     return options.allowFailure ? result : throwOnFailure("gh", args, result);
   }
+}
+
+/**
+ * Every page of a REST list, a hundred at a time. `--method GET` is spelled
+ * out because fields would otherwise make it a POST.
+ */
+function pagedGet(path: string): string[] {
+  return ["api", "--paginate", "--method", "GET", path, "-F", "per_page=100"];
 }
 
 /** The Actions job a check's link points at: `.../actions/runs/<run>/job/<job>`. */
@@ -775,6 +773,10 @@ function readCi(checks: CiCheck[] | undefined): CiReading | "pending" {
  * A check run's bucket, as `gh pr checks` sorted it: by conclusion once it has
  * completed, and pending until then. A conclusion GitHub adds later is pending
  * too, which the timeout bounds, rather than a pass nobody saw.
+ *
+ * One departure: `startup_failure`, which `gh` left pending, is a failure. A
+ * workflow that could not start never will, and waiting it out only turns a
+ * red check into a timeout.
  */
 function checkRunBucket(run: RawCheckRun): Bucket {
   if (run.status !== "completed") return "pending";
