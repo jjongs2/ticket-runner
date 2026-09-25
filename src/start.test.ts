@@ -178,6 +178,39 @@ describe("a Target init has not set up", () => {
     expect(tracker.calls).toEqual([]);
   });
 
+  it("refuses a Host without gh, saying so rather than crashing on the first GitHub call", async () => {
+    tracker.authenticationAnswer = "not-installed";
+
+    const { code, err } = await start();
+
+    expect(code).toBe(2);
+    expect(err).toBe(
+      "This Target is not set up: `gh` is not installed — install the GitHub CLI from https://cli.github.com first. Run `agent-pipeline init` here and start again; a Run puts nothing in place itself.",
+    );
+    expect(lockTaken()).toBe(false);
+  });
+
+  it("refuses `ticket <n>` on a Host without gh too", async () => {
+    tracker.addIssue({ number: 4 });
+    tracker.authenticationAnswer = "not-installed";
+
+    const { code, err } = await start({ command: "ticket", ticket: 4 });
+
+    expect(code).toBe(2);
+    expect(err).toContain("`gh` is not installed");
+    expect(lockTaken()).toBe(false);
+  });
+
+  it("asks the Target's own files before whether gh is installed", async () => {
+    rmSync(join(repoRoot, OPERATOR_SKILL_PATH));
+    tracker.authenticationAnswer = "not-installed";
+
+    const { err } = await start();
+
+    expect(err).toContain(OPERATOR_SKILL_PATH);
+    expect(err).not.toContain("`gh`");
+  });
+
   it("refuses a Target without the Operator's skill", async () => {
     rmSync(join(repoRoot, OPERATOR_SKILL_PATH));
 

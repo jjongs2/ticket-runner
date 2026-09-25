@@ -93,7 +93,9 @@ export interface ReadinessOptions {
  * The first missing item is the whole message: a human who has not run `init`
  * here is missing all of them, and one item to put right reads as one command to
  * type. The Target's own files are asked about before GitHub is, so that Target
- * is refused without a network call at all.
+ * is refused without a network call at all. Whether `gh` is there to ask comes
+ * next, so a Host without it is refused in words rather than with the spawn
+ * error the first label lookup would crash on.
  */
 export async function readinessRefusal({
   repoRoot,
@@ -102,6 +104,7 @@ export async function readinessRefusal({
 }: ReadinessOptions): Promise<string | undefined> {
   const missing =
     missingFileMessage(repoRoot) ??
+    (await missingGhMessage(tracker)) ??
     (await missingLabelMessage(tracker, labels)) ??
     (await missingBranchDeletionMessage(tracker));
   if (missing === undefined) return undefined;
@@ -139,6 +142,23 @@ function missingFileMessage(repoRoot: string): string | undefined {
   }
 
   return undefined;
+}
+
+/** What `init` and readiness both call a Host with no `gh` it can run. */
+export const GH_NOT_INSTALLED = "`gh` is not installed";
+
+/** What the human does about it, which neither of them can do for them. */
+export const GH_INSTALL = "install the GitHub CLI from https://cli.github.com";
+
+/**
+ * Names a `gh` that cannot be run at all, and the install that comes before
+ * the `init` the refusal goes on to name. One that runs but is not logged in is
+ * left to the GitHub questions after it, which fail on it loudly enough.
+ */
+async function missingGhMessage(tracker: Tracker): Promise<string | undefined> {
+  return (await tracker.authentication()) === "not-installed"
+    ? `${GH_NOT_INSTALLED} — ${GH_INSTALL} first`
+    : undefined;
 }
 
 /** Names the first triage label this Target is missing, as config spells it. */

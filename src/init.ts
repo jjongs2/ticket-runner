@@ -13,9 +13,11 @@ import {
   type AgentRunner,
   SKILLS_PLUGIN,
 } from "./ports/agent-runner.js";
-import type { Tracker } from "./ports/tracker.js";
+import type { Authentication, Tracker } from "./ports/tracker.js";
 import {
   CLAUDE_FILENAME,
+  GH_INSTALL,
+  GH_NOT_INSTALLED,
   hasClaudePointer,
   missingIgnoreLines,
   readTargetFile,
@@ -119,10 +121,10 @@ export async function initTarget(options: InitOptions): Promise<number> {
 
   // Asked before the labels, because every other GitHub call throws without it
   // and a report is more use to the human than a stack trace.
-  const authenticated = await tracker.authenticated();
+  const authentication = await tracker.authentication();
   const preflight = await runner.preflight();
-  const github = await updateGitHub(tracker, config, authenticated);
-  const reported = reportedItems(repoRoot, config, authenticated, preflight);
+  const github = await updateGitHub(tracker, config, authentication);
+  const reported = reportedItems(repoRoot, config, authentication, preflight);
 
   logGroup(log, "Wrote", written, "nothing to write");
   logGroup(log, "GitHub", github);
@@ -319,13 +321,25 @@ function separator(existing: string): string {
   return existing.endsWith("\n") ? "\n" : "\n\n";
 }
 
+/**
+ * What is wrong with a `gh` that cannot speak to GitHub, as both groups say it,
+ * and what the human does about it: only a `gh` that runs can be logged in.
+ */
+const GH_FAILURE: Record<
+  Exclude<Authentication, "authenticated">,
+  { failure: string; remedy: string }
+> = {
+  unauthenticated: { failure: "`gh` is not authenticated", remedy: "run `gh auth login`" },
+  "not-installed": { failure: GH_NOT_INSTALLED, remedy: GH_INSTALL },
+};
+
 /** The three things `init` does on GitHub, and the one thing that stops them all. */
 async function updateGitHub(
   tracker: Tracker,
   config: Config,
-  authenticated: boolean,
+  authentication: Authentication,
 ): Promise<string[]> {
-  if (!authenticated) return ["nothing done: `gh` is not authenticated"];
+  if (authentication !== "authenticated") return [`nothing done: ${GH_FAILURE[authentication].failure}`];
 
   const created = await ensureLabels(tracker, config.labels);
   // Asked for every time: the setting is the Target's to have on, and GitHub
@@ -359,11 +373,11 @@ interface Reported {
 function reportedItems(
   repoRoot: string,
   config: Config,
-  authenticated: boolean,
+  authentication: Authentication,
   preflight: AgentPreflight,
 ): Reported[] {
   return [
-    report(authenticated, "`gh` is authenticated", "`gh` is not authenticated — run `gh auth login`"),
+    ghReported(authentication),
     report(preflight.runs, "`claude` runs", "`claude` could not be run — install the Claude Code CLI"),
     report(
       preflight.plugin,
@@ -381,6 +395,13 @@ function reportedItems(
       `no Check is configured or inferable — name one in \`checks\` in ${CONFIG_FILENAME}, or add \`test\` and \`typecheck\` scripts to package.json`,
     ),
   ];
+}
+
+/** The `gh` item, which fails two ways and names the fix for each. */
+function ghReported(authentication: Authentication): Reported {
+  if (authentication === "authenticated") return { ok: true, line: "`gh` is authenticated" };
+  const { failure, remedy } = GH_FAILURE[authentication];
+  return { ok: false, line: `${failure} — ${remedy}` };
 }
 
 function report(ok: boolean, passed: string, failed: string): Reported {

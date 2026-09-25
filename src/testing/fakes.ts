@@ -16,6 +16,7 @@ import type {
   StageResult,
 } from "../ports/agent-runner.js";
 import type {
+  Authentication,
   Candidate,
   CiOutcome,
   CreateIssue,
@@ -55,8 +56,8 @@ export interface FakePullRequest extends CreatePullRequest {
 
 export class FakeTracker implements Tracker {
   user = "pipeline-user";
-  /** Whether `gh` is logged in, as `init` reports it. */
-  isAuthenticated = true;
+  /** How `gh` answers on this Host, as `init` reports it and readiness asks. */
+  authenticationAnswer: Authentication = "authenticated";
   /** Whether squash merging is allowed, which `init` turns on. */
   squashMergeEnabled = false;
   /**
@@ -138,8 +139,8 @@ export class FakeTracker implements Tracker {
   }
 
   // Not in `calls`: a read, and one nothing about the Target changes over.
-  async authenticated(): Promise<boolean> {
-    return this.isAuthenticated;
+  async authentication(): Promise<Authentication> {
+    return this.authenticationAnswer;
   }
 
   async currentUser(): Promise<string> {

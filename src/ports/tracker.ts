@@ -153,14 +153,24 @@ export type CiOutcome =
   | { state: "conflicting" }
   | { state: "timed-out" };
 
+/**
+ * How `gh` answers on this Host: it speaks to GitHub as somebody, it runs but
+ * as nobody, or it cannot be run at all. The last two want different things
+ * of the human — a login, and an install — so they are never one answer.
+ */
+export type Authentication = "authenticated" | "unauthenticated" | "not-installed";
+
 export interface Tracker {
   /**
-   * Whether `gh` can speak to GitHub as somebody.
+   * Whether `gh` can speak to GitHub as somebody, and if not, whether it is
+   * there to be logged in.
    *
-   * Only `init` asks, and only to report the answer: every other operation of
-   * this port fails loudly when it is false, which is all a Run needs to know.
+   * `init` reports the answer, and Target readiness refuses a Host with no
+   * `gh` on it before its first GitHub question, which would otherwise fail on
+   * the spawn. Every other operation of this port fails loudly without a login,
+   * which is all a Run needs to know about that one.
    */
-  authenticated(): Promise<boolean>;
+  authentication(): Promise<Authentication>;
   currentUser(): Promise<string>;
   /**
    * The branch GitHub calls the Target's default.

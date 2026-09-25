@@ -65,23 +65,24 @@ beforeEach(() => {
 
 describe("reading", () => {
   it("reads authentication off asking REST for the current user", async () => {
-    expect(await tracker(ok("octocat\n")).authenticated()).toBe(true);
+    expect(await tracker(ok("octocat\n")).authentication()).toBe("authenticated");
     expect(calls[0]).toEqual(["api", "user", "--jq", ".login"]);
   });
 
   it("answers that gh is not authenticated rather than throwing", async () => {
     const gh = tracker(failedExecution("gh: Bad credentials (HTTP 401)"));
 
-    expect(await gh.authenticated()).toBe(false);
+    expect(await gh.authentication()).toBe("unauthenticated");
   });
-  it("answers that gh is not authenticated when gh itself cannot be run", async () => {
+
+  it("answers that gh is not installed when gh itself cannot be run", async () => {
     const gh = trackerWith({
       run: async () => {
         throw new Error("spawn gh ENOENT");
       },
     });
 
-    expect(await gh.authenticated()).toBe(false);
+    expect(await gh.authentication()).toBe("not-installed");
   });
 
   it("asks REST for the highest published Release of a named repository", async () => {
@@ -617,7 +618,7 @@ describe("writing", () => {
       ok("{}"),
       ok("{}"),
     );
-    await gh.authenticated();
+    await gh.authentication();
     await gh.listLabels();
     await gh.createLabel({ name: "x", color: "ffffff", description: "" });
     await gh.getIssue(2);

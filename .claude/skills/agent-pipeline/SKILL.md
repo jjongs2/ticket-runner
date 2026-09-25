@@ -35,7 +35,7 @@ Install only what this Host does not already have. What the cloud environment's 
    apt-get install -y gh
    ```
 
-   The `gh` apt offers is older than GitHub's own, and enough: the pipeline reaches GitHub through `gh api` alone. If the install fails, start nothing and tell the human what apt printed: without `gh` a Run is refused as if `gh` were not authenticated, which points them the wrong way.
+   The `gh` apt offers is older than GitHub's own, and enough: the pipeline reaches GitHub through `gh api` alone. If the install fails, start nothing and tell the human what apt printed: a Run started without `gh` is refused as a Target that is not set up, saying only that `gh` is not installed and must be installed first.
 
 4. This repository's own dependencies, in this checkout. Every Ticket's worktree lives inside this checkout, and a Check that finds nothing installed in its worktree uses what is installed here, so without them every Check fails to start and spends its Ticket's fix budget on that. If they are installed here already, `node_modules/` beside a `package.json` for instance, use them as they are. Otherwise work out the install command from what this repository declares, its lockfile first and then its README or contributing guide, and run it at the root of this checkout: `npm ci` beside a `package-lock.json`, say. A repository that declares no dependencies needs nothing here. If the install fails, start nothing and tell the human what the install printed.
 

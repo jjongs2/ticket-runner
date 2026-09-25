@@ -1,4 +1,5 @@
 import type {
+  Authentication,
   Candidate,
   CiOutcome,
   CreateIssue,
@@ -181,16 +182,18 @@ export class GhTracker implements Tracker {
    * The failure is the answer here, so this is the one call that does not
    * throw on one: `init` reports it as a line rather than as a crash.
    */
-  async authenticated(): Promise<boolean> {
+  async authentication(): Promise<Authentication> {
+    let exitCode: number;
     try {
-      const { exitCode } = await this.gh(["api", "user", "--jq", ".login"], {
+      ({ exitCode } = await this.gh(["api", "user", "--jq", ".login"], {
         allowFailure: true,
-      });
-      return exitCode === 0;
+      }));
     } catch {
-      // `gh` itself is not on the PATH, which is as unauthenticated as it gets.
-      return false;
+      // A failed exit comes back as an exit code, so a throw is the spawn
+      // itself failing: `gh` is not on the PATH, and no login would help.
+      return "not-installed";
     }
+    return exitCode === 0 ? "authenticated" : "unauthenticated";
   }
 
   async currentUser(): Promise<string> {

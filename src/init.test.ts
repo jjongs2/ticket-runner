@@ -463,7 +463,7 @@ describe("what init does on GitHub", () => {
   });
 
   it("does nothing on GitHub when gh is not authenticated", async () => {
-    tracker.isAuthenticated = false;
+    tracker.authenticationAnswer = "unauthenticated";
 
     const { out } = await init();
 
@@ -471,6 +471,17 @@ describe("what init does on GitHub", () => {
     expect(tracker.squashMergeEnabled).toBe(false);
     expect(tracker.deleteBranchOnMergeEnabled).toBe(false);
     expect(out).toMatch(/GitHub:\n {2}nothing done: `gh` is not authenticated/);
+  });
+
+  it("does nothing on GitHub when gh is not installed, and says so", async () => {
+    tracker.authenticationAnswer = "not-installed";
+
+    const { out } = await init();
+
+    expect(tracker.createdLabels).toEqual([]);
+    expect(tracker.squashMergeEnabled).toBe(false);
+    expect(tracker.deleteBranchOnMergeEnabled).toBe(false);
+    expect(out).toMatch(/GitHub:\n {2}nothing done: `gh` is not installed\n/);
   });
 });
 
@@ -491,11 +502,23 @@ describe("what init only reports", () => {
 
   it("fails the gh line and exits 1 when gh is not authenticated", async () => {
     readyToReport(repoRoot);
-    tracker.isAuthenticated = false;
+    tracker.authenticationAnswer = "unauthenticated";
 
     const { code, out } = await init();
 
     expect(out).toMatch(/✗ `gh` is not authenticated — run `gh auth login`/);
+    expect(code).toBe(1);
+  });
+
+  it("fails the gh line without sending the human to log in when gh is not installed", async () => {
+    readyToReport(repoRoot);
+    tracker.authenticationAnswer = "not-installed";
+
+    const { code, out } = await init();
+
+    expect(out).toMatch(/✗ `gh` is not installed — install the GitHub CLI from https:\/\/cli\.github\.com/);
+    expect(out).not.toContain("gh auth login");
+    expect(out).not.toContain("not authenticated");
     expect(code).toBe(1);
   });
 
