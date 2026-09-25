@@ -136,7 +136,7 @@ export function pullRequestBody({ ticket, verdict, runId, host }: PullRequestBod
 
   // A merged Ticket keeps no transcripts on the remote, so the run directory is
   // the only place they are, and a cloud Host's goes with its session.
-  const transcripts =
+  const where =
     host === "workstation" ? `\`.agent-pipeline/runs/${runId}/${ticket}/\`` : undefined;
 
   return [
@@ -150,7 +150,7 @@ export function pullRequestBody({ ticket, verdict, runId, host }: PullRequestBod
     "",
     "</details>",
     "",
-    runLine(runId, transcripts),
+    runLine(runId, where),
     "",
   ].join("\n");
 }
@@ -164,7 +164,11 @@ export interface DraftPullRequestBody {
   transcripts?: KeptTranscripts;
 }
 
-/** The body of the draft PR a hand-off leaves behind; there is no Verdict yet. */
+/**
+ * The body of the draft PR a hand-off leaves behind, whether it opened the PR
+ * or made an open one a draft: what a human needs from it is the hand-off, not
+ * a Verdict.
+ */
 export function draftPullRequestBody({
   ticket,
   stage,
@@ -179,12 +183,7 @@ export function draftPullRequestBody({
     "",
     `See the hand-off comment on #${ticket} for the branch, worktree and evidence.`,
     "",
-    runLine(
-      runId,
-      transcripts === undefined
-        ? undefined
-        : `\`${transcripts.path}\` on the \`${transcripts.branch}\` branch`,
-    ),
+    runLine(runId, transcripts === undefined ? undefined : keptPlace(transcripts)),
     "",
   ].join("\n");
 }
@@ -193,9 +192,14 @@ export function draftPullRequestBody({
  * The line both pull request bodies end with: the Run, and where its
  * transcripts are when there is somewhere that outlives the Host to point at.
  */
-function runLine(runId: string, transcripts: string | undefined): string {
+function runLine(runId: string, where: string | undefined): string {
   const run = `Run \`${runId}\``;
-  return transcripts === undefined ? run : `${run} · transcripts in ${transcripts}`;
+  return where === undefined ? run : `${run} · transcripts in ${where}`;
+}
+
+/** Where a hand-off kept the transcripts, as every shape that names it spells it. */
+function keptPlace(transcripts: KeptTranscripts): string {
+  return `\`${transcripts.path}\` on the \`${transcripts.branch}\` branch`;
 }
 
 export interface SquashCommitMessage {
@@ -286,9 +290,7 @@ export function handoffComment(handoff: HandoffComment): string {
     `- ${location}`,
     ...(handoff.transcripts === undefined
       ? []
-      : [
-          `- Transcripts: \`${handoff.transcripts.path}\` on the \`${handoff.transcripts.branch}\` branch`,
-        ]),
+      : [`- Transcripts: ${keptPlace(handoff.transcripts)}`]),
     "",
   ];
 

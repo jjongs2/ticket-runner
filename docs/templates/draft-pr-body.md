@@ -11,6 +11,12 @@ transcripts: the place the hand-off comment's `Transcripts:` line names. It is
 the same on every Host, because a hand-off keeps them on the remote wherever it
 ran, which is where a human can still read them once the Host is gone.
 
+The body is the hand-off's whether the hand-off opened the pull request or made
+one that was already open a draft: that one's body is what an earlier pass or
+Run wrote, with a Verdict nothing is merging on and a last line about another
+place. A draft is opened before the transcripts are kept, because the State
+records it, so its body is written again once they are.
+
 ## When nothing was kept
 
 ```

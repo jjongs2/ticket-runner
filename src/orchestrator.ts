@@ -1489,8 +1489,9 @@ interface HandOff {
  * hands it back and the next Run carries on from what it reached. The Stages'
  * transcripts go up beside the State, since the Host they were written on may
  * be gone by the time a human looks, and the comment says where they and the
- * branch are. A draft PR this hand-off opened says where they are too, once
- * they are kept: it is opened first, because the State records it.
+ * branch are. The draft PR's body says where they are too, once they are
+ * kept: a draft is opened first, because the State records it, and one that
+ * was already open is rewritten, since its body is an earlier Run's.
  *
  * A Ticket handed over before its worktree was created has none: nothing was
  * branched, so there is no directory to name and nothing to push a draft PR out
@@ -1549,8 +1550,9 @@ async function handOff(
     failure: failure.summary,
     runId: pipeline.runId,
   };
-  // Set only when this hand-off opened the draft, whose body is then its own.
-  let drafted: number | undefined;
+  // Whether the draft's body is one this hand-off wrote, naming no transcripts.
+  // One it only converted still says what its Run said, which is not this.
+  let drafted = false;
   if (pullRequest !== undefined) {
     await tracker.convertPullRequestToDraft(pullRequest);
   } else if (worktree?.pushable === true) {
@@ -1565,7 +1567,8 @@ async function handOff(
         body: draftPullRequestBody(draftBody),
         draft: true,
       });
-      pullRequest = drafted = pr.number;
+      pullRequest = pr.number;
+      drafted = true;
     } catch (error) {
       pipeline.log?.(`#${ticket} could not open a draft PR: ${(error as Error).message}`);
     }
@@ -1587,16 +1590,20 @@ async function handOff(
   // Only beside a State that stays, because they go when it does, and after
   // it, so the State they sit beside is the one a resuming Run reads.
   const transcripts = keepsState ? await keepTranscripts(pipeline, ticket) : undefined;
-  // The draft went up before anything was kept, so it learns where only now.
-  if (drafted !== undefined && transcripts !== undefined) {
+  // A draft this hand-off opened went up before anything was kept, and one it
+  // converted still carries an earlier body, so either learns where only now.
+  if (pullRequest !== undefined && !(drafted && transcripts === undefined)) {
     try {
       await tracker.updatePullRequestBody(
-        drafted,
-        draftPullRequestBody({ ...draftBody, transcripts }),
+        pullRequest,
+        draftPullRequestBody({
+          ...draftBody,
+          ...(transcripts === undefined ? {} : { transcripts }),
+        }),
       );
     } catch (error) {
       pipeline.log?.(
-        `#${ticket} could not name its transcripts in PR #${drafted}: ${(error as Error).message}`,
+        `#${ticket} could not rewrite the body of PR #${pullRequest}: ${(error as Error).message}`,
       );
     }
   }

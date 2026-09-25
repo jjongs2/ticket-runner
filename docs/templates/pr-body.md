@@ -15,9 +15,9 @@ The last line names the Run, and the directory on the Host that ran it where
 its Stages' transcripts are. That is the shape on a workstation, whose run
 directory outlives the Run.
 
-A Ticket that was handed off and merges later has its body rewritten in this
-shape at the merge, so it never keeps the state-branch pointer its draft body
-carried: the merge removes what that pointer names.
+A Ticket that was handed off and merges later has its body rewritten at the
+merge, in this shape or the cloud one below, so it never keeps the state-branch
+pointer its draft body carried: the merge removes what that pointer names.
 
 ## On a cloud Host
 

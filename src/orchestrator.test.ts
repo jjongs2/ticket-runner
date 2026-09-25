@@ -1056,6 +1056,33 @@ describe("the transcripts a hand-off keeps on the remote", () => {
     expect(body).not.toContain("transcripts");
   });
 
+  it("names them in a PR that was open before the hand-off made it a draft", async () => {
+    tracker.ci = { state: "failed", summary: "checks/build failed", excerpt: "" };
+
+    await run();
+
+    const body = tracker.pullRequest(100).body;
+    expect(tracker.calls).toContain("convertPullRequestToDraft:100");
+    expect(body).toContain("**Handed off at ci.**");
+    expect(body).toContain(
+      "Run `run-1` · transcripts in `ticket-2/run-1/` on the `agent-pipeline/state` branch",
+    );
+    expect(body).not.toContain(".agent-pipeline/runs/");
+  });
+
+  it("names none in a PR made a draft when the remote will not take them", async () => {
+    tracker.ci = { state: "failed", summary: "checks/build failed", excerpt: "" };
+    workspace.keepTranscripts = async () => {
+      throw new Error("remote rejected");
+    };
+
+    await run();
+
+    const body = tracker.pullRequest(100).body;
+    expect(body.endsWith("evidence.\n\nRun `run-1`\n")).toBe(true);
+    expect(body).not.toContain("transcripts");
+  });
+
   it("still hands the Ticket off when the draft PR's body cannot be rewritten", async () => {
     workspace.failCheck("npm test", "FAIL src/a.test.ts");
     tracker.updatePullRequestBody = async () => {
