@@ -144,13 +144,20 @@ function missingFileMessage(repoRoot: string): string | undefined {
   return undefined;
 }
 
+/** What `init` and readiness both call a Host with no `gh` it can run. */
+export const GH_NOT_INSTALLED = "`gh` is not installed";
+
+/** What the human does about it, which neither of them can do for them. */
+export const GH_INSTALL = "install the GitHub CLI from https://cli.github.com";
+
 /**
- * Names a `gh` that cannot be run at all. One that runs but is not logged in is
+ * Names a `gh` that cannot be run at all, and the install that comes before
+ * the `init` the refusal goes on to name. One that runs but is not logged in is
  * left to the GitHub questions after it, which fail on it loudly enough.
  */
 async function missingGhMessage(tracker: Tracker): Promise<string | undefined> {
   return (await tracker.authentication()) === "not-installed"
-    ? "`gh` is not installed"
+    ? `${GH_NOT_INSTALLED} — ${GH_INSTALL} first`
     : undefined;
 }
 

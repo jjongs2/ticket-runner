@@ -185,7 +185,7 @@ describe("a Target init has not set up", () => {
 
     expect(code).toBe(2);
     expect(err).toBe(
-      "This Target is not set up: `gh` is not installed. Run `agent-pipeline init` here and start again; a Run puts nothing in place itself.",
+      "This Target is not set up: `gh` is not installed — install the GitHub CLI from https://cli.github.com first. Run `agent-pipeline init` here and start again; a Run puts nothing in place itself.",
     );
     expect(lockTaken()).toBe(false);
   });
