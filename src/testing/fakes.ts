@@ -29,6 +29,7 @@ import type {
 } from "../ports/tracker.js";
 import type {
   CheckOutcome,
+  KeptTranscripts,
   LockHolder,
   LockOutcome,
   LockTake,
@@ -450,7 +451,15 @@ export class FakeWorkspace implements Workspace {
    * would otherwise have to step round them.
    */
   states = new Map<number, StateFile>();
-  /** What every write of the State fails with, when set: storage that will not take it. */
+  /**
+   * The Runs whose transcripts each handed-off Ticket keeps beside its State,
+   * in the order they were kept. They go when the State does.
+   */
+  transcripts = new Map<number, string[]>();
+  /**
+   * What every write of the State fails with, when set: storage that will not
+   * take it, which takes transcripts no better.
+   */
   stateWriteFailure: Error | undefined;
   /**
    * The Run lock as it stands, and whether the Run it names is still running.
@@ -468,6 +477,7 @@ export class FakeWorkspace implements Workspace {
     const other = new FakeWorkspace();
     other.remoteBranches = this.remoteBranches;
     other.states = this.states;
+    other.transcripts = this.transcripts;
     return other;
   }
 
@@ -616,6 +626,11 @@ export class FakeWorkspace implements Workspace {
     this.remoteBranches.add(branch);
   }
 
+  // Not in `calls`: a read, which only decides what a hand-off comment says.
+  async hasRemoteBranch(branch: string): Promise<boolean> {
+    return this.remoteBranches.has(branch);
+  }
+
   async deleteRemoteBranch(branch: string): Promise<void> {
     this.calls.push(`deleteRemoteBranch:${branch}`);
     this.remoteBranches.delete(branch);
@@ -645,6 +660,17 @@ export class FakeWorkspace implements Workspace {
 
   async removeState(ticket: number): Promise<void> {
     this.states.delete(ticket);
+    this.transcripts.delete(ticket);
+  }
+
+  /**
+   * Kept whatever the Run ran: the fake has no transcripts on disk to count,
+   * so it keeps the Run's name, which is what a test asks after.
+   */
+  async keepTranscripts(ticket: number, runId: string): Promise<KeptTranscripts | undefined> {
+    if (this.stateWriteFailure !== undefined) throw this.stateWriteFailure;
+    this.transcripts.set(ticket, [...(this.transcripts.get(ticket) ?? []), runId]);
+    return { branch: "agent-pipeline/state", path: `ticket-${ticket}/${runId}/` };
   }
 
   async takeRunLock(holder: LockHolder): Promise<LockTake> {

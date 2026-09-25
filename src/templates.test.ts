@@ -153,6 +153,25 @@ describe("handoffComment", () => {
     expect(handoffComment({ ...base, pullRequest: 12 })).toContain("PR #12 (draft)");
   });
 
+  it("says the branch is on the remote when it is, where it outlives this Host", () => {
+    expect(handoffComment({ ...base, onRemote: true })).toContain(
+      "- Branch `agent/2-skeleton` on the remote · worktree",
+    );
+    expect(handoffComment(base)).not.toContain("on the remote");
+  });
+
+  it("names where the Stages' transcripts were kept, on its own line", () => {
+    const comment = handoffComment({
+      ...base,
+      transcripts: { branch: "agent-pipeline/state", path: "ticket-2/run-1/" },
+    });
+
+    expect(comment).toContain(
+      "- Transcripts: `ticket-2/run-1/` on the `agent-pipeline/state` branch",
+    );
+    expect(handoffComment(base)).not.toContain("Transcripts");
+  });
+
   it("omits the PR clause when no PR exists", () => {
     expect(handoffComment(base)).not.toContain("PR #");
   });

@@ -10,6 +10,7 @@ import {
 } from "../lock.js";
 import type {
   CheckOutcome,
+  KeptTranscripts,
   LockHolder,
   LockOutcome,
   LockTake,
@@ -27,6 +28,7 @@ import {
   stateFileName,
   stateFileTicket,
 } from "../resume.js";
+import { transcriptFiles } from "../run-log.js";
 import { exec, execOrThrow, throwOnFailure } from "./exec.js";
 
 /**
@@ -44,7 +46,8 @@ const REBASE_DIRS = ["rebase-merge", "rebase-apply"];
 
 /**
  * The branch of the Target's remote that holds every Ticket's State, one file
- * per Ticket, under the prefix the pipeline owns (ADR-0004).
+ * per Ticket, and the transcripts of a handed-off Ticket's Stages beside it,
+ * under the prefix the pipeline owns (ADR-0004).
  */
 export const STATE_BRANCH = "agent-pipeline/state";
 
@@ -58,11 +61,15 @@ export const STATE_BRANCH = "agent-pipeline/state";
  */
 const STATE_ATTEMPTS = 3;
 
-/** One file of the state branch to write, with its contents, or to remove, without. */
-interface StateEdit {
-  name: string;
-  contents?: string;
-}
+/**
+ * One change to the state branch: a file written with `contents`, a file
+ * written with what is on disk at `from`, or everything at `remove` gone, the
+ * file of that name or the directory of it.
+ */
+type StateEdit =
+  | { name: string; contents: string }
+  | { name: string; from: string }
+  | { remove: string };
 
 /** One entry of the snapshot's tree, as `git ls-tree` names it. */
 interface TreeEntry {
@@ -431,6 +438,16 @@ export class GitWorkspace implements Workspace {
     );
   }
 
+  async hasRemoteBranch(branch: string): Promise<boolean> {
+    const { stdout } = await this.git([
+      "ls-remote",
+      "--heads",
+      this.remote,
+      `refs/heads/${branch}`,
+    ]);
+    return stdout.trim() !== "";
+  }
+
   async deleteRemoteBranch(branch: string): Promise<void> {
     const args = ["push", this.remote, "--delete", branch];
     const result = await this.tryGit(args);
@@ -485,32 +502,49 @@ export class GitWorkspace implements Workspace {
   }
 
   async writeState(state: TicketState): Promise<void> {
-    await this.changeState(`Record #${state.ticket} at ${state.state}`, {
-      name: stateFileName(state.ticket),
-      contents: stateFileContents(state),
-    });
+    await this.changeState(`Record #${state.ticket} at ${state.state}`, [
+      { name: stateFileName(state.ticket), contents: stateFileContents(state) },
+    ]);
   }
 
   async removeState(ticket: number): Promise<void> {
-    await this.changeState(`Forget #${ticket}`, { name: stateFileName(ticket) });
+    await this.changeState(`Forget #${ticket}`, [
+      { remove: stateFileName(ticket) },
+      { remove: transcriptsDir(ticket) },
+    ]);
+  }
+
+  /**
+   * Each file goes up under `ticket-<n>/<runId>/`, beside the Ticket's State
+   * file, as the Run's own directory lays it out; a Ticket handed off by more
+   * than one Run keeps each Run's apart, and {@link removeState} takes them
+   * all.
+   */
+  async keepTranscripts(ticket: number, runId: string): Promise<KeptTranscripts | undefined> {
+    const files = transcriptFiles(this.repoRoot, runId, ticket);
+    if (files.length === 0) return undefined;
+
+    const path = `${transcriptsDir(ticket)}/${runId}/`;
+    await this.changeState(
+      `Keep #${ticket}'s transcripts from ${runId}`,
+      files.map(({ name, path: from }) => ({ name: `${path}${name}`, from })),
+    );
+    return { branch: STATE_BRANCH, path };
   }
 
   /**
    * Rewrite the state branch as one new snapshot commit, the same as the tip
-   * but for the file `edit` names — written with its contents, or removed where
-   * it has none — and push it over the tip it was built from. Removing a file
-   * the tip does not have pushes nothing, so a remove never creates the branch.
+   * but for `edits`, and push it over the tip it was built from. Edits that
+   * change nothing push nothing, so removing what the tip does not have never
+   * creates the branch.
    *
    * No parent, because nothing reads the branch's history and a branch that
    * grew with every Stage would grow the Target with it. The lease is on the
    * tip read, or on no branch at all where there was none, so a snapshot that
    * another writer moved on since is never overwritten: it is read again and
-   * the edit made over it.
+   * the edits made over it.
    */
-  private async changeState(
-    message: string,
-    edit: StateEdit,
-  ): Promise<void> {
+  private async changeState(message: string, edits: StateEdit[]): Promise<void> {
     await this.stateBranch.take(async () => {
       for (let attempt = 1; ; attempt++) {
         const tracking = await this.fetchBranch(STATE_BRANCH);
@@ -518,14 +552,13 @@ export class GitWorkspace implements Workspace {
           tracking === undefined
             ? undefined
             : (await this.git(["rev-parse", tracking])).stdout.trim();
-        if (edit.contents === undefined) {
-          const had =
-            tip !== undefined &&
-            (await this.tryGit(["cat-file", "-e", `${tip}:${edit.name}`])).exitCode === 0;
-          if (!had) return;
-        }
+        if (tip === undefined && edits.every((edit) => "remove" in edit)) return;
 
-        const tree = await this.editTree(tip, edit);
+        const tree = await this.editTree(tip, edits);
+        const unchanged =
+          tip !== undefined &&
+          tree === (await this.git(["rev-parse", `${tip}^{tree}`])).stdout.trim();
+        if (unchanged) return;
         // Unsigned, like the push is unhooked: a signing key that asks for a
         // passphrase would otherwise stop every write of an unattended Run.
         const { stdout } = await this.git([
@@ -566,26 +599,38 @@ export class GitWorkspace implements Workspace {
   }
 
   /**
-   * The tree `tip` has with `edit` made to it, built in a scratch index so the
-   * main checkout's own index is never the one written. The blob goes through
-   * a scratch file too, because `exec` gives a child no stdin to read it from.
+   * The tree `tip` has with `edits` made to it, built in a scratch index so the
+   * main checkout's own index is never the one written. Contents go through a
+   * scratch file on their way to a blob, because `exec` gives a child no stdin
+   * to read them from.
    */
-  private async editTree(
-    tip: string | undefined,
-    edit: StateEdit,
-  ): Promise<string> {
+  private async editTree(tip: string | undefined, edits: StateEdit[]): Promise<string> {
     return this.withScratch(async (scratch) => {
       const env = { GIT_INDEX_FILE: join(scratch, "index") };
       await this.git(["read-tree", ...(tip === undefined ? ["--empty"] : [tip])], env);
-      if (edit.contents === undefined) {
-        await this.git(["update-index", "--force-remove", "--", edit.name], env);
-      } else {
-        const path = join(scratch, "blob");
-        writeFileSync(path, edit.contents);
+      for (const [index, edit] of edits.entries()) {
+        if ("remove" in edit) {
+          // Every file under a directory's name, or the one file of that name:
+          // an index holds files alone, so a directory goes a file at a time.
+          const { stdout } = await this.git(["ls-files", "-z", "--", edit.remove], env);
+          const paths = stdout.split("\0").filter((path) => path !== "");
+          if (paths.length > 0) {
+            await this.git(["update-index", "--force-remove", "--", ...paths], env);
+          }
+          continue;
+        }
+
+        let from: string;
+        if ("from" in edit) {
+          from = edit.from;
+        } else {
+          from = join(scratch, `blob-${index}`);
+          writeFileSync(from, edit.contents);
+        }
         // --no-filters: the bytes written are the bytes kept, whatever the
         // checkout's attributes would make of a JSON file.
         const blob = (
-          await this.git(["hash-object", "-w", "--no-filters", "--", path])
+          await this.git(["hash-object", "-w", "--no-filters", "--", from])
         ).stdout.trim();
         await this.git(
           ["update-index", "--add", "--cacheinfo", `100644,${blob},${edit.name}`],
@@ -637,6 +682,14 @@ export class GitWorkspace implements Workspace {
   private tryGit(args: string[]) {
     return this.mainCheckout.take(() => exec("git", args, { cwd: this.repoRoot }));
   }
+}
+
+/**
+ * The directory of the state branch a handed-off Ticket's transcripts are kept
+ * in, named like its State file without the extension, so the two sort together.
+ */
+function transcriptsDir(ticket: number): string {
+  return `ticket-${ticket}`;
 }
 
 /**

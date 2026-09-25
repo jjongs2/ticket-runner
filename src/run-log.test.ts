@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -8,6 +8,7 @@ import {
   retryLogDir,
   runLogDir,
   stageLogDir,
+  transcriptFiles,
   writeRunVersion,
 } from "./run-log.js";
 
@@ -46,6 +47,47 @@ describe("the Version beside the transcripts", () => {
     // The Run writes this before its first Stage, so nothing else has been
     // there to make the directory for it.
     expect(() => writeRunVersion(repoRoot, RUN_ID, "0.4.0")).not.toThrow();
+  });
+});
+
+describe("the files a hand-off keeps", () => {
+  /** Write `files` under the Ticket's directory of this Run. */
+  function write(ticket: number, files: string[]): void {
+    for (const name of files) {
+      const path = join(stageLogDir(repoRoot, RUN_ID, ticket), name);
+      mkdirSync(join(path, ".."), { recursive: true });
+      writeFileSync(path, "");
+    }
+  }
+
+  it("are each Stage's command line and transcript, the retries' and the Version with them", () => {
+    writeRunVersion(repoRoot, RUN_ID, "0.4.0");
+    write(8, [
+      "verify.command",
+      "verify.stdout",
+      "verify.stderr",
+      "verify.transcript.jsonl",
+      "retry/fix.command",
+      "retry/fix.transcript.jsonl",
+    ]);
+
+    const files = transcriptFiles(repoRoot, RUN_ID, 8);
+
+    expect(files.map(({ name }) => name)).toEqual([
+      "retry/fix.command",
+      "retry/fix.transcript.jsonl",
+      "verify.command",
+      "verify.transcript.jsonl",
+      "version.txt",
+    ]);
+    expect(files[0]?.path).toBe(join(retryLogDir(repoRoot, RUN_ID, 8), "fix.command"));
+  });
+
+  it("are none for a Ticket the Run ran no Stage of, whatever its other Tickets left", () => {
+    writeRunVersion(repoRoot, RUN_ID, "0.4.0");
+    write(9, ["implement.command"]);
+
+    expect(transcriptFiles(repoRoot, RUN_ID, 8)).toEqual([]);
   });
 });
 

@@ -957,6 +957,86 @@ describe("hand-off", () => {
 });
 
 /**
+ * What a human reads a hand-off by once the Host it happened on is gone: the
+ * branch and the Stages' transcripts, both on the remote.
+ */
+describe("the transcripts a hand-off keeps on the remote", () => {
+  const KEPT = "- Transcripts: `ticket-2/run-1/` on the `agent-pipeline/state` branch";
+
+  it("keeps this Run's beside the State, and the comment says where they and the branch are", async () => {
+    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+
+    expect(await run()).toMatchObject({ outcome: "handed-off" });
+    expect(workspace.transcripts.get(TICKET)).toEqual(["run-1"]);
+    expect(workspace.state(TICKET)).toBeDefined();
+    expect(handoffBody()).toContain(`- Branch \`${BRANCH}\` on the remote · worktree`);
+    expect(handoffBody()).toContain(KEPT);
+  });
+
+  it("keeps them after the rest of the hand-off is written, so the kept State is current", async () => {
+    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+    let stateWhenKept: TicketState | undefined;
+    const keep = workspace.keepTranscripts.bind(workspace);
+    workspace.keepTranscripts = async (ticket, runId) => {
+      stateWhenKept = workspace.state(ticket);
+      return keep(ticket, runId);
+    };
+
+    await run();
+
+    // The draft PR is part of the State; transcripts kept before it would sit
+    // beside a State a resuming Run opens a second pull request over.
+    expect(stateWhenKept).toMatchObject({ pullRequest: 100 });
+  });
+
+  it("keeps none for a Ticket that merges", async () => {
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(workspace.transcripts.has(TICKET)).toBe(false);
+  });
+
+  it("clears those an earlier hand-off kept once the Ticket, handed back, merges", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    expect(await run()).toMatchObject({ outcome: "handed-off" });
+    expect(workspace.transcripts.has(TICKET)).toBe(true);
+    tracker.issue(TICKET).labels = ["ready-for-agent"];
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(workspace.transcripts.has(TICKET)).toBe(false);
+  });
+
+  it("keeps none for a released Ticket, which nobody has to look into", async () => {
+    runner.queue("implement", { ok: false, failure: "rate-limited" });
+
+    expect(await run()).toMatchObject({ outcome: "released" });
+    expect(workspace.transcripts.has(TICKET)).toBe(false);
+  });
+
+  it("keeps none where the hand-off leaves no State, and says the branch is only here", async () => {
+    // A branch in the way at setup: no Stage of this Run ran, and the branch
+    // is a human's, which never went to the remote.
+    workspace.branches.add(BRANCH);
+
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "setup" });
+    expect(workspace.transcripts.has(TICKET)).toBe(false);
+    expect(handoffBody()).not.toContain("Transcripts");
+    expect(handoffBody()).toContain(`- Branch \`${BRANCH}\`\n`);
+  });
+
+  it("still hands the Ticket off, naming none, when the remote will not take them", async () => {
+    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+    workspace.keepTranscripts = async () => {
+      throw new Error("remote rejected");
+    };
+
+    expect(await run()).toMatchObject({ outcome: "handed-off" });
+    expect(tracker.issue(TICKET).labels).toEqual(["ready-for-human"]);
+    expect(handoffBody()).not.toContain("Transcripts");
+    expect(logged.some((line) => line.includes("remote rejected"))).toBe(true);
+  });
+});
+
+/**
  * The branch carries a Ticket's work between Hosts, so every Stage that commits
  * pushes it: a Host that vanishes after that loses nothing (ADR-0004).
  */
