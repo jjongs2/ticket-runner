@@ -73,8 +73,8 @@ export interface Candidate {
   title: string;
   assignees: string[];
   /**
-   * Open `blocked by` issues, from GitHub's native dependency summary. Body
-   * text is never read (ADR-0003).
+   * Open `blocked by` issues, counted off GitHub's native dependency list for
+   * the issue. Body text is never read (ADR-0003).
    */
   openBlockers: number;
 }
