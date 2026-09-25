@@ -219,14 +219,8 @@ export class GitWorkspace implements Workspace {
    * remote branch is rewritten by every rebase that is pushed.
    */
   private async fetchBranch(branch: string): Promise<string | undefined> {
-    const { stdout } = await this.git([
-      "ls-remote",
-      "--heads",
-      this.remote,
-      `refs/heads/${branch}`,
-    ]);
     const tracking = `refs/remotes/${this.remote}/${branch}`;
-    if (stdout.trim() === "") {
+    if (!(await this.hasRemoteBranch(branch))) {
       // A tip the remote no longer has would be the lease of the next push,
       // and refuse it: the push is then creating the branch, not replacing it.
       await this.tryGit(["update-ref", "-d", tracking]);
@@ -524,12 +518,12 @@ export class GitWorkspace implements Workspace {
     const files = transcriptFiles(this.repoRoot, runId, ticket);
     if (files.length === 0) return undefined;
 
-    const path = `${transcriptsDir(ticket)}/${runId}/`;
+    const directory = `${transcriptsDir(ticket)}/${runId}/`;
     await this.changeState(
       `Keep #${ticket}'s transcripts from ${runId}`,
-      files.map(({ name, path: from }) => ({ name: `${path}${name}`, from })),
+      files.map((file) => ({ name: `${directory}${file.name}`, from: file.path })),
     );
-    return { branch: STATE_BRANCH, path };
+    return { branch: STATE_BRANCH, path: directory };
   }
 
   /**

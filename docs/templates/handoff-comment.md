@@ -15,9 +15,10 @@
 
 The branch and the transcripts are named where they are on the remote, because
 the Host the work was done on may be gone by the time a human looks: a cloud
-Host's VM does not outlive its session. `on the remote` is dropped when the
-remote does not have the branch, as for a branch the pipeline refused to branch
-over, which is only ever this Host's.
+Host's VM does not outlive its session. `on the remote` is said only when the
+remote has the branch: one the pipeline refused to branch over at `setup` is
+usually a human's and only on this Host, and a Ticket that never committed has
+pushed nothing.
 
 The transcripts line names where the hand-off kept the command line and
 transcript of each Stage this Run ran for the Ticket, with those of the fix

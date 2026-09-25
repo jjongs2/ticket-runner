@@ -1567,7 +1567,7 @@ async function handOff(
   // Only beside a State that stays, because they go when it does, and after
   // it, so the State they sit beside is the one a resuming Run reads.
   const transcripts = keepsState ? await keepTranscripts(pipeline, ticket) : undefined;
-  const onRemote = await onTheRemote(pipeline, ticket, branch);
+  const onRemote = await branchOnRemote(pipeline, ticket, branch);
 
   await tracker.comment(
     ticket,
@@ -1628,7 +1628,7 @@ async function keepTranscripts(
  * when it does. A remote that cannot be asked counts as no: saying less than
  * is so sends nobody looking for a branch that is not there.
  */
-async function onTheRemote(pipeline: Pipeline, ticket: number, branch: string): Promise<boolean> {
+async function branchOnRemote(pipeline: Pipeline, ticket: number, branch: string): Promise<boolean> {
   try {
     return await pipeline.workspace.hasRemoteBranch(branch);
   } catch (error) {
