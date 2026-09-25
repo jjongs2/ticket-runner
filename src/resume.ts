@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
+import { REACHED_STATES, type StateFile, type TicketState } from "./ports/workspace.js";
 
 /**
  * The State file a Ticket keeps while its branch carries work worth resuming,
@@ -21,57 +22,12 @@ import { z } from "zod";
  * It lives beside the branch and worktree it is about, and like them it is local
  * and gitignored.
  *
- * Nothing here talks to git or GitHub. Whether the branch and worktree the file
- * names are still there is the Workspace's question, and the orchestrator asks
- * it before resuming into them; whether the Ticket is released or stranded is
- * the Claim's, and it is read off GitHub.
+ * This is how the git-backed Workspace keeps the State the port offers
+ * ({@link import("./ports/workspace.js").Workspace.readState} and the rest):
+ * nothing else reads or writes these files. Whether the branch and worktree a
+ * file names are still there is the Workspace's other question, and whether the
+ * Ticket is released or stranded is the Claim's, read off GitHub.
  */
-
-/**
- * How far a Ticket got: `claimed` is one the implement Stage never finished,
- * `implemented` one carrying that Stage's work on its branch with no merge
- * behind it.
- *
- * A state of the lifecycle, not a Stage — a Stage is a session (CONTEXT.md), and
- * what the file records is what the Ticket has, not what was running. Only these
- * two, because everything after the implement Stage — the Checks, the rebase,
- * the pull request, CI and the merge — is re-run from the top by a Run that
- * resumes at `implemented`, and none of them is worth a state a resume could
- * land on halfway.
- */
-export const REACHED_STATES = ["claimed", "implemented"] as const;
-
-export type ReachedState = (typeof REACHED_STATES)[number];
-
-export interface TicketState {
-  /** Carried in the file as well as its name, so the file reads on its own. */
-  ticket: number;
-  /** The branch the work is on, which the resuming Run uses rather than deriving. */
-  branch: string;
-  /** The state the Ticket had reached, which is where a later Run picks it up. */
-  state: ReachedState;
-  /**
-   * Whether the Fix budget has been spent. Resuming must not hand the Ticket a
-   * second fix Stage it never earned — except after a hand-off, which records it
-   * unspent, the Ticket having been through a human's hands since.
-   */
-  fixUsed: boolean;
-  /**
-   * The pull request the Ticket already has, if it got that far. Without it the
-   * resuming Run would try to open a second one for the branch.
-   */
-  pullRequest?: number;
-  /** The Run that last wrote the file, and when — both for a human reading it. */
-  runId: string;
-  /**
-   * The Version that wrote the file (ADR-0007). Written on every write, and
-   * optional when read: a file an earlier pipeline left names none, and a
-   * Ticket claimed before this existed still resumes.
-   */
-  version?: string;
-  /** ISO 8601. */
-  updatedAt: string;
-}
 
 const stateSchema = z.object({
   ticket: z.number().int().positive(),
@@ -108,25 +64,6 @@ export function writeTicketState(repoRoot: string, state: TicketState): void {
 export function clearTicketState(repoRoot: string, ticket: number): void {
   rmSync(statePath(repoRoot, ticket), { force: true });
 }
-
-/**
- * What a State file turned out to be.
- *
- * Three cases, not two: no file at all, a file that reads as state a Run can
- * resume from, and a file that does not. The third used to be the first —
- * silently dropped — and it is the one that most needs saying out loud: its
- * Ticket is claimed on the board, so the sweep for Stranded Tickets is the only
- * thing that could ever have found it (ADR-0007).
- */
-export type StateFile =
-  | { readable: true; state: TicketState }
-  | {
-      readable: false;
-      /** Read off the file's name, which is the only part of it that parsed. */
-      ticket: number;
-      /** The Version the file names, where it names one a reader can make out. */
-      version?: string;
-    };
 
 /**
  * What an earlier Run recorded about this Ticket, if it can be believed.

@@ -122,7 +122,8 @@ async function main(argv: string[]): Promise<number> {
   // a Run is already running, so whatever they would have refused it over was
   // answered when it started.
   if (command === "stop") {
-    return requestStop({ repoRoot: await findRepoRoot() });
+    const root = await findRepoRoot();
+    return await requestStop({ repoRoot: root, workspace: new GitWorkspace(root) });
   }
 
   if (command === "init") {

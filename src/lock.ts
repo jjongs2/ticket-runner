@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import type { LockHolder, LockOutcome, LockTake } from "./ports/workspace.js";
 
 /**
  * One Run at a time per Target.
@@ -9,38 +10,10 @@ import { dirname, join } from "node:path";
  * Frontier and over the same worktrees. The lock is a PID file rather than an
  * advisory lock so a Run killed mid-flight leaves something a human can read,
  * and so the next Run can tell a live holder from a stale file.
+ *
+ * This is how the git-backed Workspace keeps the Run lock the port offers
+ * ({@link import("./ports/workspace.js").Workspace.takeRunLock} and the rest).
  */
-
-export interface LockHolder {
-  pid: number;
-  /** The command line the holder is running, for the message the loser prints. */
-  command: string;
-  runId: string;
-  /** ISO 8601, so the file is readable without the pipeline. */
-  startedAt: string;
-  /**
-   * The holder process's start time as the operating system reports it, taken
-   * when the lock was claimed. Distinct from `startedAt` above, which is the
-   * Run's own wall clock, written for a human reading the file.
-   *
-   * A pid a lock names can be recycled — by a wrapped counter, or by a reboot
-   * climbing back through the numbers a pre-reboot Run was using — so a live
-   * pid alone cannot say the process behind it is still the holder. This is
-   * what a recycled pid cannot forge. Absent when it could not be read, or
-   * when the file predates this field; either way a live pid alone is treated
-   * as the holder, which is what this check has always done.
-   *
-   * An opaque token, not a timestamp to parse or display: its shape is
-   * whatever the platform's own record of it looks like (kernel ticks on
-   * Linux, a `ps` field on macOS), good for nothing but comparing a pid's
-   * past and present selves on the same host.
-   */
-  processStartedAt?: string;
-}
-
-export type LockOutcome =
-  | { ok: true; release: () => void }
-  | { ok: false; holder: LockHolder };
 
 /** Whether a pid is alive, and which process it is when it is. */
 export type ProcessCheck = { alive: false } | { alive: true; startedAt: string | undefined };
@@ -56,19 +29,70 @@ export function lockPath(repoRoot: string): string {
 }
 
 /**
- * Take the repo's Run lock, or report who holds it.
+ * Take the repo's Run lock, or report what stands in the way.
  *
- * A lock whose process is gone is reclaimed: the alternative is a crashed Run
- * blocking the repo until a human deletes a file they have never heard of.
+ * A lock whose process is gone is `abandoned` rather than taken here: taking it
+ * over is {@link takeOverLock}, which the caller asks for once it has been told.
  */
-export function acquireLock(
+export function takeLock(
+  repoRoot: string,
+  holder: LockHolder,
+  { checkProcess = checkProcessTable }: LockOptions = {},
+): LockTake {
+  const path = lockPath(repoRoot);
+  mkdirSync(dirname(path), { recursive: true });
+  if (claim(path, holder, checkProcess)) return { outcome: "taken" };
+
+  const existing = readHolder(path);
+  if (existing !== undefined && holderIsCurrent(existing, checkProcess(existing.pid))) {
+    return { outcome: "held", holder: existing };
+  }
+  // Gone, a recycled pid wearing someone else's identity, or a file too
+  // corrupt to name anyone to wait for.
+  return { outcome: "abandoned" };
+}
+
+/**
+ * Take a lock {@link takeLock} found abandoned.
+ *
+ * Reclaimed rather than waited on: the alternative is a crashed Run blocking
+ * the repo until a human deletes a file they have never heard of. The holder is
+ * read again first, since another Run may have taken the lock over since.
+ */
+export function takeOverLock(
   repoRoot: string,
   holder: LockHolder,
   { checkProcess = checkProcessTable }: LockOptions = {},
 ): LockOutcome {
   const path = lockPath(repoRoot);
-  mkdirSync(dirname(path), { recursive: true });
+  const held = currentHolder(path, checkProcess);
+  if (held !== undefined) return { outcome: "held", holder: held };
 
+  rmSync(path, { force: true });
+  if (claim(path, holder, checkProcess)) return { outcome: "taken" };
+
+  // Somebody took the file between the two lines above. A live one has it
+  // fairly; anything else means somebody is racing us for it.
+  const racer = currentHolder(path, checkProcess);
+  if (racer !== undefined) return { outcome: "held", holder: racer };
+  rmSync(path, { force: true });
+  throw new Error(`another process keeps taking the Run lock at ${path}`);
+}
+
+/** Give the Run lock up. */
+export function releaseLock(repoRoot: string): void {
+  rmSync(lockPath(repoRoot), { force: true });
+}
+
+/**
+ * Create the lock file for `holder`, or say it was already there. `wx` is the
+ * whole mutual exclusion: creating the file is the claim.
+ */
+function claim(
+  path: string,
+  holder: LockHolder,
+  checkProcess: (pid: number) => ProcessCheck,
+): boolean {
   // The holder is always this process (`holder.pid` is `process.pid`), so its
   // own start time is read here rather than trusted from a caller a recycled
   // pid could impersonate just as easily as it impersonates the pid itself.
@@ -77,29 +101,13 @@ export function acquireLock(
     ...holder,
     ...(own.alive && own.startedAt !== undefined ? { processStartedAt: own.startedAt } : {}),
   };
-  const contents = `${JSON.stringify(recorded, null, 2)}\n`;
-
-  // Two passes: the first finds the file, the second takes it once the dead
-  // holder has been cleared. A third would mean somebody is racing us for it.
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      // `wx` is the whole mutual exclusion: creating the file is the claim.
-      writeFileSync(path, contents, { flag: "wx" });
-      return { ok: true, release: () => rmSync(path, { force: true }) };
-    } catch (error) {
-      if (errorCode(error) !== "EEXIST") throw error;
-    }
-
-    const existing = readHolder(path);
-    if (existing !== undefined && holderIsCurrent(existing, checkProcess(existing.pid))) {
-      return { ok: false, holder: existing };
-    }
-    // Gone, a recycled pid wearing someone else's identity, or a file too
-    // corrupt to name anyone to wait for.
-    rmSync(path, { force: true });
+  try {
+    writeFileSync(path, `${JSON.stringify(recorded, null, 2)}\n`, { flag: "wx" });
+    return true;
+  } catch (error) {
+    if (errorCode(error) !== "EEXIST") throw error;
+    return false;
   }
-
-  throw new Error(`another process keeps taking the Run lock at ${path}`);
 }
 
 /**
@@ -107,14 +115,21 @@ export function acquireLock(
  *
  * Nobody covers all three ways there is no Run to reach: no lock file, a file
  * too corrupt to name one, and a holder whose process has gone. A dead lock is
- * left exactly where it is — reclaiming one belongs to `acquireLock`, on behalf
+ * left exactly where it is — reclaiming one belongs to `takeOverLock`, on behalf
  * of a Run that is actually starting, where this only reads.
  */
 export function lockHolder(
   repoRoot: string,
   { checkProcess = checkProcessTable }: LockOptions = {},
 ): LockHolder | undefined {
-  const holder = readHolder(lockPath(repoRoot));
+  return currentHolder(lockPath(repoRoot), checkProcess);
+}
+
+function currentHolder(
+  path: string,
+  checkProcess: (pid: number) => ProcessCheck,
+): LockHolder | undefined {
+  const holder = readHolder(path);
   if (holder === undefined || !holderIsCurrent(holder, checkProcess(holder.pid))) {
     return undefined;
   }

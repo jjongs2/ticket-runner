@@ -86,12 +86,9 @@ async function start(
   return { code, out: out.join("\n"), lines: out, err: err.join("\n") };
 }
 
-/**
- * Whether the Run lock was ever taken. Taking it creates the directory it lives
- * in, which a Run that was refused before the lock never has.
- */
+/** Whether the Run lock was ever asked for, which a Run refused before it never is. */
 function lockTaken(): boolean {
-  return existsSync(join(repoRoot, ".agent-pipeline"));
+  return workspace.calls.includes("takeRunLock");
 }
 
 describe("a Target init has not set up", () => {
@@ -253,7 +250,41 @@ describe("a Target init has set up", () => {
 
     await start();
 
-    expect(existsSync(join(repoRoot, ".agent-pipeline", "lock.json"))).toBe(false);
+    expect(workspace.lock).toBeUndefined();
+  });
+});
+
+describe("the Run lock", () => {
+  const holder = {
+    pid: 4321,
+    command: "agent-pipeline run",
+    runId: "run-0",
+    startedAt: "2026-09-17T09:00:00.000Z",
+  };
+
+  it("refuses a Run while another holds the lock, naming it, and takes nothing", async () => {
+    workspace.lock = { holder, running: true };
+    tracker.addIssue({ number: 4 });
+
+    const { code, err } = await start();
+
+    expect(code).toBe(2);
+    expect(err).toContain("`agent-pipeline run`");
+    expect(err).toContain("pid 4321");
+    expect(workspace.lock).toEqual({ holder, running: true });
+    expect(tracker.calls).not.toContain("assign:4:pipeline-user");
+  });
+
+  it("takes over a lock whose Run has gone, and releases it at the end", async () => {
+    workspace.lock = { holder, running: false };
+    tracker.addIssue({ number: 4 });
+
+    const { code, out } = await start();
+
+    expect(code).toBe(0);
+    expect(out).toContain("merged   #4");
+    expect(workspace.calls).toContain("takeOverRunLock");
+    expect(workspace.lock).toBeUndefined();
   });
 });
 

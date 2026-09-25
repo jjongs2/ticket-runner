@@ -2,7 +2,7 @@ import { resolveBaseBranch } from "./base-branch.js";
 import type { Config } from "./config.js";
 import { Landing } from "./landing.js";
 import { StandingNotes } from "./notes.js";
-import { acquireLock, lockHeldMessage } from "./lock.js";
+import { lockHeldMessage } from "./lock.js";
 import { type Pipeline, type TicketOutcome, processTicket } from "./orchestrator.js";
 import type { AgentRunner } from "./ports/agent-runner.js";
 import type { Tracker } from "./ports/tracker.js";
@@ -60,10 +60,10 @@ export interface StartOptions {
  *
  * Both refusals come before the lock: a Target `init` has not set up, and a
  * Target with nothing to gate a merge. Neither is a Run that went wrong, so
- * neither should leave a lock file behind for the next one to reclaim.
+ * neither should leave a lock behind for the next one to reclaim.
  */
 export async function startRun(options: StartOptions): Promise<number> {
-  const { repoRoot, config, tracker } = options;
+  const { repoRoot, config, tracker, workspace } = options;
   const log = options.log ?? ((line: string) => console.log(line));
   const error = options.error ?? ((line: string) => console.error(line));
 
@@ -87,13 +87,17 @@ export async function startRun(options: StartOptions): Promise<number> {
   }
 
   // Taken before the first write, so two Runs never both claim a Ticket.
-  const lock = acquireLock(repoRoot, {
+  const holder = {
     pid: process.pid,
     command: options.command,
     runId: options.runId,
     startedAt: new Date().toISOString(),
-  });
-  if (!lock.ok) {
+  };
+  const found = await workspace.takeRunLock(holder);
+  // A lock whose Run has gone is taken over: the alternative is a crashed Run
+  // blocking the Target until a human deletes a lock they have never heard of.
+  const lock = found.outcome === "abandoned" ? await workspace.takeOverRunLock(holder) : found;
+  if (lock.outcome === "held") {
     error(lockHeldMessage(lock.holder, repoRoot));
     return 2;
   }
@@ -112,7 +116,7 @@ export async function startRun(options: StartOptions): Promise<number> {
     // that leaves the lock behind costs the next Run a stale holder to reclaim,
     // where one that leaves the Stop unread costs nothing at all.
     try {
-      lock.release();
+      await workspace.releaseRunLock();
     } finally {
       deafen();
     }

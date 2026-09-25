@@ -1,12 +1,30 @@
 import { existsSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
+import {
+  type LockOptions,
+  lockHolder,
+  releaseLock,
+  takeLock,
+  takeOverLock,
+} from "../lock.js";
 import type {
   CheckOutcome,
+  LockHolder,
+  LockOutcome,
+  LockTake,
   WorktreeRef,
   RebaseOutcome,
   RebaseState,
+  StateFile,
+  TicketState,
   Workspace,
 } from "../ports/workspace.js";
+import {
+  clearTicketState,
+  listStateFiles,
+  readTicketState,
+  writeTicketState,
+} from "../resume.js";
 import { exec, execOrThrow, throwOnFailure } from "./exec.js";
 
 /**
@@ -39,6 +57,10 @@ const REBASE_DIRS = ["rebase-merge", "rebase-apply"];
  * What each of them needs is a main checkout nobody else is writing to while it
  * runs, which is what this gives; a pair that had to be indivisible would have
  * to say so, and none of them is.
+ *
+ * The State and the Run lock are plain files under the gitignored run directory
+ * (ADR-0004), with a PID check telling a live lock from an abandoned one. They
+ * take no git ref or index lock, so they are not queued behind git.
  */
 export class GitWorkspace implements Workspace {
   /**
@@ -51,6 +73,8 @@ export class GitWorkspace implements Workspace {
   constructor(
     private readonly repoRoot: string,
     private readonly remote = "origin",
+    /** How the Run lock tells a live holder; the real process table by default. */
+    private readonly lockOptions: LockOptions = {},
   ) {}
 
   async createWorktree({ path, branch }: WorktreeRef, base: string): Promise<void> {
@@ -289,6 +313,38 @@ export class GitWorkspace implements Workspace {
     // The base branch is not checked out here, so move the ref without
     // touching the tree.
     await this.git(["fetch", this.remote, `${base}:${base}`]);
+  }
+
+  async readState(ticket: number): Promise<TicketState | undefined> {
+    return readTicketState(this.repoRoot, ticket);
+  }
+
+  async readAllStates(): Promise<StateFile[]> {
+    return listStateFiles(this.repoRoot);
+  }
+
+  async writeState(state: TicketState): Promise<void> {
+    writeTicketState(this.repoRoot, state);
+  }
+
+  async removeState(ticket: number): Promise<void> {
+    clearTicketState(this.repoRoot, ticket);
+  }
+
+  async takeRunLock(holder: LockHolder): Promise<LockTake> {
+    return takeLock(this.repoRoot, holder, this.lockOptions);
+  }
+
+  async takeOverRunLock(holder: LockHolder): Promise<LockOutcome> {
+    return takeOverLock(this.repoRoot, holder, this.lockOptions);
+  }
+
+  async runLockHolder(): Promise<LockHolder | undefined> {
+    return lockHolder(this.repoRoot, this.lockOptions);
+  }
+
+  async releaseRunLock(): Promise<void> {
+    releaseLock(this.repoRoot);
   }
 
   /**

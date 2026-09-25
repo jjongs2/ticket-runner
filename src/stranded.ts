@@ -1,5 +1,5 @@
 import type { Issue, Tracker } from "./ports/tracker.js";
-import { type StateFile, clearTicketState, listStateFiles } from "./resume.js";
+import type { StateFile, Workspace } from "./ports/workspace.js";
 
 /**
  * The Tickets a Run that never came back left claimed, and how a later Run finds
@@ -36,14 +36,15 @@ export function holdsClaim(issue: Issue, user: string, inProgress: string): bool
 
 export interface StrandedSweep {
   tracker: Tracker;
-  repoRoot: string;
+  /** Where the State is kept. */
+  workspace: Workspace;
   /** The `in-progress` label, as this repo configured it. */
   inProgress: string;
   log?: (line: string) => void;
 }
 
 /**
- * Sweep the local State files for the Tickets this checkout is still holding.
+ * Sweep the State the Workspace keeps for the Tickets this checkout still holds.
  *
  * Four things can be behind a State file, and only one of them is stranded:
  *
@@ -61,10 +62,10 @@ export interface StrandedSweep {
  * forget, a Ticket on a guess.
  */
 export async function strandedTickets(sweep: StrandedSweep): Promise<StrandedTicket[]> {
-  const { tracker, repoRoot, inProgress } = sweep;
+  const { tracker, workspace, inProgress } = sweep;
   const log = sweep.log ?? (() => {});
 
-  const files = listStateFiles(repoRoot);
+  const files = await workspace.readAllStates();
   // Said before anything is asked of the tracker, because it is the one finding
   // here that needs nothing of it: the file is all the evidence there is.
   for (const file of files) if (!file.readable) log(unreadableLine(file));
@@ -87,7 +88,7 @@ export async function strandedTickets(sweep: StrandedSweep): Promise<StrandedTic
     }
 
     if (issue.closed) {
-      clearTicketState(repoRoot, ticket);
+      await workspace.removeState(ticket);
       log(`#${ticket} has closed, so the state it left is gone`);
       continue;
     }
