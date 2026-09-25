@@ -271,7 +271,8 @@ A Run can also be started from the Claude app, with the workstation off: open a 
 cloud session on the Target and say "run it". The session's own Claude is the **Operator**,
 and the skill `init` wrote tells it what to do (ADR-0008). It installs what the cloud
 environment's setup script did not — the pipeline, at the Version the conventions document
-is stamped with, the `mattpocock-skills` plugin, and `gh` from apt — and then starts
+is stamped with, the `mattpocock-skills` plugin, `gh` from apt, and the Target's own
+dependencies in its main checkout, where every worktree's Checks find them — and then starts
 `agent-pipeline run` in the background, or `agent-pipeline ticket <n>` for a Ticket you
 name. Ask for a number of Tickets at once and it passes `--lanes`, so a cloud Host can carry
 a different count from your workstation without the config changing. It reports each
