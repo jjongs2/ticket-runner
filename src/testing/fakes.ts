@@ -38,6 +38,7 @@ import type {
   StateFile,
   TicketState,
   Workspace,
+  WorktreeFromRemote,
 } from "../ports/workspace.js";
 import { Hold } from "./hold.js";
 
@@ -396,6 +397,17 @@ export class FakeWorkspace implements Workspace {
    * to stand for a branch a human left behind.
    */
   branches = new Set<string>();
+  /**
+   * The branches the remote has: a push puts its branch there, a test seeds one
+   * to stand for work another Host pushed, and deleting one takes it away.
+   */
+  remoteBranches = new Set<string>();
+  /**
+   * Branches whose copy on this Host has parted from the one on the remote,
+   * each carrying commits the other lacks: a test seeds one for another Host
+   * that moved on while this one held work it never pushed.
+   */
+  partedBranches = new Set<string>();
   calls: string[] = [];
   /** The branch's commit subjects, oldest first, as an implement Stage leaves them. */
   commits = ["feat(cli): do the thing (#2)", "test(cli): cover the thing (#2)"];
@@ -510,6 +522,19 @@ export class FakeWorkspace implements Workspace {
     return this.branches.has(branch);
   }
 
+  async worktreeFromRemote({ path, branch }: WorktreeRef): Promise<WorktreeFromRemote> {
+    this.calls.push(`worktreeFromRemote:${branch}`);
+    const here = this.worktrees.get(path) === branch;
+    if (!this.remoteBranches.has(branch)) return here ? "kept" : "gone";
+    if (this.partedBranches.has(branch) && (here || this.branches.has(branch))) {
+      return "parted";
+    }
+    if (here) return "kept";
+    this.worktrees.set(path, branch);
+    this.branches.add(branch);
+    return "made";
+  }
+
   async removeWorktree({ path, branch }: WorktreeRef): Promise<void> {
     this.calls.push(`removeWorktree:${branch}`);
     this.worktrees.delete(path);
@@ -574,10 +599,12 @@ export class FakeWorkspace implements Workspace {
       throw new Error(`ENOENT: no such file or directory, chdir '${cwd}'`);
     }
     this.pushes.push({ cwd, branch });
+    this.remoteBranches.add(branch);
   }
 
   async deleteRemoteBranch(branch: string): Promise<void> {
     this.calls.push(`deleteRemoteBranch:${branch}`);
+    this.remoteBranches.delete(branch);
   }
 
   async pullBase(base: string): Promise<void> {

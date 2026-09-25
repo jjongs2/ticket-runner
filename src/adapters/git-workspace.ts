@@ -1,5 +1,5 @@
 import { existsSync, rmSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import {
   type LockOptions,
   lockHolder,
@@ -18,6 +18,7 @@ import type {
   StateFile,
   TicketState,
   Workspace,
+  WorktreeFromRemote,
 } from "../ports/workspace.js";
 import {
   clearTicketState,
@@ -108,6 +109,101 @@ export class GitWorkspace implements Workspace {
       return lines.includes(`branch refs/heads/${branch}`);
     }
     return false;
+  }
+
+  /**
+   * The remote branch is fetched into its remote-tracking ref, which is also
+   * what the lease of every later {@link push} is taken against: a push from
+   * here then overwrites only the tip this Host last saw.
+   *
+   * A rebase a Run was killed in the middle of is aborted first, because it
+   * leaves the worktree detached rather than on its branch, and git would
+   * then neither list the worktree as the branch's nor let it be checked out
+   * anywhere else.
+   */
+  async worktreeFromRemote({ path, branch }: WorktreeRef): Promise<WorktreeFromRemote> {
+    // Only in a directory that is itself a worktree: git run anywhere else
+    // under the repo would find the main checkout, and abort a human's rebase.
+    if (existsSync(join(path, ".git"))) await this.abortRebase(path);
+    const here = await this.hasWorktree({ path, branch });
+    const remoteRef = await this.fetchBranch(branch);
+    if (remoteRef === undefined) return here ? "kept" : "gone";
+
+    const localRef = `refs/heads/${branch}`;
+    if (here || (await this.hasBranch(branch))) {
+      // A rebase this Host made and never pushed rewrote every commit the
+      // remote has, so it is told from another Host's work by what the commits
+      // change rather than by their ids.
+      if (
+        (await this.contains(localRef, remoteRef)) ||
+        (await this.replays(localRef, remoteRef))
+      ) {
+        if (!here) await this.addWorktree([path, branch]);
+        return here ? "kept" : "made";
+      }
+      if (!(await this.contains(remoteRef, localRef))) return "parted";
+      // Behind the remote and nothing more: every commit here is one the
+      // remote already has, so moving up to it loses nothing.
+      if (here) {
+        await execOrThrow("git", ["merge", "--ff-only", remoteRef], { cwd: path });
+        return "kept";
+      }
+    }
+
+    // -B, because a branch left behind without its worktree is by now known to
+    // hold nothing the remote lacks, and is moved to the remote tip.
+    await this.addWorktree(["-B", branch, path, remoteRef]);
+    return "made";
+  }
+
+  /**
+   * `worktree add`, after git has forgotten any worktree whose directory a
+   * human deleted: git refuses to check a branch out where it still believes
+   * one is.
+   */
+  private async addWorktree(args: string[]): Promise<void> {
+    await this.git(["worktree", "prune"]);
+    await this.git(["worktree", "add", ...args]);
+  }
+
+  /**
+   * Fetch `branch` from the remote into its remote-tracking ref and name that
+   * ref, or nothing when the remote has no such branch. Forced, because the
+   * remote branch is rewritten by every rebase that is pushed.
+   */
+  private async fetchBranch(branch: string): Promise<string | undefined> {
+    const { stdout } = await this.git([
+      "ls-remote",
+      "--heads",
+      this.remote,
+      `refs/heads/${branch}`,
+    ]);
+    const tracking = `refs/remotes/${this.remote}/${branch}`;
+    if (stdout.trim() === "") {
+      // A tip the remote no longer has would be the lease of the next push,
+      // and refuse it: the push is then creating the branch, not replacing it.
+      await this.tryGit(["update-ref", "-d", tracking]);
+      return undefined;
+    }
+
+    await this.git(["fetch", this.remote, `+refs/heads/${branch}:${tracking}`]);
+    return tracking;
+  }
+
+  /** Whether `ref` holds every commit `other` does. */
+  private async contains(ref: string, other: string): Promise<boolean> {
+    const result = await this.tryGit(["merge-base", "--is-ancestor", other, ref]);
+    return result.exitCode === 0;
+  }
+
+  /**
+   * Whether `ref` makes every change `other` makes, under other commit ids:
+   * `git cherry` marks a commit of `other` with `+` when `ref` has no commit
+   * with the same patch.
+   */
+  private async replays(ref: string, other: string): Promise<boolean> {
+    const { stdout } = await this.git(["cherry", ref, other]);
+    return !stdout.split("\n").some((line) => line.startsWith("+"));
   }
 
   /**

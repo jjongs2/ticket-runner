@@ -586,6 +586,197 @@ describe("push and pullBase", () => {
 });
 
 /**
+ * Where a resumed Ticket's worktree comes from once its branch lives on the
+ * remote: another Host is a second clone of the same bare remote, pushing the
+ * work this checkout's Run is about to resume.
+ */
+describe("a worktree from the remote branch", () => {
+  const branch = "agent/2-x";
+  let path: string;
+
+  beforeEach(() => {
+    path = join(repo, ".worktrees", "ticket-2");
+  });
+
+  /** A second Host: its own clone of the remote, with the Ticket's branch on it. */
+  function otherHost(): string {
+    const clone = mkdtempSync(join(tmpdir(), "agent-pipeline-host-"));
+    created.push(clone);
+    git(clone, "clone", remote, ".");
+    git(clone, "config", "user.email", "pipeline@example.com");
+    git(clone, "config", "user.name", "agent-pipeline");
+    return clone;
+  }
+
+  /** Commit on the other Host's copy of the branch and push it, as a Stage there does. */
+  function pushFrom(clone: string, file: string, message: string): void {
+    const branches = git(clone, "branch", "--list", branch);
+    if (branches === "") {
+      const onRemote = git(clone, "ls-remote", "--heads", "origin", branch) !== "";
+      if (onRemote) {
+        git(clone, "fetch", "origin", branch);
+        git(clone, "checkout", "-b", branch, "FETCH_HEAD");
+      } else {
+        git(clone, "checkout", "-b", branch);
+      }
+    }
+    commit(clone, file, `${file}\n`, message);
+    git(clone, "push", "--force", "origin", branch);
+  }
+
+  it("makes one from the remote branch when this Host has none", async () => {
+    const other = otherHost();
+    pushFrom(other, "a.txt", "feat: a (#2)");
+
+    expect(await workspace.worktreeFromRemote({ path, branch })).toBe("made");
+
+    expect(await workspace.hasWorktree({ path, branch })).toBe(true);
+    expect(git(path, "rev-parse", "HEAD")).toBe(git(other, "rev-parse", "HEAD"));
+    expect(readFileSync(join(path, "a.txt"), "utf8")).toBe("a.txt\n");
+  });
+
+  it("makes one a later push from it lands on, as the Stages that resume there push", async () => {
+    const other = otherHost();
+    pushFrom(other, "a.txt", "feat: a (#2)");
+    await workspace.worktreeFromRemote({ path, branch });
+
+    commit(path, "b.txt", "b\n", "feat: b (#2)");
+    await workspace.push(path, branch);
+
+    expect(git(remote, "rev-parse", branch)).toBe(git(path, "rev-parse", "HEAD"));
+  });
+
+  it("says the branch is gone when neither this Host nor the remote has it", async () => {
+    expect(await workspace.worktreeFromRemote({ path, branch })).toBe("gone");
+
+    expect(existsSync(path)).toBe(false);
+    expect(await workspace.hasBranch(branch)).toBe(false);
+  });
+
+  it("keeps a worktree that sits on top of the remote branch, unpushed commits and all", async () => {
+    await workspace.createWorktree({ path, branch }, "main");
+    commit(path, "a.txt", "a\n", "feat: a (#2)");
+    await workspace.push(path, branch);
+    // What a Run on this Host committed and died before pushing.
+    commit(path, "b.txt", "b\n", "feat: b (#2)");
+    const tip = git(path, "rev-parse", "HEAD");
+
+    expect(await workspace.worktreeFromRemote({ path, branch })).toBe("kept");
+
+    expect(git(path, "rev-parse", "HEAD")).toBe(tip);
+    expect(git(remote, "rev-parse", branch)).not.toBe(tip);
+  });
+
+  it("keeps a worktree whose branch never reached the remote", async () => {
+    await workspace.createWorktree({ path, branch }, "main");
+    commit(path, "a.txt", "a\n", "feat: a (#2)");
+    const tip = git(path, "rev-parse", "HEAD");
+
+    expect(await workspace.worktreeFromRemote({ path, branch })).toBe("kept");
+
+    expect(git(path, "rev-parse", "HEAD")).toBe(tip);
+  });
+
+  it("brings a worktree up to a remote branch another Host moved on", async () => {
+    await workspace.createWorktree({ path, branch }, "main");
+    commit(path, "a.txt", "a\n", "feat: a (#2)");
+    await workspace.push(path, branch);
+    const other = otherHost();
+    pushFrom(other, "b.txt", "fix: b (#2)");
+
+    expect(await workspace.worktreeFromRemote({ path, branch })).toBe("kept");
+
+    expect(git(path, "rev-parse", "HEAD")).toBe(git(other, "rev-parse", "HEAD"));
+    expect(await workspace.uncommittedPaths(path)).toEqual([]);
+  });
+
+  it("keeps a worktree a Run left mid-rebase, back on its branch", async () => {
+    await workspace.createWorktree({ path, branch }, "main");
+    commit(path, "README.md", "branch version\n", "feat: branch edit (#2)");
+    await workspace.push(path, branch);
+    const tip = git(path, "rev-parse", "HEAD");
+    commit(repo, "README.md", "main version\n", "feat: main edit (#1)");
+    expect(await workspace.rebase(path, "main")).toMatchObject({ ok: false });
+
+    expect(await workspace.worktreeFromRemote({ path, branch })).toBe("kept");
+
+    expect(git(path, "rev-parse", "--abbrev-ref", "HEAD")).toBe(branch);
+    expect(git(path, "rev-parse", "HEAD")).toBe(tip);
+  });
+
+  it("keeps a worktree this Host rebased and never pushed, and the push then lands", async () => {
+    await workspace.createWorktree({ path, branch }, "main");
+    commit(path, "a.txt", "a\n", "feat: a (#2)");
+    await workspace.push(path, branch);
+    commit(repo, "main.txt", "main\n", "feat: main moved (#1)");
+    await workspace.rebase(path, "main");
+    const rebased = git(path, "rev-parse", "HEAD");
+
+    expect(await workspace.worktreeFromRemote({ path, branch })).toBe("kept");
+
+    expect(git(path, "rev-parse", "HEAD")).toBe(rebased);
+    await workspace.push(path, branch);
+    expect(git(remote, "rev-parse", branch)).toBe(rebased);
+  });
+
+  it("forgets a remote branch that has gone, so the next push is not refused over it", async () => {
+    await workspace.createWorktree({ path, branch }, "main");
+    commit(path, "a.txt", "a\n", "feat: a (#2)");
+    await workspace.push(path, branch);
+    git(remote, "branch", "-D", branch);
+    commit(path, "b.txt", "b\n", "feat: b (#2)");
+
+    expect(await workspace.worktreeFromRemote({ path, branch })).toBe("kept");
+
+    await workspace.push(path, branch);
+    expect(git(remote, "rev-parse", branch)).toBe(git(path, "rev-parse", "HEAD"));
+  });
+
+  it("reports a worktree that has parted from the remote branch, and leaves both alone", async () => {
+    await workspace.createWorktree({ path, branch }, "main");
+    commit(path, "a.txt", "a\n", "feat: a (#2)");
+    await workspace.push(path, branch);
+    const other = otherHost();
+    pushFrom(other, "b.txt", "fix: b (#2)");
+    commit(path, "c.txt", "c\n", "fix: c (#2)");
+    const mine = git(path, "rev-parse", "HEAD");
+    const theirs = git(remote, "rev-parse", branch);
+
+    expect(await workspace.worktreeFromRemote({ path, branch })).toBe("parted");
+
+    expect(git(path, "rev-parse", "HEAD")).toBe(mine);
+    expect(git(remote, "rev-parse", branch)).toBe(theirs);
+  });
+
+  it("reports a branch left without its worktree that has parted from the remote one", async () => {
+    await workspace.createWorktree({ path, branch }, "main");
+    commit(path, "a.txt", "a\n", "feat: a (#2)");
+    await workspace.push(path, branch);
+    commit(path, "c.txt", "c\n", "fix: c (#2)");
+    git(repo, "worktree", "remove", "--force", path);
+    pushFrom(otherHost(), "b.txt", "fix: b (#2)");
+
+    expect(await workspace.worktreeFromRemote({ path, branch })).toBe("parted");
+
+    expect(existsSync(path)).toBe(false);
+  });
+
+  it("puts a worktree back on a branch it left behind that contains the remote one", async () => {
+    await workspace.createWorktree({ path, branch }, "main");
+    commit(path, "a.txt", "a\n", "feat: a (#2)");
+    await workspace.push(path, branch);
+    commit(path, "b.txt", "b\n", "feat: b (#2)");
+    const tip = git(path, "rev-parse", "HEAD");
+    // `rm -rf .worktrees` without a prune, which is how a human cleans up.
+    rmSync(path, { recursive: true, force: true });
+
+    expect(await workspace.worktreeFromRemote({ path, branch })).toBe("made");
+
+    expect(git(path, "rev-parse", "HEAD")).toBe(tip);
+  });
+});
+
+/**
  * What the Tickets of one Run do to the main checkout when they are not taking
  * turns: git fails a second `worktree add` or `fetch` outright rather than
  * waiting for the lock the first one holds, so the workspace queues them.

@@ -255,12 +255,27 @@ branch, whether the fix budget was already spent, and the pull request if one is
 ```
 
 A Run started once the limit has reset finds the Ticket back on the Frontier, reads that
-file and carries on in the worktree and on the branch it names rather than creating new
-ones: `claimed` runs the implement Stage again, `implemented` goes straight to the Checks.
-The fix budget is resumed as it was recorded, so a Ticket that had already spent it is
-handed off at its next failure — resuming buys no second chances. The file is ignored if
-the worktree it names has since been cleaned up — the Ticket is then taken from the top,
-which needs a branch to create, and the branch may still be there.
+file and carries on on the branch it names rather than creating a new one: `claimed` runs
+the implement Stage again, `implemented` goes straight to the Checks. The fix budget is
+resumed as it was recorded, so a Ticket that had already spent it is handed off at its
+next failure — resuming buys no second chances.
+
+What it carries on from is the branch on the remote, which every Stage that commits — the
+implement, fix and conflict Stages — pushes as soon as it has, whatever became of the
+Stage. A push that is refused is logged, and the Ticket carries on. So:
+
+- with no worktree of the Ticket here, one is made from the remote branch
+- a worktree still here is used as it is when it contains the remote branch, so commits a
+  killed Run never pushed are kept, when this Host rebased it and never pushed the result,
+  and when the branch never reached the remote at all; one the remote branch has merely
+  moved ahead of is brought up to it
+- a worktree whose branch has parted from the remote one, each holding commits the other
+  lacks, is left alone and the Ticket is handed off at `setup`, with a failure saying the
+  two have parted and how to keep one side. Nothing is pushed, and the State file stays,
+  so the Ticket resumes from whichever side a human keeps once they relabel it
+  `ready-for-agent`
+- with the branch neither here nor on the remote, the file is removed and the Ticket is
+  taken from the top, which needs a branch to create, and a local branch may still be there
 
 A branch nobody can account for is not reused. So before the worktree is created the
 pipeline asks whether the Ticket's branch already exists locally, and hands the Ticket
@@ -270,9 +285,10 @@ by hand, then relabel the Ticket `ready-for-agent`. It is the one hand-off whose
 is cleared — no Stage of the Run ran on that branch, so there is nothing of the pipeline's
 to resume — and it costs the Ticket nothing else, because the fix budget is never spent at
 `setup`. The same refusal meets a human who finished a handed-off Ticket and deleted
-`.worktrees/ticket-<n>` without deleting its branch, and a human branch that happens to
-share the Ticket's name — there the failure names the worktree the branch is checked out
-in, since a branch git is holding is not one `git branch -D` can take.
+`.worktrees/ticket-<n>` without deleting its branch, once the remote branch has gone too,
+and a human branch that happens to share the Ticket's name — there the failure names the
+worktree the branch is checked out in, since a branch git is holding is not one
+`git branch -D` can take.
 
 The Run the limit stops fills no Lane after that Release. It does not wait for the limit to
 reset, and it claims nothing else: the limit that stopped one Stage would stop the next, so
@@ -331,8 +347,9 @@ State file is not written by the release; it is written as part of the Claim and
 current as the Ticket advances: `claimed` when the Claim is made, `implemented` once the
 implement Stage has committed, the pull request once one is open, the fix budget once a fix
 Stage has come back. It is removed when the branch carries nothing left to resume — when
-the Ticket merges, when the sweep finds its issue closed, when the worktree it names has
-gone, and on the one hand-off at `setup` above.
+the Ticket merges, when the sweep finds its issue closed, when the branch it names is in
+neither its worktree here nor on the remote, and on the one hand-off at `setup` above over a branch in
+the way.
 
 A Ticket left like that is a **stranded Ticket**: state recorded locally, and the Claim
 still on the board. No Frontier can offer one — it is claimed — so a `run` sweeps the local
@@ -355,8 +372,9 @@ Not everything the sweep finds is stranded, and it resumes nothing else:
   `ready-for-human` means a human is still holding it, and nothing is said about it
 - a Ticket that has closed has nothing left to resume, so its State file is removed
 - a Ticket somebody else now holds is left alone and logged — a human took it over
-- a Ticket whose worktree is gone is taken from the top, in place, keeping its Claim —
-  which is a hand-off at `setup` when the branch it named is still there
+- a Ticket whose worktree is gone is resumed from its remote branch, and taken from the
+  top, in place, keeping its Claim, only when that branch is gone too — which is a
+  hand-off at `setup` when the branch it named is still here
 - a Ticket whose State file nothing can resume from is logged with the Version the file
   names, and both the file and the Claim are left exactly where they are: such a file was
   probably written by a newer pipeline, and this sweep is the only thing that can ever see it
