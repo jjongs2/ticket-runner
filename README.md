@@ -260,9 +260,10 @@ the pass that failed survive alongside them.
 A Ticket that is handed off also keeps its Stages' command lines and transcripts, and the
 Run's `version.txt`, on the Target's remote: under `ticket-<n>/<runId>/` on the
 `agent-pipeline/state` branch, beside its State file, since the Host that wrote them may be
-gone by the time a human looks. The hand-off comment names that directory, and says when
-the Ticket's branch is on the remote. They go when the State file does, so a Ticket that
-merges leaves none behind.
+gone by the time a human looks. The hand-off comment and the draft pull request name that
+directory, and the comment says when the Ticket's branch is on the remote. They go when the
+State file does, so a Ticket that merges leaves none behind, and its pull request names the
+Run's directory only on a workstation, where it is still there.
 
 ### From the Claude app
 

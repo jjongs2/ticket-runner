@@ -5,6 +5,7 @@
 
 import { UNCHECKED_BOX } from "./acceptance-criteria.js";
 import type { GuardReason } from "./guards.js";
+import type { HostKind } from "./host.js";
 import type { FailurePoint } from "./lifecycle.js";
 import type { NotingStage, RoutedNote } from "./notes.js";
 import type { TicketOutcome } from "./orchestrator.js";
@@ -123,13 +124,20 @@ export interface PullRequestBody {
   ticket: number;
   verdict: Verdict;
   runId: string;
+  /** The Host the Run is on, which decides whether its run directory is worth naming. */
+  host: HostKind;
 }
 
-export function pullRequestBody({ ticket, verdict, runId }: PullRequestBody): string {
+export function pullRequestBody({ ticket, verdict, runId, host }: PullRequestBody): string {
   const criteria = verdict.criteria.map((criterion) => {
     const line = `- ${STATUS_ICON[criterion.status]} ${criterion.text}`;
     return criterion.status === "met" ? line : `${line} — ${criterion.evidence}`;
   });
+
+  // A merged Ticket keeps no transcripts on the remote, so the run directory is
+  // the only place they are, and a cloud Host's goes with its session.
+  const transcripts =
+    host === "workstation" ? `\`.agent-pipeline/runs/${runId}/${ticket}/\`` : undefined;
 
   return [
     `Closes #${ticket}`,
@@ -142,7 +150,7 @@ export function pullRequestBody({ ticket, verdict, runId }: PullRequestBody): st
     "",
     "</details>",
     "",
-    `Run \`${runId}\` · transcripts in \`.agent-pipeline/runs/${runId}/${ticket}/\``,
+    runLine(runId, transcripts),
     "",
   ].join("\n");
 }
@@ -152,6 +160,8 @@ export interface DraftPullRequestBody {
   stage: FailurePoint;
   failure: string;
   runId: string;
+  /** Where the hand-off kept the Stages' transcripts on the remote, when it kept any. */
+  transcripts?: KeptTranscripts;
 }
 
 /** The body of the draft PR a hand-off leaves behind; there is no Verdict yet. */
@@ -160,6 +170,7 @@ export function draftPullRequestBody({
   stage,
   failure,
   runId,
+  transcripts,
 }: DraftPullRequestBody): string {
   return [
     `Closes #${ticket}`,
@@ -168,9 +179,23 @@ export function draftPullRequestBody({
     "",
     `See the hand-off comment on #${ticket} for the branch, worktree and evidence.`,
     "",
-    `Run \`${runId}\` · transcripts in \`.agent-pipeline/runs/${runId}/${ticket}/\``,
+    runLine(
+      runId,
+      transcripts === undefined
+        ? undefined
+        : `\`${transcripts.path}\` on the \`${transcripts.branch}\` branch`,
+    ),
     "",
   ].join("\n");
+}
+
+/**
+ * The line both pull request bodies end with: the Run, and where its
+ * transcripts are when there is somewhere that outlives the Host to point at.
+ */
+function runLine(runId: string, transcripts: string | undefined): string {
+  const run = `Run \`${runId}\``;
+  return transcripts === undefined ? run : `${run} · transcripts in ${transcripts}`;
 }
 
 export interface SquashCommitMessage {

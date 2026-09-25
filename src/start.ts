@@ -1,5 +1,6 @@
 import { resolveBaseBranch } from "./base-branch.js";
 import type { Config } from "./config.js";
+import { hostKind } from "./host.js";
 import { Landing } from "./landing.js";
 import { StandingNotes } from "./notes.js";
 import { lockHeldMessage, unreleasedLockMessage } from "./lock.js";
@@ -188,6 +189,7 @@ async function execute(
     repoRoot,
     runId,
     version,
+    host: hostKind(process.env),
     baseBranch,
     // Once per Run as well, and for the same reason: the Tickets of one Run
     // take turns between their rebase and their merge, and a Landing made per

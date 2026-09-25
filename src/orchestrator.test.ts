@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { UNCHECKED_BOX } from "./acceptance-criteria.js";
 import { resolveBaseBranch } from "./base-branch.js";
 import type { Config } from "./config.js";
+import type { HostKind } from "./host.js";
 import { Landing } from "./landing.js";
 import { StandingNotes } from "./notes.js";
 import { processTicket } from "./orchestrator.js";
@@ -150,7 +151,10 @@ function stateAtEachStage(): { stage: StageName; state: TicketState | undefined 
  * branch is resolved from the tracker and the config before the Ticket starts,
  * so a fake Tracker on `master` is enough to drive the whole Run there.
  */
-async function run(overrides: Partial<Config> = {}): Promise<TicketOutcome> {
+async function run(
+  overrides: Partial<Config> = {},
+  host: HostKind = "workstation",
+): Promise<TicketOutcome> {
   const settings = config(overrides);
   return await processTicket(
     {
@@ -161,6 +165,7 @@ async function run(overrides: Partial<Config> = {}): Promise<TicketOutcome> {
       repoRoot,
       runId: "run-1",
       version: VERSION,
+      host,
       baseBranch: await resolveBaseBranch(tracker, settings),
       landing: new Landing(),
       standingNotes: new StandingNotes(),
@@ -236,6 +241,22 @@ describe("the happy path", () => {
     expect(pr.title).toBe("feat(cli): do the thing");
     expect(pr.body.split("\n")[0]).toBe(`Closes #${TICKET}`);
     expect(pr.body).toContain("**Verdict:** 1 met · 0 unmet · 0 unverifiable");
+  });
+
+  it("points a workstation's reader at the Run's directory, which is still there", async () => {
+    await run();
+
+    expect(tracker.pullRequest(100).body).toContain(
+      `Run \`run-1\` · transcripts in \`.agent-pipeline/runs/run-1/${TICKET}/\``,
+    );
+  });
+
+  it("names the Run alone on a cloud Host, whose run directory goes with its session", async () => {
+    await run({}, "cloud");
+
+    const body = tracker.pullRequest(100).body;
+    expect(body.endsWith("</details>\n\nRun `run-1`\n")).toBe(true);
+    expect(body).not.toContain("transcripts");
   });
 
   it("clears in-progress after the merge and keeps the assignee as the record", async () => {
@@ -1009,6 +1030,44 @@ describe("the transcripts a hand-off keeps on the remote", () => {
     expect(stateWhenKept).toMatchObject({ pullRequest: 100 });
   });
 
+  it("names them in the draft PR's body too, and not the directory on this Host", async () => {
+    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+
+    await run({}, "cloud");
+
+    const body = tracker.pullRequest(100).body;
+    expect(tracker.pullRequest(100).draft).toBe(true);
+    expect(body).toContain(
+      "Run `run-1` · transcripts in `ticket-2/run-1/` on the `agent-pipeline/state` branch",
+    );
+    expect(body).not.toContain(".agent-pipeline/runs/");
+  });
+
+  it("names none in the draft PR's body when the remote will not take them", async () => {
+    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+    workspace.keepTranscripts = async () => {
+      throw new Error("remote rejected");
+    };
+
+    await run();
+
+    const body = tracker.pullRequest(100).body;
+    expect(body.endsWith("evidence.\n\nRun `run-1`\n")).toBe(true);
+    expect(body).not.toContain("transcripts");
+  });
+
+  it("still hands the Ticket off when the draft PR's body cannot be rewritten", async () => {
+    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+    tracker.updatePullRequestBody = async () => {
+      throw new Error("gh: 502");
+    };
+
+    expect(await run()).toMatchObject({ outcome: "handed-off", pullRequest: 100 });
+    expect(tracker.issue(TICKET).labels).toEqual(["ready-for-human"]);
+    expect(handoffBody()).toContain(KEPT);
+    expect(logged.some((line) => line.includes("gh: 502"))).toBe(true);
+  });
+
   it("keeps none for a Ticket that merges", async () => {
     expect(await run()).toMatchObject({ outcome: "merged" });
     expect(workspace.transcripts.has(TICKET)).toBe(false);
@@ -1023,6 +1082,8 @@ describe("the transcripts a hand-off keeps on the remote", () => {
 
     expect(await run()).toMatchObject({ outcome: "merged" });
     expect(workspace.transcripts.has(TICKET)).toBe(false);
+    // The merge took what the draft's body pointed at, so the body goes too.
+    expect(tracker.pullRequest(100).body).not.toContain("agent-pipeline/state");
   });
 
   it("keeps none for a released Ticket, which nobody has to look into", async () => {
@@ -3537,6 +3598,7 @@ describe("the Landing", () => {
       repoRoot,
       runId: "run-1",
       version: VERSION,
+      host: "workstation",
       baseBranch: await resolveBaseBranch(tracker, settings),
       landing: new Landing(),
       standingNotes: new StandingNotes(),

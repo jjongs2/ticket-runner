@@ -92,6 +92,7 @@ function pipeline(lanes = 1): Pipeline {
     repoRoot,
     runId: "run-1",
     version: VERSION,
+    host: "workstation",
     baseBranch: "main",
     landing: new Landing(),
     standingNotes: new StandingNotes(),
