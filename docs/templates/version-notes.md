@@ -23,11 +23,10 @@ thing a reader of this tool cannot get from the pull request list, because the
 pipeline rewrites files in every Target it is set up in. When nothing is asked
 of a Target, it says so in one word rather than being left out.
 
-Everything above it is grouped by what changed, in the writer's own words; a
-section with only a handful of lines needs no groups at all. Lines are terse:
-about a dozen words, ending in the pull request numbers the change landed in.
-One line per change, not per pull request — three pull requests that built one
-thing are one line carrying three numbers.
+Everything above it is grouped by what changed, in the writer's own words.
+Lines are terse: about a dozen words, ending in the pull request numbers the
+change landed in. One line per change, not per pull request — three pull
+requests that built one thing are one line carrying three numbers.
 
 The numbers are links the notes carry themselves, defined at the end of the
 section below `After upgrading`, where the extraction keeps them and nothing

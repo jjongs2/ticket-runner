@@ -11,7 +11,10 @@ A Version is cut by merging a **Version PR** (ADR-0007): it raises the number in
 `CHANGELOG.md`. The push to `main` does the rest — the tag, and a GitHub Release
 whose body is the section.
 
-Work in a worktree when a Run may be active, as `CONTRIBUTING.md` asks.
+Work in a worktree when a Run may be active, as `CONTRIBUTING.md` asks: one is
+when `git show origin/agent-pipeline/lock:lock.json` reads `"held": true` for a
+`workstation` Host named as this machine is. A cloud Host's Run pulls its own
+checkout, not this one.
 
 ## 1. Read the span
 
@@ -42,9 +45,15 @@ the number is written down with the answer that decided it.
 ## 3. Draft the notes
 
 `docs/templates/version-notes.md` is the shape; the sections already in
-`CHANGELOG.md` are the measure. Terse: one line per change, about a dozen words,
-ending in its pull request numbers. The new section goes at the top, under the
+`CHANGELOG.md` are the measure. The new section goes at the top, under the
 heading and the prose, dated today.
+
+Terse, because the reader is deciding whether to upgrade and the pull request
+is one click away:
+
+- One line per change, about a dozen words, ending in its pull request numbers.
+  The line says what changed; the why and the how stay in the pull request.
+- `After upgrading` in one or two lines, or the single word `nothing`.
 
 Each number is a reference link — `([#94], [#95])` — and every one it names is
 defined at the end of the section, below `After upgrading`:
@@ -81,20 +90,36 @@ this repository is a Target of its own pipeline, and its test suite refuses a
 copy the new number would have written differently. Done when the check prints
 that the number may merge.
 
-## 5. Open the Version PR
+## 5. Confirm with the maintainer
+
+```bash
+npx tsx scripts/version.ts notes > "${TMPDIR:-/tmp}/version-notes.md"
+git diff --stat
+```
+
+Put three things in front of the maintainer: the number with the answer from
+step 2 that decided it, the notes file as it stands, and the diff stat. Then
+stop and wait. A correction sends you back to the step it touches — a new
+number to the heading in step 3 and then step 4, a reworded line to step 3
+and then step 4's check — and back here with the result.
+
+Done when the maintainer has approved this number and these notes in so many
+words. A question, or a correction already applied, is not yet approval.
+
+## 6. Open the Version PR
 
 ```bash
 git switch -c version/<number>
 git commit -a -m "chore: version <number>"
 git push -u origin version/<number>
-npx tsx scripts/version.ts notes > "${TMPDIR:-/tmp}/version-notes.md"
 gh pr create --base main --title "chore: version <number>" \
   --body-file "${TMPDIR:-/tmp}/version-notes.md"
 ```
 
-The body is the section as the tag workflow will extract it, so the notes are
-read in the pull request exactly as they will be published. It is the one pull
-request on `main` that carries no Ticket number.
+The body is the notes file the maintainer approved: the section as the tag
+workflow will extract it, so the notes are read in the pull request exactly as
+they will be published. It is the one pull request on `main` that carries no
+Ticket number.
 
 Done when the pull request is open and its link is handed to the maintainer:
 their review and their merge are what cut the Version.
