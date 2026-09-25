@@ -159,16 +159,9 @@ describe("reading", () => {
     expect(calls[0]).toEqual(["api", "user", "--jq", ".login"]);
   });
 
-  it("asks gh what GitHub calls the Target's default branch", async () => {
+  it("reads what GitHub calls the Target's default branch through REST", async () => {
     expect(await tracker(ok("master\n")).defaultBranch()).toBe("master");
-    expect(calls[0]).toEqual([
-      "repo",
-      "view",
-      "--json",
-      "defaultBranchRef",
-      "--jq",
-      ".defaultBranchRef.name",
-    ]);
+    expect(calls[0]).toEqual(["api", "repos/{owner}/{repo}", "--jq", ".default_branch"]);
   });
 
   it("refuses an empty answer rather than branching from nothing", async () => {
@@ -595,6 +588,17 @@ describe("writing", () => {
     await gh.comment(2, "b");
     await gh.updateComment("1", "b");
     await gh.updateIssueBody(2, "b");
+
+    expect(calls.filter((args) => args[0] !== "api" || args.includes("graphql"))).toEqual([]);
+  });
+
+  it("runs no gh subcommand that goes through GraphQL for any repository-side call", async () => {
+    const gh = tracker(ok("octocat\n"), ok("main\n"), ok("{}"), ok("true\n"), ok("{}"));
+    await gh.currentUser();
+    await gh.defaultBranch();
+    await gh.enableSquashMerge();
+    await gh.deletesBranchOnMerge();
+    await gh.enableDeleteBranchOnMerge();
 
     expect(calls.filter((args) => args[0] !== "api" || args.includes("graphql"))).toEqual([]);
   });

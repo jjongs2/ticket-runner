@@ -182,16 +182,12 @@ export class GhTracker implements Tracker {
     return stdout.trim();
   }
 
-  /** Whatever the Target's `HEAD` points at, which `gh repo view` reports. */
+  /**
+   * Whatever the Target's `HEAD` points at, read off the repository through
+   * REST: `gh repo view` asks GraphQL, which a cloud Host refuses (ADR-0008).
+   */
   async defaultBranch(): Promise<string> {
-    const { stdout } = await this.gh([
-      "repo",
-      "view",
-      "--json",
-      "defaultBranchRef",
-      "--jq",
-      ".defaultBranchRef.name",
-    ]);
+    const { stdout } = await this.gh(["api", "repos/{owner}/{repo}", "--jq", ".default_branch"]);
     const branch = stdout.trim();
     if (branch === "") throw new Error("gh reported no default branch for this repository");
     return branch;
