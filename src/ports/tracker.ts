@@ -136,9 +136,11 @@ export type CiOutcome =
        *
        * The names alone say nothing a fix Stage can work from: it cannot see
        * the CI log, and a failure that only happens on the runner may not
-       * reproduce in the worktree. Empty when no log could be fetched — the
-       * checks are not all GitHub Actions jobs and a tracker owes the caller
-       * the failure either way — so every reader of it degrades to the summary.
+       * reproduce in the worktree. A failing job whose log could not be
+       * fetched is named with where to find it and a note that its log was
+       * unavailable, since the failure is owed to the caller either way. Empty
+       * when no failing check was an Actions job, so every reader of it
+       * degrades to the summary.
        */
       excerpt: string;
     }
