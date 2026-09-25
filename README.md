@@ -110,6 +110,12 @@ document starts, and the next `init` brings it up to date. A Run says so on the 
 one warning naming the Version that wrote the copy and `agent-pipeline init`, or the upgrade
 where the copy is from a newer pipeline than the Run — and then takes the Frontier as usual.
 
+A Target that still has State files under `.agent-pipeline/state/`, where an earlier
+pipeline kept them, is refused the same way, naming the Tickets they belong to: a Ticket's
+State lives on the Target's remote now, and nothing moves the old files there. Finish those
+Tickets with the Version that wrote them, or hand them to a human, then delete the
+directory.
+
 A Run and `init` also say when a newer Version has been published, in one line naming both
 numbers, at the top of the Run log and again at the head of the Run summary:
 
@@ -239,8 +245,9 @@ report. A released Ticket does not change the exit code, so a Run the limit stop
 exits `0`.
 
 What the release leaves behind is the **State file** the Ticket has been keeping since it
-was claimed, at `.agent-pipeline/state/ticket-<n>.json`, naming the state it reached, its
-branch, whether the fix budget was already spent, and the pull request if one is open
+was claimed, as `ticket-<n>.json` on the `agent-pipeline/state` branch of the Target's
+remote, where a Run on any Host finds it. It names the state it reached, its branch,
+whether the fix budget was already spent, and the pull request if one is open
 ([ADR-0004](docs/adr/0004-resume-state-is-a-local-file.md)):
 
 ```json
@@ -351,19 +358,20 @@ the Ticket merges, when the sweep finds its issue closed, when the branch it nam
 neither its worktree here nor on the remote, and on the one hand-off at `setup` above over a branch in
 the way.
 
-A Ticket left like that is a **stranded Ticket**: state recorded locally, and the Claim
-still on the board. No Frontier can offer one — it is claimed — so a `run` sweeps the local
-State files first and resumes every stranded Ticket it finds, in the worktree and on the
-branch it already has. A free Lane takes a stranded Ticket, in ascending number, before
+A Ticket left like that is a **stranded Ticket**: state recorded on the remote, and the
+Claim still on the board. No Frontier can offer one — it is claimed — so a `run` sweeps the
+State files on the remote first and resumes every stranded Ticket it finds, on the branch it
+already has: in the worktree this Host kept, or in one made from the remote branch when the
+Run that left it was on another Host. A free Lane takes a stranded Ticket, in ascending number, before
 anything the Frontier is offering, and the Frontier is not computed at all while there are
 enough of them to fill every Lane — so with more than one Lane a stranded Ticket may still
 be running when a Frontier Ticket starts beside it. The Claim stays exactly as it is: nothing is
 re-assigned, nothing is relabelled, and nobody is notified. `ticket <n>` naming a stranded
 Ticket resumes it too, where it would otherwise refuse it as claimed.
 
-Nothing records a process id. One Run at a time holds the lock for a checkout and the State
-file is local to that checkout, so a Run that holds the lock and finds a Ticket still
-wearing this checkout's Claim knows the Run that claimed it is gone.
+Nothing records a process id. One Run at a time holds the Run lock, so a Run that holds it
+and finds a Ticket still wearing this pipeline's Claim knows the Run that claimed it is
+gone.
 
 Not everything the sweep finds is stranded, and it resumes nothing else:
 

@@ -1,4 +1,5 @@
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
   type LockOptions,
@@ -21,10 +22,10 @@ import type {
   WorktreeFromRemote,
 } from "../ports/workspace.js";
 import {
-  clearTicketState,
-  listStateFiles,
-  readTicketState,
-  writeTicketState,
+  readStateFile,
+  stateFileContents,
+  stateFileName,
+  stateFileTicket,
 } from "../resume.js";
 import { exec, execOrThrow, throwOnFailure } from "./exec.js";
 
@@ -40,6 +41,35 @@ const BRANCH_ALREADY_GONE = /remote ref does not exist/;
 
 /** The two directories git keeps a rebase in, depending on which one it used. */
 const REBASE_DIRS = ["rebase-merge", "rebase-apply"];
+
+/**
+ * The branch of the Target's remote that holds every Ticket's State, one file
+ * per Ticket, under the prefix the pipeline owns (ADR-0004).
+ */
+export const STATE_BRANCH = "agent-pipeline/state";
+
+/**
+ * How many times a change to the state branch is tried, read again from the
+ * remote each time, before its push failing is an error. Meant for a remote
+ * that moved between the read and the push, whose lease then refuses it; a
+ * push that failed for any other reason is tried again too, which costs a
+ * moment. The Lanes of one Run take turns and only one Run holds a Target, so
+ * a second attempt is already the unusual case.
+ */
+const STATE_ATTEMPTS = 3;
+
+/** One file of the state branch to write, with its contents, or to remove, without. */
+interface StateEdit {
+  name: string;
+  contents?: string;
+}
+
+/** One entry of the snapshot's tree, as `git ls-tree` names it. */
+interface TreeEntry {
+  type: string;
+  object: string;
+  name: string;
+}
 
 /**
  * The git-backed {@link Workspace}: one worktree per Ticket, branched from the
@@ -59,17 +89,27 @@ const REBASE_DIRS = ["rebase-merge", "rebase-apply"];
  * runs, which is what this gives; a pair that had to be indivisible would have
  * to say so, and none of them is.
  *
- * The State and the Run lock are plain files under the gitignored run directory
- * (ADR-0004), with a PID check telling a live lock from an abandoned one. They
- * take no git ref or index lock, so they are not queued behind git.
+ * The State lives on the Target's remote, on {@link STATE_BRANCH}, so a Run on
+ * any Host resumes a Ticket another left (ADR-0004). The branch is one snapshot
+ * commit, rewritten whole and force-pushed with a lease on the tip it was built
+ * from, and built from objects and a scratch index alone: the main checkout's
+ * tree, index and branches are never touched. Each change to it takes a turn of
+ * its own, whole — read, rewrite, push — because two Lanes that rewrote the
+ * same tip would each push a snapshot missing the other's Ticket.
+ *
+ * The Run lock is still a plain file under the gitignored run directory, with a
+ * PID check telling a live lock from an abandoned one. It takes no git ref or
+ * index lock, so it is not queued behind git.
  */
 export class GitWorkspace implements Workspace {
   /**
-   * The last main-checkout command queued, which the next one waits for —
-   * settled either way. A command that failed is still a command that finished,
-   * so the queue carries on rather than rejecting everything behind it.
+   * Main-checkout commands, one at a time. A command that failed is still a
+   * command that finished, so the queue carries on rather than rejecting
+   * everything behind it.
    */
-  private lastMainCheckoutCommand: Promise<unknown> = Promise.resolve();
+  private readonly mainCheckout = new Turns();
+  /** Changes to the state branch, and reads of it, one whole operation at a time. */
+  private readonly stateBranch = new Turns();
 
   constructor(
     private readonly repoRoot: string,
@@ -412,19 +452,158 @@ export class GitWorkspace implements Workspace {
   }
 
   async readState(ticket: number): Promise<TicketState | undefined> {
-    return readTicketState(this.repoRoot, ticket);
+    return this.stateBranch.take(async () => {
+      const tracking = await this.fetchBranch(STATE_BRANCH);
+      if (tracking === undefined) return undefined;
+      const read = await this.tryGit([
+        "cat-file",
+        "blob",
+        `${tracking}:${stateFileName(ticket)}`,
+      ]);
+      if (read.exitCode !== 0) return undefined;
+      const file = readStateFile(read.stdout, ticket);
+      return file.readable ? file.state : undefined;
+    });
   }
 
   async readAllStates(): Promise<StateFile[]> {
-    return listStateFiles(this.repoRoot);
+    return this.stateBranch.take(async () => {
+      const tracking = await this.fetchBranch(STATE_BRANCH);
+      if (tracking === undefined) return [];
+      const files = (await this.snapshot(tracking)).flatMap((entry) => {
+        const ticket = stateFileTicket(entry.name);
+        return entry.type === "blob" && ticket !== undefined ? [{ ticket, entry }] : [];
+      });
+      files.sort((a, b) => a.ticket - b.ticket);
+      const read: StateFile[] = [];
+      for (const { ticket, entry } of files) {
+        const { stdout } = await this.git(["cat-file", "blob", entry.object]);
+        read.push(readStateFile(stdout, ticket));
+      }
+      return read;
+    });
   }
 
   async writeState(state: TicketState): Promise<void> {
-    writeTicketState(this.repoRoot, state);
+    await this.changeState(`Record #${state.ticket} at ${state.state}`, {
+      name: stateFileName(state.ticket),
+      contents: stateFileContents(state),
+    });
   }
 
   async removeState(ticket: number): Promise<void> {
-    clearTicketState(this.repoRoot, ticket);
+    await this.changeState(`Forget #${ticket}`, { name: stateFileName(ticket) });
+  }
+
+  /**
+   * Rewrite the state branch as one new snapshot commit, the same as the tip
+   * but for the file `edit` names — written with its contents, or removed where
+   * it has none — and push it over the tip it was built from. Removing a file
+   * the tip does not have pushes nothing, so a remove never creates the branch.
+   *
+   * No parent, because nothing reads the branch's history and a branch that
+   * grew with every Stage would grow the Target with it. The lease is on the
+   * tip read, or on no branch at all where there was none, so a snapshot that
+   * another writer moved on since is never overwritten: it is read again and
+   * the edit made over it.
+   */
+  private async changeState(
+    message: string,
+    edit: StateEdit,
+  ): Promise<void> {
+    await this.stateBranch.take(async () => {
+      for (let attempt = 1; ; attempt++) {
+        const tracking = await this.fetchBranch(STATE_BRANCH);
+        const tip =
+          tracking === undefined
+            ? undefined
+            : (await this.git(["rev-parse", tracking])).stdout.trim();
+        if (edit.contents === undefined) {
+          const had =
+            tip !== undefined &&
+            (await this.tryGit(["cat-file", "-e", `${tip}:${edit.name}`])).exitCode === 0;
+          if (!had) return;
+        }
+
+        const tree = await this.editTree(tip, edit);
+        // Unsigned, like the push is unhooked: a signing key that asks for a
+        // passphrase would otherwise stop every write of an unattended Run.
+        const { stdout } = await this.git([
+          "commit-tree",
+          "--no-gpg-sign",
+          tree,
+          "-m",
+          message,
+        ]);
+        const args = [
+          "push",
+          // The state branch holds no code, so a Target's pre-push hooks have
+          // nothing to check on it.
+          "--no-verify",
+          `--force-with-lease=refs/heads/${STATE_BRANCH}:${tip ?? ""}`,
+          this.remote,
+          `${stdout.trim()}:refs/heads/${STATE_BRANCH}`,
+        ];
+        const pushed = await this.tryGit(args);
+        if (pushed.exitCode === 0) return;
+        if (attempt === STATE_ATTEMPTS) throwOnFailure("git", args, pushed);
+      }
+    });
+  }
+
+  /** The entries at the top of the snapshot `tip` is, files and directories alike. */
+  private async snapshot(tip: string): Promise<TreeEntry[]> {
+    const { stdout } = await this.git(["ls-tree", "-z", tip]);
+    return stdout
+      .split("\0")
+      .filter((line) => line !== "")
+      .map((line) => {
+        // `<mode> <type> <object>\t<name>`, the name spelt as it is under -z.
+        const tab = line.indexOf("\t");
+        const [, type = "", object = ""] = line.slice(0, tab).split(" ");
+        return { type, object, name: line.slice(tab + 1) };
+      });
+  }
+
+  /**
+   * The tree `tip` has with `edit` made to it, built in a scratch index so the
+   * main checkout's own index is never the one written. The blob goes through
+   * a scratch file too, because `exec` gives a child no stdin to read it from.
+   */
+  private async editTree(
+    tip: string | undefined,
+    edit: StateEdit,
+  ): Promise<string> {
+    return this.withScratch(async (scratch) => {
+      const env = { GIT_INDEX_FILE: join(scratch, "index") };
+      await this.git(["read-tree", ...(tip === undefined ? ["--empty"] : [tip])], env);
+      if (edit.contents === undefined) {
+        await this.git(["update-index", "--force-remove", "--", edit.name], env);
+      } else {
+        const path = join(scratch, "blob");
+        writeFileSync(path, edit.contents);
+        // --no-filters: the bytes written are the bytes kept, whatever the
+        // checkout's attributes would make of a JSON file.
+        const blob = (
+          await this.git(["hash-object", "-w", "--no-filters", "--", path])
+        ).stdout.trim();
+        await this.git(
+          ["update-index", "--add", "--cacheinfo", `100644,${blob},${edit.name}`],
+          env,
+        );
+      }
+      const { stdout } = await this.git(["write-tree"], env);
+      return stdout.trim();
+    });
+  }
+
+  private async withScratch<T>(use: (scratch: string) => Promise<T>): Promise<T> {
+    const scratch = mkdtempSync(join(tmpdir(), "agent-pipeline-state-"));
+    try {
+      return await use(scratch);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
   }
 
   async takeRunLock(holder: LockHolder): Promise<LockTake> {
@@ -448,18 +627,28 @@ export class GitWorkspace implements Workspace {
    * class runs there goes through here or through {@link tryGit}, so a new one
    * is serialized by being written the way the others are.
    */
-  private git(args: string[]) {
-    return this.inMainCheckout(() => execOrThrow("git", args, { cwd: this.repoRoot }));
+  private git(args: string[], extraEnv?: Record<string, string>) {
+    return this.mainCheckout.take(() =>
+      execOrThrow("git", args, { cwd: this.repoRoot, ...(extraEnv && { extraEnv }) }),
+    );
   }
 
   /** The same, for a command whose failure is an answer rather than an error. */
   private tryGit(args: string[]) {
-    return this.inMainCheckout(() => exec("git", args, { cwd: this.repoRoot }));
+    return this.mainCheckout.take(() => exec("git", args, { cwd: this.repoRoot }));
   }
+}
 
-  private inMainCheckout<T>(command: () => Promise<T>): Promise<T> {
-    const started = this.lastMainCheckoutCommand.then(command, command);
-    this.lastMainCheckoutCommand = started.then(
+/**
+ * Work that takes turns: each piece waits for the last one queued to settle,
+ * either way, before it starts.
+ */
+class Turns {
+  private last: Promise<unknown> = Promise.resolve();
+
+  take<T>(work: () => Promise<T>): Promise<T> {
+    const started = this.last.then(work, work);
+    this.last = started.then(
       () => undefined,
       () => undefined,
     );

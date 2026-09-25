@@ -5,15 +5,14 @@ import type { StateFile, Workspace } from "./ports/workspace.js";
  * The Tickets a Run that never came back left claimed, and how a later Run finds
  * them.
  *
- * A Run killed mid-Ticket releases nothing: the Claim stays on the board, and
- * the branch, worktree and State file stay on the machine. The Frontier cannot
- * see such a Ticket — it is claimed — so without this nobody would ever pick it
- * up again.
+ * A Run killed mid-Ticket releases nothing: the Claim stays on the board, the
+ * State file on the Target's remote, and the branch on the remote as of its
+ * last committing Stage. The Frontier cannot see such a Ticket — it is claimed —
+ * so without this nobody would ever pick it up again, on this Host or another.
  *
- * Nothing here needs a process id. The Run lock allows one Run per checkout and
- * the State file is local to that checkout (ADR-0004), so a Run holding the lock
- * that finds a State file whose Ticket still carries this user's Claim knows the
- * Run that wrote it is gone.
+ * Nothing here needs a process id. The Run lock allows one Run at a time
+ * (ADR-0004), so a Run holding the lock that finds a State file whose Ticket
+ * still carries this user's Claim knows the Run that wrote it is gone.
  */
 
 /** A Ticket still claimed by a Run that never came back, and where its work is. */
@@ -44,7 +43,8 @@ export interface StrandedSweep {
 }
 
 /**
- * Sweep the State the Workspace keeps for the Tickets this checkout still holds.
+ * Sweep the State the Workspace keeps on the remote for the Tickets this
+ * pipeline still holds, whichever Host's Run claimed them.
  *
  * Four things can be behind a State file, and only one of them is stranded:
  *
@@ -71,7 +71,7 @@ export async function strandedTickets(sweep: StrandedSweep): Promise<StrandedTic
   for (const file of files) if (!file.readable) log(unreadableLine(file));
 
   const recorded = files.flatMap((file) => (file.readable ? [file.state] : []));
-  // Asked only when there is something to ask about, so a Run on a checkout that
+  // Asked only when there is something to ask about, so a Run on a Target that
   // has never claimed anything spends no call on the sweep.
   if (recorded.length === 0) return [];
   const user = await tracker.currentUser();
@@ -88,8 +88,14 @@ export async function strandedTickets(sweep: StrandedSweep): Promise<StrandedTic
     }
 
     if (issue.closed) {
-      await workspace.removeState(ticket);
-      log(`#${ticket} has closed, so the state it left is gone`);
+      // A remote that will not take the removal costs nothing but a second
+      // try from the next Run, where letting it throw would end this one.
+      try {
+        await workspace.removeState(ticket);
+        log(`#${ticket} has closed, so the state it left is gone`);
+      } catch (error) {
+        log(`#${ticket} has closed, but removing its state failed: ${(error as Error).message}`);
+      }
       continue;
     }
     if (issue.assignees.length > 0 && !issue.assignees.includes(user)) {

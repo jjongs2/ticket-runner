@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { GitWorkspace } from "./git-workspace.js";
+import { GitWorkspace, STATE_BRANCH } from "./git-workspace.js";
 
 let remote: string;
 let repo: string;
@@ -942,23 +942,99 @@ describe("the State a Ticket keeps", () => {
     updatedAt: "2026-09-17T09:00:00.000Z",
   };
 
-  it("is the State file under the run directory, as every Run before this one wrote it", async () => {
+  /** A second checkout of the same remote, standing for another Host. */
+  function anotherHost(): { repo: string; workspace: GitWorkspace } {
+    const other = mkdtempSync(join(tmpdir(), "agent-pipeline-host-"));
+    created.push(other);
+    git(other, "clone", remote, ".");
+    git(other, "config", "user.email", "pipeline@example.com");
+    git(other, "config", "user.name", "agent-pipeline");
+    return { repo: other, workspace: new GitWorkspace(other) };
+  }
+
+  /** The files the state branch holds on the remote, by name. */
+  function onRemote(): string[] {
+    return git(remote, "ls-tree", "--name-only", STATE_BRANCH).split("\n").filter(Boolean);
+  }
+
+  /** Commit `files` over the state branch by hand, as a human or an older pipeline might. */
+  function commitToStateBranch(files: Record<string, string>): void {
+    const { repo: other } = anotherHost();
+    git(other, "fetch", "origin", STATE_BRANCH);
+    git(other, "checkout", "-b", STATE_BRANCH, "FETCH_HEAD");
+    for (const [name, contents] of Object.entries(files)) {
+      mkdirSync(join(other, name, ".."), { recursive: true });
+      writeFileSync(join(other, name), contents);
+    }
+    git(other, "add", "-A");
+    git(other, "commit", "-m", "by hand");
+    git(other, "push", "origin", STATE_BRANCH);
+  }
+
+  it("is a file per Ticket on the remote's state branch, readable without the pipeline", async () => {
     await workspace.writeState(state);
 
-    const path = join(repo, ".agent-pipeline", "state", "ticket-4.json");
-    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual(state);
+    expect(JSON.parse(git(remote, "show", `${STATE_BRANCH}:ticket-4.json`))).toEqual(state);
     expect(await workspace.readState(4)).toEqual(state);
+    // Nothing under the run directory any more: that is only this Host's.
+    expect(existsSync(join(repo, ".agent-pipeline", "state"))).toBe(false);
+  });
+
+  it("is read by a Run on another Host", async () => {
+    await workspace.writeState(state);
+
+    expect(await anotherHost().workspace.readState(4)).toEqual(state);
+  });
+
+  it("keeps the state branch a single snapshot commit however often it is written", async () => {
+    await workspace.writeState({ ...state, state: "claimed" });
+    await workspace.writeState(state);
+    await workspace.writeState({ ...state, ticket: 9, branch: "agent/9-x" });
+    await workspace.removeState(9);
+    await workspace.writeState({ ...state, ticket: 9, branch: "agent/9-x" });
+
+    expect(git(remote, "rev-list", "--count", STATE_BRANCH)).toBe("1");
+    expect(onRemote()).toEqual(["ticket-4.json", "ticket-9.json"]);
+    expect(await workspace.readState(4)).toEqual(state);
+  });
+
+  it("keeps what another Host wrote since this one last read it", async () => {
+    const other = anotherHost().workspace;
+    await workspace.writeState(state);
+    await other.writeState({ ...state, ticket: 9, branch: "agent/9-x" });
+
+    await workspace.writeState({ ...state, fixUsed: true });
+    await workspace.removeState(5);
+
+    expect(onRemote()).toEqual(["ticket-4.json", "ticket-9.json"]);
+    expect(await other.readState(4)).toEqual({ ...state, fixUsed: true });
+  });
+
+  it("loses none of the writes a Run's Lanes make at once", async () => {
+    const tickets = [3, 4, 5, 6, 7];
+
+    await Promise.all(
+      tickets.map((ticket) =>
+        workspace.writeState({ ...state, ticket, branch: `agent/${ticket}-x` }),
+      ),
+    );
+
+    expect((await workspace.readAllStates()).map((file) => file.readable && file.state.ticket)).toEqual(
+      tickets,
+    );
   });
 
   it("reads every Ticket's back, lowest first, the unreadable ones included", async () => {
     await workspace.writeState({ ...state, ticket: 9, branch: "agent/9-x" });
     await workspace.writeState(state);
-    writeFileSync(join(repo, ".agent-pipeline", "state", "ticket-6.json"), "{ not json");
-    // A file that parses, but names another Ticket than its own name does.
-    writeFileSync(
-      join(repo, ".agent-pipeline", "state", "ticket-7.json"),
-      JSON.stringify({ ...state, ticket: 5, version: "0.4.0" }),
-    );
+    commitToStateBranch({
+      "ticket-6.json": "{ not json",
+      // A file that parses, but names another Ticket than its own name does.
+      "ticket-7.json": JSON.stringify({ ...state, ticket: 5, version: "0.4.0" }),
+      // Neither is a Ticket's State: a note, and a directory of transcripts.
+      "notes.txt": "a human's note",
+      "ticket-4/implement.jsonl": "{}",
+    });
 
     expect(await workspace.readAllStates()).toEqual([
       { readable: true, state },
@@ -970,7 +1046,24 @@ describe("the State a Ticket keeps", () => {
     expect(await workspace.readState(7)).toBeUndefined();
   });
 
-  it("is gone once removed, and removing it twice is no error", async () => {
+  it("keeps what else the state branch holds when a Ticket's State is written", async () => {
+    await workspace.writeState(state);
+    commitToStateBranch({ "ticket-4/implement.jsonl": "{}" });
+
+    await workspace.writeState({ ...state, fixUsed: true });
+
+    expect(git(remote, "show", `${STATE_BRANCH}:ticket-4/implement.jsonl`)).toBe("{}");
+  });
+
+  it("has nothing to read, and creates nothing, before any State is written", async () => {
+    expect(await workspace.readState(4)).toBeUndefined();
+    expect(await workspace.readAllStates()).toEqual([]);
+    await workspace.removeState(4);
+
+    expect(git(remote, "branch", "--list", STATE_BRANCH)).toBe("");
+  });
+
+  it("is gone once removed, removing it twice is no error, and the branch stays", async () => {
     await workspace.writeState(state);
 
     await workspace.removeState(4);
@@ -978,6 +1071,20 @@ describe("the State a Ticket keeps", () => {
 
     expect(await workspace.readState(4)).toBeUndefined();
     expect(await workspace.readAllStates()).toEqual([]);
+    // A cloud Host can delete nothing on the remote, so nothing here does.
+    expect(git(remote, "branch", "--list", STATE_BRANCH)).toContain(STATE_BRANCH);
+    expect(onRemote()).toEqual([]);
+  });
+
+  it("leaves the main checkout exactly as it was", async () => {
+    const head = git(repo, "rev-parse", "HEAD");
+
+    await workspace.writeState(state);
+    await workspace.removeState(4);
+
+    expect(git(repo, "rev-parse", "HEAD")).toBe(head);
+    expect(git(repo, "status", "--porcelain")).toBe("");
+    expect(git(repo, "branch", "--list", STATE_BRANCH)).toBe("");
   });
 });
 

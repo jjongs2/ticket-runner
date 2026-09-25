@@ -1,5 +1,5 @@
-import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
 import { z } from "zod";
 import { REACHED_STATES, type StateFile, type TicketState } from "./ports/workspace.js";
 
@@ -19,14 +19,13 @@ import { REACHED_STATES, type StateFile, type TicketState } from "./ports/worksp
  * in `ready-for-human` is none of them: its file is inert until a human moves
  * the label or the issue closes.
  *
- * It lives beside the branch and worktree it is about, and like them it is local
- * and gitignored.
- *
- * This is how the git-backed Workspace keeps the State the port offers
- * ({@link import("./ports/workspace.js").Workspace.readState} and the rest):
- * nothing else reads or writes these files. Whether the branch and worktree a
- * file names are still there is the Workspace's other question, and whether the
- * Ticket is released or stranded is the Claim's, read off GitHub.
+ * It lives on the Target's remote, where a Run on any Host finds it; where
+ * exactly is the git-backed Workspace's business
+ * ({@link import("./ports/workspace.js").Workspace.readState} and the rest).
+ * This is only what the file says and what its name is, which that Workspace
+ * reads and writes through here. Whether the branch a file names is still there
+ * is the Workspace's other question, and whether the Ticket is released or
+ * stranded is the Claim's, read off GitHub.
  */
 
 const stateSchema = z.object({
@@ -40,51 +39,34 @@ const stateSchema = z.object({
   updatedAt: z.string(),
 });
 
-/** Where the State files live, under the same gitignored directory as the Run logs. */
-function stateDir(repoRoot: string): string {
-  return join(repoRoot, ".agent-pipeline", "state");
+/** One file per Ticket, named for it. */
+export function stateFileName(ticket: number): string {
+  return `ticket-${ticket}.json`;
 }
 
-/** One file per Ticket. */
-export function statePath(repoRoot: string, ticket: number): string {
-  return join(stateDir(repoRoot), `ticket-${ticket}.json`);
+/** The name {@link stateFileName} gives, read back the other way. */
+const STATE_FILE = /^ticket-(\d+)\.json$/;
+
+/** The Ticket a file of that name is about, or undefined for any other file. */
+export function stateFileTicket(name: string): number | undefined {
+  const match = STATE_FILE.exec(name);
+  return match === null ? undefined : Number.parseInt(match[1] as string, 10);
 }
 
-export function writeTicketState(repoRoot: string, state: TicketState): void {
-  const path = statePath(repoRoot, state.ticket);
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`);
-}
-
-/**
- * Forget a Ticket is resumable: on merge, when the sweep finds its issue closed,
- * when the worktree it names has gone, and on a hand-off over a branch no Stage
- * of the Run ever worked on.
- */
-export function clearTicketState(repoRoot: string, ticket: number): void {
-  rmSync(statePath(repoRoot, ticket), { force: true });
+/** What the file holds: JSON a human can read without the pipeline. */
+export function stateFileContents(state: TicketState): string {
+  return `${JSON.stringify(state, null, 2)}\n`;
 }
 
 /**
- * What an earlier Run recorded about this Ticket, if it can be believed.
+ * What the file `ticket` keeps says, and which of the two things it is.
  *
- * A file nothing wrote, one that is not JSON, and one a newer pipeline shaped
- * differently all read as no state at all: starting the Ticket over is always
- * safe, and resuming on a guess is not.
+ * A file that is not JSON, one missing what resuming needs, and one a newer
+ * pipeline shaped differently are all unreadable: starting the Ticket over is
+ * always safe, and resuming on a guess is not. So is one that names another
+ * Ticket than its own name does, which no Version would resume either.
  */
-export function readTicketState(repoRoot: string, ticket: number): TicketState | undefined {
-  const file = readStateFile(repoRoot, ticket);
-  return file?.readable === true ? file.state : undefined;
-}
-
-/**
- * The file itself, and which of the three things it is. Undefined is the first:
- * nothing has ever recorded this Ticket here.
- */
-export function readStateFile(repoRoot: string, ticket: number): StateFile | undefined {
-  const contents = readFile(statePath(repoRoot, ticket));
-  if (contents === undefined) return undefined;
-
+export function readStateFile(contents: string, ticket: number): StateFile {
   const raw = parseJson(contents);
   const parsed = stateSchema.safeParse(raw);
   if (!parsed.success || parsed.data.ticket !== ticket) {
@@ -119,46 +101,6 @@ function namedVersion(raw: unknown): string | undefined {
   return typeof version === "string" && version !== "" ? version : undefined;
 }
 
-/**
- * Every State file this checkout holds, in ascending Ticket number.
- *
- * Ascending because a Run takes the oldest Ticket first, and the sweep that
- * reads this runs before the Frontier. A file that cannot be read is in the
- * list rather than missing from it: its Ticket is claimed, and the sweep is
- * what tells a human it is there.
- */
-export function listStateFiles(repoRoot: string): StateFile[] {
-  return recordedTickets(repoRoot)
-    .sort((a, b) => a - b)
-    .flatMap((ticket) => readStateFile(repoRoot, ticket) ?? []);
-}
-
-/** The name {@link statePath} writes, read back the other way. */
-const STATE_FILE = /^ticket-(\d+)\.json$/;
-
-function recordedTickets(repoRoot: string): number[] {
-  let entries: string[];
-  try {
-    entries = readdirSync(stateDir(repoRoot));
-  } catch {
-    // No directory at all: nothing has ever been claimed on this checkout.
-    return [];
-  }
-  return entries.flatMap((entry) => {
-    const match = STATE_FILE.exec(entry);
-    return match === null ? [] : [Number.parseInt(match[1] as string, 10)];
-  });
-}
-
-/** What is on disk, or undefined where there is no file to read at all. */
-function readFile(path: string): string | undefined {
-  try {
-    return readFileSync(path, "utf8");
-  } catch {
-    return undefined;
-  }
-}
-
 /** The file's JSON, or undefined where it is not JSON — which the schema refuses. */
 function parseJson(contents: string): unknown {
   try {
@@ -166,4 +108,26 @@ function parseJson(contents: string): unknown {
   } catch {
     return undefined;
   }
+}
+
+/** Where a pipeline before the state branch kept the State files, in the checkout. */
+export const LOCAL_STATE_DIR = join(".agent-pipeline", "state");
+
+/**
+ * The Tickets whose State files a pipeline before the state branch left in this
+ * checkout, in ascending number.
+ *
+ * Nothing reads them any more, and nothing migrates them (ADR-0004): a Run that
+ * finds any refuses to start, because each is a Ticket a Run would otherwise
+ * take from the top, or never sweep at all, without a word.
+ */
+export function localStateTickets(repoRoot: string): number[] {
+  let entries: string[];
+  try {
+    entries = readdirSync(join(repoRoot, LOCAL_STATE_DIR));
+  } catch {
+    // No directory at all: no earlier pipeline ever claimed anything here.
+    return [];
+  }
+  return entries.flatMap((entry) => stateFileTicket(entry) ?? []).sort((a, b) => a - b);
 }
