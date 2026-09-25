@@ -4,6 +4,18 @@ One section per Version, newest first, written in the Version PR that cut it and
 published as the body of that Version's GitHub Release (ADR-0007). The shape is
 `docs/templates/version-notes.md`.
 
+## 0.5.1 (2026-09-25)
+
+### Fixes
+
+- A Ticket branches from, and rebases onto, the remote's Base branch, not the checkout's ([#177])
+
+### After upgrading
+
+- Run `agent-pipeline init` again in every Target, so a cloud Host installs this Version rather than the one stamped before.
+
+[#177]: https://github.com/jjongs2/agent-pipeline/pull/177
+
 ## 0.5.0 (2026-09-25)
 
 ### Cloud Host
