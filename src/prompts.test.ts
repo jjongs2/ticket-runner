@@ -32,6 +32,18 @@ function expectsForegroundFinish(prompt: string): void {
   expect(prompt).toMatch(/run your final tests in the foreground/i);
 }
 
+/**
+ * What both code Stages are told about leaving the worktree clean.
+ * `uncommittedPaths` and `discardChanges` both leave gitignored files alone, so
+ * a Stage that deletes the dependencies it installed buys nothing and loses them.
+ */
+function expectsCleanWorktreeKeepingIgnoredFiles(prompt: string): void {
+  expect(prompt).toMatch(/keep gitignored files, such as dependencies you installed/i);
+  expect(prompt).toMatch(
+    /remove every untracked file that is not ignored and that no commit carries, test output included/i,
+  );
+}
+
 describe("implementPrompt", () => {
   it("begins with the skill invocation and the full issue URL", () => {
     expect(implementPrompt(url, BASE, "").split("\n")[0]).toBe(
@@ -92,6 +104,10 @@ describe("implementPrompt", () => {
 
   it("keeps uncommitted work off a background task and the final tests in the foreground", () => {
     expectsForegroundFinish(implementPrompt(url, BASE, ""));
+  });
+
+  it("leaves the worktree clean but keeps the gitignored files it installed", () => {
+    expectsCleanWorktreeKeepingIgnoredFiles(implementPrompt(url, BASE, ""));
   });
 
   it("appends the configured extra prompt after the guidance", () => {
@@ -175,6 +191,10 @@ describe("fixPrompt", () => {
 
   it("keeps uncommitted work off a background task and the final tests in the foreground", () => {
     expectsForegroundFinish(fixPrompt(url, FAILED_CHECK, BASE, ""));
+  });
+
+  it("leaves the worktree clean but keeps the gitignored files it installed", () => {
+    expectsCleanWorktreeKeepingIgnoredFiles(fixPrompt(url, FAILED_CHECK, BASE, ""));
   });
 
   it("names the conventions document rather than \"the repo's commit convention\"", () => {

@@ -22,9 +22,13 @@ export const SELF_HOSTING_GUIDANCE = `This checkout is the pipeline that started
  * How the two Stages that write code are told to finish. A session ends with its
  * turn and stops every background task it started, so a session that hands its
  * last commit to a test run it left in the background never makes that commit.
+ * `uncommittedPaths` and `discardChanges` both leave gitignored files alone, so
+ * a Stage told only to remove what no commit carries deletes the dependencies
+ * it installed for nothing.
  */
 const FINISH_GUIDANCE = `- Never end your turn while uncommitted work waits on a background task: the session ends with your turn and stops that task, and the work is never committed. Run your final tests in the foreground, then commit.
-- Leave the worktree clean: commit your work and remove whatever else no commit carries, test output included. The pipeline refuses a worktree holding changes no commit carries.`;
+- Leave the worktree clean: commit your work and remove every untracked file that is not ignored and that no commit carries, test output included. The pipeline refuses a worktree holding changes no commit carries.
+- Keep gitignored files, such as dependencies you installed. The pipeline does not count them against a clean worktree, and deleting them only leaves the next Stage to install them again.`;
 
 /**
  * Guidance appended to every implement Stage, working around known defects of
