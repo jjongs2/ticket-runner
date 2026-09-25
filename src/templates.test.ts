@@ -6,6 +6,7 @@ import {
   NOTES_ISSUE_MARKER,
   NOTES_ISSUE_TITLE,
   NOTE_MARKER,
+  draftPullRequestBody,
   findMarkedComment,
   findMarkedComments,
   guardComment,
@@ -34,28 +35,79 @@ const VERSION = "0.4.0+331d79c";
 
 describe("pullRequestBody", () => {
   it("starts with Closes #<n> on its own line so the merge closes the Ticket", () => {
-    const body = pullRequestBody({ ticket: 2, verdict, runId: "r1" });
+    const body = pullRequestBody({ ticket: 2, verdict, runId: "r1", host: "workstation" });
 
     expect(body.split("\n")[0]).toBe("Closes #2");
   });
 
   it("summarises the Verdict by status count", () => {
-    const body = pullRequestBody({ ticket: 2, verdict, runId: "r1" });
+    const body = pullRequestBody({ ticket: 2, verdict, runId: "r1", host: "workstation" });
 
     expect(body).toContain("**Verdict:** 1 met · 0 unmet · 1 unverifiable");
   });
 
   it("lists every criterion, with evidence for the ones not met", () => {
-    const body = pullRequestBody({ ticket: 2, verdict, runId: "r1" });
+    const body = pullRequestBody({ ticket: 2, verdict, runId: "r1", host: "workstation" });
 
     expect(body).toContain("- ✅ tests pass");
     expect(body).toContain("- ❓ docs updated — no way to tell");
   });
 
-  it("points at the transcripts for the Run", () => {
-    const body = pullRequestBody({ ticket: 2, verdict, runId: "r1" });
+  it("points a workstation's reader at the Run's directory, which outlives the Run", () => {
+    const body = pullRequestBody({ ticket: 2, verdict, runId: "r1", host: "workstation" });
 
-    expect(body).toContain("Run `r1` · transcripts in `.agent-pipeline/runs/r1/2/`");
+    expect(body).toBe(
+      [
+        "Closes #2",
+        "",
+        "**Verdict:** 1 met · 0 unmet · 1 unverifiable",
+        "",
+        "<details><summary>Criteria</summary>",
+        "",
+        "- ✅ tests pass",
+        "- ❓ docs updated — no way to tell",
+        "",
+        "</details>",
+        "",
+        "Run `r1` · transcripts in `.agent-pipeline/runs/r1/2/`",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("names the Run alone on a cloud Host, whose VM goes with its session", () => {
+    const body = pullRequestBody({ ticket: 2, verdict, runId: "r1", host: "cloud" });
+
+    expect(body.endsWith("</details>\n\nRun `r1`\n")).toBe(true);
+    expect(body).not.toContain("transcripts");
+  });
+});
+
+describe("draftPullRequestBody", () => {
+  const base = {
+    ticket: 2,
+    stage: "verify",
+    failure: "2 criteria unmet",
+    runId: "r1",
+  } as const;
+
+  it("names where the hand-off kept the transcripts on the remote", () => {
+    const body = draftPullRequestBody({
+      ...base,
+      transcripts: { branch: "agent-pipeline/state", path: "ticket-2/r1/" },
+    });
+
+    expect(body).toContain(
+      "Run `r1` · transcripts in `ticket-2/r1/` on the `agent-pipeline/state` branch",
+    );
+    expect(body).not.toContain(".agent-pipeline/runs/");
+  });
+
+  it("names the Run alone when the hand-off kept no transcripts", () => {
+    const body = draftPullRequestBody(base);
+
+    expect(body.endsWith("evidence.\n\nRun `r1`\n")).toBe(true);
+    expect(body).not.toContain("transcripts");
   });
 });
 

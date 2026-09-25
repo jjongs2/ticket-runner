@@ -3,6 +3,7 @@ import type { Config } from "./config.js";
 import { tickMetCriteria } from "./criteria.js";
 import { type SkipReason, isGuardReason, skipReason } from "./guards.js";
 import { markHandoffsTaken } from "./handoff.js";
+import type { HostKind } from "./host.js";
 import type { Landing, LandingTurn } from "./landing.js";
 import type { FailureKind, FailurePoint } from "./lifecycle.js";
 import {
@@ -105,6 +106,11 @@ export interface Pipeline {
    * `package.json` or runs git, so every stamp of one Run is the same string.
    */
   version: string;
+  /**
+   * The Host the Run is on, which decides whether a merged pull request's body
+   * can point at the Run's directory: a cloud Host's is gone with its session.
+   */
+  host: HostKind;
   /**
    * The branch every Ticket of this Run branches from, rebases onto, merges
    * into and pulls, resolved once before the Run started
@@ -1335,7 +1341,12 @@ async function publishPullRequest(
   existing: number | undefined,
 ): Promise<number> {
   await pipeline.workspace.push(worktree, branch);
-  const body = pullRequestBody({ ticket: issue.number, verdict, runId: pipeline.runId });
+  const body = pullRequestBody({
+    ticket: issue.number,
+    verdict,
+    runId: pipeline.runId,
+    host: pipeline.host,
+  });
 
   if (existing !== undefined) {
     await pipeline.tracker.updatePullRequestBody(existing, body);
@@ -1478,7 +1489,9 @@ interface HandOff {
  * hands it back and the next Run carries on from what it reached. The Stages'
  * transcripts go up beside the State, since the Host they were written on may
  * be gone by the time a human looks, and the comment says where they and the
- * branch are.
+ * branch are. The draft PR's body says where they are too, once they are
+ * kept: a draft is opened first, because the State records it, and one that
+ * was already open is rewritten, since its body is an earlier Run's.
  *
  * A Ticket handed over before its worktree was created has none: nothing was
  * branched, so there is no directory to name and nothing to push a draft PR out
@@ -1531,6 +1544,15 @@ async function handOff(
     }
   }
 
+  const draftBody = {
+    ticket,
+    stage: failure.point,
+    failure: failure.summary,
+    runId: pipeline.runId,
+  };
+  // Whether the draft's body is one this hand-off wrote, naming no transcripts.
+  // One it only converted still says what its Run said, which is not this.
+  let drafted = false;
   if (pullRequest !== undefined) {
     await tracker.convertPullRequestToDraft(pullRequest);
   } else if (worktree?.pushable === true) {
@@ -1542,15 +1564,11 @@ async function handOff(
         head: branch,
         // Nothing here is merged, so there is no commit subject worth deriving.
         title: issue.title,
-        body: draftPullRequestBody({
-          ticket,
-          stage: failure.point,
-          failure: failure.summary,
-          runId: pipeline.runId,
-        }),
+        body: draftPullRequestBody(draftBody),
         draft: true,
       });
       pullRequest = pr.number;
+      drafted = true;
     } catch (error) {
       pipeline.log?.(`#${ticket} could not open a draft PR: ${(error as Error).message}`);
     }
@@ -1572,6 +1590,23 @@ async function handOff(
   // Only beside a State that stays, because they go when it does, and after
   // it, so the State they sit beside is the one a resuming Run reads.
   const transcripts = keepsState ? await keepTranscripts(pipeline, ticket) : undefined;
+  // A draft this hand-off opened went up before anything was kept, and one it
+  // converted still carries an earlier body, so either learns where only now.
+  if (pullRequest !== undefined && !(drafted && transcripts === undefined)) {
+    try {
+      await tracker.updatePullRequestBody(
+        pullRequest,
+        draftPullRequestBody({
+          ...draftBody,
+          ...(transcripts === undefined ? {} : { transcripts }),
+        }),
+      );
+    } catch (error) {
+      pipeline.log?.(
+        `#${ticket} could not rewrite the body of PR #${pullRequest}: ${(error as Error).message}`,
+      );
+    }
+  }
   const onRemote = await branchOnRemote(pipeline, ticket, branch);
 
   await tracker.comment(
