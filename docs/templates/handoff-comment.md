@@ -23,6 +23,12 @@ draft PR even when it does name a worktree: no Stage of that Run ran there, so
 the branch carries a human's work, which is neither pushed to the remote unasked
 nor presented as this Run's under `Closes #<n>`.
 
+A hand-off at `setup` for a resumed Ticket whose copy of the branch on this Host
+has parted from the one on the remote opens no draft PR either, and pushes
+nothing: the remote may hold another Host's newer work, and pushing this Host's
+over it is the choice the human is handed. The failure says the two have
+parted, names both, and says how to keep either side.
+
 The PR clause is dropped when no pull request could be opened. The whole
 `<details>` block is dropped when there is no evidence to show. Evidence is
 fenced because it is raw command output, which would otherwise be read as

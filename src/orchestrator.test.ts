@@ -2243,6 +2243,22 @@ describe("resuming from the remote branch", () => {
     });
   });
 
+  it("hands the Ticket off at setup when its worktree cannot be made ready", async () => {
+    recorded();
+    workspace.worktreeFromRemote = async () => {
+      throw new Error("fatal: unable to access the remote");
+    };
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "setup" });
+    expect(handoffBody()).toContain("fatal: unable to access the remote");
+    expect(tracker.issue(TICKET).labels).toEqual(["ready-for-human"]);
+    expect(runner.stages()).toEqual([]);
+    // Nothing about the work is known to be wrong, so a relabel resumes it.
+    expect(workspace.state(TICKET)).toMatchObject({ state: "implemented" });
+  });
+
   describe("with a worktree left on this Host", () => {
     it("uses one that contains the remote branch as it is", async () => {
       recorded();

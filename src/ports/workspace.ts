@@ -153,7 +153,9 @@ export interface WorktreeRef {
  * - `made`: this Host had no worktree of the branch, so one was made from the
  *   remote branch
  * - `kept`: this Host's worktree contains the remote branch, which is a Run on
- *   this Host that died before it pushed, and it is used as it is
+ *   this Host that died before it pushed, and it is used as it is. A rebase
+ *   of the remote branch this Host never pushed contains it too, since it
+ *   makes every change the remote's commits make
  * - `parted`: this Host's copy and the remote branch each carry commits the
  *   other lacks, so another Host moved on while this one held work it never
  *   pushed, and nothing is touched
@@ -169,16 +171,18 @@ export interface Workspace {
   /**
    * Whether `path` is still a worktree of this repo, checked out on `branch`.
    *
-   * Asked of a branch in the way of a Ticket taken from the top, because a
-   * branch that is checked out is not one a human can simply delete.
+   * Asked of a branch in the way of a Ticket taken from the top, and of one
+   * parted from the remote, because a hand-off over either sends the human to
+   * the worktree the branch is checked out in, when it is in one.
    */
   hasWorktree(worktree: WorktreeRef): Promise<boolean>;
   /**
    * Ready the worktree a resumed Ticket carries on in, from its branch on the
    * remote rather than from whatever this Host happens to have.
    *
-   * A worktree already here is kept only when it contains the remote branch,
-   * unpushed commits and all. One the remote has merely moved ahead of is
+   * A rebase a dead Run left in progress is aborted first. A worktree already
+   * here is kept only when it contains the remote branch, unpushed commits and
+   * all. One the remote has merely moved ahead of is
    * brought up to it, since it holds nothing the remote lacks. One that has
    * parted from the remote branch is reported and left exactly as it is, as is
    * the remote: choosing between the two is a human's call. A branch this Host

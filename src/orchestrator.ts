@@ -20,7 +20,12 @@ import type {
   StageResult,
 } from "./ports/agent-runner.js";
 import type { Issue, Tracker } from "./ports/tracker.js";
-import type { ReachedState, TicketState, Workspace } from "./ports/workspace.js";
+import type {
+  ReachedState,
+  TicketState,
+  Workspace,
+  WorktreeFromRemote,
+} from "./ports/workspace.js";
 import { Progress, type ProgressPoint, type ProgressRow } from "./progress.js";
 import {
   type FixFailure,
@@ -299,10 +304,6 @@ async function takeTicket(
   // made from its remote branch.
   let worktreeOnDisk: HandOffWorktree | undefined =
     resume === undefined ? undefined : { path: worktree, pushable: true };
-  // Whether a hand-off leaves the State for a later Run to resume from, which
-  // is true of every worktree a Stage of this Run may have worked in, and of a
-  // branch parted from the remote one.
-  let keepsState = false;
   // The fix budget, which is one per Ticket and spent by the first failure a
   // fix Stage is offered. Once it is gone the next failure of any kind — even a
   // kind the fix Stage never touched — is a hand-off. A resumed Ticket keeps the
@@ -318,18 +319,14 @@ async function takeTicket(
   try {
     // A resumed Ticket's worktree is ready by now, and the Stages that already
     // succeeded on its branch are not paid for twice.
-    if (found?.parted === true) {
-      // Neither side is this Run's to pick: the remote holds another Host's
-      // newer work and this Host holds work it never pushed. Nothing is pushed
-      // out of here, but the State stays, because both sides are the
-      // pipeline's and whichever a human keeps is one a Run can resume.
-      const checkedOut = await workspace.hasWorktree({ path: worktree, branch });
-      worktreeOnDisk = checkedOut ? { path: worktree, pushable: false } : undefined;
-      keepsState = true;
-      throw new TicketFailure(
-        "setup",
-        describeParted(branch, checkedOut ? worktree : undefined, config.labels.readyForAgent),
-      );
+    if (found?.refusal !== undefined) {
+      // Nothing is pushed out of a worktree this Run cannot resume in, since
+      // what the remote holds may be another Host's newer work.
+      worktreeOnDisk =
+        found.checkedOutAt === undefined
+          ? undefined
+          : { path: found.checkedOutAt, pushable: false };
+      throw new TicketFailure("setup", found.refusal);
     }
     if (resume === undefined) {
       // The branch is asked about before it is branched: `createWorktree`
@@ -489,7 +486,9 @@ async function takeTicket(
       user,
       branch,
       ...(worktreeOnDisk === undefined ? {} : { worktree: worktreeOnDisk }),
-      keepsState: keepsState || worktreeOnDisk?.pushable === true,
+      // A resume refused at setup keeps it too: the work is the pipeline's,
+      // and whichever side a human keeps is one a later Run resumes from.
+      keepsState: found?.refusal !== undefined || worktreeOnDisk?.pushable === true,
       pullRequest,
       failure: asTicketFailure(error, point),
       fixUsed,
@@ -565,14 +564,17 @@ function describeBranchInTheWay(
   );
 }
 
-/** A Ticket a Run can resume, and whether its work is in two minds. */
+/** A Ticket a Run can resume, and whether it can carry on in its worktree. */
 interface Resumable {
   state: TicketState;
   /**
-   * Whether this Host's copy of the branch has parted from the remote one,
-   * which leaves the worktree exactly as it was and the Ticket for a human.
+   * Why it cannot, when it cannot: this Host's copy of the branch has parted
+   * from the remote one, or the worktree could not be made ready at all.
+   * Either is a hand-off at setup, and the State stays.
    */
-  parted: boolean;
+  refusal?: string;
+  /** The worktree the branch is checked out in, for a refusal to send a human to. */
+  checkedOutAt?: string;
 }
 
 /**
@@ -598,11 +600,29 @@ async function resumable(
   state: TicketState | undefined,
 ): Promise<Resumable | undefined> {
   if (state === undefined) return undefined;
-  const found = await pipeline.workspace.worktreeFromRemote({
-    path: worktree,
-    branch: state.branch,
-  });
-  if (found !== "gone") return { state, parted: found === "parted" };
+  const ref = { path: worktree, branch: state.branch };
+  // Caught here, because nothing is claimed yet: the refusal is raised once the
+  // Claim is made, as a hand-off a human can see on the board.
+  let found: WorktreeFromRemote;
+  let checkedOut: boolean;
+  try {
+    found = await pipeline.workspace.worktreeFromRemote(ref);
+    checkedOut = found === "parted" && (await pipeline.workspace.hasWorktree(ref));
+  } catch (error) {
+    return {
+      state,
+      refusal: `the worktree of ${state.branch} could not be made ready to resume in: ${(error as Error).message}`,
+    };
+  }
+  if (found === "made" || found === "kept") return { state };
+  if (found === "parted") {
+    const checkedOutAt = checkedOut ? worktree : undefined;
+    return {
+      state,
+      refusal: describeParted(state.branch, checkedOutAt, pipeline.config.labels.readyForAgent),
+      ...(checkedOutAt === undefined ? {} : { checkedOutAt }),
+    };
+  }
 
   await pipeline.workspace.removeState(ticket);
   pipeline.log?.(

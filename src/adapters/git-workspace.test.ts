@@ -586,11 +586,6 @@ describe("push and pullBase", () => {
 });
 
 /**
- * What the Tickets of one Run do to the main checkout when they are not taking
- * turns: git fails a second `worktree add` or `fetch` outright rather than
- * waiting for the lock the first one holds, so the workspace queues them.
- */
-/**
  * Where a resumed Ticket's worktree comes from once its branch lives on the
  * remote: another Host is a second clone of the same bare remote, pushing the
  * work this checkout's Run is about to resume.
@@ -695,6 +690,48 @@ describe("a worktree from the remote branch", () => {
     expect(await workspace.uncommittedPaths(path)).toEqual([]);
   });
 
+  it("keeps a worktree a Run left mid-rebase, back on its branch", async () => {
+    await workspace.createWorktree({ path, branch }, "main");
+    commit(path, "README.md", "branch version\n", "feat: branch edit (#2)");
+    await workspace.push(path, branch);
+    const tip = git(path, "rev-parse", "HEAD");
+    commit(repo, "README.md", "main version\n", "feat: main edit (#1)");
+    expect(await workspace.rebase(path, "main")).toMatchObject({ ok: false });
+
+    expect(await workspace.worktreeFromRemote({ path, branch })).toBe("kept");
+
+    expect(git(path, "rev-parse", "--abbrev-ref", "HEAD")).toBe(branch);
+    expect(git(path, "rev-parse", "HEAD")).toBe(tip);
+  });
+
+  it("keeps a worktree this Host rebased and never pushed, and the push then lands", async () => {
+    await workspace.createWorktree({ path, branch }, "main");
+    commit(path, "a.txt", "a\n", "feat: a (#2)");
+    await workspace.push(path, branch);
+    commit(repo, "main.txt", "main\n", "feat: main moved (#1)");
+    await workspace.rebase(path, "main");
+    const rebased = git(path, "rev-parse", "HEAD");
+
+    expect(await workspace.worktreeFromRemote({ path, branch })).toBe("kept");
+
+    expect(git(path, "rev-parse", "HEAD")).toBe(rebased);
+    await workspace.push(path, branch);
+    expect(git(remote, "rev-parse", branch)).toBe(rebased);
+  });
+
+  it("forgets a remote branch that has gone, so the next push is not refused over it", async () => {
+    await workspace.createWorktree({ path, branch }, "main");
+    commit(path, "a.txt", "a\n", "feat: a (#2)");
+    await workspace.push(path, branch);
+    git(remote, "branch", "-D", branch);
+    commit(path, "b.txt", "b\n", "feat: b (#2)");
+
+    expect(await workspace.worktreeFromRemote({ path, branch })).toBe("kept");
+
+    await workspace.push(path, branch);
+    expect(git(remote, "rev-parse", branch)).toBe(git(path, "rev-parse", "HEAD"));
+  });
+
   it("reports a worktree that has parted from the remote branch, and leaves both alone", async () => {
     await workspace.createWorktree({ path, branch }, "main");
     commit(path, "a.txt", "a\n", "feat: a (#2)");
@@ -739,6 +776,11 @@ describe("a worktree from the remote branch", () => {
   });
 });
 
+/**
+ * What the Tickets of one Run do to the main checkout when they are not taking
+ * turns: git fails a second `worktree add` or `fetch` outright rather than
+ * waiting for the lock the first one holds, so the workspace queues them.
+ */
 describe("two Tickets at the main checkout at once", () => {
   /** A commit pushed to the remote from elsewhere, as another Run's merge is. */
   function moveMainOnTheRemote(): string {

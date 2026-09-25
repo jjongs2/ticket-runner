@@ -266,8 +266,9 @@ Stage. A push that is refused is logged, and the Ticket carries on. So:
 
 - with no worktree of the Ticket here, one is made from the remote branch
 - a worktree still here is used as it is when it contains the remote branch, so commits a
-  killed Run never pushed are kept, and when the branch never reached the remote at all;
-  one the remote branch has merely moved ahead of is brought up to it
+  killed Run never pushed are kept, when this Host rebased it and never pushed the result,
+  and when the branch never reached the remote at all; one the remote branch has merely
+  moved ahead of is brought up to it
 - a worktree whose branch has parted from the remote one, each holding commits the other
   lacks, is left alone and the Ticket is handed off at `setup`, with a failure saying the
   two have parted and how to keep one side. Nothing is pushed, and the State file stays,
@@ -346,8 +347,8 @@ State file is not written by the release; it is written as part of the Claim and
 current as the Ticket advances: `claimed` when the Claim is made, `implemented` once the
 implement Stage has committed, the pull request once one is open, the fix budget once a fix
 Stage has come back. It is removed when the branch carries nothing left to resume — when
-the Ticket merges, when the sweep finds its issue closed, when the branch it names is gone
-both here and from the remote, and on the one hand-off at `setup` above over a branch in
+the Ticket merges, when the sweep finds its issue closed, when the branch it names is in
+neither its worktree here nor on the remote, and on the one hand-off at `setup` above over a branch in
 the way.
 
 A Ticket left like that is a **stranded Ticket**: state recorded locally, and the Claim

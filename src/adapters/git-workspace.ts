@@ -1,5 +1,5 @@
 import { existsSync, rmSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import {
   type LockOptions,
   lockHolder,
@@ -116,18 +116,28 @@ export class GitWorkspace implements Workspace {
    * what the lease of every later {@link push} is taken against: a push from
    * here then overwrites only the tip this Host last saw.
    *
-   * Every comparison reads the branch ref, not the worktree's HEAD, because a
-   * Run killed mid-rebase leaves HEAD detached on a half-replayed branch while
-   * the branch itself still names the work.
+   * A rebase a Run was killed in the middle of is aborted first, because it
+   * leaves the worktree detached rather than on its branch, and git would
+   * then neither list the worktree as the branch's nor let it be checked out
+   * anywhere else.
    */
   async worktreeFromRemote({ path, branch }: WorktreeRef): Promise<WorktreeFromRemote> {
+    // Only in a directory that is itself a worktree: git run anywhere else
+    // under the repo would find the main checkout, and abort a human's rebase.
+    if (existsSync(join(path, ".git"))) await this.abortRebase(path);
     const here = await this.hasWorktree({ path, branch });
     const remoteRef = await this.fetchBranch(branch);
     if (remoteRef === undefined) return here ? "kept" : "gone";
 
     const localRef = `refs/heads/${branch}`;
     if (here || (await this.hasBranch(branch))) {
-      if (await this.contains(localRef, remoteRef)) {
+      // A rebase this Host made and never pushed rewrote every commit the
+      // remote has, so it is told from another Host's work by what the commits
+      // change rather than by their ids.
+      if (
+        (await this.contains(localRef, remoteRef)) ||
+        (await this.replays(localRef, remoteRef))
+      ) {
         if (!here) await this.addWorktree([path, branch]);
         return here ? "kept" : "made";
       }
@@ -135,7 +145,6 @@ export class GitWorkspace implements Workspace {
       // Behind the remote and nothing more: every commit here is one the
       // remote already has, so moving up to it loses nothing.
       if (here) {
-        await this.abortRebase(path);
         await execOrThrow("git", ["merge", "--ff-only", remoteRef], { cwd: path });
         return "kept";
       }
@@ -169,9 +178,14 @@ export class GitWorkspace implements Workspace {
       this.remote,
       `refs/heads/${branch}`,
     ]);
-    if (stdout.trim() === "") return undefined;
-
     const tracking = `refs/remotes/${this.remote}/${branch}`;
+    if (stdout.trim() === "") {
+      // A tip the remote no longer has would be the lease of the next push,
+      // and refuse it: the push is then creating the branch, not replacing it.
+      await this.tryGit(["update-ref", "-d", tracking]);
+      return undefined;
+    }
+
     await this.git(["fetch", this.remote, `+refs/heads/${branch}:${tracking}`]);
     return tracking;
   }
@@ -180,6 +194,16 @@ export class GitWorkspace implements Workspace {
   private async contains(ref: string, other: string): Promise<boolean> {
     const result = await this.tryGit(["merge-base", "--is-ancestor", other, ref]);
     return result.exitCode === 0;
+  }
+
+  /**
+   * Whether `ref` makes every change `other` makes, under other commit ids:
+   * `git cherry` marks a commit of `other` with `+` when `ref` has no commit
+   * with the same patch.
+   */
+  private async replays(ref: string, other: string): Promise<boolean> {
+    const { stdout } = await this.git(["cherry", ref, other]);
+    return !stdout.split("\n").some((line) => line.startsWith("+"));
   }
 
   /**
