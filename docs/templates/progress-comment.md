@@ -5,6 +5,13 @@
 |---|---|---|---|
 | implement | ✅ committed | <n> | <m>m |
 | checks | ✅ passed | – | <m>m |
+| verify | ⏸ rate limited | <n> | <m>m |
+
+**agent-pipeline** `<version>` · run `<runId>` · `<branch>`
+
+| Stage | Outcome | Turns | Duration |
+|---|---|---|---|
+| checks | ✅ passed | – | <m>m |
 | verify | ❌ <k> unmet | <n> | <m>m |
 | fix | ✅ committed | <n> | <m>m |
 | checks | ✅ passed | – | <m>m |
@@ -13,6 +20,10 @@
 | checks | ✅ passed | – | <m>m |
 | ci | ✅ passed | – | <m>m |
 | merge | ✅ #<pr> | – | – |
+
+One section per Run that worked the Ticket, oldest first: the header naming
+that Run's Version, runId and branch, a blank line, and that Run's table. A
+Ticket one Run took from the Claim to the merge has one section.
 
 One row per Stage or gate, appended as it finishes, in the order it happened.
 Rows are not unique: a fix buys a second pass of the Checks and verify, and each
@@ -23,17 +34,24 @@ where a Ticket stopped.
 `<version>` is the Version that wrote the table (ADR-0007), in the shape
 `run-summary.txt` describes.
 
-A later Run finds this comment by its marker and carries on in it, rewriting the
-header and the rows with its own. The table is what the Run reporting now did,
-not a history of every Run the Ticket has had; the transcripts under
-`.agent-pipeline/runs/` are that.
+A later Run finds this comment by its marker and carries on in it: it leaves
+every section already there exactly as it was and writes its own below them,
+whether the Ticket was released, stranded, or resumed on the same Host or
+another. A Run's transcripts go with a cloud Host's VM, so the sections an
+earlier Run wrote are the only record of which Stages it ran, on which Version,
+and what they cost. A Run whose own section is already the last one — the same
+runId — rewrites that section rather than starting a second. A comment an
+earlier Version wrote, with one header and one table, is one earlier section.
 
-One Run does not: the one taking the Ticket back from a human, which is a Ticket
-carrying a hand-off comment not yet marked as history. It posts a table of its
-own below the one the human read, leaving that one exactly as they read it. So a
-Ticket can carry more than one of these, and the newest is the one being written.
-Every other Run — a released Ticket, a stranded one — rewrites the comment it
-finds, because nobody was handed anything in between.
+The header names no Host. The runId finds it: every commit on the
+`agent-pipeline/lock` branch that takes the lock opens ``Held by run <runId> on
+<Host>``.
+
+One Run does not carry on: the one taking the Ticket back from a human, which is
+a Ticket carrying a hand-off comment not yet marked as history. It posts a
+comment of its own below the one the human read, leaving that one exactly as
+they read it. So a Ticket can carry more than one of these, and the newest is
+the one being written.
 
 `–` is what a cell has no answer for: Checks, CI and the merge run no agent, so
 they have no turn count, and the merge takes no measurable time of its own.
@@ -71,8 +89,8 @@ never carries.
 out`, `turn capped`, `exited non-zero`, `invalid result`, or `failed` when the
 Stage came back without saying which. The subscription rate limit is the one
 Stage failure that is nothing about the Ticket, so it reads `⏸ rate limited`
-and is the last row of the table: the Ticket is released there, and the Run that
-resumes it writes its own table over this one.
+and is the last row of its Run's table: the Ticket is released there, and the Run
+that resumes it writes its own section below this one.
 
 `❌ no commits` reads the same on both Stages the branch is asked about — a
 session that came back having committed nothing — but it is not the same
