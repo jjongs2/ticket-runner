@@ -28,16 +28,16 @@ Install only what this Host does not already have. What the cloud environment's 
    claude plugin install mattpocock-skills@claude-plugins-official
    ```
 
-3. `gh`. If `command -v gh` finds it, use it. Otherwise install it from apt, dropping `sudo` when the shell is already root and has none:
+3. `gh`. If `command -v gh` finds it, use it. Otherwise install it from apt, as below when the shell runs as root and through `sudo -n` when it does not:
 
    ```bash
-   sudo apt-get update
-   sudo apt-get install -y gh
+   apt-get update
+   apt-get install -y gh
    ```
 
-   The `gh` apt offers is older than GitHub's own, and enough: the pipeline reaches GitHub through `gh api` alone. Without `gh` a Run is refused as if `gh` were not authenticated.
+   The `gh` apt offers is older than GitHub's own, and enough: the pipeline reaches GitHub through `gh api` alone. If the install fails, start nothing and tell the human what apt printed: without `gh` a Run is refused as if `gh` were not authenticated, which points them the wrong way.
 
-Tell the human in one line which of the three you installed — the pipeline, the plugin, `gh` — or that nothing was missing.
+Tell the human in one line which of these you installed, or that nothing was missing.
 
 ## Start
 

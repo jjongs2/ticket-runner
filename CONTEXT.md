@@ -47,7 +47,7 @@ The machine a Run executes on: a workstation that outlives the Run, or a cloud V
 _Avoid_: cloud session (a session is a Stage), machine, environment, runner, checkout
 
 **Operator**:
-The Claude session a human opens on a cloud Host to run a Run for them, and to watch and steer it from the app. It readies the Host with whatever the Host's own setup did not already put there — the pipeline and the plugin the Stages drive — then starts the Run, or a `ticket` for one named Ticket, reports what it prints, passes on a Stop, and releases a Run lock a vanished Host left behind when the human asks; everything else a human wants of a Ticket still goes through the board. While its Run holds the Target it leaves the checkout and the worktrees alone. Never a Stage, and never itself the Run.
+The Claude session a human opens on a cloud Host to run a Run for them, and to watch and steer it from the app. It readies the Host with whatever the Host's own setup did not already put there — the pipeline, the plugin the Stages drive, and the `gh` the Tracker calls — then starts the Run, or a `ticket` for one named Ticket, reports what it prints, passes on a Stop, and releases a Run lock a vanished Host left behind when the human asks; everything else a human wants of a Ticket still goes through the board. While its Run holds the Target it leaves the checkout and the worktrees alone. Never a Stage, and never itself the Run.
 _Avoid_: cloud session, outer session, driver, supervisor, orchestrator
 
 **Base branch**:

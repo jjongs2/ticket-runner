@@ -273,11 +273,12 @@ environment's setup script did not — the pipeline, at the Version the conventi
 is stamped with, the `mattpocock-skills` plugin, and `gh` from apt — and then starts
 `agent-pipeline run` in the background, or `agent-pipeline ticket <n>` for a Ticket you
 name. Ask for a number of Tickets at once and it passes `--lanes`, so a cloud Host can carry
-a different count from your workstation without the config changing. It reports each Ticket as the Run ends it and
-the summary when the Run is over, runs `agent-pipeline stop` when you ask for a Stop, and
-releases a lock a vanished Host left behind only when you ask and no Run of its own is
-running. Everything else it leaves alone: the checkout and the worktrees are the Run's while
-it holds the Target, and anything else about a Ticket goes through the board.
+a different count from your workstation without the config changing. It reports each
+Ticket as the Run ends it and the summary when the Run is over, runs `agent-pipeline stop`
+when you ask for a Stop, and releases a lock a vanished Host left behind only when you ask
+and no Run of its own is running. Everything else it leaves alone: the checkout and the
+worktrees are the Run's while it holds the Target, and anything else about a Ticket goes
+through the board.
 
 ## Rate limits
 
