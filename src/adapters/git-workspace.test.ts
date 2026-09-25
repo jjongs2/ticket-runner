@@ -535,6 +535,19 @@ describe("push and pullBase", () => {
     expect(git(remote, "branch", "--list", "agent/2-x")).toBe("");
   });
 
+  it("asks for no delete of a branch the remote already deleted, as a cloud Host could send none", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
+    commit(path, "a.txt", "a\n", "feat: a (#2)");
+    await workspace.push(path, "agent/2-x");
+    git(remote, "branch", "-D", "agent/2-x");
+    // Every push now fails, whatever git would have said about the ref: the
+    // cloud proxy refuses a delete before a remote can answer it.
+    git(repo, "remote", "set-url", "--push", "origin", join(remote, "missing"));
+
+    await expect(workspace.deleteRemoteBranch("agent/2-x")).resolves.toBeUndefined();
+  });
+
   it("still fails when the remote refuses the delete", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
     await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");

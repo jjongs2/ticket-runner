@@ -59,6 +59,11 @@ export class FakeTracker implements Tracker {
   isAuthenticated = true;
   /** Whether squash merging is allowed, which `init` turns on. */
   squashMergeEnabled = false;
+  /**
+   * Whether a merged pull request's branch is deleted, which `init` turns on
+   * and readiness asks for. Off, as on a repository GitHub has just made.
+   */
+  deleteBranchOnMergeEnabled = false;
   /** What GitHub calls this Target's default branch; the Run resolves from it. */
   defaultBranchName = "main";
   /**
@@ -157,6 +162,16 @@ export class FakeTracker implements Tracker {
   async enableSquashMerge(): Promise<void> {
     this.calls.push("enableSquashMerge");
     this.squashMergeEnabled = true;
+  }
+
+  // Not in `calls`: a read, which only decides whether a Target is ready.
+  async deletesBranchOnMerge(): Promise<boolean> {
+    return this.deleteBranchOnMergeEnabled;
+  }
+
+  async enableDeleteBranchOnMerge(): Promise<void> {
+    this.calls.push("enableDeleteBranchOnMerge");
+    this.deleteBranchOnMergeEnabled = true;
   }
 
   async getIssue(number: number): Promise<Issue> {

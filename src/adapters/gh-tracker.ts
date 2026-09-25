@@ -251,6 +251,19 @@ export class GhTracker implements Tracker {
   }
 
   /**
+   * Read off the repository itself. GitHub leaves the field out for a caller
+   * who may not change it, which is read as off: a Run cannot count on it.
+   */
+  async deletesBranchOnMerge(): Promise<boolean> {
+    const { stdout } = await this.gh(["api", "repos/{owner}/{repo}", "--jq", ".delete_branch_on_merge"]);
+    return stdout.trim() === "true";
+  }
+
+  async enableDeleteBranchOnMerge(): Promise<void> {
+    await this.rest("PATCH", "repos/{owner}/{repo}", [], { typed: ["delete_branch_on_merge=true"] });
+  }
+
+  /**
    * One issue, with its comments and the two native relations the guards read:
    * how many sub-issues it has, and what GitHub says blocks it.
    *

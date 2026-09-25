@@ -44,9 +44,6 @@ import { exec, execOrThrow, throwOnFailure } from "./exec.js";
  */
 const CONFLICT_MARKER = "^(<{7}|>{7}|\\|{7}) ";
 
-/** What git says to a `push --delete` of a branch the remote no longer has. */
-const BRANCH_ALREADY_GONE = /remote ref does not exist/;
-
 /** The two directories git keeps a rebase in, depending on which one it used. */
 const REBASE_DIRS = ["rebase-merge", "rebase-apply"];
 
@@ -472,11 +469,15 @@ export class GitWorkspace implements Workspace {
   }
 
   async deleteRemoteBranch(branch: string): Promise<void> {
+    // Asked before anything is sent: a repository that deletes a merged branch
+    // has usually done it by now, and a cloud Host, which may delete nothing,
+    // would be refused whether the branch were there or not (ADR-0008).
+    if (!(await this.hasRemoteBranch(branch))) return;
     const args = ["push", this.remote, "--delete", branch];
     const result = await this.tryGit(args);
-    // A remote set to delete head branches on merge got there first. The
-    // branch is gone either way, which is all this step is for.
-    if (result.exitCode !== 0 && BRANCH_ALREADY_GONE.test(result.stderr)) return;
+    // Asked again after a refusal, because GitHub may have got there between
+    // the two: the branch is gone either way, which is all this step is for.
+    if (result.exitCode !== 0 && !(await this.hasRemoteBranch(branch))) return;
     throwOnFailure("git", args, result);
   }
 

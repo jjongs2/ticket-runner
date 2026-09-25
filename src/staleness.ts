@@ -8,7 +8,7 @@
  * Nothing here is a gate. A pipeline that refused to work while a newer Version
  * existed would strand a Target on the night its maintainer was asleep, and
  * Target readiness already says what a Target is refused over: the document's
- * absence, never what it says.
+ * absence or a missing Version stamp, never what it says or which Version.
  *
  * A number against a number, always. A development checkout runs a commit past
  * the Version it reports, so comparing anything finer would call every checkout
@@ -82,8 +82,8 @@ async function publishedVersionTag(
  * Worded for whichever side is behind, because only one of them can be put
  * right from here: a document an older pipeline left is `init`'s to rewrite,
  * and a document a newer one left is the install's to catch up with. A copy
- * carrying no mark at all is read as the older side, which is what every copy
- * written before the mark existed is.
+ * carrying no mark at all is not this function's: readiness refuses it before a
+ * Run gets this far.
  */
 export function conventionsWarning(repoRoot: string, version: string): string | undefined {
   const own = versionNumber(version);
@@ -91,12 +91,11 @@ export function conventionsWarning(repoRoot: string, version: string): string | 
 
   const document = readTargetFile(join(repoRoot, CONVENTIONS_PATH));
   const mark = conventionsMark(document);
-  if (mark === own) return undefined;
+  if (mark === undefined || mark === own) return undefined;
 
   const subject = `This Target's \`${CONVENTIONS_PATH}\``;
-  if (mark !== undefined && isHigher(mark, own)) {
+  if (isHigher(mark, own)) {
     return `${subject} was left by ${mark}, and this Run is ${own} — upgrade \`agent-pipeline\`.`;
   }
-  const left = mark === undefined ? "carries no Version" : `was left by ${mark}`;
-  return `${subject} ${left}, and this Run is ${own} — run \`agent-pipeline init\` here to bring it up to date.`;
+  return `${subject} was left by ${mark}, and this Run is ${own} — run \`agent-pipeline init\` here to bring it up to date.`;
 }

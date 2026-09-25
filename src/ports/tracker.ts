@@ -193,6 +193,17 @@ export interface Tracker {
    * allows merge commits or rebase merging is the Target's own policy.
    */
   enableSquashMerge(): Promise<void>;
+  /**
+   * Whether GitHub deletes a pull request's branch when it merges.
+   *
+   * A Target readiness item on every Host: a cloud Host can delete nothing on
+   * the remote, so a merged Ticket's branch goes only when the repository takes
+   * it (ADR-0008). Asked of a workstation too, so a Target it accepts is never
+   * one a cloud Run then refuses.
+   */
+  deletesBranchOnMerge(): Promise<boolean>;
+  /** Switch on {@link deletesBranchOnMerge}, and change no other setting. */
+  enableDeleteBranchOnMerge(): Promise<void>;
   getIssue(number: number): Promise<Issue>;
   /** Open an issue, and say which one it is so a summary can name it. */
   createIssue(issue: CreateIssue): Promise<IssueRef>;
