@@ -47,7 +47,7 @@ export type CommandLine =
   | { kind: "refused"; message: string }
   | { kind: "init" }
   | { kind: "stop" }
-  | { kind: "work"; work: Work; lanes?: number };
+  | { kind: "work"; work: Work };
 
 /** Read the arguments after the command's own name. */
 export function readCommandLine(argv: string[]): CommandLine {
@@ -87,7 +87,7 @@ export function readCommandLine(argv: string[]): CommandLine {
   if (lanes === undefined) {
     return refused(`\`--lanes\` needs a whole number of one or more, not \`${values.lanes}\`.`);
   }
-  return { kind: "work", work: { command: "run" }, lanes };
+  return { kind: "work", work: { command: "run", lanes } };
 }
 
 /**

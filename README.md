@@ -50,18 +50,19 @@ because it claims no Ticket.
 
 It writes the two gitignore lines for `.worktrees/` and `.agent-pipeline/`, an empty
 `agent-pipeline.json`, the pipeline's conventions document at
-[`docs/agents/pipeline-conventions.md`](docs/agents/pipeline-conventions.md), a section
-in `CLAUDE.md` pointing at it, and the Operator's skill at
-[`.claude/skills/agent-pipeline/SKILL.md`](.claude/skills/agent-pipeline/SKILL.md), which is
-how a Claude session opened from the app knows how to run the pipeline. The files a human owns
-only ever gain lines; the conventions document and the skill are the pipeline's own text, so a
-Target carrying an older copy is rewritten and told that it was. The document carries the Version that wrote it in a hidden marker on its first
-line, which is what `init` reads before it compares any text: a copy a *newer* pipeline wrote
-is left exactly as it is, and so is the skill beside it, and the report names the upgrade
-instead (ADR-0007). On GitHub it
-creates whichever of the six triage labels are missing, turns squash merging on, touching no
-other merge method, and switches on deleting a pull request's branch when it merges, which is
-the only way a merged branch goes on a cloud Host (ADR-0008).
+[`docs/agents/pipeline-conventions.md`](docs/agents/pipeline-conventions.md), a section in
+`CLAUDE.md` pointing at it, and the Operator's skill at
+[`.claude/skills/agent-pipeline/SKILL.md`](.claude/skills/agent-pipeline/SKILL.md), which
+is how a Claude session opened from the app knows how to run the pipeline. The files a
+human owns only ever gain lines; the conventions document and the skill are the pipeline's
+own text, so a Target carrying an older copy is rewritten and told that it was. The
+document carries the Version that wrote it in a hidden marker on its first line, which is
+what `init` reads before it compares any text: a copy a *newer* pipeline wrote is left
+exactly as it is, and so is the skill beside it, and the report names the upgrade instead
+(ADR-0007). On GitHub it creates whichever of the six triage labels are missing, turns
+squash merging on, touching no other merge method, and switches on deleting a pull
+request's branch when it merges, which is the only way a merged branch goes on a cloud Host
+(ADR-0008).
 
 Then it reports one line per item that is yours — whether `gh` is authenticated, `claude`
 runs, the `mattpocock-skills` plugin is installed, a CI workflow exists under
@@ -106,9 +107,10 @@ can be traced to the pipeline that wrote it (ADR-0007).
 `run` and `ticket` refuse a Target `init` has not set up rather than repairing it. A
 gitignore missing one of the two directories, no conventions document or one carrying no
 Version, a `CLAUDE.md` that does not point at it, no Operator's skill, a missing triage
-label, or a repository that keeps a pull request's branch after it merges: whichever comes first is a refusal with
-exit code `2` that names the item and the command that puts it right. Every item is asked
-on every Host, so a Target a workstation accepts is one a cloud Host accepts too.
+label, or a repository that keeps a pull request's branch after it merges: whichever comes
+first is a refusal with exit code `2` that names the item and the command that puts it
+right. Every item is asked on every Host, so a Target a workstation accepts is one a cloud
+Host accepts too.
 
 ```
 $ agent-pipeline run
@@ -116,9 +118,9 @@ This Target is not set up: `.gitignore` does not ignore `.worktrees/`. Run
 `agent-pipeline init` here and start again; a Run puts nothing in place itself.
 ```
 
-The check is presence and the Version stamp, never content: a Target carrying an older
-copy of the conventions document or the skill starts, and the next `init` brings it up to date. A Run
-says so on the way past — one warning naming the Version that wrote the copy and
+The check is presence and the Version stamp, never content: a Target carrying an older copy
+of the conventions document or the skill starts, and the next `init` brings it up to date.
+A Run says so on the way past — one warning naming the Version that wrote the copy and
 `agent-pipeline init`, or the upgrade where the copy is from a newer pipeline than the Run
 — and then takes the Frontier as usual.
 
@@ -139,14 +141,14 @@ Nothing is refused over either. A development checkout is compared by number alo
 running a commit past the latest Version is not stale, and a lookup that could not be made —
 no network, no `gh`, a repository nobody can see — prints nothing and changes nothing.
 
-`run` drains the **Frontier**: the open Tickets labelled `ready-for-agent` that nobody
-has claimed and whose native `blocked by` issues have all closed. It takes them through its
+`run` drains the **Frontier**: the open Tickets labelled `ready-for-agent` that nobody has
+claimed and whose native `blocked by` issues have all closed. It takes them through its
 **Lanes** — as many Tickets at once as `--lanes` says, or else `lanes`, one per Lane, and
 one by default. Every Lane is filled at the start and refilled the moment its Ticket ends:
 the Frontier is recomputed at every refill and taken from lowest number first, so a merge
-that closes a blocker puts the Ticket it unblocked into the same Run. A Ticket another Lane is still
-working on has not closed, so it is still an open blocker — and those edges are the whole
-of what keeps two Tickets out of each other's way.
+that closes a blocker puts the Ticket it unblocked into the same Run. A Ticket another Lane
+is still working on has not closed, so it is still an open blocker — and those edges are
+the whole of what keeps two Tickets out of each other's way.
 
 A Ticket that fails is handed off and its Lane takes the next one; one the rate limit
 stopped is released, and the Run fills no Lane after that, though the Lanes still busy
@@ -594,9 +596,9 @@ pulls once they merge — is asked of GitHub once at the start of a Run, so a Ta
   "baseBranch": "main",
 
   // How many Tickets a Run may hold at once, one Lane per Ticket.
-  // A positive whole number. Default: 1. `run --lanes <n>` overrides it for one Run. Lanes run their Checks at the same time
-  // in different worktrees, so a Target whose Checks need a port or a database
-  // keeps this at 1.
+  // A positive whole number. Default: 1. `run --lanes <n>` overrides it for one Run.
+  // Lanes run their Checks at the same time in different worktrees, so a Target
+  // whose Checks need a port or a database keeps this at 1.
   "lanes": 1,
 
   // Commands run in the worktree after implement.

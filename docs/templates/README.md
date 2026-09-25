@@ -1,6 +1,6 @@
 # Pipeline output templates
 
-The exact shapes written to GitHub and the terminal: the pipeline's own, which the orchestrator embeds, and the one a Version PR carries. This folder is the source of truth for every shape, so change it here first. Angle-bracket fields are filled in; everything else is literal.
+The exact shapes written to GitHub and the terminal: the pipeline's own, which the orchestrator embeds, the Operator's skill, which `init` copies into a Target as it is, and the one a Version PR carries. This folder is the source of truth for every shape, so change it here first. Angle-bracket fields are filled in; everything else is literal.
 
 Humans read all of these, so each stays short: one line of status, details folded away.
 

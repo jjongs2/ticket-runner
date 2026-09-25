@@ -27,9 +27,9 @@ async function main(argv: string[]): Promise<number> {
     return 2;
   }
 
-  const read = readCommandLine(argv);
-  if (read.kind === "refused") {
-    console.error(read.message);
+  const commandLine = readCommandLine(argv);
+  if (commandLine.kind === "refused") {
+    console.error(commandLine.message);
     return 2;
   }
 
@@ -40,25 +40,25 @@ async function main(argv: string[]): Promise<number> {
   // The repository a newer Version would be published on, read from the same
   // package the number came from, so a fork asks about itself (ADR-0007).
   const repository = pipelineRepository();
-  if (read.kind === "version") {
+  if (commandLine.kind === "version") {
     console.log(version);
     return 0;
   }
 
-  if (read.kind === "usage") {
+  if (commandLine.kind === "usage") {
     console.log(USAGE);
-    return read.exitCode;
+    return commandLine.exitCode;
   }
 
   // Before the config and the Target's readiness, which a Stop needs none of:
   // a Run is already running, so whatever they would have refused it over was
   // answered when it started.
-  if (read.kind === "stop") {
+  if (commandLine.kind === "stop") {
     const root = await findRepoRoot();
     return await requestStop({ workspace: new GitWorkspace(root) });
   }
 
-  if (read.kind === "init") {
+  if (commandLine.kind === "init") {
     const root = await findRepoRoot();
     // No Run lock, because no Ticket is claimed, and no startup refusal: the
     // missing Checks it would refuse over are one of the things `init` reports.
@@ -75,8 +75,7 @@ async function main(argv: string[]): Promise<number> {
   const repoRoot = await findRepoRoot();
   const config = loadConfig(repoRoot, version);
   return startRun({
-    work: read.work,
-    lanes: read.lanes,
+    work: commandLine.work,
     repoRoot,
     config,
     // The one setting an adapter holds rather than being handed per call: the

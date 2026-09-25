@@ -55,14 +55,13 @@ describe("the Lane count a Run is started with", () => {
   it("reads `run --lanes <n>` as that many Lanes", () => {
     expect(readCommandLine(["run", "--lanes", "3"])).toEqual({
       kind: "work",
-      work: { command: "run" },
-      lanes: 3,
+      work: { command: "run", lanes: 3 },
     });
   });
 
   it("reads the `--lanes=<n>` spelling and the option before the command alike", () => {
-    expect(readCommandLine(["run", "--lanes=2"])).toMatchObject({ lanes: 2 });
-    expect(readCommandLine(["--lanes", "2", "run"])).toMatchObject({ lanes: 2 });
+    expect(readCommandLine(["run", "--lanes=2"])).toMatchObject({ work: { lanes: 2 } });
+    expect(readCommandLine(["--lanes", "2", "run"])).toMatchObject({ work: { lanes: 2 } });
   });
 
   it.each(["0", "-1", "two", "1.5", ""])("refuses `--lanes %s`", (count) => {

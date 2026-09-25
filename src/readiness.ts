@@ -15,9 +15,10 @@ import type { Tracker } from "./ports/tracker.js";
  * place — so the refusal names the item and the command that fixes it.
  *
  * Presence and the Version stamp, never content. The conventions document and
- * the Operator's skill are the pipeline's own text and change with it, so comparing it at every start would refuse a Target
- * for carrying last week's copy, which is a thing the next `init` rewrites and
- * nothing a Run is worse for. Its Version stamp is asked for, though never which
+ * the Operator's skill are the pipeline's own text and change with it, so
+ * comparing either at every start would refuse a Target for carrying last
+ * week's copy, which is a thing the next `init` rewrites and nothing a Run is
+ * worse for. The document's Version stamp is asked for, though never which
  * Version it names: an Operator installs the pipeline a cloud Host runs at that
  * Version, and a Target without one leaves it guessing (ADR-0008).
  *

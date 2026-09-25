@@ -76,7 +76,6 @@ async function start(
   work: Work = { command: "run" },
   signals?: StopSource,
   repository?: string,
-  lanes?: number,
 ) {
   const out: string[] = [];
   const err: string[] = [];
@@ -90,7 +89,6 @@ async function start(
     runId: "run-1",
     version: VERSION,
     ...(repository === undefined ? {} : { repository }),
-    ...(lanes === undefined ? {} : { lanes }),
     command: "agent-pipeline run",
     log: (line) => out.push(line),
     error: (line) => err.push(line),
@@ -351,7 +349,7 @@ describe("a Target init has set up", () => {
     for (const number of [4, 5, 6]) tracker.addIssue({ number });
     const implementing = runner.holds("implement");
 
-    const run = start({ command: "run" }, undefined, undefined, 2);
+    const run = start({ command: "run", lanes: 2 });
     await implementing.started();
     await settle();
 
@@ -572,7 +570,7 @@ describe("the Run log", () => {
     write(CONFIG_FILENAME, JSON.stringify({ lanes: 3 }));
     tracker.addIssue({ number: 4 });
 
-    const { lines } = await start({ command: "run" }, undefined, undefined, 2);
+    const { lines } = await start({ command: "run", lanes: 2 });
 
     expect(lines[0]).toBe("agent-pipeline run run-1 · 2 lanes");
   });

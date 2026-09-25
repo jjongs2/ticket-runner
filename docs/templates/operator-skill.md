@@ -48,7 +48,7 @@ When the Run ends, report its summary and what its exit code means: `0` nothing 
 
 ## Stop
 
-When the human asks for a Stop, send the Run SIGTERM by running `agent-pipeline stop`, which signals the Run this Host holds the lock for. Report what it prints, then keep reporting the Run: a Stop finishes the Tickets the Run already holds and takes no more, so the Run ends by itself with its summary. Never end it any other way. SIGINT or SIGKILL ends it in the middle of a Ticket.
+When the human asks for a Stop, send the Run SIGTERM by running `agent-pipeline stop`, which signals the Run this Host holds the lock for. Report what it prints, then keep reporting the Run: a Stop finishes the Tickets the Run already holds and takes no more, so the Run ends by itself with its summary. A `ticket` ends with its one Ticket whatever happens, so `stop` sends it nothing and says so; tell the human that it is finishing that Ticket. Never end a Run any other way. SIGINT or SIGKILL ends it in the middle of a Ticket.
 
 ## Release a lock another Host left
 
