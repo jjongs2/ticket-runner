@@ -124,6 +124,11 @@ export interface CreatePullRequest {
  *
  * `none` means the PR has no checks at all, which `gates.ci` treats as a
  * failure rather than a silent bypass.
+ *
+ * `conflicting` means the PR has no checks because GitHub reports it as
+ * conflicting with the Base branch: GitHub runs no `pull_request` workflow for
+ * such a PR, so it would otherwise read as `none`. It cannot be merged, so no gate
+ * lets it through, and it has nothing a fix Stage could act on.
  */
 export type CiOutcome =
   | { state: "passed" }
@@ -145,6 +150,7 @@ export type CiOutcome =
       excerpt: string;
     }
   | { state: "none" }
+  | { state: "conflicting" }
   | { state: "timed-out" };
 
 export interface Tracker {

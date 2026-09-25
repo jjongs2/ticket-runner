@@ -856,6 +856,27 @@ describe("CI", () => {
     expect(handoffBody()).toMatch(/no checks/i);
   });
 
+  it("hands off a PR that conflicts with the Base branch as a conflict, not as no checks", async () => {
+    tracker.ci = { state: "conflicting" };
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "ci" });
+    expect(handoffBody()).toContain("the pull request conflicts with `main`");
+    expect(handoffBody()).not.toMatch(/no checks/i);
+    expect(progressTable()).toMatch(/\| ci \| ❌ conflicting \|/);
+  });
+
+  it("hands off a conflicting PR when the CI gate is off, without trying the merge", async () => {
+    tracker.ci = { state: "conflicting" };
+
+    const outcome = await run({ gates: { checks: true, ci: false } });
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "ci" });
+    expect(tracker.calls).not.toContain("squashMerge:100");
+    expect(handoffBody()).toContain("the pull request conflicts with `main`");
+  });
+
   it("hands off when CI does not finish in time", async () => {
     tracker.ci = { state: "timed-out" };
 
@@ -1731,6 +1752,12 @@ describe("failures no fix Stage is offered", () => {
 
   it("refuses to retry a pull request that has no checks at all", async () => {
     tracker.ci = { state: "none" };
+
+    await expectNoFix("ci");
+  });
+
+  it("refuses to retry a pull request that conflicts with the Base branch", async () => {
+    tracker.ci = { state: "conflicting" };
 
     await expectNoFix("ci");
   });
