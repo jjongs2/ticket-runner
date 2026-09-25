@@ -5,6 +5,7 @@ Wrote:
   agent-pipeline.json: created, with every setting left at its default
   docs/agents/pipeline-conventions.md: written
   CLAUDE.md: created, pointing at docs/agents/pipeline-conventions.md
+  .claude/skills/agent-pipeline/SKILL.md: written
 
 GitHub:
   labels: created needs-triage, needs-info, ready-for-agent
@@ -55,6 +56,15 @@ a line at all. A copy a newer pipeline wrote is the one this never touches:
 rewriting it would take the Target backwards, so it is left and the upgrade is
 named. None of the five is a `Checked:` item, so none of them changes the exit
 code — a Target is not unready for carrying another Version's copy.
+
+The Operator's skill is the pipeline's own text too, rewritten when it says
+something else and left alone where a newer pipeline set the Target up, which
+the conventions document's mark is how `init` knows. It carries no mark of its
+own, so it has three lines of its own rather than five:
+
+  .claude/skills/agent-pipeline/SKILL.md: written
+  .claude/skills/agent-pipeline/SKILL.md: overwritten, because the copy here said something else
+  .claude/skills/agent-pipeline/SKILL.md: left alone, because 0.5.0 set this Target up and this is 0.4.0 — upgrade `agent-pipeline` to rewrite it
 
 A copy with no number to stamp — a pipeline that could not read its own package
 — writes no marker at all, so the document it writes is the document it next

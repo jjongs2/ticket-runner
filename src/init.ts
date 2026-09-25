@@ -20,6 +20,7 @@ import {
   missingIgnoreLines,
   readTargetFile,
 } from "./readiness.js";
+import { OPERATOR_SKILL_PATH, operatorSkill } from "./operator-skill.js";
 import { nestedRunRefusal } from "./stage-guard.js";
 import { newerVersionLine } from "./staleness.js";
 import { isHigher, versionNumber } from "./version-number.js";
@@ -35,17 +36,18 @@ import { isHigher, versionNumber } from "./version-number.js";
  * Target already has the thing.
  *
  * The files a human owns — `.gitignore`, `CLAUDE.md` — only ever gain lines.
- * The conventions document is the one exception, and it says so in its own
- * first paragraph: it is the pipeline's text, so a Target carrying an older
- * copy is rewritten and told that it was. The exception to the exception is a
- * copy a newer pipeline wrote, which the mark on its first line is how this
- * knows: rewriting that one would take the Target backwards, so it is left
- * alone and the upgrade is named instead (ADR-0007).
+ * The conventions document and the Operator's skill are the exception, and the
+ * document says so in its own first paragraph: they are the pipeline's text, so
+ * a Target carrying another copy is rewritten and told that it was. The
+ * exception to the exception is a Target a newer pipeline set up, which the
+ * mark on the document's first line is how this knows: rewriting either would
+ * take the Target backwards, so both are left alone and the upgrade is named
+ * instead (ADR-0007).
  *
  * The Target's own files are read and written here rather than through a port,
  * which every other external effect of the pipeline goes through. Setting a
  * Target up is not something a Run does, so no port of a Run describes it, and
- * a fourth port for four `writeFileSync` calls would be a port with one
+ * a fourth port for five `writeFileSync` calls would be a port with one
  * implementation and one caller. What the ports buy elsewhere — a fake to
  * drive the state machine with — a temporary repository root buys here, which
  * is how the local state under `.agent-pipeline/` is already tested (ADR-0004).
@@ -154,12 +156,42 @@ function logGroup(
 
 /** What the Target gained on disk, one line per file that changed. */
 function writeTargetFiles(repoRoot: string, version: string): string[] {
+  // Read once, before the document it is read from is rewritten: it decides
+  // whether the skill is too.
+  const newer = newerSetUp(repoRoot, version);
   return [
     ensureGitignore(repoRoot),
     ensureConfigFile(repoRoot),
-    ensureConventionsDoc(repoRoot, version),
+    ensureConventionsDoc(repoRoot, version, newer),
     ensureClaudePointer(repoRoot),
+    ensureOperatorSkill(repoRoot, newer),
   ].filter((line): line is string => line !== undefined);
+}
+
+/**
+ * The Version that set this Target up, where it is newer than the one setting
+ * it up now, and nothing otherwise.
+ *
+ * Read off the conventions document's mark, which is the only thing in a
+ * Target that says which pipeline wrote it, so it answers for the skill too.
+ */
+function newerSetUp(repoRoot: string, version: string): NewerSetUp | undefined {
+  const mark = conventionsMark(readTargetFile(join(repoRoot, CONVENTIONS_PATH)));
+  const own = versionNumber(version);
+  return mark !== undefined && own !== undefined && isHigher(mark, own)
+    ? { mark, own }
+    : undefined;
+}
+
+/** Which newer Version set a Target up, and which one found it. */
+interface NewerSetUp {
+  mark: string;
+  own: string;
+}
+
+/** The line for a file of the pipeline's own that a newer pipeline wrote. */
+function leftAlone(path: string, { mark, own }: NewerSetUp): string {
+  return `${path}: left alone, because ${mark} set this Target up and this is ${own} — upgrade \`agent-pipeline\` to rewrite it`;
 }
 
 /**
@@ -198,15 +230,17 @@ function ensureConfigFile(repoRoot: string): string | undefined {
  * which way round the two copies are. Nothing is refused either way: a Target
  * is not worse for carrying a document from another Version.
  */
-function ensureConventionsDoc(repoRoot: string, version: string): string | undefined {
+function ensureConventionsDoc(
+  repoRoot: string,
+  version: string,
+  newer: NewerSetUp | undefined,
+): string | undefined {
+  if (newer !== undefined) return leftAlone(CONVENTIONS_PATH, newer);
+
   const path = join(repoRoot, CONVENTIONS_PATH);
   const existing = readTargetFile(path);
   const mark = conventionsMark(existing);
   const own = versionNumber(version);
-
-  if (mark !== undefined && own !== undefined && isHigher(mark, own)) {
-    return `${CONVENTIONS_PATH}: left alone, because ${mark} set this Target up and this is ${own} — upgrade \`agent-pipeline\` to rewrite it`;
-  }
 
   const doc = conventionsDoc(version);
   if (existing === doc) return undefined;
@@ -249,6 +283,31 @@ function ensureClaudePointer(repoRoot: string): string | undefined {
   return existing === undefined
     ? `${CLAUDE_FILENAME}: created, pointing at ${CONVENTIONS_PATH}`
     : `${CLAUDE_FILENAME}: added the section pointing at ${CONVENTIONS_PATH}`;
+}
+
+/**
+ * The Operator's instructions, which a cloud session finds nowhere but in the
+ * Target (ADR-0008).
+ *
+ * The pipeline's own text, rewritten when it says something else, like the
+ * conventions document. It carries no mark of its own, so a Target a newer
+ * pipeline set up is known by the document's, and keeps what that pipeline
+ * wrote. One it left without a skill still gets this one: an older skill is
+ * something an Operator can follow, and no skill is a Target every Run refuses.
+ */
+function ensureOperatorSkill(repoRoot: string, newer: NewerSetUp | undefined): string | undefined {
+  const path = join(repoRoot, OPERATOR_SKILL_PATH);
+  const existing = readTargetFile(path);
+  if (existing !== undefined && newer !== undefined) return leftAlone(OPERATOR_SKILL_PATH, newer);
+
+  const skill = operatorSkill();
+  if (existing === skill) return undefined;
+
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, skill);
+  return existing === undefined
+    ? `${OPERATOR_SKILL_PATH}: written`
+    : `${OPERATOR_SKILL_PATH}: overwritten, because the copy here said something else`;
 }
 
 /**

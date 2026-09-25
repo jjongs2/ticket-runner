@@ -15,7 +15,8 @@
   },
   "files": [
     "bin",
-    "src"
+    "src",
+    "docs/templates/operator-skill.md"
   ],
   "scripts": {
     "agent-pipeline": "tsx src/cli.ts",

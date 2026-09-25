@@ -15,6 +15,7 @@ import { loadConfig } from "./config.js";
 import { pipelineVersion } from "./adapters/version.js";
 import { CLAUDE_SECTION, CONVENTIONS_PATH, conventionsDoc } from "./conventions.js";
 import { initTarget } from "./init.js";
+import { OPERATOR_SKILL_PATH, operatorSkill } from "./operator-skill.js";
 import { STAGE_ENV_VAR } from "./stage-guard.js";
 import { FakeAgentRunner, FakeTracker } from "./testing/fakes.js";
 
@@ -108,6 +109,7 @@ describe("what init writes into the Target", () => {
     expect(read(repoRoot, "agent-pipeline.json")).toBe("{}\n");
     expect(read(repoRoot, CONVENTIONS_PATH)).toBe(conventionsDoc(VERSION));
     expect(read(repoRoot, "CLAUDE.md")).toContain(CONVENTIONS_PATH);
+    expect(read(repoRoot, OPERATOR_SKILL_PATH)).toBe(operatorSkill());
   });
 
   it("heads the report with the Version doing the setting up", async () => {
@@ -123,6 +125,7 @@ describe("what init writes into the Target", () => {
     expect(out).toMatch(/agent-pipeline\.json: created/);
     expect(out).toMatch(new RegExp(`${CONVENTIONS_PATH}: written`));
     expect(out).toMatch(/CLAUDE\.md: created/);
+    expect(out).toContain(`${OPERATOR_SKILL_PATH}: written`);
   });
 
   it("creates the six triage labels and turns squash merging on", async () => {
@@ -232,6 +235,25 @@ describe("what init writes into the Target", () => {
     expect(out).toMatch(new RegExp(`${CONVENTIONS_PATH}: overwritten`));
   });
 
+  it("overwrites an Operator's skill that says something else, and says it did", async () => {
+    write(repoRoot, OPERATOR_SKILL_PATH, "---\nname: agent-pipeline\n---\n\nEdited by hand.\n");
+
+    const { out } = await init();
+
+    expect(read(repoRoot, OPERATOR_SKILL_PATH)).toBe(operatorSkill());
+    expect(out).toContain(
+      `${OPERATOR_SKILL_PATH}: overwritten, because the copy here said something else`,
+    );
+  });
+
+  it("writes nothing for an Operator's skill that already says what it would write", async () => {
+    write(repoRoot, OPERATOR_SKILL_PATH, operatorSkill());
+
+    const { out } = await init();
+
+    expect(out).not.toContain(`${OPERATOR_SKILL_PATH}:`);
+  });
+
   it("points CLAUDE.md at the document it writes", () => {
     expect(CLAUDE_SECTION).toContain(CONVENTIONS_PATH);
   });
@@ -293,6 +315,26 @@ describe("what init says about another Version", () => {
     expect(out).toContain("upgrade `agent-pipeline`");
     // Nothing a human has to put right before a Run: the Target is set up.
     expect(code).toBe(0);
+  });
+
+  it("leaves the Operator's skill of a Target a newer pipeline set up alone too", async () => {
+    write(repoRoot, CONVENTIONS_PATH, conventionsDoc("0.5.0"));
+    const newer = "---\nname: agent-pipeline\n---\n\nWhat 0.5.0 tells an Operator.\n";
+    write(repoRoot, OPERATOR_SKILL_PATH, newer);
+
+    const { out } = await init();
+
+    expect(read(repoRoot, OPERATOR_SKILL_PATH)).toBe(newer);
+    expect(out).toContain(`${OPERATOR_SKILL_PATH}: left alone, because 0.5.0 set this Target up`);
+  });
+
+  it("still writes the Operator's skill a Target a newer pipeline set up is missing", async () => {
+    write(repoRoot, CONVENTIONS_PATH, conventionsDoc("0.5.0"));
+
+    const { out } = await init();
+
+    expect(read(repoRoot, OPERATOR_SKILL_PATH)).toBe(operatorSkill());
+    expect(out).toContain(`${OPERATOR_SKILL_PATH}: written`);
   });
 
   it("rewrites a document an older pipeline wrote, and names that pipeline", async () => {
