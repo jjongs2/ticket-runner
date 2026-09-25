@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { hostname } from "node:os";
 
@@ -60,9 +61,12 @@ const SESSION_ENV_VARS = ["CLAUDE_CODE_REMOTE_SESSION_ID", "CLAUDE_CODE_SESSION_
 /**
  * The Host this process runs on.
  *
- * A cloud Host that names no session falls back to the machine like a
- * workstation does. Its VM is discarded with the session, so the machine is as
- * short-lived as the session would have been.
+ * A cloud Host that names no session is given an id no other process will
+ * ever have, rather than the machine's: VMs made from one image can share a
+ * machine id and a hostname, and a second session taken for the first would
+ * find the first's pid missing and take a live Run's lock over. The cost is
+ * that a Run there is a stranger even to its own Host, so its lock is always
+ * one a human releases.
  */
 export function currentHost(
   env: Record<string, string | undefined>,
@@ -70,11 +74,14 @@ export function currentHost(
 ): Host {
   const kind = hostKind(env);
   const name = machine.hostname();
-  const session =
-    kind === "cloud"
-      ? SESSION_ENV_VARS.map((variable) => env[variable]).find((value) => value)
-      : undefined;
-  return { kind, id: session ?? machine.machineId() ?? name, name };
+  const session = SESSION_ENV_VARS.map((variable) => env[variable]).find((value) => value);
+  if (kind === "cloud") return { kind, id: session ?? `unnamed-${randomUUID()}`, name };
+  return { kind, id: machine.machineId() ?? name, name };
+}
+
+/** Whether two Hosts are the same one, which only then can see each other's processes. */
+export function sameHost(a: Host, b: Host): boolean {
+  return a.kind === b.kind && a.id === b.id;
 }
 
 /** A Host as a sentence names it. */

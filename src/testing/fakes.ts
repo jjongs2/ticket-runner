@@ -7,7 +7,7 @@
  * the resulting state, never on internal helper calls.
  */
 
-import type { Host } from "../host.js";
+import { type Host, sameHost } from "../host.js";
 import type {
   AgentPreflight,
   AgentRunner,
@@ -730,7 +730,7 @@ export class FakeWorkspace implements Workspace {
   private heldLock(): HeldLock | undefined {
     if (this.lock === undefined) return undefined;
     const { holder, running } = this.lock;
-    const onAnotherHost = holder.host.id !== this.host.id;
+    const onAnotherHost = !sameHost(holder.host, this.host);
     return onAnotherHost || running ? { holder, onAnotherHost } : undefined;
   }
 

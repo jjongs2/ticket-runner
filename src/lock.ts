@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { type Host, describeHost } from "./host.js";
+import { type Host, describeHost, sameHost } from "./host.js";
 import type { HeldLock, LockHolder } from "./ports/workspace.js";
 
 /**
@@ -44,7 +44,7 @@ export function holderStanding(
   here: Host,
   checkProcess: (pid: number) => ProcessCheck,
 ): HolderStanding {
-  if (holder.host.kind !== here.kind || holder.host.id !== here.id) return "elsewhere";
+  if (!sameHost(holder.host, here)) return "elsewhere";
   return holderIsCurrent(holder, checkProcess(holder.pid)) ? "running" : "abandoned";
 }
 
@@ -115,10 +115,24 @@ export function lockHeldMessage({ holder, onAnotherHost }: HeldLock): string {
 }
 
 /**
- * How a lock another Host holds is given up, for every message that meets one.
- * Nothing here can tell whether that Run is still going, so waiting comes first.
+ * What a Run that could not give the lock up says as it ends. The lock still
+ * names it: a Run on this Host takes it over by itself, and a Run on any other
+ * waits for a human.
  */
-export function releaseAdvice(): string {
+export function unreleasedLockMessage(reason: string): string {
+  return (
+    `Could not release the Run lock: ${reason}. It still names this Run on the ` +
+    `\`${LOCK_BRANCH}\` branch. The next Run on this Host takes it over by itself; for a ` +
+    `Run on any other Host, commit a \`${LOCK_FILE}\` that reads \`${FREE_LOCK}\` to that ` +
+    "branch on GitHub, or ask an Operator to."
+  );
+}
+
+/**
+ * How a lock another Host holds is given up. Nothing here can tell whether
+ * that Run is still going, so waiting comes first.
+ */
+function releaseAdvice(): string {
   return (
     "A Run on another Host is never presumed gone, so the lock stays until it is released: " +
     "wait for that Run to finish or, if it is gone, release the lock through an Operator, " +

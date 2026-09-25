@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CLOUD_ENV_VAR, currentHost, describeHost, hostKind } from "./host.js";
+import { CLOUD_ENV_VAR, currentHost, describeHost, hostKind, sameHost } from "./host.js";
 
 describe("hostKind", () => {
   it("calls a Claude Code cloud session a cloud Host", () => {
@@ -47,6 +47,18 @@ describe("currentHost", () => {
     expect(host.id).toBe("session-a");
   });
 
+  it("never names a cloud Host that names no session by its machine", () => {
+    // VMs made from one image can share both, and a session taken for another
+    // would take a live Run's lock over.
+    const first = currentHost({ [CLOUD_ENV_VAR]: "true" }, machine);
+    const second = currentHost({ [CLOUD_ENV_VAR]: "true" }, machine);
+
+    expect(first.kind).toBe("cloud");
+    expect(first.id).not.toBe("4f1c0ffee");
+    expect(first.id).not.toBe("desk");
+    expect(second.id).not.toBe(first.id);
+  });
+
   it("reads the real machine when no seam is given", () => {
     const host = currentHost({});
 
@@ -64,5 +76,18 @@ describe("describeHost", () => {
     expect(describeHost({ kind: "cloud", id: "session_01abc", name: "runsc" })).toBe(
       "the cloud Host of session `session_01abc`",
     );
+  });
+});
+
+describe("sameHost", () => {
+  const desk = { kind: "workstation" as const, id: "4f1c0ffee", name: "desk" };
+
+  it("is the same Host by kind and id, whatever it is called", () => {
+    expect(sameHost(desk, { ...desk, name: "renamed" })).toBe(true);
+  });
+
+  it("is another Host by id, or by kind", () => {
+    expect(sameHost(desk, { ...desk, id: "another-machine" })).toBe(false);
+    expect(sameHost(desk, { ...desk, kind: "cloud" })).toBe(false);
   });
 });

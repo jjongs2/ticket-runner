@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { type Host, currentHost } from "../host.js";
+import { type Host, currentHost, sameHost } from "../host.js";
 import {
   LOCK_BRANCH,
   LOCK_FILE,
@@ -832,12 +832,7 @@ function transcriptsDir(ticket: number): string {
 
 /** Whether two holders are the same Run on the same Host. */
 function sameHolder(a: LockHolder, b: LockHolder): boolean {
-  return (
-    a.runId === b.runId &&
-    a.pid === b.pid &&
-    a.host.kind === b.host.kind &&
-    a.host.id === b.host.id
-  );
+  return a.runId === b.runId && a.pid === b.pid && sameHost(a.host, b.host);
 }
 
 /**

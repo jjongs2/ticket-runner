@@ -353,6 +353,20 @@ describe("the Run lock", () => {
     });
   });
 
+  it("keeps the Run's exit code when the lock cannot be released, and says so", async () => {
+    tracker.addIssue({ number: 4 });
+    workspace.releaseRunLock = async () => {
+      throw new Error("could not reach origin");
+    };
+
+    const { code, out, err } = await start();
+
+    expect(code).toBe(0);
+    expect(out).toContain("merged   #4");
+    expect(err).toContain("could not reach origin");
+    expect(err).toContain("`agent-pipeline/lock`");
+  });
+
   describe("held from another Host", () => {
     const foreign = { ...holder, host: ANOTHER_HOST };
 

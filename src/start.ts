@@ -2,7 +2,7 @@ import { resolveBaseBranch } from "./base-branch.js";
 import type { Config } from "./config.js";
 import { Landing } from "./landing.js";
 import { StandingNotes } from "./notes.js";
-import { lockHeldMessage } from "./lock.js";
+import { lockHeldMessage, unreleasedLockMessage } from "./lock.js";
 import { type Pipeline, type TicketOutcome, processTicket } from "./orchestrator.js";
 import type { AgentRunner } from "./ports/agent-runner.js";
 import type { Tracker } from "./ports/tracker.js";
@@ -128,6 +128,10 @@ export async function startRun(options: StartOptions): Promise<number> {
     // where one that leaves the Stop unread costs nothing at all.
     try {
       await workspace.releaseRunLock();
+    } catch (failure) {
+      // Reported, and the Run's own exit code kept: every Ticket it took has
+      // already ended, and the lock left behind is the one thing to tell.
+      error(unreleasedLockMessage(failure instanceof Error ? failure.message : String(failure)));
     } finally {
       deafen();
     }
