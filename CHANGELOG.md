@@ -4,6 +4,38 @@ One section per Version, newest first, written in the Version PR that cut it and
 published as the body of that Version's GitHub Release (ADR-0007). The shape is
 `docs/templates/version-notes.md`.
 
+## 0.5.2 (2026-09-25)
+
+### Progress comments
+
+- A Ticket's Progress comment keeps each Run's own section, and drops another Run's footer from an earlier one ([#185], [#192])
+
+### Fixes
+
+- A Host without `gh` installed is told so, instead of being asked to log in ([#190])
+- A Stage installs the Target's dependencies and keeps them past its clean-worktree check ([#191])
+- A conflicting pull request hands off as a conflict, without waiting out the grace period ([#183])
+- `init` counts a label GitHub already has as present, instead of failing ([#182])
+- A pull request body names only the transcripts that outlive the Host ([#181])
+
+### Versions
+
+- `/cut-a-version` confirms the number and the notes with the maintainer before opening the Version PR ([#184])
+- Attended work too small for a Ticket opens a pull request on `human/<slug>`, without one ([#184])
+
+### After upgrading
+
+- Run `agent-pipeline init` again in every Target: the Operator's skill's `gh` wording and its dependency-install line both changed.
+
+[#181]: https://github.com/jjongs2/agent-pipeline/pull/181
+[#182]: https://github.com/jjongs2/agent-pipeline/pull/182
+[#183]: https://github.com/jjongs2/agent-pipeline/pull/183
+[#184]: https://github.com/jjongs2/agent-pipeline/pull/184
+[#185]: https://github.com/jjongs2/agent-pipeline/pull/185
+[#190]: https://github.com/jjongs2/agent-pipeline/pull/190
+[#191]: https://github.com/jjongs2/agent-pipeline/pull/191
+[#192]: https://github.com/jjongs2/agent-pipeline/pull/192
+
 ## 0.5.1 (2026-09-25)
 
 ### Fixes
