@@ -4,9 +4,12 @@
  * A Run reports on a Ticket a dozen times, and a comment per report would make
  * the Ticket unreadable and notify its watchers every time. So there is one
  * comment, found by a hidden marker and rewritten in place as each Stage
- * finishes: only the first Stage notifies anyone. The one Run that starts a
- * second is the one taking the Ticket back from a human, which leaves the table
- * that human read exactly as they read it. Everything a human has to act on — a
+ * finishes: only the first Stage notifies anyone. Each Run that works the
+ * Ticket has a section of it, below the sections earlier Runs left exactly as
+ * they left them, because a cloud Host's transcripts go with its VM and those
+ * sections are then all that says what that Run did. The one Run that starts a
+ * second comment is the one taking the Ticket back from a human, which leaves
+ * the comment that human read exactly as they read it. Everything a human has to act on — a
  * hand-off, a guard warning — stays a comment of its own, because those are
  * exactly the ones a notification is worth.
  *
@@ -54,6 +57,19 @@ export interface ProgressCommentBody {
   branch: string;
   /** Every row so far, oldest first. */
   rows: ProgressRow[];
+  /**
+   * The sections earlier Runs wrote, oldest first, exactly as they wrote them.
+   * This Run's section goes below them.
+   */
+  earlier?: string;
+}
+
+/** Opens every section, and is how one is told from the table above it. */
+const SECTION_HEADER = "**agent-pipeline**";
+
+/** How a section's header names its Run, which is how a Run finds its own. */
+function runLabel(runId: string): string {
+  return `run \`${runId}\``;
 }
 
 export function progressComment({
@@ -61,10 +77,12 @@ export function progressComment({
   runId,
   branch,
   rows,
+  earlier = "",
 }: ProgressCommentBody): string {
   return [
     PROGRESS_MARKER,
-    `**agent-pipeline** \`${version}\` · run \`${runId}\` · \`${branch}\``,
+    ...(earlier === "" ? [] : [earlier, ""]),
+    `${SECTION_HEADER} \`${version}\` · ${runLabel(runId)} · \`${branch}\``,
     "",
     "| Stage | Outcome | Turns | Duration |",
     "|---|---|---|---|",
@@ -74,6 +92,24 @@ export function progressComment({
     ),
     "",
   ].join("\n");
+}
+
+/**
+ * The sections of a progress comment that belong to Runs other than `runId`.
+ *
+ * Everything under the marker, minus the last section when it is this Run's
+ * own: a Run that reads the Ticket again rewrites its section rather than
+ * starting a second. A comment an earlier Version wrote, with one header and one
+ * table, is one section like any other. Only the blank lines around the sections
+ * are the template's; what is between them comes back as it was.
+ */
+function earlierSections(body: string, runId: string): string {
+  const sections = body.trimStart().slice(PROGRESS_MARKER.length).trim();
+  const lines = sections.split("\n");
+  const last = lines.findLastIndex((line) => line.startsWith(SECTION_HEADER));
+  return lines[last]?.includes(runLabel(runId))
+    ? lines.slice(0, last).join("\n").trimEnd()
+    : sections;
 }
 
 /** A Check command or a failure summary may hold the one character a table cannot. */
@@ -126,17 +162,22 @@ export interface ProgressOptions {
 export class Progress {
   private readonly rows: ProgressRow[] = [];
   private comment: IssueComment | undefined;
+  /** What earlier Runs wrote in the comment this Run carries on in. */
+  private readonly earlier: string;
   /** Set when reporting again could only mean a second comment, never an edit. */
   private stopped = false;
 
   constructor(private readonly options: ProgressOptions) {
-    // A Ticket taken back from a human keeps the table that human read: a Run
-    // resuming one rewrites nothing and starts a comment of its own. Every
+    // A Ticket taken back from a human keeps the comment that human read: a
+    // Run resuming one rewrites nothing and starts a comment of its own. Every
     // other Run — a released Ticket, a stranded one, a second pass of this one
-    // — carries on in the comment it finds, which is what the one table is for.
+    // — carries on in the comment it finds, which is what the one comment is
+    // for, below whatever earlier Runs wrote in it.
     this.comment = carriesCurrentHandoff(options.comments)
       ? undefined
       : findProgressComment(options.comments);
+    this.earlier =
+      this.comment === undefined ? "" : earlierSections(this.comment.body, options.runId);
   }
 
   /** Append a row, and show it on the Ticket. */
@@ -145,7 +186,8 @@ export class Progress {
     if (this.stopped) return;
 
     const { tracker, ticket, version, runId, branch } = this.options;
-    const body = progressComment({ version, runId, branch, rows: this.rows });
+    const { earlier } = this;
+    const body = progressComment({ version, runId, branch, rows: this.rows, earlier });
 
     try {
       const id = this.comment?.id;

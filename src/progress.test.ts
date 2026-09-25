@@ -173,15 +173,104 @@ describe("recording a Stage", () => {
     ]);
   });
 
-  it("rewrites a reused comment with this Run's own header", async () => {
+  it("keeps an earlier Run's header and rows and writes its own below them", async () => {
     const tracker = new FakeTracker();
     const issue = tracker.addIssue({ number: TICKET });
-    issue.comments.push({ id: "42", body: `${PROGRESS_MARKER}\n**agent-pipeline** · run \`run-0\`` });
+    const earlier = progressComment({
+      version: "0.5.0",
+      runId: "run-0",
+      branch: BRANCH,
+      rows: [{ point: "implement", outcome: "✅ committed", turns: 46, durationMs: 1_260_000 }],
+    });
+    issue.comments.push({ id: "42", body: earlier });
+
+    await progress(tracker, issue.comments).record({ point: "checks", outcome: "✅ passed" });
+
+    expect(tracker.updatedComments[0]?.body).toBe(
+      [
+        earlier,
+        `**agent-pipeline** \`${VERSION}\` · run \`run-1\` · \`${BRANCH}\``,
+        "",
+        "| Stage | Outcome | Turns | Duration |",
+        "|---|---|---|---|",
+        "| checks | ✅ passed | – | – |",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("shows three Runs as three sections, oldest first", async () => {
+    const tracker = new FakeTracker();
+    const issue = tracker.addIssue({ number: TICKET });
+    const runOf = (runId: string, comments: IssueComment[]) =>
+      new Progress({ tracker, ticket: TICKET, version: VERSION, runId, branch: BRANCH, comments });
+
+    await runOf("run-1", []).record({ point: "implement", outcome: "⏸ rate limited" });
+    await runOf("run-2", issue.comments).record({ point: "implement", outcome: "✅ committed" });
+    await runOf("run-3", issue.comments).record({ point: "checks", outcome: "✅ passed" });
+
+    expect(tracker.comments).toHaveLength(1);
+    expect([...body(tracker).matchAll(/run `(run-\d)`/g)].map((match) => match[1])).toEqual([
+      "run-1",
+      "run-2",
+      "run-3",
+    ]);
+    expect(body(tracker).match(/^\| Stage \|/gm)).toHaveLength(3);
+  });
+
+  it("rewrites its own section when it is already the last one, rather than adding another", async () => {
+    const tracker = new FakeTracker();
+    const issue = tracker.addIssue({ number: TICKET });
+    const earlier = progressComment({
+      version: "0.5.0",
+      runId: "run-0",
+      branch: BRANCH,
+      rows: [{ point: "implement", outcome: "⏸ rate limited" }],
+    });
+    issue.comments.push({ id: "42", body: earlier });
 
     await progress(tracker, issue.comments).record({ point: "implement", outcome: "✅ committed" });
+    // This Run reads the Ticket again, as it does on a second pass of it.
+    const again = progress(tracker, issue.comments);
+    await again.record({ point: "checks", outcome: "✅ passed" });
+    await again.record({ point: "verify", outcome: "❌ 1 unmet" });
 
-    expect(tracker.updatedComments[0]?.body).toContain("run `run-1`");
-    expect(tracker.updatedComments[0]?.body).not.toContain("run `run-0`");
+    expect(tracker.comments).toEqual([]);
+    expect(body(tracker).match(/run `run-1`/g)).toHaveLength(1);
+    expect(body(tracker).startsWith(earlier)).toBe(true);
+    expect(body(tracker)).toContain("| checks | ✅ passed | – | – |\n| verify | ❌ 1 unmet | – | – |");
+  });
+
+  it("keeps a comment an earlier Version wrote as the first section, byte for byte", async () => {
+    const tracker = new FakeTracker();
+    const issue = tracker.addIssue({ number: TICKET });
+    const single = [
+      PROGRESS_MARKER,
+      `**agent-pipeline** \`0.4.0+331d79c\` · run \`run-0\` · \`${BRANCH}\``,
+      "",
+      "| Stage | Outcome | Turns | Duration |",
+      "|---|---|---|---|",
+      "| implement | ✅ committed | 7 | 20m |",
+      "| checks | ✅ passed | – | 2m |",
+      "",
+    ].join("\n");
+    issue.comments.push({ id: "42", body: single });
+
+    await progress(tracker, issue.comments).record({ point: "verify", outcome: "❌ no Verdict" });
+
+    expect(body(tracker).startsWith(`${single}\n**agent-pipeline** \`${VERSION}\` · run \`run-1\``)).toBe(
+      true,
+    );
+  });
+
+  it("names no Host in the header it writes", async () => {
+    const tracker = new FakeTracker();
+    tracker.addIssue({ number: TICKET });
+
+    await progress(tracker).record({ point: "implement", outcome: "✅ committed" });
+
+    const header = body(tracker).split("\n")[1];
+    expect(header).toBe(`**agent-pipeline** \`${VERSION}\` · run \`run-1\` · \`${BRANCH}\``);
   });
 
   it("starts a fresh comment when the Ticket is being taken back from a human", async () => {

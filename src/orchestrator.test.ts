@@ -3106,17 +3106,24 @@ describe("the progress comment", () => {
     expect(progressTable()).toContain("| conflict | ✅ rebased | 7 | 0m |");
   });
 
-  it("reuses the comment an earlier Run left on the Ticket", async () => {
-    tracker.issue(TICKET).comments.push({
-      id: "99",
-      body: `${PROGRESS_MARKER}\n**agent-pipeline** · run \`run-0\` · \`${BRANCH}\`\n`,
-    });
+  it("carries on in the comment an earlier Run left, below that Run's section", async () => {
+    const earlier = [
+      `**agent-pipeline** \`0.5.0\` · run \`run-0\` · \`${BRANCH}\``,
+      "",
+      "| Stage | Outcome | Turns | Duration |",
+      "|---|---|---|---|",
+      "| implement | ✅ committed | 46 | 21m |",
+    ].join("\n");
+    tracker.issue(TICKET).comments.push({ id: "99", body: `${PROGRESS_MARKER}\n${earlier}\n` });
 
     await run();
 
     expect(tracker.comments.filter(({ body }) => body.startsWith(PROGRESS_MARKER))).toEqual([]);
     expect(tracker.updatedComments.every(({ id }) => id === "99")).toBe(true);
-    expect(progressTable()).toContain("run \`run-1\`");
+    expect(progressTable()).toContain(`${earlier}\n\n**agent-pipeline**`);
+    expect(progressTable().indexOf("run \`run-1\`")).toBeGreaterThan(
+      progressTable().indexOf("run \`run-0\`"),
+    );
   });
 
   it("merges a Ticket the tracker would not take a progress comment for", async () => {

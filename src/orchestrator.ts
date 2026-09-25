@@ -254,8 +254,8 @@ async function takeTicket(
   const resume = found?.state;
   const branch = resume?.branch ?? branchName(ticket, issue.title);
   // Built from the comments the Ticket already has, so a Run that comes back to
-  // a Ticket an earlier Run reported on edits that table rather than opening a
-  // second one. Nothing is written until the first Stage finishes.
+  // a Ticket an earlier Run reported on adds its section to that comment rather
+  // than opening a second one. Nothing is written until the first Stage finishes.
   const progress = new Progress({
     tracker,
     ticket,
