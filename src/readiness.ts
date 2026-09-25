@@ -1,7 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Labels } from "./config.js";
-import { CONVENTIONS_PATH } from "./conventions.js";
+import { CONVENTIONS_PATH, conventionsMark } from "./conventions.js";
 import type { Tracker } from "./ports/tracker.js";
 
 /**
@@ -16,7 +16,9 @@ import type { Tracker } from "./ports/tracker.js";
  * Presence only, never content. The conventions document is the pipeline's own
  * text and changes with it, so comparing it at every start would refuse a Target
  * for carrying last week's copy, which is a thing the next `init` rewrites and
- * nothing a Run is worse for.
+ * nothing a Run is worse for. Its Version stamp is asked for, though never which
+ * Version it names: an Operator installs the pipeline a cloud Host runs at that
+ * Version, and a Target without one leaves it guessing (ADR-0008).
  *
  * The Target's own files are read here rather than through a port, which every
  * external effect of a Run goes through. What a port buys is a fake to drive the
@@ -26,6 +28,9 @@ import type { Tracker } from "./ports/tracker.js";
  * `.agent-pipeline/` is tested too (ADR-0004). Widening the `Workspace` port for
  * them would put reads no Stage and no Ticket ever makes on the interface the
  * orchestrator depends on.
+ *
+ * Every item is asked on every Host, the cloud's own needs included, so a
+ * Target a workstation accepts is never one a cloud Run then refuses.
  */
 
 /** The file every agent session in a Target reads first. */
@@ -94,7 +99,9 @@ export async function readinessRefusal({
   tracker,
 }: ReadinessOptions): Promise<string | undefined> {
   const missing =
-    missingFileMessage(repoRoot) ?? (await missingLabelMessage(tracker, labels));
+    missingFileMessage(repoRoot) ??
+    (await missingLabelMessage(tracker, labels)) ??
+    (await keptBranchesMessage(tracker));
   if (missing === undefined) return undefined;
 
   return [
@@ -111,8 +118,12 @@ function missingFileMessage(repoRoot: string): string | undefined {
     return `\`.gitignore\` does not ignore \`${unignored.line}\``;
   }
 
-  if (!existsSync(join(repoRoot, CONVENTIONS_PATH))) {
+  const conventions = readTargetFile(join(repoRoot, CONVENTIONS_PATH));
+  if (conventions === undefined) {
     return `\`${CONVENTIONS_PATH}\` is not there`;
+  }
+  if (conventionsMark(conventions) === undefined) {
+    return `\`${CONVENTIONS_PATH}\` carries no Version`;
   }
 
   if (!hasClaudePointer(readTargetFile(join(repoRoot, CLAUDE_FILENAME)))) {
@@ -130,6 +141,16 @@ async function missingLabelMessage(
   const existing = new Set(await tracker.listLabels());
   const missing = Object.values(labels).find((name) => !existing.has(name));
   return missing === undefined ? undefined : `the \`${missing}\` label is not on this Target`;
+}
+
+/**
+ * Names the repository setting a cloud Host depends on, when it is off: nothing
+ * there can delete a branch, so a merged Ticket's goes only if GitHub takes it.
+ */
+async function keptBranchesMessage(tracker: Tracker): Promise<string | undefined> {
+  return (await tracker.deletesBranchOnMerge())
+    ? undefined
+    : "the repository does not delete a pull request's branch when it merges";
 }
 
 /** A Target file's contents, or nothing when the Target does not have it. */

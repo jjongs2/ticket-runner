@@ -260,7 +260,7 @@ function separator(existing: string): string {
   return existing.endsWith("\n") ? "\n" : "\n\n";
 }
 
-/** The two things `init` does on GitHub, and the one thing that stops both. */
+/** The three things `init` does on GitHub, and the one thing that stops them all. */
 async function updateGitHub(
   tracker: Tracker,
   config: Config,
@@ -272,11 +272,18 @@ async function updateGitHub(
   // Asked for every time: the setting is the Target's to have on, and GitHub
   // reports no difference between turning it on and finding it on.
   await tracker.enableSquashMerge();
+  // Read first, because readiness reads it too: a report that says which of
+  // the two it found is one a human can match against a refusal.
+  const deletesBranches = await tracker.deletesBranchOnMerge();
+  if (!deletesBranches) await tracker.enableDeleteBranchOnMerge();
   return [
     created.length === 0
       ? "labels: every triage label is already there"
       : `labels: created ${created.join(", ")}`,
-    "merges: squash merging is on, and no other merge setting was touched",
+    "merges: squash merging is on, and no other merge method was touched",
+    deletesBranches
+      ? "branches: a pull request's branch is already deleted when it merges"
+      : "branches: switched on deleting a pull request's branch when it merges",
   ];
 }
 

@@ -56,8 +56,9 @@ document is the pipeline's own text, so a Target carrying an older copy is rewri
 that it was. The document carries the Version that wrote it in a hidden marker on its first
 line, which is what `init` reads before it compares any text: a copy a *newer* pipeline wrote
 is left exactly as it is, and the report names the upgrade instead (ADR-0007). On GitHub it
-creates whichever of the six triage labels are missing and turns squash merging on, touching
-no other merge setting.
+creates whichever of the six triage labels are missing, turns squash merging on, touching no
+other merge method, and switches on deleting a pull request's branch when it merges, which is
+the only way a merged branch goes on a cloud Host (ADR-0008).
 
 Then it reports one line per item that is yours — whether `gh` is authenticated, `claude`
 runs, the `mattpocock-skills` plugin is installed, a CI workflow exists under
@@ -95,9 +96,11 @@ mark when the tree has uncommitted changes — `0.4.0`, `0.4.0+331d79c`,
 can be traced to the pipeline that wrote it (ADR-0007).
 
 `run` and `ticket` refuse a Target `init` has not set up rather than repairing it. A
-gitignore missing one of the two directories, a missing triage label, no conventions
-document, or a `CLAUDE.md` that does not point at one: whichever comes first is a refusal
-with exit code `2` that names the item and the command that puts it right.
+gitignore missing one of the two directories, no conventions document or one carrying no
+Version, a `CLAUDE.md` that does not point at it, a missing triage label, or a repository
+that keeps a pull request's branch after it merges: whichever comes first is a refusal with
+exit code `2` that names the item and the command that puts it right. Every item is asked
+on every Host, so a Target a workstation accepts is one a cloud Host accepts too.
 
 ```
 $ agent-pipeline run
@@ -105,8 +108,8 @@ This Target is not set up: `.gitignore` does not ignore `.worktrees/`. Run
 `agent-pipeline init` here and start again; a Run puts nothing in place itself.
 ```
 
-The check is presence, never content: a Target carrying an older copy of the conventions
-document starts, and the next `init` brings it up to date. A Run says so on the way past —
+The check is presence and the Version stamp, never content: a Target carrying an older copy
+of the conventions document starts, and the next `init` brings it up to date. A Run says so on the way past —
 one warning naming the Version that wrote the copy and `agent-pipeline init`, or the upgrade
 where the copy is from a newer pipeline than the Run — and then takes the Frontier as usual.
 
@@ -204,7 +207,8 @@ reproducing a Stage by hand reproduces its environment too.
 5. verify Stage, graded against the Ticket's Acceptance Criteria
 6. rebase on the base branch, resolving a conflict if one comes up, open a PR that closes
    the Ticket, wait for CI
-7. squash-merge, pull the base branch, remove the worktree
+7. squash-merge, pull the base branch, remove the worktree and delete the remote branch,
+   unless the repository already did
 
 A worktree holding changes no commit carries, a failing Check, a Check killed at its
 wall-clock limit, a Verdict with an `unmet` criterion, a red CI, or a rebase conflict the

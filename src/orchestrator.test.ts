@@ -883,6 +883,17 @@ describe("failures the pipeline did not expect", () => {
     expect(notices()).toEqual([]);
     expect(tracker.issue(TICKET).labels).toEqual([]);
   });
+
+  it("merges cleanly where the repository deleted the branch as it merged", async () => {
+    // What GitHub does on merge when readiness has had its way.
+    tracker.onSquashMerge = () => workspace.remoteBranches.delete(BRANCH);
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged", pullRequest: 100 });
+    expect(workspace.remoteBranches.has(BRANCH)).toBe(false);
+    expect(logged.join("\n")).not.toContain("cleaning up failed");
+  });
 });
 
 describe("hand-off", () => {

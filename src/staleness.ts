@@ -8,7 +8,7 @@
  * Nothing here is a gate. A pipeline that refused to work while a newer Version
  * existed would strand a Target on the night its maintainer was asleep, and
  * Target readiness already says what a Target is refused over: the document's
- * absence, never what it says.
+ * absence or a missing Version stamp, never what it says or which Version.
  *
  * A number against a number, always. A development checkout runs a commit past
  * the Version it reports, so comparing anything finer would call every checkout

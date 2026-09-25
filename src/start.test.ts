@@ -51,6 +51,7 @@ beforeEach(() => {
 
   tracker = new FakeTracker();
   for (const name of ALL_LABELS) tracker.labels.add(name);
+  tracker.deleteBranchOnMergeEnabled = true;
   runner = new FakeAgentRunner({ verify: stageResult({ result: PASSING_VERDICT }) });
   workspace = new FakeWorkspace();
 });
@@ -149,8 +150,48 @@ describe("a Target init has not set up", () => {
     expect(tracker.calls).toEqual([]);
   });
 
-  it("asks only whether the conventions document is there, never what it says", async () => {
-    write(CONVENTIONS_PATH, "# Conventions\n\nAn older copy, saying something else.\n");
+  it("refuses a conventions document carrying no Version stamp", async () => {
+    write(CONVENTIONS_PATH, "# agent-pipeline conventions\n\nFrom an older pipeline.\n");
+
+    const { code, err } = await start();
+
+    expect(code).toBe(2);
+    expect(err).toContain(CONVENTIONS_PATH);
+    expect(err).toContain("no Version");
+    expect(err).toContain("agent-pipeline init");
+    expect(lockTaken()).toBe(false);
+    expect(tracker.calls).toEqual([]);
+  });
+
+  it("refuses a repository that keeps a pull request's branch after it merges", async () => {
+    tracker.deleteBranchOnMergeEnabled = false;
+
+    const { code, err } = await start();
+
+    expect(code).toBe(2);
+    expect(err).toContain("does not delete a pull request's branch");
+    expect(err).toContain("agent-pipeline init");
+    expect(lockTaken()).toBe(false);
+    expect(tracker.calls).toEqual([]);
+  });
+
+  it("refuses `ticket <n>` on a repository that keeps merged branches too", async () => {
+    tracker.addIssue({ number: 4 });
+    tracker.deleteBranchOnMergeEnabled = false;
+
+    const { code, err } = await start({ command: "ticket", ticket: 4 });
+
+    expect(code).toBe(2);
+    expect(err).toContain("does not delete a pull request's branch");
+    expect(lockTaken()).toBe(false);
+    expect(tracker.calls).toEqual([]);
+  });
+
+  it("asks only whether the conventions document is there and stamped, never what it says", async () => {
+    write(
+      CONVENTIONS_PATH,
+      `${conventionsDoc(VERSION).split("\n")[0]}\n\nA hand-edited copy, saying something else.\n`,
+    );
     tracker.addIssue({ number: 4 });
 
     const { code } = await start();
@@ -661,17 +702,6 @@ describe("what a Run says about the Target's conventions document", () => {
     expect(err.split("\n").filter((line) => line.includes(CONVENTIONS_PATH))).toHaveLength(1);
     // Warned, and then the Run did exactly what it came for.
     expect(out).toContain("merged   #4");
-    expect(code).toBe(0);
-  });
-
-  it("warns and names `init` for a document carrying no mark at all", async () => {
-    write(CONVENTIONS_PATH, "# agent-pipeline conventions\n\nFrom an older pipeline.\n");
-    tracker.addIssue({ number: 4 });
-
-    const { code, err } = await start();
-
-    expect(err).toContain("no Version");
-    expect(err).toContain("agent-pipeline init");
     expect(code).toBe(0);
   });
 

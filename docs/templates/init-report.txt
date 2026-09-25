@@ -8,7 +8,8 @@ Wrote:
 
 GitHub:
   labels: created needs-triage, needs-info, ready-for-agent
-  merges: squash merging is on, and no other merge setting was touched
+  merges: squash merging is on, and no other merge method was touched
+  branches: switched on deleting a pull request's branch when it merges
 
 Checked:
   ✓ `gh` is authenticated
@@ -60,7 +61,15 @@ A copy with no number to stamp — a pipeline that could not read its own packag
 compares against.
 
 `GitHub:` says which labels were created, or that every one of them was already
-there, and that squash merging is on. Where GitHub could not be asked at all,
+there, that squash merging is on, and whether deleting a pull request's branch
+when it merges was switched on now or found on already:
+
+  branches: switched on deleting a pull request's branch when it merges
+  branches: a pull request's branch is already deleted when it merges
+
+A cloud Host can delete nothing on the remote, so that setting is the only way a
+merged Ticket's branch goes there, and Target readiness refuses a repository
+without it (ADR-0008). Where GitHub could not be asked at all,
 its one line is: nothing done: `gh` is not authenticated.
 
 `Checked:` is one line per item only the human can put right, each marked `✓` or

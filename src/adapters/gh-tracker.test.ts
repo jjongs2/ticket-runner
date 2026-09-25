@@ -389,6 +389,29 @@ describe("writing", () => {
     expect(calls[0]?.join(" ")).not.toMatch(/merge_commit|rebase_merge|delete_branch/);
   });
 
+  it("switches on deleting a merged branch and names no other setting", async () => {
+    await tracker(ok("")).enableDeleteBranchOnMerge();
+
+    expect(calls[0]).toEqual([
+      "api",
+      "--method",
+      "PATCH",
+      "repos/{owner}/{repo}",
+      "-F",
+      "delete_branch_on_merge=true",
+    ]);
+  });
+
+  it("reads whether a merged branch is deleted off the repository through REST", async () => {
+    expect(await tracker(ok("true\n")).deletesBranchOnMerge()).toBe(true);
+    expect(calls[0]).toEqual(["api", "repos/{owner}/{repo}", "--jq", ".delete_branch_on_merge"]);
+  });
+
+  it("reads a repository that keeps merged branches, or would not say, as not deleting them", async () => {
+    expect(await tracker(ok("false\n")).deletesBranchOnMerge()).toBe(false);
+    expect(await tracker(ok("null\n")).deletesBranchOnMerge()).toBe(false);
+  });
+
   it("creates a label with its colour and description through REST", async () => {
     await tracker(ok("{}")).createLabel({
       name: "in-progress",

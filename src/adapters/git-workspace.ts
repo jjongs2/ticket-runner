@@ -472,6 +472,10 @@ export class GitWorkspace implements Workspace {
   }
 
   async deleteRemoteBranch(branch: string): Promise<void> {
+    // Asked before anything is sent: a repository that deletes a merged branch
+    // has usually done it by now, and a cloud Host, which may delete nothing,
+    // would be refused whether the branch were there or not (ADR-0008).
+    if (!(await this.hasRemoteBranch(branch))) return;
     const args = ["push", this.remote, "--delete", branch];
     const result = await this.tryGit(args);
     // A remote set to delete head branches on merge got there first. The

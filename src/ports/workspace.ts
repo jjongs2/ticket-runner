@@ -306,7 +306,7 @@ export interface Workspace {
   /**
    * Delete `branch` on the remote; the PR is merged, so nothing references it.
    * A branch the remote already deleted, as GitHub does on merge when told to,
-   * counts as deleted.
+   * counts as deleted without a delete being sent, which a cloud Host could not.
    */
   deleteRemoteBranch(branch: string): Promise<void>;
   /** Fast-forward the main checkout's `base` to the remote, after a merge. */

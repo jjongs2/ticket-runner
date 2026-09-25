@@ -151,6 +151,15 @@ describe("what init writes into the Target", () => {
     expect(tracker.calls).toEqual(["enableSquashMerge"]);
   });
 
+  it("names the pipeline's own branches in the conventions document", async () => {
+    await init();
+
+    const doc = read(repoRoot, CONVENTIONS_PATH);
+    expect(doc).toContain("`agent/<n>-<slug>`");
+    expect(doc).toContain("`agent-pipeline/lock`");
+    expect(doc).toContain("`agent-pipeline/state`");
+  });
+
   it("adds only the missing lines to a gitignore that already has its own", async () => {
     write(repoRoot, ".gitignore", "node_modules/\ndist/\n");
 
@@ -370,6 +379,22 @@ describe("what init does on GitHub", () => {
     expect(out).toMatch(/labels: created needs-info, ready-for-agent/);
   });
 
+  it("switches on deleting a pull request's branch when it merges, and says so", async () => {
+    const { out } = await init();
+
+    expect(tracker.deleteBranchOnMergeEnabled).toBe(true);
+    expect(out).toMatch(/branches: switched on deleting a pull request's branch when it merges/);
+  });
+
+  it("leaves deleting merged branches alone where it is already on, and says so", async () => {
+    tracker.deleteBranchOnMergeEnabled = true;
+
+    const { out } = await init();
+
+    expect(tracker.calls).not.toContain("enableDeleteBranchOnMerge");
+    expect(out).toMatch(/branches: a pull request's branch is already deleted when it merges/);
+  });
+
   it("creates the labels the config names rather than the default ones", async () => {
     write(repoRoot, "agent-pipeline.json", '{"labels":{"readyForAgent":"afk-ready"}}');
 
@@ -386,6 +411,7 @@ describe("what init does on GitHub", () => {
 
     expect(tracker.createdLabels).toEqual([]);
     expect(tracker.squashMergeEnabled).toBe(false);
+    expect(tracker.deleteBranchOnMergeEnabled).toBe(false);
     expect(out).toMatch(/GitHub:\n {2}nothing done: `gh` is not authenticated/);
   });
 });
