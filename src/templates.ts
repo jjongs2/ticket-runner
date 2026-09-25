@@ -9,6 +9,7 @@ import type { FailurePoint } from "./lifecycle.js";
 import type { NotingStage, RoutedNote } from "./notes.js";
 import type { TicketOutcome } from "./orchestrator.js";
 import type { IssueComment, SquashCommit } from "./ports/tracker.js";
+import type { KeptTranscripts } from "./ports/workspace.js";
 import type { RunStop } from "./run.js";
 import { type Criterion, type Verdict, countStatuses } from "./verdict.js";
 
@@ -222,6 +223,11 @@ export interface HandoffComment {
   failure: string;
   branch: string;
   /**
+   * Whether the remote has the branch, which is where the work still is once
+   * the Host that did it is gone. Said only when it is so.
+   */
+  onRemote?: boolean;
+  /**
    * Where the work is, left out when there is no worktree to send anyone to:
    * a Ticket that failed at setup never had one created, and a path that is not
    * on disk reads as if something else had gone wrong.
@@ -232,11 +238,13 @@ export interface HandoffComment {
   evidence: string;
   /** Whether the Ticket's fix budget had already been spent when this failure came. */
   fixUsed?: boolean;
+  /** Where the Stages' transcripts were kept on the remote, when any were. */
+  transcripts?: KeptTranscripts;
 }
 
 export function handoffComment(handoff: HandoffComment): string {
   const location = [
-    `Branch \`${handoff.branch}\``,
+    `Branch \`${handoff.branch}\`${handoff.onRemote === true ? " on the remote" : ""}`,
     ...(handoff.worktree === undefined ? [] : [`worktree \`${handoff.worktree}\``]),
     ...(handoff.pullRequest === undefined ? [] : [`PR #${handoff.pullRequest} (draft)`]),
   ].join(" · ");
@@ -251,6 +259,11 @@ export function handoffComment(handoff: HandoffComment): string {
     "",
     `- Failure: ${handoff.failure}`,
     `- ${location}`,
+    ...(handoff.transcripts === undefined
+      ? []
+      : [
+          `- Transcripts: \`${handoff.transcripts.path}\` on the \`${handoff.transcripts.branch}\` branch`,
+        ]),
     "",
   ];
 

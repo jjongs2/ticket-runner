@@ -141,6 +141,16 @@ export type LockOutcome = { outcome: "taken" } | { outcome: "held"; holder: Lock
  */
 export type LockTake = LockOutcome | { outcome: "abandoned" };
 
+/**
+ * Where a handed-off Ticket's transcripts were kept on the remote: a branch, and
+ * the directory on it, spelt as a human looking for them would look them up.
+ */
+export interface KeptTranscripts {
+  branch: string;
+  /** Ends in `/`, so it reads as the directory it is. */
+  path: string;
+}
+
 export interface WorktreeRef {
   path: string;
   branch: string;
@@ -266,6 +276,11 @@ export interface Workspace {
    */
   push(cwd: string, branch: string): Promise<void>;
   /**
+   * Whether the remote has `branch`, asked by a hand-off so its comment says
+   * where the work is once this Host is gone only when that is true.
+   */
+  hasRemoteBranch(branch: string): Promise<boolean>;
+  /**
    * Delete `branch` on the remote; the PR is merged, so nothing references it.
    * A branch the remote already deleted, as GitHub does on merge when told to,
    * counts as deleted.
@@ -290,8 +305,21 @@ export interface Workspace {
   readAllStates(): Promise<StateFile[]>;
   /** Record `state` as its Ticket's, replacing whatever was there. */
   writeState(state: TicketState): Promise<void>;
-  /** Forget `ticket` is resumable. A Ticket with no State is not an error. */
+  /**
+   * Forget `ticket` is resumable, and the transcripts {@link keepTranscripts}
+   * kept beside its State with it. A Ticket with no State is not an error.
+   */
   removeState(ticket: number): Promise<void>;
+  /**
+   * Keep the command lines and transcripts of the Stages Run `runId` ran for
+   * `ticket` beside its State, where a human can still read them once this
+   * Host is gone. Asked of a hand-off, and nothing else: a Ticket nobody has to
+   * look into leaves nothing behind.
+   *
+   * Where they were kept, for the hand-off comment to name, or nothing when
+   * the Run left none for the Ticket.
+   */
+  keepTranscripts(ticket: number, runId: string): Promise<KeptTranscripts | undefined>;
   /**
    * Take the Run lock for `holder`, or say what stands in the way. Taking it is
    * the whole of the mutual exclusion: two Runs never both get `taken`.

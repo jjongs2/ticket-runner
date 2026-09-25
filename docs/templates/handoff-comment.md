@@ -2,7 +2,8 @@
 **Handed off.** Failed at **<stage>**<, after the fix budget was used>.
 
 - Failure: <one line>
-- Branch `<branch>` · worktree `<path>` · PR #<pr> (draft)
+- Branch `<branch>` on the remote · worktree `<path>` · PR #<pr> (draft)
+- Transcripts: `ticket-<n>/<runId>/` on the `agent-pipeline/state` branch
 
 <details><summary>Evidence</summary>
 
@@ -11,6 +12,22 @@
 ```
 
 </details>
+
+The branch and the transcripts are named where they are on the remote, because
+the Host the work was done on may be gone by the time a human looks: a cloud
+Host's VM does not outlive its session. `on the remote` is said only when the
+remote has the branch: one the pipeline refused to branch over at `setup` is
+usually a human's and only on this Host, and a Ticket that never committed has
+pushed nothing.
+
+The transcripts line names where the hand-off kept the command line and
+transcript of each Stage this Run ran for the Ticket, with those of the fix
+Stage and the pass it bought under `retry/`, and the Run's `version.txt`. They
+sit on the state branch beside the Ticket's State file and go when it does, so
+a Ticket that merges leaves none behind. The line is dropped when nothing was
+kept: a hand-off that removes the State keeps no transcripts either, a Run that
+ran no Stage of the Ticket has none, and a remote that refused the write has
+none to point at.
 
 The worktree clause is dropped when there is no worktree to name: a Ticket that
 failed before its worktree was created never had one, and a path that is not on

@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { stageLogDir, writeRunVersion } from "../run-log.js";
 import { GitWorkspace, STATE_BRANCH } from "./git-workspace.js";
 
 let remote: string;
@@ -1085,6 +1086,126 @@ describe("the State a Ticket keeps", () => {
     expect(git(repo, "rev-parse", "HEAD")).toBe(head);
     expect(git(repo, "status", "--porcelain")).toBe("");
     expect(git(repo, "branch", "--list", STATE_BRANCH)).toBe("");
+  });
+
+  describe("and the transcripts of a handed-off Ticket's Stages", () => {
+    /** Write what a Run's Stages leave for `ticket`, as the agent runner names it. */
+    function stageLogs(runId: string, ticket: number, files: Record<string, string>): void {
+      for (const [name, contents] of Object.entries(files)) {
+        const path = join(stageLogDir(repo, runId, ticket), name);
+        mkdirSync(join(path, ".."), { recursive: true });
+        writeFileSync(path, contents);
+      }
+    }
+
+    /** Every file under `ticket-<n>/` on the remote's state branch, by path. */
+    function keptOnRemote(ticket: number): string[] {
+      return git(remote, "ls-tree", "-r", "--name-only", STATE_BRANCH, `ticket-${ticket}/`)
+        .split("\n")
+        .filter(Boolean);
+    }
+
+    beforeEach(() => {
+      writeRunVersion(repo, "run-1", "0.4.0");
+      stageLogs("run-1", 4, {
+        "implement.command": "claude -p implement\n",
+        "implement.stdout": "raw stream\n",
+        "implement.stderr": "",
+        "implement.transcript.jsonl": '{"type":"result"}\n',
+        "verify.command": "claude -p verify\n",
+        "verify.transcript.jsonl": "{}\n",
+        "retry/fix.command": "claude -p fix\n",
+        "retry/fix.transcript.jsonl": "{}\n",
+      });
+    });
+
+    it("keeps each Stage's command line and transcript under the Ticket, retries included", async () => {
+      await workspace.writeState(state);
+
+      const kept = await workspace.keepTranscripts(4, "run-1");
+
+      expect(kept).toEqual({ branch: STATE_BRANCH, path: "ticket-4/run-1/" });
+      // The Version beside them, as it is beside them on the Host that ran them.
+      expect(keptOnRemote(4)).toEqual([
+        "ticket-4/run-1/implement.command",
+        "ticket-4/run-1/implement.transcript.jsonl",
+        "ticket-4/run-1/retry/fix.command",
+        "ticket-4/run-1/retry/fix.transcript.jsonl",
+        "ticket-4/run-1/verify.command",
+        "ticket-4/run-1/verify.transcript.jsonl",
+        "ticket-4/run-1/version.txt",
+      ]);
+      expect(git(remote, "show", `${STATE_BRANCH}:ticket-4/run-1/implement.command`)).toBe(
+        "claude -p implement",
+      );
+      expect(git(remote, "show", `${STATE_BRANCH}:ticket-4/run-1/version.txt`)).toBe("0.4.0");
+      expect(await workspace.readState(4)).toEqual(state);
+      expect(git(remote, "rev-list", "--count", STATE_BRANCH)).toBe("1");
+    });
+
+    it("keeps an earlier Run's beside a later one's, and another Ticket's apart", async () => {
+      stageLogs("run-2", 4, { "fix.command": "claude -p fix\n" });
+      stageLogs("run-2", 9, { "implement.command": "claude -p implement\n" });
+
+      await workspace.keepTranscripts(4, "run-1");
+      await workspace.keepTranscripts(4, "run-2");
+      await workspace.keepTranscripts(9, "run-2");
+
+      expect(keptOnRemote(4)).toContain("ticket-4/run-1/implement.command");
+      expect(keptOnRemote(4)).toContain("ticket-4/run-2/fix.command");
+      expect(keptOnRemote(9)).toEqual(["ticket-9/run-2/implement.command"]);
+    });
+
+    it("keeps nothing, and creates nothing, for a Run that left no Stage of the Ticket's", async () => {
+      expect(await workspace.keepTranscripts(5, "run-1")).toBeUndefined();
+
+      expect(git(remote, "branch", "--list", STATE_BRANCH)).toBe("");
+    });
+
+    it("go when the Ticket's State does, and no other Ticket's go with them", async () => {
+      stageLogs("run-1", 9, { "implement.command": "claude -p implement\n" });
+      await workspace.writeState(state);
+      await workspace.writeState({ ...state, ticket: 9, branch: "agent/9-x" });
+      await workspace.keepTranscripts(4, "run-1");
+      await workspace.keepTranscripts(9, "run-1");
+
+      await workspace.removeState(4);
+
+      expect(onRemote()).toEqual(["ticket-9.json", "ticket-9"]);
+    });
+
+    it("go on their own where the State was already gone", async () => {
+      await workspace.keepTranscripts(4, "run-1");
+
+      await workspace.removeState(4);
+
+      expect(onRemote()).toEqual([]);
+    });
+
+    it("are read by nothing that reads the State", async () => {
+      await workspace.writeState(state);
+      await workspace.keepTranscripts(4, "run-1");
+
+      expect(await workspace.readAllStates()).toEqual([{ readable: true, state }]);
+    });
+  });
+});
+
+describe("hasRemoteBranch", () => {
+  it("says yes about a branch the remote has, pushed from here or not", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
+    await workspace.push(path, "agent/2-x");
+
+    expect(await workspace.hasRemoteBranch("agent/2-x")).toBe(true);
+    expect(await workspace.hasRemoteBranch("main")).toBe(true);
+  });
+
+  it("says no about a branch only this Host has", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
+
+    expect(await workspace.hasRemoteBranch("agent/2-x")).toBe(false);
   });
 });
 

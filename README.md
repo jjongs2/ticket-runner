@@ -233,6 +233,13 @@ killed mid-Stage still leaves behind what it had reached. A Ticket that spends i
 budget writes the fix Stage and the pass it bought to `<n>/retry/`, so the transcripts of
 the pass that failed survive alongside them.
 
+A Ticket that is handed off also keeps its Stages' command lines and transcripts, and the
+Run's `version.txt`, on the Target's remote: under `ticket-<n>/<runId>/` on the
+`agent-pipeline/state` branch, beside its State file, since the Host that wrote them may be
+gone by the time a human looks. The hand-off comment names that directory, and says when
+the Ticket's branch is on the remote. They go when the State file does, so a Ticket that
+merges leaves none behind.
+
 ## Rate limits
 
 A Stage that comes back rate-limited has failed at nothing: the subscription ran out of

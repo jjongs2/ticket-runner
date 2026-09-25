@@ -21,6 +21,7 @@ import type {
 } from "./ports/agent-runner.js";
 import type { Issue, Tracker } from "./ports/tracker.js";
 import type {
+  KeptTranscripts,
   ReachedState,
   TicketState,
   Workspace,
@@ -1469,7 +1470,10 @@ interface HandOff {
  * Hand the Ticket to a human: a draft PR to review, a comment naming where the
  * work is, and the labels a human filters on. The branch, the worktree and the
  * State file stay put, so a human who relabels the Ticket `ready-for-agent`
- * hands it back and the next Run carries on from what it reached.
+ * hands it back and the next Run carries on from what it reached. The Stages'
+ * transcripts go up beside the State, since the Host they were written on may
+ * be gone by the time a human looks, and the comment says where they and the
+ * branch are.
  *
  * A Ticket handed over before its worktree was created has none: nothing was
  * branched, so there is no directory to name and nothing to push a draft PR out
@@ -1560,6 +1564,10 @@ async function handOff(
       ...(pullRequest === undefined ? {} : { pullRequest }),
     });
   }
+  // Only beside a State that stays, because they go when it does, and after
+  // it, so the State they sit beside is the one a resuming Run reads.
+  const transcripts = keepsState ? await keepTranscripts(pipeline, ticket) : undefined;
+  const onRemote = await branchOnRemote(pipeline, ticket, branch);
 
   await tracker.comment(
     ticket,
@@ -1567,7 +1575,9 @@ async function handOff(
       stage: failure.point,
       failure: failure.summary,
       branch,
+      onRemote,
       ...(worktree === undefined ? {} : { worktree: worktree.path }),
+      ...(transcripts === undefined ? {} : { transcripts }),
       evidence: failure.evidence,
       fixUsed,
       ...(pullRequest === undefined ? {} : { pullRequest }),
@@ -1588,6 +1598,43 @@ async function handOff(
     notes,
     ...(pullRequest === undefined ? {} : { pullRequest }),
   };
+}
+
+/**
+ * Keep the transcripts of the Stages this Run ran for a handed-off Ticket on
+ * the remote, where a human can still read them once this Host is gone, and
+ * say where.
+ *
+ * Nothing when that fails, and the failure logged: the hand-off is what a
+ * human is waiting for, and the transcripts are still on this Host for as long
+ * as it lasts.
+ */
+async function keepTranscripts(
+  pipeline: Pipeline,
+  ticket: number,
+): Promise<KeptTranscripts | undefined> {
+  try {
+    return await pipeline.workspace.keepTranscripts(ticket, pipeline.runId);
+  } catch (error) {
+    pipeline.log?.(
+      `#${ticket} handed off, but keeping its transcripts failed: ${(error as Error).message}`,
+    );
+    return undefined;
+  }
+}
+
+/**
+ * Whether the remote has the branch, for a hand-off comment that says so only
+ * when it does. A remote that cannot be asked counts as no: saying less than
+ * is so sends nobody looking for a branch that is not there.
+ */
+async function branchOnRemote(pipeline: Pipeline, ticket: number, branch: string): Promise<boolean> {
+  try {
+    return await pipeline.workspace.hasRemoteBranch(branch);
+  } catch (error) {
+    pipeline.log?.(`#${ticket} could not ask the remote for ${branch}: ${(error as Error).message}`);
+    return false;
+  }
 }
 
 /** Any `<type>(<scope>): <summary>`; the repo's own types and scopes are CONTRIBUTING.md's business. */
