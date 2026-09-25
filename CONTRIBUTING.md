@@ -7,7 +7,7 @@ Conventions for humans and agents working in this repo. Vocabulary is defined in
 - `main` receives squash merges from pull requests only. Nobody commits to it directly. Bootstrap exception: Planning documents written before the first Ticket merged landed on `main` directly, because no CI existed to gate a PR.
 - `agent/<n>-<slug>` belongs to the pipeline, as the conventions document states. `<slug>` is the Ticket title in lowercase kebab-case, at most 40 characters.
 - `version/<number>` carries a Version PR and nothing else.
-- `human/<n>-<slug>` for attended work on a Ticket. Create it before running `/implement`, which commits to whatever branch is checked out.
+- `human/<n>-<slug>` for attended work on a Ticket, `human/<slug>` for attended work without one. Create it before running `/implement`, which commits to whatever branch is checked out.
 - Branches are updated by rebasing on `main`. Merge commits do not appear in history.
 - A branch is deleted when its PR merges. A handed-off Ticket keeps its branch and worktree until a human finishes or abandons it.
 
@@ -21,7 +21,7 @@ Conventions for humans and agents working in this repo. Vocabulary is defined in
 
 ## Pull requests
 
-- One PR per Ticket. The PR title becomes the squash commit subject on `main`, so write it in the commit subject format without the `(#<n>)`.
+- One PR per Ticket. Attended work too small to be a Ticket — a document, a skill — opens its PR without one: its commits carry no number and its body no `Closes`. The PR title becomes the squash commit subject on `main`, so write it in the commit subject format without the `(#<n>)`.
 - A pipeline PR takes its title from the subject of the branch's first commit with that trailing `(#<n>)` removed. When that subject is not in the commit format the Ticket title is used instead, and it is the one subject on `main` allowed not to be: a Stage that could not write one conventional subject is not trusted to have one invented for it, and the Ticket title at least says what the work was. A draft PR the hand-off opens keeps the Ticket title, since nothing of it is merged; a PR that was already open when the hand-off came keeps the title it was opened with.
 - Body starts with `Closes #<n>` on its own line so the merge closes the Ticket. For pipeline PRs the Verdict summary follows.
 - A draft PR means the Ticket was handed off; the hand-off comment on the Ticket names the branch, and the worktree when there is one. A Ticket handed off before its worktree was created has neither: nothing was branched, so there is nothing to push and no draft PR to open. A Ticket handed off at setup because its branch was already checked out somewhere names that worktree but gets no draft PR either: the work in it is a human's, and no Stage of the Run ran there. Nor does a resumed Ticket handed off at setup because its branch here has parted from the one on the remote: pushing either over the other is the human's call.
@@ -30,7 +30,7 @@ Conventions for humans and agents working in this repo. Vocabulary is defined in
 
 ## Versions
 
-- A **Version PR** is the one pull request that reaches `main` without a Ticket number, next to the bootstrap exception above (ADR-0007). Its branch is `version/<number>`, its title and commit subject are `chore: version <number>`, and it carries nothing but the two numbers, the Version's `CHANGELOG.md` section and the mark on our own copy of the conventions document, which `npx tsx scripts/version.ts mark` rewrites.
+- A **Version PR** reaches `main` without a Ticket number (ADR-0007). Its branch is `version/<number>`, its title and commit subject are `chore: version <number>`, and it carries nothing but the two numbers, the Version's `CHANGELOG.md` section and the mark on our own copy of the conventions document, which `npx tsx scripts/version.ts mark` rewrites.
 - The number is minor when a Spec has closed since the last Version and patch for everything that shipped between two Specs, whatever its type — a small feature as much as a fix. Did a Spec close, yes or no, is the whole rule; work that deserves a minor deserves a Spec.
 - `/cut-a-version` ([`.claude/skills/cut-a-version/`](.claude/skills/cut-a-version/SKILL.md)) drafts the pull request: the number, the section in the shape [`docs/templates/version-notes.md`](docs/templates/version-notes.md) gives, and both numbers raised together. It never merges — the review and the merge are the maintainer's, and they are what cuts the Version.
 - The check on the pull request refuses a number that is not above every tag, a lock file that disagrees and a missing or incomplete section. The push to `main` tags the commit `v<number>` and publishes the section as that Version's GitHub Release.
