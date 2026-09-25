@@ -80,6 +80,25 @@ describe("worktrees", () => {
     expect(git(path, "rev-parse", "HEAD")).toBe(git(repo, "rev-parse", "main"));
   });
 
+  it("branches from the remote's main when the checkout's is behind it, and leaves the checkout's alone", async () => {
+    const other = mkdtempSync(join(tmpdir(), "agent-pipeline-other-"));
+    created.push(other);
+    git(other, "clone", remote, ".");
+    git(other, "config", "user.email", "human@example.com");
+    git(other, "config", "user.name", "human");
+    commit(other, "from-elsewhere.txt", "x\n", "feat: elsewhere (#1)");
+    git(other, "push", "origin", "main");
+    const before = git(repo, "rev-parse", "main");
+
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
+
+    expect(git(path, "rev-parse", "HEAD")).toBe(git(other, "rev-parse", "HEAD"));
+    expect(git(repo, "rev-parse", "main")).toBe(before);
+    // No upstream, so nothing pushed from the worktree can land on main.
+    expect(() => git(path, "rev-parse", "--abbrev-ref", "@{upstream}")).toThrow();
+  });
+
   it("removes the worktree and its branch", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
     await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");

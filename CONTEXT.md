@@ -63,7 +63,7 @@ One of the places a Run has for a Ticket in progress; the Target's config says h
 _Avoid_: slot, worker, thread, parallelism
 
 **Landing**:
-The stretch of a Ticket from its rebase to the pull of the Base branch after its merge, including any Conflict Stage and the wait for CI. Only one Lane is in it at a time, taken in the order they arrive, so the Base branch cannot move between a Ticket's rebase and its merge. A Ticket that leaves it for a fix Stage rejoins at the back.
+The stretch of a Ticket from bringing the Base branch up to the remote's and rebasing onto it, to the pull of the Base branch after its merge, including any Conflict Stage and the wait for CI. Only one Lane is in it at a time, taken in the order they arrive, so the Base branch cannot move between a Ticket's rebase and its merge. A Ticket that leaves it for a fix Stage rejoins at the back.
 _Avoid_: merge queue, tail, critical section, merge lane
 
 **Run lock**:
