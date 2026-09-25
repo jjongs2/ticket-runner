@@ -8,6 +8,11 @@
  * than holding one: the Target's base branch is resolved once at the start of a
  * Run, and a port that kept its own copy would be a second answer to the same
  * question.
+ *
+ * It also keeps the pipeline's own bookkeeping about the Target: the State each
+ * resumable Ticket keeps, and the Run lock. Where those live is the adapter's
+ * business (ADR-0004), so nothing above the port says whether they are files,
+ * a branch, or a map in a test.
  */
 
 /**
@@ -32,6 +37,109 @@ export type RebaseOutcome = { ok: true } | { ok: false; conflict: string };
  * all.
  */
 export type RebaseState = { resolved: true } | { resolved: false; unresolved: string };
+
+/**
+ * How far a Ticket got: `claimed` is one the implement Stage never finished,
+ * `implemented` one carrying that Stage's work on its branch with no merge
+ * behind it.
+ *
+ * A state of the lifecycle, not a Stage — a Stage is a session (CONTEXT.md), and
+ * what the State records is what the Ticket has, not what was running. Only these
+ * two, because everything after the implement Stage — the Checks, the rebase,
+ * the pull request, CI and the merge — is re-run from the top by a Run that
+ * resumes at `implemented`, and none of them is worth a state a resume could
+ * land on halfway.
+ */
+export const REACHED_STATES = ["claimed", "implemented"] as const;
+
+export type ReachedState = (typeof REACHED_STATES)[number];
+
+/** The State a Ticket keeps while its branch carries work worth resuming. */
+export interface TicketState {
+  /** Carried in the State as well as its name, so it reads on its own. */
+  ticket: number;
+  /** The branch the work is on, which the resuming Run uses rather than deriving. */
+  branch: string;
+  /** The state the Ticket had reached, which is where a later Run picks it up. */
+  state: ReachedState;
+  /**
+   * Whether the Fix budget has been spent. Resuming must not hand the Ticket a
+   * second fix Stage it never earned — except after a hand-off, which records it
+   * unspent, the Ticket having been through a human's hands since.
+   */
+  fixUsed: boolean;
+  /**
+   * The pull request the Ticket already has, if it got that far. Without it the
+   * resuming Run would try to open a second one for the branch.
+   */
+  pullRequest?: number;
+  /** The Run that last wrote the State, and when — both for a human reading it. */
+  runId: string;
+  /**
+   * The Version that wrote the State (ADR-0007). Written on every write, and
+   * optional when read: State an earlier pipeline left names none, and a
+   * Ticket claimed before this existed still resumes.
+   */
+  version?: string;
+  /** ISO 8601. */
+  updatedAt: string;
+}
+
+/**
+ * What one Ticket's recorded State turned out to be.
+ *
+ * Two cases, where no State at all is a third: State a Run can resume from, and
+ * State it cannot. The second is the one that most needs saying out loud: its
+ * Ticket is claimed on the board, so the sweep for Stranded Tickets is the only
+ * thing that could ever have found it (ADR-0007).
+ */
+export type StateFile =
+  | { readable: true; state: TicketState }
+  | {
+      readable: false;
+      /** Read off where the State was kept, which is the only part of it that parsed. */
+      ticket: number;
+      /** The Version the State names, where it names one a reader can make out. */
+      version?: string;
+    };
+
+/** Who holds the Run lock: one Run at a time per Target. */
+export interface LockHolder {
+  pid: number;
+  /** The command line the holder is running, for the message the loser prints. */
+  command: string;
+  runId: string;
+  /** ISO 8601, so the lock is readable without the pipeline. */
+  startedAt: string;
+  /**
+   * The holder process's start time as the operating system reports it, taken
+   * when the lock was claimed. Distinct from `startedAt` above, which is the
+   * Run's own wall clock, written for a human reading the lock.
+   *
+   * A pid a lock names can be recycled — by a wrapped counter, or by a reboot
+   * climbing back through the numbers a pre-reboot Run was using — so a live
+   * pid alone cannot say the process behind it is still the holder. This is
+   * what a recycled pid cannot forge. Absent when it could not be read, or
+   * when the lock predates this field; either way a live pid alone is treated
+   * as the holder, which is what this check has always done.
+   *
+   * An opaque token, not a timestamp to parse or display: its shape is
+   * whatever the platform's own record of it looks like (kernel ticks on
+   * Linux, a `ps` field on macOS), good for nothing but comparing a pid's
+   * past and present selves on the same host.
+   */
+  processStartedAt?: string;
+}
+
+/** Whether a Run got the lock, and who has it when it did not. */
+export type LockOutcome = { outcome: "taken" } | { outcome: "held"; holder: LockHolder };
+
+/**
+ * What an attempt to take the lock found. `abandoned` is a lock no running Run
+ * holds — its holder's process has gone, or it names nobody at all — and is
+ * the one a Run may take over.
+ */
+export type LockTake = LockOutcome | { outcome: "abandoned" };
 
 export interface WorktreeRef {
   path: string;
@@ -125,4 +233,41 @@ export interface Workspace {
   deleteRemoteBranch(branch: string): Promise<void>;
   /** Fast-forward the main checkout's `base` to the remote, after a merge. */
   pullBase(base: string): Promise<void>;
+
+  /**
+   * The State `ticket` keeps, when a Run can resume from it.
+   *
+   * State nothing wrote, and State this pipeline cannot read, are both
+   * undefined: starting the Ticket over is always safe, and resuming on a guess
+   * is not.
+   */
+  readState(ticket: number): Promise<TicketState | undefined>;
+  /**
+   * Every Ticket's State, in ascending Ticket number, the unreadable ones
+   * included: their Tickets are claimed, and the sweep is what tells a human
+   * they are there.
+   */
+  readAllStates(): Promise<StateFile[]>;
+  /** Record `state` as its Ticket's, replacing whatever was there. */
+  writeState(state: TicketState): Promise<void>;
+  /** Forget `ticket` is resumable. A Ticket with no State is not an error. */
+  removeState(ticket: number): Promise<void>;
+  /**
+   * Take the Run lock for `holder`, or say what stands in the way. Taking it is
+   * the whole of the mutual exclusion: two Runs never both get `taken`.
+   */
+  takeRunLock(holder: LockHolder): Promise<LockTake>;
+  /**
+   * Take a lock {@link takeRunLock} found `abandoned`. A Run that took it in
+   * the meantime is `held` again, and is not taken from.
+   */
+  takeOverRunLock(holder: LockHolder): Promise<LockOutcome>;
+  /**
+   * Who holds the Run lock, when anybody still does. An abandoned lock has no
+   * holder, and is left exactly where it is: taking it over belongs to a Run
+   * that is actually starting, where this only reads.
+   */
+  runLockHolder(): Promise<LockHolder | undefined>;
+  /** Give the Run lock up. */
+  releaseRunLock(): Promise<void>;
 }

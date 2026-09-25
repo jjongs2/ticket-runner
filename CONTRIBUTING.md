@@ -61,7 +61,7 @@ Write issue titles in the glossary's words and keep them short. Describe behavio
 - TypeScript, strict, ESM. Tests are vitest files named `*.test.ts` beside the code they test.
 - The orchestrator depends on the three ports (`Tracker`, `AgentRunner`, `Workspace`) as interfaces. Adapters are thin: argument building and output parsing.
 - Tests reach the orchestrator through in-memory fakes of the ports. The git-backed `Workspace` is tested against a real temporary repository. Tests never spawn `gh` or `claude`.
-- Every external effect goes through a port. The pipeline's own local state under `.agent-pipeline/` does not: the Run lock and a Ticket's State file are plain files it reads and writes itself (ADR-0004), so the tests that reach those paths give the orchestrator a temporary repo root.
+- Every external effect goes through a port, the pipeline's own state included: the Run lock and a Ticket's State go through `Workspace` like every other external effect (ADR-0004), so the tests that reach them use the in-memory fake rather than a temporary repo root.
 - `scripts/` is this repository's own plumbing, what a workflow runs and no install carries. It stays thin: the judgement it needs is a module in `src/`, where the tests are.
 - Name things with the glossary. A concept that needs a new word is a signal to update `CONTEXT.md` first.
 

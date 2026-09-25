@@ -29,9 +29,14 @@ import type {
 } from "../ports/tracker.js";
 import type {
   CheckOutcome,
+  LockHolder,
+  LockOutcome,
+  LockTake,
   WorktreeRef,
   RebaseOutcome,
   RebaseState,
+  StateFile,
+  TicketState,
   Workspace,
 } from "../ports/workspace.js";
 import { Hold } from "./hold.js";
@@ -425,6 +430,32 @@ export class FakeWorkspace implements Workspace {
   pushes: { cwd: string; branch: string }[] = [];
   /** The branch each post-merge pull brought the main checkout to, in order. */
   pulledBase: string[] = [];
+  /**
+   * Each Ticket's State, as a later Run would read it. A test seeds one to
+   * stand for what an earlier Run left, readable or not. Reads and writes of it
+   * stay out of `calls`: a Ticket touches its State at every step, and a test
+   * reading the order of its git would otherwise have to step round them.
+   */
+  states = new Map<number, StateFile>();
+  /** What every write of the State fails with, when set: storage that will not take it. */
+  stateWriteFailure: Error | undefined;
+  /**
+   * The Run lock as it stands, and whether the Run it names is still running.
+   * Undefined is a lock nobody holds.
+   */
+  lock: { holder: LockHolder; running: boolean } | undefined;
+
+  /** The State `ticket` keeps, when it is one a Run can resume from. */
+  state(ticket: number): TicketState | undefined {
+    const file = this.states.get(ticket);
+    return file?.readable === true ? file.state : undefined;
+  }
+
+  /** Seed the State an earlier Run left for its Ticket. */
+  recordState(state: TicketState): this {
+    this.states.set(state.ticket, { readable: true, state: { ...state } });
+    return this;
+  }
 
   /** Fail `command` every time the pipeline runs it. */
   failCheck(command: string, output: string): this {
@@ -553,5 +584,51 @@ export class FakeWorkspace implements Workspace {
     this.calls.push("pullBase");
     this.pulledBase.push(base);
     this.basesGiven.push(base);
+  }
+
+  async readState(ticket: number): Promise<TicketState | undefined> {
+    const state = this.state(ticket);
+    return state === undefined ? undefined : { ...state };
+  }
+
+  async readAllStates(): Promise<StateFile[]> {
+    return [...this.states.entries()]
+      .sort(([first], [second]) => first - second)
+      .map(([, file]) => file);
+  }
+
+  async writeState(state: TicketState): Promise<void> {
+    if (this.stateWriteFailure !== undefined) throw this.stateWriteFailure;
+    this.recordState(state);
+  }
+
+  async removeState(ticket: number): Promise<void> {
+    this.states.delete(ticket);
+  }
+
+  async takeRunLock(holder: LockHolder): Promise<LockTake> {
+    this.calls.push("takeRunLock");
+    if (this.lock === undefined) {
+      this.lock = { holder, running: true };
+      return { outcome: "taken" };
+    }
+    return this.lock.running ? { outcome: "held", holder: this.lock.holder } : { outcome: "abandoned" };
+  }
+
+  async takeOverRunLock(holder: LockHolder): Promise<LockOutcome> {
+    this.calls.push("takeOverRunLock");
+    if (this.lock?.running === true) return { outcome: "held", holder: this.lock.holder };
+    this.lock = { holder, running: true };
+    return { outcome: "taken" };
+  }
+
+  async runLockHolder(): Promise<LockHolder | undefined> {
+    this.calls.push("runLockHolder");
+    return this.lock?.running === true ? this.lock.holder : undefined;
+  }
+
+  async releaseRunLock(): Promise<void> {
+    this.calls.push("releaseRunLock");
+    this.lock = undefined;
   }
 }

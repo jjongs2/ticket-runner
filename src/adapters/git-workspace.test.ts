@@ -740,3 +740,111 @@ describe("a Target whose base branch is not main", () => {
     expect(git(masterRepo, "rev-parse", "HEAD")).toBe(git(other, "rev-parse", "HEAD"));
   });
 });
+
+describe("the State a Ticket keeps", () => {
+  const state = {
+    ticket: 4,
+    branch: "agent/4-x",
+    state: "implemented" as const,
+    fixUsed: false,
+    runId: "run-0",
+    updatedAt: "2026-09-17T09:00:00.000Z",
+  };
+
+  it("is the State file under the run directory, as every Run before this one wrote it", async () => {
+    await workspace.writeState(state);
+
+    const path = join(repo, ".agent-pipeline", "state", "ticket-4.json");
+    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual(state);
+    expect(await workspace.readState(4)).toEqual(state);
+  });
+
+  it("reads every Ticket's back, lowest first, the unreadable ones included", async () => {
+    await workspace.writeState({ ...state, ticket: 9, branch: "agent/9-x" });
+    await workspace.writeState(state);
+    writeFileSync(join(repo, ".agent-pipeline", "state", "ticket-6.json"), "{ not json");
+    // A file that parses, but names another Ticket than its own name does.
+    writeFileSync(
+      join(repo, ".agent-pipeline", "state", "ticket-7.json"),
+      JSON.stringify({ ...state, ticket: 5, version: "0.4.0" }),
+    );
+
+    expect(await workspace.readAllStates()).toEqual([
+      { readable: true, state },
+      { readable: false, ticket: 6 },
+      { readable: false, ticket: 7, version: "0.4.0" },
+      { readable: true, state: { ...state, ticket: 9, branch: "agent/9-x" } },
+    ]);
+    expect(await workspace.readState(6)).toBeUndefined();
+    expect(await workspace.readState(7)).toBeUndefined();
+  });
+
+  it("is gone once removed, and removing it twice is no error", async () => {
+    await workspace.writeState(state);
+
+    await workspace.removeState(4);
+    await workspace.removeState(4);
+
+    expect(await workspace.readState(4)).toBeUndefined();
+    expect(await workspace.readAllStates()).toEqual([]);
+  });
+});
+
+describe("the Run lock", () => {
+  const holder = {
+    pid: 4321,
+    command: "agent-pipeline run",
+    runId: "run-1",
+    startedAt: "2026-09-17T09:00:00.000Z",
+  };
+  const lockFile = () => join(repo, ".agent-pipeline", "lock.json");
+
+  /** The same checkout, with the process table answering as told. */
+  function withProcesses(alive: boolean): GitWorkspace {
+    return new GitWorkspace(repo, "origin", {
+      checkProcess: () => (alive ? { alive: true, startedAt: undefined } : { alive: false }),
+    });
+  }
+
+  it("is the PID file under the run directory, naming its holder", async () => {
+    const running = withProcesses(true);
+
+    expect(await running.takeRunLock(holder)).toEqual({ outcome: "taken" });
+    expect(JSON.parse(readFileSync(lockFile(), "utf8"))).toEqual(holder);
+    expect(await running.runLockHolder()).toEqual(holder);
+  });
+
+  it("refuses a second Run while the holder is running, naming it", async () => {
+    const running = withProcesses(true);
+    await running.takeRunLock(holder);
+
+    expect(await running.takeRunLock({ ...holder, pid: 222 })).toEqual({
+      outcome: "held",
+      holder,
+    });
+  });
+
+  it("finds a lock whose holder has gone abandoned, and takes it over", async () => {
+    await withProcesses(true).takeRunLock(holder);
+    const next = withProcesses(false);
+
+    expect(await next.runLockHolder()).toBeUndefined();
+    expect(await next.takeRunLock({ ...holder, runId: "run-2" })).toEqual({
+      outcome: "abandoned",
+    });
+    expect(await next.takeOverRunLock({ ...holder, runId: "run-2" })).toEqual({
+      outcome: "taken",
+    });
+    expect(JSON.parse(readFileSync(lockFile(), "utf8")).runId).toBe("run-2");
+  });
+
+  it("is free for the next Run once released", async () => {
+    const running = withProcesses(true);
+    await running.takeRunLock(holder);
+
+    await running.releaseRunLock();
+
+    expect(existsSync(lockFile())).toBe(false);
+    expect(await running.takeRunLock({ ...holder, pid: 222 })).toEqual({ outcome: "taken" });
+  });
+});

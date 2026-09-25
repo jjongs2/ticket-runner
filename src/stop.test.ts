@@ -1,10 +1,8 @@
 import { EventEmitter } from "node:events";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { type LockHolder, acquireLock, lockPath } from "./lock.js";
+import { beforeEach, describe, expect, it } from "vitest";
+import type { LockHolder } from "./ports/workspace.js";
 import { type StopRequest, StopSignal, listenForStop, requestStop, stopLine } from "./stop.js";
+import { FakeWorkspace } from "./testing/fakes.js";
 
 /** A stand-in for the process, so a test raises SIGTERM without sending one. */
 function source(): EventEmitter {
@@ -101,42 +99,40 @@ describe("the line a Run logs", () => {
 });
 
 describe("asking a Run to stop", () => {
-  let repoRoot: string;
+  const repoRoot = "/repo";
+  let workspace: FakeWorkspace;
 
   beforeEach(() => {
-    repoRoot = mkdtempSync(join(tmpdir(), "agent-pipeline-stop-"));
+    workspace = new FakeWorkspace();
   });
 
-  afterEach(() => {
-    rmSync(repoRoot, { recursive: true, force: true });
-  });
-
-  /** The Run lock as a Run leaves it, written by the code that writes the real one. */
+  /** The Run lock as a Run that is still running leaves it. */
   function lock(overrides: Partial<LockHolder> = {}): void {
-    acquireLock(
-      repoRoot,
-      {
+    workspace.lock = {
+      holder: {
         pid: 4321,
         command: "agent-pipeline run",
         runId: "2026-09-17T09-00-00-000",
         startedAt: "2026-09-17T09:00:00.000Z",
         ...overrides,
       },
-      // pid 4321 is fictitious: told it is not alive, so a fixture setting
-      // `processStartedAt` itself is not clobbered by a real-but-unrelated
-      // process that happens to share the pid.
-      { checkProcess: () => ({ alive: false }) },
-    );
+      running: true,
+    };
   }
 
-  /** One `agent-pipeline stop`, with the process table and the signal faked. */
-  function stop(options: Partial<StopRequest> = {}) {
+  /** The Run the lock names is no longer running, whatever the reason. */
+  function abandon(): void {
+    if (workspace.lock !== undefined) workspace.lock.running = false;
+  }
+
+  /** One `agent-pipeline stop`, with the lock and the signal faked. */
+  async function stop(options: Partial<StopRequest> = {}) {
     const out: string[] = [];
     const err: string[] = [];
     const signalled: number[] = [];
-    const code = requestStop({
+    const code = await requestStop({
       repoRoot,
-      checkProcess: () => ({ alive: true, startedAt: undefined }),
+      workspace,
       send: (pid) => signalled.push(pid),
       log: (line) => out.push(line),
       error: (line) => err.push(line),
@@ -145,10 +141,10 @@ describe("asking a Run to stop", () => {
     return { code, signalled, lines: out, out: out.join("\n"), err: err.join("\n") };
   }
 
-  it("sends SIGTERM to the Run the lock names, and says what it will finish", () => {
+  it("sends SIGTERM to the Run the lock names, and says what it will finish", async () => {
     lock();
 
-    const { code, signalled, lines } = stop();
+    const { code, signalled, lines } = await stop();
 
     expect(signalled).toEqual([4321]);
     expect(code).toBe(0);
@@ -158,28 +154,28 @@ describe("asking a Run to stop", () => {
     expect(lines[0]).toContain("2026-09-17T09-00-00-000");
   });
 
-  it("names Ctrl+C as the way to stop at once, and what that costs", () => {
+  it("names Ctrl+C as the way to stop at once, and what that costs", async () => {
     lock();
 
-    const { lines } = stop();
+    const { lines } = await stop();
 
     expect(lines[1]).toContain("Ctrl+C");
     expect(lines[1]).toContain("strand");
   });
 
-  it("says the same thing twice, because the Run ignores the second signal", () => {
+  it("says the same thing twice, because the Run ignores the second signal", async () => {
     lock();
 
-    const first = stop();
-    const second = stop();
+    const first = await stop();
+    const second = await stop();
 
     expect(second.out).toBe(first.out);
     expect(second.code).toBe(0);
     expect(second.signalled).toEqual([4321]);
   });
 
-  it("refuses when no Run holds the lock, and sends nothing", () => {
-    const { code, signalled, err, out } = stop();
+  it("refuses when no Run holds the lock, and sends nothing", async () => {
+    const { code, signalled, err, out } = await stop();
 
     expect(code).toBe(2);
     expect(signalled).toEqual([]);
@@ -187,34 +183,22 @@ describe("asking a Run to stop", () => {
     expect(out).toBe("");
   });
 
-  it("refuses a lock whose process is gone, and leaves the lock where it is", () => {
+  it("refuses a lock whose process is gone, and leaves the lock where it is", async () => {
     lock();
+    abandon();
 
-    const { code, signalled, err } = stop({ checkProcess: () => ({ alive: false }) });
-
-    expect(code).toBe(2);
-    expect(signalled).toEqual([]);
-    expect(err).toContain("No Run to stop");
-    expect(existsSync(lockPath(repoRoot))).toBe(true);
-  });
-
-  it("answers a recycled pid exactly as a pid that is gone, and leaves the lock where it is", () => {
-    lock({ processStartedAt: "A" });
-
-    const { code, signalled, err } = stop({
-      checkProcess: () => ({ alive: true, startedAt: "B" }),
-    });
+    const { code, signalled, err } = await stop();
 
     expect(code).toBe(2);
     expect(signalled).toEqual([]);
     expect(err).toContain("No Run to stop");
-    expect(existsSync(lockPath(repoRoot))).toBe(true);
+    expect(workspace.lock).toBeDefined();
   });
 
-  it("leaves a `ticket <n>` Run alone, because it ends with its Ticket anyway", () => {
+  it("leaves a `ticket <n>` Run alone, because it ends with its Ticket anyway", async () => {
     lock({ command: "agent-pipeline ticket 5" });
 
-    const { code, signalled, err } = stop();
+    const { code, signalled, err } = await stop();
 
     expect(code).toBe(2);
     expect(signalled).toEqual([]);
@@ -222,20 +206,20 @@ describe("asking a Run to stop", () => {
     expect(err).toContain("Ticket");
   });
 
-  it("asks a holder whose command line names no command, rather than passing it over", () => {
+  it("asks a holder whose command line names no command, rather than passing it over", async () => {
     // What a lock file with no command line at all reads back as.
     lock({ command: "agent-pipeline" });
 
-    const { code, signalled } = stop();
+    const { code, signalled } = await stop();
 
     expect(signalled).toEqual([4321]);
     expect(code).toBe(0);
   });
 
-  it("reports a signal it could not deliver, and claims nothing was stopped", () => {
+  it("reports a signal it could not deliver, and claims nothing was stopped", async () => {
     lock();
 
-    const { code, err, out } = stop({
+    const { code, err, out } = await stop({
       send: () => {
         throw new Error("kill ESRCH");
       },
@@ -244,15 +228,5 @@ describe("asking a Run to stop", () => {
     expect(code).toBe(2);
     expect(err).toContain("ESRCH");
     expect(out).toBe("");
-  });
-
-  it("asks the real process table when no seam is given", () => {
-    lock({ pid: process.pid });
-    const signalled: number[] = [];
-
-    const code = requestStop({ repoRoot, send: (pid) => signalled.push(pid), log: () => {} });
-
-    expect(signalled).toEqual([process.pid]);
-    expect(code).toBe(0);
   });
 });

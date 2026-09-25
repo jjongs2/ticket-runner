@@ -120,7 +120,7 @@ export async function processRun(
   // Lanes at once, and neither waits for the other's kind to run out.
   const stranded = await strandedTickets({
     tracker,
-    repoRoot: pipeline.repoRoot,
+    workspace: pipeline.workspace,
     inProgress: config.labels.inProgress,
     ...(pipeline.log === undefined ? {} : { log: pipeline.log }),
   });

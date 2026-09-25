@@ -1,23 +1,16 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { UNCHECKED_BOX } from "./acceptance-criteria.js";
 import { resolveBaseBranch } from "./base-branch.js";
 import type { Config } from "./config.js";
 import { Landing } from "./landing.js";
 import { StandingNotes } from "./notes.js";
 import { processTicket } from "./orchestrator.js";
-import {
-  type TicketState,
-  readTicketState,
-  statePath,
-  writeTicketState,
-} from "./resume.js";
 import { PROGRESS_MARKER } from "./progress.js";
 import { HANDOFF_MARKER, HANDOFF_TAKEN_LINE, handoffComment } from "./templates.js";
 import type { Pipeline, TicketOutcome } from "./orchestrator.js";
 import type { StageName } from "./ports/agent-runner.js";
+import type { TicketState } from "./ports/workspace.js";
 import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./testing/fakes.js";
 import { settle } from "./testing/settle.js";
 
@@ -114,18 +107,14 @@ const notices = () => tracker.comments.filter(({ body }) => !body.startsWith(PRO
 let tracker: FakeTracker;
 let runner: FakeAgentRunner;
 let workspace: FakeWorkspace;
-/**
- * A temporary repo root, because a claimed Ticket's State file is a real file
- * (ADR-0004). The three ports are still fakes; only the local state is not.
- */
-let repoRoot: string;
+/** The repo root the Run is given; nothing under it is read or written. */
+const repoRoot = "/repo";
 /** Where this Ticket's Stages run, under the repo root the Run was given. */
 let worktree: string;
 /** The Run log, for the lines a Ticket is expected to print — or not to. */
 let logged: string[];
 
 beforeEach(() => {
-  repoRoot = mkdtempSync(join(tmpdir(), "agent-pipeline-ticket-"));
   logged = [];
   worktree = join(repoRoot, ".worktrees", `ticket-${TICKET}`);
   tracker = new FakeTracker();
@@ -139,10 +128,6 @@ beforeEach(() => {
   runner.leaves("fix", () => workspace.commits.push("fix(cli): mend the thing (#2)"));
 });
 
-afterEach(() => {
-  rmSync(repoRoot, { recursive: true, force: true });
-});
-
 /**
  * The State file as it stood when each Stage started.
  *
@@ -154,7 +139,7 @@ function stateAtEachStage(): { stage: StageName; state: TicketState | undefined 
   const seen: { stage: StageName; state: TicketState | undefined }[] = [];
   const runStage = runner.run.bind(runner);
   runner.run = async (request) => {
-    seen.push({ stage: request.stage, state: readTicketState(repoRoot, TICKET) });
+    seen.push({ stage: request.stage, state: workspace.state(TICKET) });
     return runStage(request);
   };
   return seen;
@@ -1450,7 +1435,7 @@ describe("failures no fix Stage is offered", () => {
 
 describe("releasing a rate-limited Ticket", () => {
   /** The State file the release left, as a later Run would read it. */
-  const state = () => readTicketState(repoRoot, TICKET);
+  const state = () => workspace.state(TICKET);
 
   it("releases the Ticket rather than handing it to a human", async () => {
     runner.queue("implement", { ok: false, failure: "rate-limited" });
@@ -1648,7 +1633,7 @@ describe("the State file a claimed Ticket keeps", () => {
     let atClaim: TicketState | undefined;
     const assign = tracker.assign.bind(tracker);
     tracker.assign = async (number, assignee) => {
-      atClaim = readTicketState(repoRoot, TICKET);
+      atClaim = workspace.state(TICKET);
       return assign(number, assignee);
     };
 
@@ -1674,7 +1659,7 @@ describe("the State file a claimed Ticket keeps", () => {
     let atCount: TicketState | undefined;
     const commitSubjects = workspace.commitSubjects.bind(workspace);
     workspace.commitSubjects = async (branch, base) => {
-      atCount ??= readTicketState(repoRoot, TICKET);
+      atCount ??= workspace.state(TICKET);
       return commitSubjects(branch, base);
     };
 
@@ -1697,9 +1682,8 @@ describe("the State file a claimed Ticket keeps", () => {
   });
 
   it("fails the Ticket at setup rather than claiming what it cannot record", async () => {
-    // A file where the state directory has to go, so the very first write fails.
-    mkdirSync(join(repoRoot, ".agent-pipeline"), { recursive: true });
-    writeFileSync(join(repoRoot, ".agent-pipeline", "state"), "not a directory");
+    // Storage that will not take the State, so the very first write fails.
+    workspace.stateWriteFailure = new Error("ENOTDIR: not a directory");
 
     await expect(run()).rejects.toThrow();
 
@@ -1713,7 +1697,7 @@ describe("the State file a claimed Ticket keeps", () => {
     let atCi: TicketState | undefined;
     const waitForCi = tracker.waitForCi.bind(tracker);
     tracker.waitForCi = async (number, timeoutMs) => {
-      atCi = readTicketState(repoRoot, TICKET);
+      atCi = workspace.state(TICKET);
       return waitForCi(number, timeoutMs);
     };
 
@@ -1739,7 +1723,7 @@ describe("the State file a claimed Ticket keeps", () => {
 
   it("is gone once the Ticket merges", async () => {
     expect(await run()).toMatchObject({ outcome: "merged" });
-    expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
+    expect(workspace.states.has(TICKET)).toBe(false);
   });
 
   it("is kept once the Ticket is handed off, with the Fix budget given back", async () => {
@@ -1749,7 +1733,7 @@ describe("the State file a claimed Ticket keeps", () => {
     // spent — and the file says otherwise, because the Ticket only comes back
     // through a human's hands and the fresh budget is for what they did to it.
     expect(await run()).toMatchObject({ outcome: "handed-off" });
-    expect(readTicketState(repoRoot, TICKET)).toMatchObject({
+    expect(workspace.state(TICKET)).toMatchObject({
       state: "implemented",
       branch: BRANCH,
       fixUsed: false,
@@ -1760,7 +1744,7 @@ describe("the State file a claimed Ticket keeps", () => {
     tracker.issue(TICKET).subIssues = 3;
 
     expect(await run()).toMatchObject({ outcome: "skipped", reason: "spec" });
-    expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
+    expect(workspace.states.has(TICKET)).toBe(false);
   });
 });
 
@@ -1786,7 +1770,7 @@ describe("resuming a stranded Ticket", () => {
     issue.labels = ["in-progress"];
     workspace.worktrees.set(worktree, state.branch);
     workspace.branches.add(state.branch);
-    writeTicketState(repoRoot, state);
+    workspace.recordState(state);
   }
 
   it("is resumed rather than refused as claimed", async () => {
@@ -1829,7 +1813,7 @@ describe("resuming a stranded Ticket", () => {
     expect(runner.stages()).toEqual([]);
     // Kept, and with the budget back: the human this is handed to is the reason
     // the next Run gets to buy a fix Stage again.
-    expect(readTicketState(repoRoot, TICKET)).toMatchObject({ fixUsed: false });
+    expect(workspace.state(TICKET)).toMatchObject({ fixUsed: false });
   });
 
   it("still pushes and opens a draft PR when it is handed off in its own worktree", async () => {
@@ -1900,7 +1884,7 @@ describe("resuming a stranded Ticket", () => {
     const outcome = await run();
 
     expect(outcome).toMatchObject({ outcome: "skipped", reason: "claimed" });
-    expect(existsSync(statePath(repoRoot, TICKET))).toBe(true);
+    expect(workspace.states.has(TICKET)).toBe(true);
   });
 
   it("is released again, with its state current, when the rate limit is still on", async () => {
@@ -1910,7 +1894,7 @@ describe("resuming a stranded Ticket", () => {
     const outcome = await run();
 
     expect(outcome).toMatchObject({ outcome: "released", stage: "verify" });
-    expect(readTicketState(repoRoot, TICKET)).toMatchObject({
+    expect(workspace.state(TICKET)).toMatchObject({
       state: "implemented",
       runId: "run-1",
     });
@@ -1933,7 +1917,7 @@ describe("resuming a released Ticket", () => {
     };
     workspace.worktrees.set(worktree, state.branch);
     workspace.branches.add(state.branch);
-    writeTicketState(repoRoot, state);
+    workspace.recordState(state);
   }
 
   it("carries on at the Checks rather than implementing the Ticket again", async () => {
@@ -2028,7 +2012,7 @@ describe("resuming a released Ticket", () => {
 
     await run();
 
-    expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
+    expect(workspace.states.has(TICKET)).toBe(false);
   });
 
   it("keeps the State file when the resumed Ticket is handed off", async () => {
@@ -2037,7 +2021,7 @@ describe("resuming a released Ticket", () => {
 
     await run();
 
-    expect(readTicketState(repoRoot, TICKET)).toMatchObject({
+    expect(workspace.state(TICKET)).toMatchObject({
       state: "implemented",
       fixUsed: false,
     });
@@ -2047,7 +2031,7 @@ describe("resuming a released Ticket", () => {
   it("starts the Ticket over when the worktree and the branch are both gone", async () => {
     // Nothing is seeded on the workspace: the human who removed the worktree
     // removed the branch with it, so there is nothing in the way of a fresh one.
-    writeTicketState(repoRoot, {
+    workspace.recordState({
       ticket: TICKET,
       branch: BRANCH,
       state: "implemented",
@@ -2063,7 +2047,7 @@ describe("resuming a released Ticket", () => {
     expect(runner.stages()).toEqual(["implement", "verify"]);
     // And the State file nothing can resume from is gone, so the next Run is
     // not asked the same question again.
-    expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
+    expect(workspace.states.has(TICKET)).toBe(false);
   });
 });
 
@@ -2120,12 +2104,12 @@ describe("a branch that outlived its worktree", () => {
 
     expect(tracker.issue(TICKET).labels).toEqual(["ready-for-human"]);
     expect(tracker.issue(TICKET).assignees).toEqual([]);
-    expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
+    expect(workspace.states.has(TICKET)).toBe(false);
     expect(handoffBody()).not.toContain("after the fix budget was used");
   });
 
   it("reaches the same hand-off when a released Ticket's worktree has gone", async () => {
-    writeTicketState(repoRoot, {
+    workspace.recordState({
       ticket: TICKET,
       branch: BRANCH,
       state: "implemented",
@@ -2138,7 +2122,7 @@ describe("a branch that outlived its worktree", () => {
 
     expect(outcome).toMatchObject({ outcome: "handed-off", stage: "setup" });
     expect(handoffBody()).toContain(`git branch -D ${BRANCH}`);
-    expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
+    expect(workspace.states.has(TICKET)).toBe(false);
   });
 
   it("names the worktree instead when the branch is still checked out in one", async () => {
@@ -2163,7 +2147,7 @@ git branch -D ${BRANCH}\`, then relabel the Ticket ready-for-agent`,
     expect(handoffBody()).toContain(`worktree \`${worktree}\``);
     // And the State file the Claim wrote goes, alone among hand-offs: no Stage
     // of this Run ran in there, so a later resume would implement over a human.
-    expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
+    expect(workspace.states.has(TICKET)).toBe(false);
   });
 
   it("pushes nothing and opens no draft PR over the worktree it names", async () => {
@@ -2303,7 +2287,7 @@ describe("a Ticket handed off and then handed back", () => {
 
     expect(workspace.worktrees.get(worktree)).toBe(BRANCH);
     expect(tracker.pullRequest(100).draft).toBe(true);
-    expect(readTicketState(repoRoot, TICKET)).toMatchObject({
+    expect(workspace.state(TICKET)).toMatchObject({
       state: "implemented",
       branch: BRANCH,
       pullRequest: 100,
@@ -2317,7 +2301,7 @@ describe("a Ticket handed off and then handed back", () => {
     // `ready-for-human` is not `ready-for-agent`, and the sweep cannot see it
     // either, the Claim having come off. Nothing moves until the human does.
     expect(await run()).toMatchObject({ outcome: "skipped", reason: "not-ready" });
-    expect(existsSync(statePath(repoRoot, TICKET))).toBe(true);
+    expect(workspace.states.has(TICKET)).toBe(true);
   });
 
   it("resumes from what it reached rather than implementing a second time", async () => {
@@ -2410,7 +2394,7 @@ describe("a Ticket handed off and then handed back", () => {
 
     await run();
 
-    expect(existsSync(statePath(repoRoot, TICKET))).toBe(false);
+    expect(workspace.states.has(TICKET)).toBe(false);
   });
 });
 

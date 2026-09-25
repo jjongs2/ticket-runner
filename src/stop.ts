@@ -1,4 +1,5 @@
-import { type LockHolder, type ProcessCheck, lockHolder, lockPath } from "./lock.js";
+import { lockPath } from "./lock.js";
+import type { LockHolder, Workspace } from "./ports/workspace.js";
 
 /**
  * A Stop: how a human asks for one, and how a Run comes to hear about it.
@@ -89,11 +90,11 @@ export function stopLine(busy: number[]): string {
   return `${held} left to finish · stopped`;
 }
 
-/** What `agent-pipeline stop` needs: the Target's root, and seams for tests. */
+/** What `agent-pipeline stop` needs: the Target's root and lock, and seams for tests. */
 export interface StopRequest {
   repoRoot: string;
-  /** Whether the lock's holder is still there. The real process table by default. */
-  checkProcess?: (pid: number) => ProcessCheck;
+  /** Where the Run lock is read from. */
+  workspace: Workspace;
   /** How the Stop is delivered. A real SIGTERM by default. */
   send?: (pid: number) => void;
   log?: (line: string) => void;
@@ -110,16 +111,14 @@ export interface StopRequest {
  * harmless — the second SIGTERM is one the Run ignores (ADR-0006) — so it says
  * the same thing every time rather than reporting a Stop already asked for.
  */
-export function requestStop({
+export async function requestStop({
   repoRoot,
-  checkProcess,
+  workspace,
   send = sendStop,
   log = (line: string) => console.log(line),
   error = (line: string) => console.error(line),
-}: StopRequest): number {
-  // Spread conditionally rather than passed through: an explicit `undefined`
-  // is not an absent seam under `exactOptionalPropertyTypes`.
-  const holder = lockHolder(repoRoot, checkProcess === undefined ? {} : { checkProcess });
+}: StopRequest): Promise<number> {
+  const holder = await workspace.runLockHolder();
   if (holder === undefined) {
     error(
       `No Run to stop: nothing holds the Run lock at ${lockPath(repoRoot)}, or the Run that` +

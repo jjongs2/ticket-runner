@@ -1,12 +1,10 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { Config } from "./config.js";
 import { Landing } from "./landing.js";
 import { StandingNotes } from "./notes.js";
 import type { Pipeline } from "./orchestrator.js";
-import { type TicketState, statePath, writeTicketState } from "./resume.js";
+import type { TicketState } from "./ports/workspace.js";
 import { processRun } from "./run.js";
 import { StopSignal } from "./stop.js";
 import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./testing/fakes.js";
@@ -74,19 +72,14 @@ let tracker: FakeTracker;
 let runner: FakeAgentRunner;
 let workspace: FakeWorkspace;
 let logged: string[];
-/** A temporary repo root, because a claimed Ticket's State file is a real file. */
-let repoRoot: string;
+/** The repo root the Run is given; nothing under it is read or written. */
+const repoRoot = "/repo";
 
 beforeEach(() => {
-  repoRoot = mkdtempSync(join(tmpdir(), "agent-pipeline-run-"));
   tracker = new FakeTracker();
   runner = new FakeAgentRunner({ verify: stageResult({ result: PASSING_VERDICT }) });
   workspace = new FakeWorkspace();
   logged = [];
-});
-
-afterEach(() => {
-  rmSync(repoRoot, { recursive: true, force: true });
 });
 
 /** A Run with `lanes` Lanes, which is one unless the test is about the others. */
@@ -131,7 +124,7 @@ function stranded(ticket: number, overrides: Partial<TicketState> = {}): void {
   };
   tracker.addIssue({ number: ticket, assignees: ["pipeline-user"], labels: ["in-progress"] });
   workspace.worktrees.set(worktreeOf(ticket), state.branch);
-  writeTicketState(repoRoot, state);
+  workspace.recordState(state);
 }
 
 describe("draining the Frontier", () => {
@@ -528,7 +521,7 @@ describe("stranded Tickets", () => {
     // #9 keeps the Claim that makes it stranded, and its state keeps the work,
     // so the next Run sweeps it up exactly as this one found it.
     expect(tracker.issue(9).assignees).toEqual(["pipeline-user"]);
-    expect(existsSync(statePath(repoRoot, 9))).toBe(true);
+    expect(workspace.states.has(9)).toBe(true);
     // No Candidate is listed, let alone taken.
     expect(tracker.calls).not.toContain("listCandidates:ready-for-agent");
     expect(processed()).toEqual([]);
@@ -549,7 +542,7 @@ describe("stranded Tickets", () => {
 
   it("forgets one whose Ticket has closed rather than resuming it", async () => {
     tracker.addIssue({ number: 4, closed: true, assignees: ["pipeline-user"] });
-    writeTicketState(repoRoot, {
+    workspace.recordState({
       ticket: 4,
       branch: "agent/4-ticket-4",
       state: "implemented",
@@ -561,7 +554,7 @@ describe("stranded Tickets", () => {
     const result = await processRun(pipeline());
 
     expect(result.outcomes).toEqual([]);
-    expect(existsSync(statePath(repoRoot, 4))).toBe(false);
+    expect(workspace.states.has(4)).toBe(false);
     expect(logged).toContain("#4 has closed, so the state it left is gone");
   });
 
@@ -572,13 +565,13 @@ describe("stranded Tickets", () => {
     const result = await processRun(pipeline());
 
     expect(result.outcomes).toEqual([]);
-    expect(existsSync(statePath(repoRoot, 4))).toBe(true);
+    expect(workspace.states.has(4)).toBe(true);
     expect(logged).toContain("#4 is resumable, but octocat holds it now");
   });
 
   it("leaves a released Ticket to the Frontier, which claims it the usual way", async () => {
     tracker.addIssue({ number: 4 });
-    writeTicketState(repoRoot, {
+    workspace.recordState({
       ticket: 4,
       branch: "agent/4-ticket-4",
       state: "implemented",
@@ -597,7 +590,7 @@ describe("stranded Tickets", () => {
   it("ends the Run when one resumed off the Frontier is released", async () => {
     // No Claim, so the Frontier offers #4 and the Run resumes it from its state.
     tracker.addIssue({ number: 4 });
-    writeTicketState(repoRoot, {
+    workspace.recordState({
       ticket: 4,
       branch: "agent/4-ticket-4",
       state: "implemented",
@@ -1052,8 +1045,8 @@ describe("a Run a human stopped", () => {
     expect(result.outcomes).toEqual([]);
     expect(runner.requests).toEqual([]);
     expect(tracker.issue(4).assignees).toEqual(["pipeline-user"]);
-    expect(existsSync(statePath(repoRoot, 4))).toBe(true);
-    expect(existsSync(statePath(repoRoot, 9))).toBe(true);
+    expect(workspace.states.has(4)).toBe(true);
+    expect(workspace.states.has(9)).toBe(true);
   });
 
   it("leaves the Ticket it was finishing on the board exactly as a merge does", async () => {
@@ -1069,7 +1062,7 @@ describe("a Run a human stopped", () => {
     await run;
 
     expect(tracker.pullRequest(100).merged).toBe(true);
-    expect(existsSync(statePath(repoRoot, 4))).toBe(false);
+    expect(workspace.states.has(4)).toBe(false);
     expect(tracker.calls).not.toContain("addLabel:4:ready-for-human");
   });
 

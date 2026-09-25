@@ -20,7 +20,7 @@ import type {
   StageResult,
 } from "./ports/agent-runner.js";
 import type { Issue, Tracker } from "./ports/tracker.js";
-import type { Workspace } from "./ports/workspace.js";
+import type { ReachedState, TicketState, Workspace } from "./ports/workspace.js";
 import { Progress, type ProgressPoint, type ProgressRow } from "./progress.js";
 import {
   type FixFailure,
@@ -29,13 +29,6 @@ import {
   implementPrompt,
   verifyPrompt,
 } from "./prompts.js";
-import {
-  type ReachedState,
-  type TicketState,
-  clearTicketState,
-  readTicketState,
-  writeTicketState,
-} from "./resume.js";
 import { retryLogDir, stageLogDir } from "./run-log.js";
 import { holdsClaim } from "./stranded.js";
 import {
@@ -236,7 +229,7 @@ async function takeTicket(
   // one of them: a Ticket this checkout still holds with state recorded for it is
   // stranded — the Claim on it is this pipeline's own, left by a Run that never
   // came back — and the refusals must not read it as somebody else's.
-  const recorded = readTicketState(repoRoot, ticket);
+  const recorded = await workspace.readState(ticket);
   const stranded = recorded !== undefined && holdsClaim(issue, user, config.labels.inProgress);
   const skip = skipReason(issue, config.labels.readyForAgent, stranded);
   if (skip !== undefined) return await passOver(pipeline, issue, skip);
@@ -267,7 +260,7 @@ async function takeTicket(
   // First of the two, because a Claim no State file names is the one thing this
   // has to rule out: a crash between the writes then leaves a Ticket nobody has
   // claimed with state beside it, which is a released Ticket and resumes itself.
-  const record = ResumeRecord.claim(pipeline, {
+  const record = await ResumeRecord.claim(pipeline, {
     ticket,
     branch,
     state: resume?.state ?? "claimed",
@@ -356,7 +349,7 @@ async function takeTicket(
       point = "implement";
       await implement(pipeline, issue, worktree, branch, logDir, progress, notes);
       // The branch now carries work no later Run should pay for again.
-      record.advance({ state: "implemented" });
+      await record.advance({ state: "implemented" });
     }
 
     let commits: string[];
@@ -405,7 +398,7 @@ async function takeTicket(
           { issue, branch, worktree, verdict, title },
           pullRequest,
         );
-        record.advance({ pullRequest });
+        await record.advance({ pullRequest });
         point = "ci";
         await requireGreenCi(pipeline, pullRequest, progress);
         break;
@@ -435,7 +428,7 @@ async function takeTicket(
         // Recorded once the Stage has come back, not when the budget was
         // committed: a fix Stage the rate limit stopped before it ran spends
         // nothing, and the release below says so.
-        record.advance({ fixUsed: true });
+        await record.advance({ fixUsed: true });
       }
     }
 
@@ -482,7 +475,7 @@ async function takeTicket(
   // next Run, whatever else below fails — which is worth the Landing staying
   // shut for three writes nobody else is waiting on.
   try {
-    clearTicketState(repoRoot, ticket);
+    await workspace.removeState(ticket);
   } catch (error) {
     log(`#${ticket} merged, but clearing its State file failed: ${(error as Error).message}`);
   }
@@ -565,7 +558,7 @@ async function resumable(
     return state;
   }
 
-  clearTicketState(pipeline.repoRoot, ticket);
+  await pipeline.workspace.removeState(ticket);
   pipeline.log?.(`#${ticket} was resumable, but ${state.branch} is not in ${worktree}`);
   return undefined;
 }
@@ -622,9 +615,9 @@ class ResumeRecord {
    * board that no later Run could ever resume — which is the state this record
    * exists to rule out.
    */
-  static claim(pipeline: Pipeline, reached: Reached): ResumeRecord {
+  static async claim(pipeline: Pipeline, reached: Reached): Promise<ResumeRecord> {
     const record = new ResumeRecord(pipeline, reached);
-    writeTicketState(pipeline.repoRoot, record.file());
+    await pipeline.workspace.writeState(record.file());
     return record;
   }
 
@@ -636,10 +629,10 @@ class ResumeRecord {
    * a Stage rather than being wrong — where failing a Ticket mid-flight over a
    * local file would throw away the Stages that have already succeeded.
    */
-  advance(reached: Advance): void {
+  async advance(reached: Advance): Promise<void> {
     Object.assign(this.reached, reached);
     try {
-      writeTicketState(this.pipeline.repoRoot, this.file());
+      await this.pipeline.workspace.writeState(this.file());
     } catch (error) {
       this.pipeline.log?.(
         `#${this.reached.ticket} could not record its state: ${(error as Error).message}`,
@@ -1282,7 +1275,7 @@ async function release(
 
   // Brought up to date before the Claim comes off: a Ticket back on the Frontier
   // whose state is out of date is one the next Run would redo Stages for.
-  record.advance({ state: limit.state, fixUsed });
+  await record.advance({ state: limit.state, fixUsed });
 
   // The claim, undone in the order it was made, so the assignee — which is what
   // another Run reads to tell a taken Ticket from a free one — comes off last.
@@ -1360,7 +1353,7 @@ async function handOff(
   // — is what a human is waiting for, and no file is worth losing it over.
   if (!keepsState) {
     try {
-      clearTicketState(pipeline.repoRoot, ticket);
+      await workspace.removeState(ticket);
     } catch (error) {
       pipeline.log?.(
         `#${ticket} handed off, but clearing its State file failed: ${(error as Error).message}`,
@@ -1401,7 +1394,7 @@ async function handOff(
     // human's hands, and whatever they did to it is what the fresh budget is
     // for. Nothing is lost by it — the hand-off comment says the budget was
     // spent, and the Claim only marks that comment as history.
-    record.advance({
+    await record.advance({
       fixUsed: false,
       ...(pullRequest === undefined ? {} : { pullRequest }),
     });

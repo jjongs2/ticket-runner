@@ -1,32 +1,25 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { type TicketState, statePath, writeTicketState } from "./resume.js";
+import { beforeEach, describe, expect, it } from "vitest";
+import type { TicketState } from "./ports/workspace.js";
 import { holdsClaim, strandedTickets } from "./stranded.js";
-import { FakeTracker } from "./testing/fakes.js";
+import { FakeTracker, FakeWorkspace } from "./testing/fakes.js";
 
 const IN_PROGRESS = "in-progress";
 
 let tracker: FakeTracker;
 let logged: string[];
-/** A temporary repo root, because the State files a sweep reads are real files. */
-let repoRoot: string;
+/** Where the State the sweep reads is kept. */
+let workspace: FakeWorkspace;
 
 beforeEach(() => {
-  repoRoot = mkdtempSync(join(tmpdir(), "agent-pipeline-stranded-"));
   tracker = new FakeTracker();
+  workspace = new FakeWorkspace();
   logged = [];
-});
-
-afterEach(() => {
-  rmSync(repoRoot, { recursive: true, force: true });
 });
 
 function sweep() {
   return strandedTickets({
     tracker,
-    repoRoot,
+    workspace,
     inProgress: IN_PROGRESS,
     log: (line) => logged.push(line),
   });
@@ -34,7 +27,7 @@ function sweep() {
 
 /** Record state for a Ticket, as the Claim and every Stage after it does. */
 function recorded(ticket: number, overrides: Partial<TicketState> = {}): void {
-  writeTicketState(repoRoot, {
+  workspace.recordState({
     ticket,
     branch: `agent/${ticket}-a-ticket`,
     state: "implemented",
@@ -69,7 +62,7 @@ describe("a Ticket a Run left claimed", () => {
 
     await sweep();
 
-    expect(existsSync(statePath(repoRoot, 4))).toBe(true);
+    expect(workspace.states.has(4)).toBe(true);
   });
 
   it("is stranded whatever the branch its title would derive to now", async () => {
@@ -94,7 +87,7 @@ describe("what the sweep leaves alone", () => {
 
     expect(await sweep()).toEqual([]);
     // The Frontier picks that one up on its own terms, so the state stays.
-    expect(existsSync(statePath(repoRoot, 4))).toBe(true);
+    expect(workspace.states.has(4)).toBe(true);
   });
 
   it("passes over a handed-off Ticket in silence, leaving its file and Claim", async () => {
@@ -104,7 +97,7 @@ describe("what the sweep leaves alone", () => {
     expect(await sweep()).toEqual([]);
     // Inert: no Frontier can offer it and nothing here touches it, so it waits
     // exactly as it is until a human relabels it or the issue closes.
-    expect(existsSync(statePath(repoRoot, 4))).toBe(true);
+    expect(workspace.states.has(4)).toBe(true);
     expect(tracker.issue(4).labels).toEqual(["ready-for-human"]);
     expect(tracker.issue(4).assignees).toEqual([]);
     expect(logged).toEqual([]);
@@ -122,7 +115,7 @@ describe("what the sweep leaves alone", () => {
     recorded(4);
 
     expect(await sweep()).toEqual([]);
-    expect(existsSync(statePath(repoRoot, 4))).toBe(true);
+    expect(workspace.states.has(4)).toBe(true);
     expect(logged).toEqual(["#4 is resumable, but octocat holds it now"]);
   });
 
@@ -133,7 +126,7 @@ describe("what the sweep leaves alone", () => {
     };
 
     expect(await sweep()).toEqual([]);
-    expect(existsSync(statePath(repoRoot, 4))).toBe(true);
+    expect(workspace.states.has(4)).toBe(true);
     expect(logged).toEqual(["#4 is resumable, but reading it failed: gh: connection reset"]);
   });
 
@@ -156,7 +149,7 @@ describe("a Ticket that has closed", () => {
     recorded(4);
 
     expect(await sweep()).toEqual([]);
-    expect(existsSync(statePath(repoRoot, 4))).toBe(false);
+    expect(workspace.states.has(4)).toBe(false);
     expect(logged).toEqual(["#4 has closed, so the state it left is gone"]);
   });
 
@@ -165,21 +158,23 @@ describe("a Ticket that has closed", () => {
     recorded(4);
 
     expect(await sweep()).toEqual([]);
-    expect(existsSync(statePath(repoRoot, 4))).toBe(false);
+    expect(workspace.states.has(4)).toBe(false);
   });
 });
 
 describe("a State file the sweep cannot read", () => {
-  /** Whatever an older or newer pipeline left behind, byte for byte. */
-  function writeRaw(ticket: number, contents: string): void {
-    const path = statePath(repoRoot, ticket);
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, contents);
+  /** What an older or newer pipeline left behind, as far as this one can read it. */
+  function unreadable(ticket: number, version?: string): void {
+    workspace.states.set(ticket, {
+      readable: false,
+      ticket,
+      ...(version === undefined ? {} : { version }),
+    });
   }
 
   it("is reported by Ticket number and the Version the file names", async () => {
     tracker.addIssue({ number: 4, assignees: [tracker.user], labels: [IN_PROGRESS] });
-    writeRaw(4, JSON.stringify({ version: "9.9.0", reached: "something newer" }));
+    unreadable(4, "9.9.0");
 
     expect(await sweep()).toEqual([]);
     expect(logged).toEqual([
@@ -188,7 +183,7 @@ describe("a State file the sweep cannot read", () => {
   });
 
   it("says so when the file names no Version at all", async () => {
-    writeRaw(4, "{ not json");
+    unreadable(4);
 
     expect(logged).toEqual([]);
     expect(await sweep()).toEqual([]);
@@ -199,18 +194,18 @@ describe("a State file the sweep cannot read", () => {
 
   it("leaves the file where it is, and the Claim on the board with it", async () => {
     tracker.addIssue({ number: 4, assignees: [tracker.user], labels: [IN_PROGRESS] });
-    writeRaw(4, "{ not json");
+    unreadable(4);
 
     await sweep();
 
-    expect(existsSync(statePath(repoRoot, 4))).toBe(true);
+    expect(workspace.states.has(4)).toBe(true);
     const issue = await tracker.getIssue(4);
     expect(issue.assignees).toEqual([tracker.user]);
     expect(issue.labels).toEqual([IN_PROGRESS]);
   });
 
   it("is reported without asking the tracker anything at all", async () => {
-    writeRaw(4, "{ not json");
+    unreadable(4);
     let asked = 0;
     tracker.currentUser = async () => {
       asked += 1;
@@ -222,31 +217,9 @@ describe("a State file the sweep cannot read", () => {
     expect(logged).toHaveLength(1);
   });
 
-  it("says the same of a file that parses but names another Ticket", async () => {
-    // No Version would resume this one either, so it is reported rather than
-    // dropped, in the words that are true of both kinds.
-    writeRaw(
-      4,
-      JSON.stringify({
-        ticket: 5,
-        branch: "agent/5-somebody-copied-a-file",
-        state: "claimed",
-        fixUsed: false,
-        runId: "run-0",
-        version: "0.4.0",
-        updatedAt: "2026-09-17T09:00:00.000Z",
-      }),
-    );
-
-    expect(await sweep()).toEqual([]);
-    expect(logged).toEqual([
-      "#4 has a State file this Version cannot use, written by 0.4.0; it and the Claim are left alone",
-    ]);
-  });
-
   it("does not stop the Tickets beside it being swept", async () => {
     claimed(6);
-    writeRaw(4, "{ not json");
+    unreadable(4);
 
     expect((await sweep()).map((ticket) => ticket.number)).toEqual([6]);
   });
