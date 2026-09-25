@@ -235,9 +235,11 @@ async function takeTicket(
   if (skip !== undefined) return await passOver(pipeline, issue, skip);
 
   const worktree = worktreePath(repoRoot, ticket);
-  // Whether the work that state names is still there. Its branch is the one the
-  // work is on, which the Ticket's title may no longer say anything about.
-  const resume = await resumable(pipeline, ticket, worktree, recorded);
+  // Whether the work that state names is still there, on this Host or the
+  // remote. Its branch is the one the work is on, which the Ticket's title may
+  // no longer say anything about.
+  const found = await resumable(pipeline, ticket, worktree, recorded);
+  const resume = found?.state;
   const branch = resume?.branch ?? branchName(ticket, issue.title);
   // Built from the comments the Ticket already has, so a Run that comes back to
   // a Ticket an earlier Run reported on edits that table rather than opening a
@@ -293,9 +295,14 @@ async function takeTicket(
   let point: FailurePoint = "setup";
   // The worktree a hand-off can send a human to, once there is one, and whether
   // this Run may push out of it. A Ticket that failed before `createWorktree`
-  // ran has none; a resumed Ticket was resumed into the one it kept.
+  // ran has none; a resumed Ticket is resumed into the one this Host kept, or
+  // made from its remote branch.
   let worktreeOnDisk: HandOffWorktree | undefined =
     resume === undefined ? undefined : { path: worktree, pushable: true };
+  // Whether a hand-off leaves the State for a later Run to resume from, which
+  // is true of every worktree a Stage of this Run may have worked in, and of a
+  // branch parted from the remote one.
+  let keepsState = false;
   // The fix budget, which is one per Ticket and spent by the first failure a
   // fix Stage is offered. Once it is gone the next failure of any kind — even a
   // kind the fix Stage never touched — is a hand-off. A resumed Ticket keeps the
@@ -309,8 +316,21 @@ async function takeTicket(
   let verdict: Verdict;
 
   try {
-    // A resumed Ticket kept its worktree and branch, and the Stages that already
-    // succeeded on them are not paid for twice.
+    // A resumed Ticket's worktree is ready by now, and the Stages that already
+    // succeeded on its branch are not paid for twice.
+    if (found?.parted === true) {
+      // Neither side is this Run's to pick: the remote holds another Host's
+      // newer work and this Host holds work it never pushed. Nothing is pushed
+      // out of here, but the State stays, because both sides are the
+      // pipeline's and whichever a human keeps is one a Run can resume.
+      const checkedOut = await workspace.hasWorktree({ path: worktree, branch });
+      worktreeOnDisk = checkedOut ? { path: worktree, pushable: false } : undefined;
+      keepsState = true;
+      throw new TicketFailure(
+        "setup",
+        describeParted(branch, checkedOut ? worktree : undefined, config.labels.readyForAgent),
+      );
+    }
     if (resume === undefined) {
       // The branch is asked about before it is branched: `createWorktree`
       // branches fresh from the base branch and fails on a name that is taken,
@@ -378,7 +398,15 @@ async function takeTicket(
           // Once per conflict, not once per Ticket: a pass the fix budget
           // bought meets a branch the fix Stage has changed, so the conflict it
           // rebases into is a new one.
-          await resolveConflict(pipeline, issue, worktree, logDir, rebase.conflict, progress);
+          await resolveConflict(
+            pipeline,
+            issue,
+            worktree,
+            branch,
+            logDir,
+            rebase.conflict,
+            progress,
+          );
           // The resolution is code nothing has graded: the Checks passed on one
           // side of the conflict and CI on the other. The Verdict is not asked
           // for again, because the conflict Stage is told to change no
@@ -461,6 +489,7 @@ async function takeTicket(
       user,
       branch,
       ...(worktreeOnDisk === undefined ? {} : { worktree: worktreeOnDisk }),
+      keepsState: keepsState || worktreeOnDisk?.pushable === true,
       pullRequest,
       failure: asTicketFailure(error, point),
       fixUsed,
@@ -536,31 +565,77 @@ function describeBranchInTheWay(
   );
 }
 
+/** A Ticket a Run can resume, and whether its work is in two minds. */
+interface Resumable {
+  state: TicketState;
+  /**
+   * Whether this Host's copy of the branch has parted from the remote one,
+   * which leaves the worktree exactly as it was and the Ticket for a human.
+   */
+  parted: boolean;
+}
+
 /**
- * The state an earlier Run left for this Ticket, if a Run can still resume it.
+ * The state an earlier Run left for this Ticket, if a Run can still resume it,
+ * with the worktree it resumes in made ready.
  *
- * The State file only names where the work is; whether the work is still there
- * is the Workspace's answer. A human who has removed the worktree, or moved it
- * onto another branch, has thrown the resume away with it — so the file goes too
- * and the Ticket is taken from the top, released or stranded alike. That is the
- * safe reading of a worktree nobody can be sure of, not a free one: the branch
- * may still exist, and then the Ticket is handed over at setup with a failure
- * naming it. Better that than resuming into a worktree that is not there.
+ * The State file only names where the work is; where the work actually is, is
+ * the Workspace's answer, and the branch on the remote is what it answers from
+ * (ADR-0004). Any Host's Run pushes it each time a Stage commits, so a Host
+ * with no worktree of the Ticket makes one from it, and one that still has a
+ * worktree keeps it only when it sits on top of the remote branch.
+ *
+ * Taken from the top, and the file with it, only when the branch is on neither
+ * this Host nor the remote: there is no work left to resume, released or
+ * stranded alike. That is not free: the branch may still be here without its
+ * worktree, and then the Ticket is handed over at setup with a failure naming
+ * it. Better that than resuming into a worktree that is not there.
  */
 async function resumable(
   pipeline: Pipeline,
   ticket: number,
   worktree: string,
   state: TicketState | undefined,
-): Promise<TicketState | undefined> {
+): Promise<Resumable | undefined> {
   if (state === undefined) return undefined;
-  if (await pipeline.workspace.hasWorktree({ path: worktree, branch: state.branch })) {
-    return state;
-  }
+  const found = await pipeline.workspace.worktreeFromRemote({
+    path: worktree,
+    branch: state.branch,
+  });
+  if (found !== "gone") return { state, parted: found === "parted" };
 
   await pipeline.workspace.removeState(ticket);
-  pipeline.log?.(`#${ticket} was resumable, but ${state.branch} is not in ${worktree}`);
+  pipeline.log?.(
+    `#${ticket} was resumable, but ${state.branch} is neither in ${worktree} nor on the remote`,
+  );
   return undefined;
+}
+
+/**
+ * What the human is told about a branch whose copy here has parted from the
+ * one on the remote: which two copies, and the two ways to make them one.
+ *
+ * One line, as for {@link describeBranchInTheWay}. `checkedOutAt` is the
+ * worktree the branch is in, when it is in one.
+ */
+function describeParted(
+  branch: string,
+  checkedOutAt: string | undefined,
+  readyForAgent: string,
+): string {
+  const here =
+    checkedOutAt === undefined
+      ? `the branch ${branch} on this Host`
+      : `the worktree at ${checkedOutAt}`;
+  const discard =
+    checkedOutAt === undefined
+      ? `\`git branch -D ${branch}\``
+      : `\`git worktree remove ${checkedOutAt} && git branch -D ${branch}\``;
+  return (
+    `${here} and the branch ${branch} on the remote have parted, each holding commits ` +
+    `the other lacks; keep the remote's by throwing this Host's away with ${discard}, ` +
+    `or force-push this Host's over it by hand, then relabel the Ticket ${readyForAgent}`
+  );
 }
 
 /**
@@ -820,6 +895,28 @@ async function commitCount(pipeline: Pipeline, branch: string): Promise<number> 
   return subjects.length;
 }
 
+/**
+ * Push the branch a Stage has just committed on, so the work outlives the Host
+ * it was done on and a Run on any Host resumes from it (ADR-0004).
+ *
+ * A push that does not land is logged and nothing more, as a State write that
+ * does not land is: the remote then holds an earlier tip of the same work, and
+ * resuming from further back costs a Stage rather than being wrong. The push
+ * the pull request needs is a different one, and fails the Ticket where it is.
+ */
+async function pushCommitted(
+  pipeline: Pipeline,
+  ticket: number,
+  worktree: string,
+  branch: string,
+): Promise<void> {
+  try {
+    await pipeline.workspace.push(worktree, branch);
+  } catch (error) {
+    pipeline.log?.(`#${ticket} could not push ${branch}: ${(error as Error).message}`);
+  }
+}
+
 async function implement(
   pipeline: Pipeline,
   issue: Issue,
@@ -845,6 +942,12 @@ async function implement(
     resultRequired: false,
   });
   await collectNotes(pipeline, issue.number, "implement", result, notes);
+
+  // Pushed whatever became of the Stage, like its Notes: a session that
+  // committed and then ran into the rate limit still committed, and the Host
+  // that resumes the Ticket may be another one.
+  const commits = await commitCount(pipeline, branch);
+  if (commits > 0) await pushCommitted(pipeline, issue.number, worktree, branch);
   if (!result.ok) throw await stageDidNotFinish(pipeline, progress, "implement", result);
 
   // An agent that gave up silently leaves a clean branch behind. That is a
@@ -852,7 +955,7 @@ async function implement(
   // it carries what the Stage the rate limit stopped had committed — so this
   // asks the same question there: is there anything at all to grade. Whether it
   // is enough is the Verdict's business, not this guard's.
-  if ((await commitCount(pipeline, branch)) === 0) {
+  if (commits === 0) {
     await progress.record(stageRow("implement", result, "❌ no commits"));
     throw new TicketFailure(
       "implement",
@@ -1042,6 +1145,10 @@ async function fix(
     resultRequired: false,
   });
   await collectNotes(pipeline, issue.number, "fix", result, notes);
+
+  // Pushed whatever became of the Stage, as the implement Stage's work is.
+  const grew = (await commitCount(pipeline, branch)) > commitsBefore;
+  if (grew) await pushCommitted(pipeline, issue.number, worktree, branch);
   if (!result.ok) throw await stageDidNotFinish(pipeline, progress, "fix", result);
 
   // A session that came back clean mended nothing, whatever it says. Believing
@@ -1053,7 +1160,7 @@ async function fix(
   // A branch that grew is the whole signal, which is not the same as one that
   // changed: a session that squashed the branch shorter, or amended in place,
   // is read here as having committed nothing.
-  if ((await commitCount(pipeline, branch)) <= commitsBefore) {
+  if (!grew) {
     await progress.record(stageRow("fix", result, "❌ no commits"));
     throw new TicketFailure("fix", "the fix Stage left no new commits on the branch");
   }
@@ -1082,13 +1189,22 @@ async function resolveConflict(
   pipeline: Pipeline,
   issue: Issue,
   worktree: string,
+  branch: string,
   logDir: string,
   conflict: string,
   progress: Progress,
 ): Promise<void> {
   pipeline.log?.(`#${issue.number} resolving a rebase conflict`);
 
-  const failure = await conflictStage(pipeline, issue, worktree, logDir, conflict, progress);
+  const failure = await conflictStage(
+    pipeline,
+    issue,
+    worktree,
+    branch,
+    logDir,
+    conflict,
+    progress,
+  );
   if (failure === undefined) return;
 
   // Nothing may leave this function with a rebase still in the worktree, least
@@ -1110,6 +1226,7 @@ async function conflictStage(
   pipeline: Pipeline,
   issue: Issue,
   worktree: string,
+  branch: string,
   logDir: string,
   conflict: string,
   progress: Progress,
@@ -1128,6 +1245,9 @@ async function conflictStage(
       // ran out of turns, or into the rate limit, after finishing the rebase
       // did the job it was sent to do.
       await progress.record(stageRow("conflict", result, "✅ rebased"));
+      // The rebase rewrote the branch, and the resolution is a commit of the
+      // Stage's like any other.
+      await pushCommitted(pipeline, issue.number, worktree, branch);
       return undefined;
     }
 
@@ -1305,6 +1425,11 @@ interface HandOff {
   branch: string;
   /** Where the work is, absent when the Ticket failed before it had a worktree. */
   worktree?: HandOffWorktree;
+  /**
+   * Whether the State stays for a later Run to resume from: what the branch
+   * carries is the pipeline's, whether or not this Run may push it.
+   */
+  keepsState: boolean;
   pullRequest: number | undefined;
   failure: TicketFailure;
   /** Whether the Ticket's fix budget had already been spent when this failure came. */
@@ -1330,22 +1455,32 @@ interface HandOff {
  * worktree and stops there: the work in it is a human's, and pushing it or
  * opening a PR that says `Closes #<n>` over it would claim it for this Run.
  *
- * That same fact decides the State file. A worktree this Run may push out of is
- * one a Stage of it worked in, and what it left is the pipeline's to resume; a
- * worktree it may not, or no worktree at all, leaves nothing of the pipeline's
- * behind, and a file kept over it would let a later Run resume into a human's
- * work and run an implement Stage over it — which is what refusing at setup
- * exists to prevent.
+ * The same fact mostly decides the State file. A worktree this Run may push out
+ * of is one a Stage of it worked in, and what it left is the pipeline's to
+ * resume; a branch in the way at setup leaves nothing of the pipeline's behind,
+ * and a file kept over it would let a later Run resume into a human's work and
+ * run an implement Stage over it — which is what refusing at setup exists to
+ * prevent. The one worktree this Run may not push out of whose State stays is
+ * one parted from the remote branch: both copies are the pipeline's, and
+ * pushing either over the other is the choice the human is handed.
  */
 async function handOff(
   pipeline: Pipeline,
-  { issue, user, branch, worktree, pullRequest, failure, fixUsed, record, notes }: HandOff,
+  {
+    issue,
+    user,
+    branch,
+    worktree,
+    keepsState,
+    pullRequest,
+    failure,
+    fixUsed,
+    record,
+    notes,
+  }: HandOff,
 ): Promise<TicketOutcome> {
   const { tracker, workspace, config } = pipeline;
   const ticket = issue.number;
-  // Whether what the Run leaves behind is the pipeline's to resume, which is
-  // the same question the draft pull request is decided by.
-  const keepsState = worktree?.pushable === true;
 
   // Nothing of this Run's is on the branch, so nothing may leave the Ticket
   // looking resumable: the next Run must not implement over what a human holds.
@@ -1363,7 +1498,7 @@ async function handOff(
 
   if (pullRequest !== undefined) {
     await tracker.convertPullRequestToDraft(pullRequest);
-  } else if (keepsState) {
+  } else if (worktree?.pushable === true) {
     // A draft PR is worth trying for, but never worth losing the relabel over.
     try {
       await workspace.push(worktree.path, branch);

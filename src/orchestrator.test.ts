@@ -680,8 +680,9 @@ describe("rebase", () => {
       "npm test",
       "npm run typecheck",
     ]);
+    // The push the pull request is opened from, which is the last one.
     expect(workspace.calls.lastIndexOf("runCheck:npm run typecheck")).toBeLessThan(
-      workspace.calls.indexOf(`push:${BRANCH}`),
+      workspace.calls.lastIndexOf(`push:${BRANCH}`),
     );
   });
 
@@ -955,6 +956,119 @@ describe("hand-off", () => {
   });
 });
 
+/**
+ * The branch carries a Ticket's work between Hosts, so every Stage that commits
+ * pushes it: a Host that vanishes after that loses nothing (ADR-0004).
+ */
+describe("pushing the branch after every committing Stage", () => {
+  /** Each push of the branch, named by the Stage that last ran before it. */
+  function pushesAfter(): (StageName | "none")[] {
+    const seen: (StageName | "none")[] = [];
+    let last: StageName | "none" = "none";
+    const runStage = runner.run.bind(runner);
+    runner.run = async (request) => {
+      const result = await runStage(request);
+      last = request.stage;
+      return result;
+    };
+    const push = workspace.push.bind(workspace);
+    workspace.push = async (cwd, branch) => {
+      seen.push(last);
+      await push(cwd, branch);
+    };
+    return seen;
+  }
+
+  it("pushes once the implement Stage has committed, before the Checks grade it", async () => {
+    const pushed = pushesAfter();
+
+    await run();
+
+    expect(pushed[0]).toBe("implement");
+    expect(workspace.calls.indexOf(`push:${BRANCH}`)).toBeLessThan(
+      workspace.calls.indexOf("runCheck:npm test"),
+    );
+  });
+
+  it("pushes what an implement Stage the rate limit stopped had committed", async () => {
+    runner.queue("implement", { ok: false, failure: "rate-limited" });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "released", stage: "implement" });
+    expect(workspace.pushes).toEqual([{ cwd: worktree, branch: BRANCH }]);
+    expect(workspace.remoteBranches.has(BRANCH)).toBe(true);
+  });
+
+  it("pushes nothing after an implement Stage that committed nothing", async () => {
+    workspace.commits = [];
+    // Nothing for the hand-off to push either, so any push is the Stage's.
+    workspace.push = async () => {
+      throw new Error("no push was expected");
+    };
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "implement" });
+    expect(logged.some((line) => line.includes("could not push"))).toBe(false);
+  });
+
+  it("pushes once the fix Stage has committed, before the Checks grade it again", async () => {
+    const pushed = pushesAfter();
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+
+    await run();
+
+    expect(pushed).toContain("fix");
+    const calls = workspace.calls;
+    const fixPush = calls.indexOf(`push:${BRANCH}`, calls.indexOf(`push:${BRANCH}`) + 1);
+    expect(fixPush).toBeLessThan(calls.lastIndexOf("runCheck:npm test"));
+  });
+
+  it("pushes once the conflict Stage has finished the rebase", async () => {
+    const pushed = pushesAfter();
+    workspace.conflictOnce(CONFLICT);
+
+    await run();
+
+    expect(pushed).toContain("conflict");
+    const calls = workspace.calls;
+    expect(calls.indexOf(`push:${BRANCH}`, calls.indexOf("rebaseState"))).toBeLessThan(
+      calls.lastIndexOf("runCheck:npm test"),
+    );
+  });
+
+  it("pushes nothing for a conflict the Stage left unresolved", async () => {
+    workspace.rebaseOutcome = { ok: false, conflict: CONFLICT };
+    workspace.rebaseStateAfterStage = UNRESOLVED;
+
+    await run();
+
+    // Between the Stage coming back and the abort that puts the branch back
+    // where it was, which is a tip the remote already has.
+    const calls = workspace.calls;
+    const afterStage = calls.slice(calls.indexOf("rebaseState"), calls.indexOf("abortRebase"));
+    expect(afterStage).not.toContain(`push:${BRANCH}`);
+  });
+
+  it("carries on when the push is refused, and says so in the Run log", async () => {
+    const push = workspace.push.bind(workspace);
+    let refused = false;
+    workspace.push = async (cwd, branch) => {
+      if (!refused) {
+        refused = true;
+        throw new Error("remote rejected");
+      }
+      await push(cwd, branch);
+    };
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(logged).toContain(`#${TICKET} could not push ${BRANCH}: remote rejected`);
+  });
+});
+
 describe("the fix Stage", () => {
   /** The one fix request a Ticket makes, which every test here expects to exist. */
   const fixRequest = () => {
@@ -1047,7 +1161,8 @@ describe("the fix Stage", () => {
 
     await run();
 
-    expect(workspace.pushes).toHaveLength(2);
+    // After each of the two Stages that committed, and before each wait for CI.
+    expect(workspace.pushes).toHaveLength(4);
     expect(tracker.ciWaits.map((wait) => wait.pullRequest)).toEqual([100, 100]);
   });
 
@@ -2048,6 +2163,168 @@ describe("resuming a released Ticket", () => {
     // And the State file nothing can resume from is gone, so the next Run is
     // not asked the same question again.
     expect(workspace.states.has(TICKET)).toBe(false);
+  });
+});
+
+/**
+ * A resumed Ticket carries on from its branch on the remote, whichever Host
+ * pushed it, rather than from whatever worktree this Host happens to have
+ * (ADR-0004).
+ */
+describe("resuming from the remote branch", () => {
+  /** The State a Run on some Host recorded, and the branch it pushed. */
+  function recorded(overrides: Partial<TicketState> = {}): void {
+    workspace.recordState({
+      ticket: TICKET,
+      branch: BRANCH,
+      state: "implemented",
+      fixUsed: false,
+      runId: "run-0",
+      updatedAt: "2026-09-17T09:00:00.000Z",
+      ...overrides,
+    });
+    workspace.remoteBranches.add(BRANCH);
+  }
+
+  /** A worktree a Run on this Host left behind. */
+  function leftover(): void {
+    workspace.worktrees.set(worktree, BRANCH);
+    workspace.branches.add(BRANCH);
+  }
+
+  describe("with no worktree on this Host", () => {
+    it("makes one from the remote branch and carries on from the state it reached", async () => {
+      recorded();
+
+      const outcome = await run();
+
+      expect(outcome).toMatchObject({ outcome: "merged" });
+      expect(workspace.calls).toContain(`worktreeFromRemote:${BRANCH}`);
+      expect(workspace.calls).not.toContain(`createWorktree:${BRANCH}`);
+      expect(runner.stages()).toEqual(["verify"]);
+      expect(workspace.ranChecks.map((check) => check.cwd)).toEqual([worktree, worktree]);
+    });
+
+    it("runs the implement Stage in it when that is where the Ticket stopped", async () => {
+      recorded({ state: "claimed" });
+
+      await run();
+
+      expect(runner.stages()).toEqual(["implement", "verify"]);
+      expect(runner.requests[0]?.cwd).toBe(worktree);
+      expect(workspace.calls).not.toContain(`createWorktree:${BRANCH}`);
+    });
+
+    it("resumes a Stranded Ticket another Host left, keeping its Claim", async () => {
+      recorded();
+      const issue = tracker.issue(TICKET);
+      issue.assignees = ["pipeline-user"];
+      issue.labels = ["in-progress"];
+
+      const outcome = await run();
+
+      expect(outcome).toMatchObject({ outcome: "merged" });
+      expect(runner.stages()).toEqual(["verify"]);
+      expect(tracker.calls).not.toContain(`assign:${TICKET}:pipeline-user`);
+    });
+
+    it("takes the Ticket from the top only when its branch is gone from the remote", async () => {
+      recorded({ fixUsed: true });
+      workspace.remoteBranches.delete(BRANCH);
+
+      const outcome = await run();
+
+      expect(outcome).toMatchObject({ outcome: "merged" });
+      expect(workspace.calls).toContain(`createWorktree:${BRANCH}`);
+      expect(runner.stages()).toEqual(["implement", "verify"]);
+      expect(logged).toContain(
+        `#${TICKET} was resumable, but ${BRANCH} is neither in ${worktree} nor on the remote`,
+      );
+    });
+  });
+
+  describe("with a worktree left on this Host", () => {
+    it("uses one that contains the remote branch as it is", async () => {
+      recorded();
+      leftover();
+
+      const outcome = await run();
+
+      expect(outcome).toMatchObject({ outcome: "merged" });
+      expect(runner.stages()).toEqual(["verify"]);
+      expect(workspace.calls).not.toContain(`createWorktree:${BRANCH}`);
+      expect(workspace.pushes[0]).toEqual({ cwd: worktree, branch: BRANCH });
+    });
+
+    it("uses one whose branch never reached the remote", async () => {
+      recorded({ state: "claimed" });
+      workspace.remoteBranches.delete(BRANCH);
+      leftover();
+
+      const outcome = await run();
+
+      expect(outcome).toMatchObject({ outcome: "merged" });
+      expect(workspace.calls).not.toContain(`createWorktree:${BRANCH}`);
+      expect(runner.requests[0]?.cwd).toBe(worktree);
+    });
+
+    describe("that has parted from the remote branch", () => {
+      beforeEach(() => {
+        recorded();
+        leftover();
+        workspace.partedBranches.add(BRANCH);
+      });
+
+      it("hands the Ticket off at setup, saying the two have parted", async () => {
+        const outcome = await run();
+
+        expect(outcome).toMatchObject({ outcome: "handed-off", stage: "setup" });
+        expect(handoffBody()).toContain(
+          `the worktree at ${worktree} and the branch ${BRANCH} on the remote have parted`,
+        );
+        expect(handoffBody()).toContain(`worktree \`${worktree}\``);
+        expect(runner.stages()).toEqual([]);
+        expect(tracker.issue(TICKET).labels).toEqual(["ready-for-human"]);
+      });
+
+      it("names the branch instead when this Host kept it without its worktree", async () => {
+        workspace.worktrees.delete(worktree);
+
+        const outcome = await run();
+
+        expect(outcome).toMatchObject({ outcome: "handed-off", stage: "setup" });
+        expect(handoffBody()).toContain(
+          `the branch ${BRANCH} on this Host and the branch ${BRANCH} on the remote have parted`,
+        );
+        expect(handoffBody()).toContain(`\`git branch -D ${BRANCH}\``);
+        expect(handoffBody()).not.toContain("worktree `");
+        expect(workspace.state(TICKET)).toMatchObject({ state: "implemented" });
+      });
+
+      it("pushes nothing over the remote branch and opens no draft PR", async () => {
+        const outcome = await run();
+
+        expect(outcome).not.toHaveProperty("pullRequest");
+        expect(workspace.calls).not.toContain(`push:${BRANCH}`);
+        expect(tracker.pullRequests).toEqual([]);
+      });
+
+      it("keeps the State, so the Ticket resumes once a human has chosen a side", async () => {
+        await run();
+
+        expect(workspace.state(TICKET)).toMatchObject({ state: "implemented" });
+
+        // The human keeps the remote's work and throws this Host's away.
+        workspace.worktrees.delete(worktree);
+        workspace.branches.delete(BRANCH);
+        workspace.partedBranches.delete(BRANCH);
+        tracker.issue(TICKET).labels = ["ready-for-agent"];
+        const outcome = await run();
+
+        expect(outcome).toMatchObject({ outcome: "merged" });
+        expect(runner.stages()).toEqual(["verify"]);
+      });
+    });
   });
 });
 
@@ -3161,8 +3438,16 @@ describe("the Landing", () => {
   const landings = () =>
     workspace.calls.filter((call) => call === "rebase" || call === "pullBase");
 
-  /** Which branch was pushed when, which is one Ticket per turn at the Landing. */
-  const pushed = () => workspace.pushes.map(({ branch }) => branch);
+  /**
+   * Which branch a pull request was opened or updated from when, which is one
+   * Ticket per turn at the Landing. The pushes a committing Stage makes happen
+   * outside it, so they are not counted.
+   */
+  const pushed = () =>
+    tracker.calls.flatMap((call) => {
+      const published = /^(?:createPullRequest|updatePullRequestBody):(\d+)/.exec(call);
+      return published ? [tracker.pullRequest(Number(published[1])).head] : [];
+    });
 
   it("holds the second Ticket's rebase until the first has merged and pulled", async () => {
     workspace.conflictOnce(CONFLICT);

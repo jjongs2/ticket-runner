@@ -146,6 +146,21 @@ export interface WorktreeRef {
   branch: string;
 }
 
+/**
+ * Where a resumed Ticket's worktree came from, measured against its branch on
+ * the remote, which is what carries a Ticket's work between Hosts (ADR-0004).
+ *
+ * - `made`: this Host had no worktree of the branch, so one was made from the
+ *   remote branch
+ * - `kept`: this Host's worktree contains the remote branch, which is a Run on
+ *   this Host that died before it pushed, and it is used as it is
+ * - `parted`: this Host's copy and the remote branch each carry commits the
+ *   other lacks, so another Host moved on while this one held work it never
+ *   pushed, and nothing is touched
+ * - `gone`: neither this Host nor the remote has the branch
+ */
+export type WorktreeFromRemote = "made" | "kept" | "parted" | "gone";
+
 export interface Workspace {
   /** Create `branch` fresh from `base` and check it out at `path`. */
   createWorktree(worktree: WorktreeRef, base: string): Promise<void>;
@@ -154,12 +169,25 @@ export interface Workspace {
   /**
    * Whether `path` is still a worktree of this repo, checked out on `branch`.
    *
-   * Asked of a resumable Ticket before a Run resumes into the worktree it kept,
-   * released or stranded alike: a human who has cleaned that worktree up has
-   * thrown the resume away with it, and the Ticket is better started over than
-   * resumed into nothing.
+   * Asked of a branch in the way of a Ticket taken from the top, because a
+   * branch that is checked out is not one a human can simply delete.
    */
   hasWorktree(worktree: WorktreeRef): Promise<boolean>;
+  /**
+   * Ready the worktree a resumed Ticket carries on in, from its branch on the
+   * remote rather than from whatever this Host happens to have.
+   *
+   * A worktree already here is kept only when it contains the remote branch,
+   * unpushed commits and all. One the remote has merely moved ahead of is
+   * brought up to it, since it holds nothing the remote lacks. One that has
+   * parted from the remote branch is reported and left exactly as it is, as is
+   * the remote: choosing between the two is a human's call. A branch this Host
+   * kept without its worktree is measured the same way.
+   *
+   * A worktree here and no branch on the remote is kept too: a Run on this Host
+   * that died before its first push.
+   */
+  worktreeFromRemote(worktree: WorktreeRef): Promise<WorktreeFromRemote>;
   /**
    * Whether `branch` is a branch of this local repo, asked before a Ticket's
    * worktree is created.
@@ -224,6 +252,14 @@ export interface Workspace {
    * when no rebase is in progress, so it is safe on any failure path.
    */
   abortRebase(cwd: string): Promise<void>;
+  /**
+   * Push `branch` from the worktree at `cwd`, overwriting what the remote has
+   * only when it is what this Host last saw there: a rebase rewrites the
+   * branch, and another Host's newer work must not be.
+   *
+   * Pushed after every Stage that commits, not only at the pull request, so a
+   * Host that vanishes mid-Ticket loses no committed work.
+   */
   push(cwd: string, branch: string): Promise<void>;
   /**
    * Delete `branch` on the remote; the PR is merged, so nothing references it.

@@ -18,6 +18,7 @@ import type {
   StateFile,
   TicketState,
   Workspace,
+  WorktreeFromRemote,
 } from "../ports/workspace.js";
 import {
   clearTicketState,
@@ -108,6 +109,77 @@ export class GitWorkspace implements Workspace {
       return lines.includes(`branch refs/heads/${branch}`);
     }
     return false;
+  }
+
+  /**
+   * The remote branch is fetched into its remote-tracking ref, which is also
+   * what the lease of every later {@link push} is taken against: a push from
+   * here then overwrites only the tip this Host last saw.
+   *
+   * Every comparison reads the branch ref, not the worktree's HEAD, because a
+   * Run killed mid-rebase leaves HEAD detached on a half-replayed branch while
+   * the branch itself still names the work.
+   */
+  async worktreeFromRemote({ path, branch }: WorktreeRef): Promise<WorktreeFromRemote> {
+    const here = await this.hasWorktree({ path, branch });
+    const remoteRef = await this.fetchBranch(branch);
+    if (remoteRef === undefined) return here ? "kept" : "gone";
+
+    const localRef = `refs/heads/${branch}`;
+    if (here || (await this.hasBranch(branch))) {
+      if (await this.contains(localRef, remoteRef)) {
+        if (!here) await this.addWorktree([path, branch]);
+        return here ? "kept" : "made";
+      }
+      if (!(await this.contains(remoteRef, localRef))) return "parted";
+      // Behind the remote and nothing more: every commit here is one the
+      // remote already has, so moving up to it loses nothing.
+      if (here) {
+        await this.abortRebase(path);
+        await execOrThrow("git", ["merge", "--ff-only", remoteRef], { cwd: path });
+        return "kept";
+      }
+    }
+
+    // -B, because a branch left behind without its worktree is by now known to
+    // hold nothing the remote lacks, and is moved to the remote tip.
+    await this.addWorktree(["-B", branch, path, remoteRef]);
+    return "made";
+  }
+
+  /**
+   * `worktree add`, after git has forgotten any worktree whose directory a
+   * human deleted: git refuses to check a branch out where it still believes
+   * one is.
+   */
+  private async addWorktree(args: string[]): Promise<void> {
+    await this.git(["worktree", "prune"]);
+    await this.git(["worktree", "add", ...args]);
+  }
+
+  /**
+   * Fetch `branch` from the remote into its remote-tracking ref and name that
+   * ref, or nothing when the remote has no such branch. Forced, because the
+   * remote branch is rewritten by every rebase that is pushed.
+   */
+  private async fetchBranch(branch: string): Promise<string | undefined> {
+    const { stdout } = await this.git([
+      "ls-remote",
+      "--heads",
+      this.remote,
+      `refs/heads/${branch}`,
+    ]);
+    if (stdout.trim() === "") return undefined;
+
+    const tracking = `refs/remotes/${this.remote}/${branch}`;
+    await this.git(["fetch", this.remote, `+refs/heads/${branch}:${tracking}`]);
+    return tracking;
+  }
+
+  /** Whether `ref` holds every commit `other` does. */
+  private async contains(ref: string, other: string): Promise<boolean> {
+    const result = await this.tryGit(["merge-base", "--is-ancestor", other, ref]);
+    return result.exitCode === 0;
   }
 
   /**
