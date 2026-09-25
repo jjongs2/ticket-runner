@@ -11,6 +11,21 @@ function ok(stdout: string, extra: Partial<Execution> = {}): Execution {
   return execution({ stdout, ...extra });
 }
 
+/** One issue as the REST API reports it, with whatever the test sets over it. */
+function restIssue(overrides: Record<string, unknown> = {}) {
+  return {
+    number: 2,
+    title: "Skeleton",
+    html_url: "https://github.com/acme/repo/issues/2",
+    body: "- [ ] it works",
+    state: "open",
+    labels: [],
+    assignees: [],
+    sub_issues_summary: { total: 0, completed: 0, percent_completed: 0 },
+    ...overrides,
+  };
+}
+
 function tracker(...queued: Execution[]) {
   return trackerWith({}, ...queued);
 }
@@ -43,17 +58,16 @@ beforeEach(() => {
 });
 
 describe("reading", () => {
-  it("reads authentication off the exit code of `gh auth status`", async () => {
-    expect(await tracker(ok("Logged in to github.com as octocat")).authenticated()).toBe(true);
-    expect(calls[0]).toEqual(["auth", "status"]);
+  it("reads authentication off asking REST for the current user", async () => {
+    expect(await tracker(ok("octocat\n")).authenticated()).toBe(true);
+    expect(calls[0]).toEqual(["api", "user", "--jq", ".login"]);
   });
 
   it("answers that gh is not authenticated rather than throwing", async () => {
-    const gh = tracker(failedExecution("You are not logged into any GitHub hosts."));
+    const gh = tracker(failedExecution("gh: Bad credentials (HTTP 401)"));
 
     expect(await gh.authenticated()).toBe(false);
   });
-
   it("answers that gh is not authenticated when gh itself cannot be run", async () => {
     const gh = trackerWith({
       run: async () => {
@@ -157,34 +171,26 @@ describe("reading", () => {
     await expect(tracker(ok("\n")).defaultBranch()).rejects.toThrow(/no default branch/);
   });
 
-  it("lists label names", async () => {
+  it("lists label names through REST, every page of them", async () => {
     const labels = await tracker(ok('[{"name":"needs-triage"},{"name":"wontfix"}]')).listLabels();
 
     expect(labels).toEqual(["needs-triage", "wontfix"]);
-    expect(calls[0]?.slice(0, 2)).toEqual(["label", "list"]);
+    expect(calls[0]).toEqual([
+      "api",
+      "--paginate",
+      "--method",
+      "GET",
+      "repos/{owner}/{repo}/labels",
+      "-F",
+      "per_page=100",
+    ]);
   });
 
   it("flattens an issue into labels, assignees, comment bodies and relations", async () => {
     const issue = await tracker(
-      ok(
-        JSON.stringify({
-          number: 2,
-          title: "Skeleton",
-          url: "https://github.com/acme/repo/issues/2",
-          body: "- [ ] it works",
-          state: "OPEN",
-          labels: [{ name: "ready-for-agent" }],
-          assignees: [{ login: "octocat" }],
-          comments: [
-            {
-              body: "extra criteria",
-              url: "https://github.com/acme/repo/issues/2#issuecomment-5714903734",
-            },
-          ],
-          subIssuesSummary: { total: 0, completed: 0, percentCompleted: 0 },
-          blockedBy: { nodes: [{ number: 3 }, { number: 7 }], totalCount: 2 },
-        }),
-      ),
+      ok(JSON.stringify(restIssue({ labels: [{ name: "ready-for-agent" }], assignees: [{ login: "octocat" }] }))),
+      ok(JSON.stringify([{ id: 5714903734, body: "extra criteria" }])),
+      ok(JSON.stringify([restIssue({ number: 3 }), restIssue({ number: 7, state: "closed" })])),
     ).getIssue(2);
 
     expect(issue).toEqual({
@@ -199,129 +205,99 @@ describe("reading", () => {
       subIssues: 0,
       blockedBy: [3, 7],
     });
-    expect(calls[0]?.slice(0, 3)).toEqual(["issue", "view", "2"]);
+  });
+
+  it("reads an issue, its comments and its blockers through REST alone", async () => {
+    await tracker(ok(JSON.stringify(restIssue())), ok("[]"), ok("[]")).getIssue(2);
+
+    expect(calls).toEqual([
+      ["api", "repos/{owner}/{repo}/issues/2"],
+      ["api", "--paginate", "--method", "GET", "repos/{owner}/{repo}/issues/2/comments", "-F", "per_page=100"],
+      [
+        "api",
+        "--paginate",
+        "--method",
+        "GET",
+        "repos/{owner}/{repo}/issues/2/dependencies/blocked_by",
+        "-F",
+        "per_page=100",
+      ],
+    ]);
   });
 
   it("reports an issue GitHub calls closed as closed", async () => {
     const issue = await tracker(
-      ok(
-        JSON.stringify({
-          number: 2,
-          title: "Skeleton",
-          url: "https://github.com/acme/repo/issues/2",
-          body: "",
-          state: "CLOSED",
-          labels: [],
-          assignees: [],
-          comments: [],
-          subIssuesSummary: { total: 0 },
-          blockedBy: { nodes: [] },
-        }),
-      ),
+      ok(JSON.stringify(restIssue({ state: "closed" }))),
+      ok("[]"),
+      ok("[]"),
     ).getIssue(2);
 
     expect(issue.closed).toBe(true);
-    expect(calls[0]?.at(-1)).toContain("state");
   });
 
-  it("reads an issue whose comment has no id in its url, since the bodies still grade it", async () => {
+  it("reads an issue with no body as an empty one", async () => {
     const issue = await tracker(
-      ok(
-        JSON.stringify({
-          number: 2,
-          title: "Skeleton",
-          url: "https://github.com/acme/repo/issues/2",
-          body: "",
-          labels: [],
-          assignees: [],
-          comments: [{ body: "- [ ] it works", url: "" }],
-          subIssuesSummary: { total: 0 },
-          blockedBy: { nodes: [] },
-        }),
-      ),
+      ok(JSON.stringify(restIssue({ body: null }))),
+      ok(JSON.stringify([{ id: 99, body: null }])),
+      ok("[]"),
+    ).getIssue(2);
+
+    expect(issue.body).toBe("");
+    expect(issue.comments).toEqual([{ id: "99", body: "" }]);
+  });
+
+  it("reads an issue whose comment came back with no id, since the bodies still grade it", async () => {
+    const issue = await tracker(
+      ok(JSON.stringify(restIssue())),
+      ok(JSON.stringify([{ body: "- [ ] it works" }])),
+      ok("[]"),
     ).getIssue(2);
 
     expect(issue.comments).toEqual([{ body: "- [ ] it works" }]);
   });
 
-  it("asks for the relations the guards need in the same call", async () => {
-    await tracker(
-      ok(
-        JSON.stringify({
-          number: 2,
-          title: "Skeleton",
-          url: "https://github.com/acme/repo/issues/2",
-          body: "",
-          labels: [],
-          assignees: [],
-          comments: [],
-          subIssuesSummary: { total: 3 },
-          blockedBy: { nodes: [] },
-        }),
-      ),
+  it("reads a Spec off its sub-issue count", async () => {
+    const issue = await tracker(
+      ok(JSON.stringify(restIssue({ sub_issues_summary: { total: 3, completed: 0 } }))),
+      ok("[]"),
+      ok("[]"),
     ).getIssue(2);
 
-    const fields = calls[0]?.at(-1) ?? "";
-    expect(fields).toContain("subIssuesSummary");
-    expect(fields).toContain("blockedBy");
+    expect(issue.subIssues).toBe(3);
   });
 
-  it("refuses to read a missing relation summary as a Ticket with no relations", async () => {
-    // Guessing zero here would offer every Spec to an implement Stage and take
-    // every body-only blocker at its word.
+  it("refuses to read a missing sub-issue summary as a Ticket with no sub-issues", async () => {
+    // Guessing zero here would offer every Spec to an implement Stage.
     const issue = tracker(
-      ok(
-        JSON.stringify({
-          number: 2,
-          title: "Skeleton",
-          url: "https://github.com/acme/repo/issues/2",
-          body: "",
-          labels: [],
-          assignees: [],
-          comments: [],
-        }),
-      ),
+      ok(JSON.stringify(restIssue({ sub_issues_summary: undefined }))),
+      ok("[]"),
+      ok("[]"),
     ).getIssue(2);
 
-    await expect(issue).rejects.toThrow(/subIssuesSummary.total or blockedBy/);
+    await expect(issue).rejects.toThrow(/without sub_issues_summary.total/);
   });
 
-  it("names the relation that is missing, not the one that came back", async () => {
+  it("refuses to read an issue whose blockers GitHub would not list", async () => {
+    // A 404 from a GitHub without dependencies is no answer, not an empty list.
     const issue = tracker(
-      ok(
-        JSON.stringify({
-          number: 2,
-          title: "Skeleton",
-          url: "https://github.com/acme/repo/issues/2",
-          body: "",
-          labels: [],
-          assignees: [],
-          comments: [],
-          subIssuesSummary: { total: 0 },
-        }),
-      ),
+      ok(JSON.stringify(restIssue())),
+      ok("[]"),
+      failedExecution("gh: Not Found (HTTP 404)"),
     ).getIssue(2);
 
-    await expect(issue).rejects.toThrow(/without blockedBy/);
+    await expect(issue).rejects.toThrow(/HTTP 404/);
   });
+
   it("reads candidates, their assignees and their open native blockers", async () => {
     const candidates = await tracker(
       ok(
         JSON.stringify([
-          {
-            number: 4,
-            title: "Planning guards",
-            assignees: [{ login: "octocat" }],
-            issue_dependencies_summary: { blocked_by: 1, total_blocked_by: 2 },
-          },
-          {
-            number: 5,
-            title: "Fix Stage",
-            assignees: [],
-            issue_dependencies_summary: { blocked_by: 0, total_blocked_by: 1 },
-          },
+          restIssue({ number: 4, title: "Planning guards", assignees: [{ login: "octocat" }] }),
+          restIssue({ number: 5, title: "Fix Stage" }),
         ]),
       ),
+      ok(JSON.stringify([restIssue({ number: 1 }), restIssue({ number: 2, state: "closed" })])),
+      ok(JSON.stringify([restIssue({ number: 3, state: "closed" })])),
     ).listCandidates("ready-for-agent");
 
     expect(candidates).toEqual([
@@ -330,39 +306,67 @@ describe("reading", () => {
     ]);
   });
 
-  it("refuses to read a missing dependency summary as unblocked", async () => {
-    // Defaulting to zero would merge every blocked Ticket without a word.
-    const listing = tracker(
-      ok(JSON.stringify([{ number: 4, title: "Planning guards", assignees: [] }])),
+  it("counts blockers off each candidate's dependency list, not its summary counts", async () => {
+    // The summary lags the list: a blocker added a moment ago is in the list
+    // while the summary still counts none.
+    const candidates = await tracker(
+      ok(
+        JSON.stringify([
+          restIssue({
+            number: 5,
+            issue_dependencies_summary: { blocked_by: 0, total_blocked_by: 0 },
+          }),
+        ]),
+      ),
+      ok(JSON.stringify([restIssue({ number: 3 })])),
     ).listCandidates("ready-for-agent");
 
-    await expect(listing).rejects.toThrow(/issue_dependencies_summary/);
+    expect(candidates[0]?.openBlockers).toBe(1);
+    expect(calls[1]).toContain("repos/{owner}/{repo}/issues/5/dependencies/blocked_by");
   });
 
-  it("asks the API for open issues with the label, since gh issue list has no blockers", async () => {
+  it("counts a blocker whose state did not come back as open", async () => {
+    // Reading it as closed would put a blocked Ticket on the Frontier (ADR-0003).
+    const candidates = await tracker(
+      ok(JSON.stringify([restIssue({ number: 5 })])),
+      ok(JSON.stringify([{ number: 3 }])),
+    ).listCandidates("ready-for-agent");
+
+    expect(candidates[0]?.openBlockers).toBe(1);
+  });
+
+  it("asks the API for open issues with the label", async () => {
     await tracker(ok("[]")).listCandidates("ready-for-agent");
 
-    expect(calls[0]).toContain("repos/{owner}/{repo}/issues");
-    expect(calls[0]).toContain("state=open");
-    expect(calls[0]).toContain("labels=ready-for-agent");
+    expect(calls[0]).toEqual([
+      "api",
+      "--paginate",
+      "--method",
+      "GET",
+      "repos/{owner}/{repo}/issues",
+      "-F",
+      "per_page=100",
+      "-f",
+      "state=open",
+      "-f",
+      "labels=ready-for-agent",
+    ]);
   });
 
   it("drops the pull requests GitHub returns from the issue list", async () => {
     const candidates = await tracker(
       ok(
         JSON.stringify([
-          { number: 12, title: "A PR", assignees: [], pull_request: { url: "..." } },
-          {
-            number: 5,
-            title: "A Ticket",
-            assignees: [],
-            issue_dependencies_summary: { blocked_by: 0 },
-          },
+          restIssue({ number: 12, title: "A PR", pull_request: { url: "..." } }),
+          restIssue({ number: 5, title: "A Ticket" }),
         ]),
       ),
+      ok("[]"),
     ).listCandidates("ready-for-agent");
 
     expect(candidates.map((candidate) => candidate.number)).toEqual([5]);
+    // No pull request's blockers are asked for either.
+    expect(calls).toHaveLength(2);
   });
 });
 
@@ -381,64 +385,85 @@ describe("writing", () => {
     expect(calls[0]?.join(" ")).not.toMatch(/merge_commit|rebase_merge|delete_branch/);
   });
 
-  it("creates a label with its colour and description", async () => {
-    await tracker(ok("")).createLabel({
+  it("creates a label with its colour and description through REST", async () => {
+    await tracker(ok("{}")).createLabel({
       name: "in-progress",
       color: "1d76db",
       description: "Claimed by an agent-pipeline Run",
     });
 
     expect(calls[0]).toEqual([
-      "label",
-      "create",
-      "in-progress",
-      "--color",
-      "1d76db",
-      "--description",
-      "Claimed by an agent-pipeline Run",
+      "api",
+      "--method",
+      "POST",
+      "repos/{owner}/{repo}/labels",
+      "-f",
+      "name=in-progress",
+      "-f",
+      "color=1d76db",
+      "-f",
+      "description=Claimed by an agent-pipeline Run",
     ]);
   });
 
-  it("assigns, unassigns and moves labels through gh issue edit", async () => {
-    const gh = tracker(ok(""), ok(""), ok(""), ok(""));
+  it("assigns, unassigns and moves labels through REST", async () => {
+    const gh = tracker(ok("{}"), ok("{}"), ok("[]"), ok("[]"));
     await gh.assign(2, "octocat");
     await gh.unassign(2, "octocat");
     await gh.addLabel(2, "in-progress");
     await gh.removeLabel(2, "ready-for-agent");
 
     expect(calls).toEqual([
-      ["issue", "edit", "2", "--add-assignee", "octocat"],
-      ["issue", "edit", "2", "--remove-assignee", "octocat"],
-      ["issue", "edit", "2", "--add-label", "in-progress"],
-      ["issue", "edit", "2", "--remove-label", "ready-for-agent"],
+      ["api", "--method", "POST", "repos/{owner}/{repo}/issues/2/assignees", "-f", "assignees[]=octocat"],
+      ["api", "--method", "DELETE", "repos/{owner}/{repo}/issues/2/assignees", "-f", "assignees[]=octocat"],
+      ["api", "--method", "POST", "repos/{owner}/{repo}/issues/2/labels", "-f", "labels[]=in-progress"],
+      ["api", "--method", "DELETE", "repos/{owner}/{repo}/issues/2/labels/ready-for-agent"],
     ]);
   });
 
-  it("comments with the body as a single argument", async () => {
-    await tracker(ok("https://github.com/acme/repo/issues/2#issuecomment-99\n")).comment(
-      2,
-      "<!-- agent-pipeline:handoff -->\nline two",
-    );
+  it("names a label with spaces in the path it removes it by", async () => {
+    await tracker(ok("[]")).removeLabel(2, "needs triage");
+
+    expect(calls[0]?.at(-1)).toBe("repos/{owner}/{repo}/issues/2/labels/needs%20triage");
+  });
+
+  it("takes a label the issue does not wear as already removed", async () => {
+    // `gh issue edit --remove-label` was a no-op there, and a Ticket must not
+    // fail over a label somebody took off first.
+    const gh = tracker(failedExecution("gh: Label does not exist (HTTP 404)"));
+
+    await expect(gh.removeLabel(2, "ready-for-agent")).resolves.toBeUndefined();
+  });
+
+  it("still fails a removal GitHub refused for any other reason", async () => {
+    const gh = tracker(failedExecution("gh: Not Found (HTTP 404)"));
+
+    await expect(gh.removeLabel(2, "ready-for-agent")).rejects.toThrow(/Not Found/);
+  });
+
+  it("comments through REST with the body as a single field", async () => {
+    await tracker(ok('{"id":99}')).comment(2, "<!-- agent-pipeline:handoff -->\nline two");
 
     expect(calls[0]).toEqual([
-      "issue",
-      "comment",
-      "2",
-      "--body",
-      "<!-- agent-pipeline:handoff -->\nline two",
+      "api",
+      "--method",
+      "POST",
+      "repos/{owner}/{repo}/issues/2/comments",
+      "-f",
+      "body=<!-- agent-pipeline:handoff -->\nline two",
     ]);
   });
 
   it("reports the id of the comment it just posted, for editing later", async () => {
     const posted = await tracker(
-      ok("https://github.com/acme/repo/issues/2#issuecomment-5714903734\n"),
+      ok(JSON.stringify({ id: 5714903734, body: "<!-- agent-pipeline:progress -->" })),
     ).comment(2, "<!-- agent-pipeline:progress -->");
 
     expect(posted).toEqual({ id: "5714903734", body: "<!-- agent-pipeline:progress -->" });
   });
 
   it("reports a comment with no id rather than failing, since an id costs an edit only", async () => {
-    expect(await tracker(ok("")).comment(2, "body")).toEqual({ body: "body" });
+    expect(await tracker(ok("{}")).comment(2, "body")).toEqual({ body: "body" });
   });
 
   it("edits a comment in place through the REST endpoint", async () => {
@@ -454,10 +479,86 @@ describe("writing", () => {
     ]);
   });
 
-  it("replaces an issue body, which is where the criteria are ticked", async () => {
-    await tracker(ok("")).updateIssueBody(2, "- [x] it works");
+  it("replaces an issue body through REST, which is where the criteria are ticked", async () => {
+    await tracker(ok("{}")).updateIssueBody(2, "- [x] it works");
 
-    expect(calls[0]).toEqual(["issue", "edit", "2", "--body", "- [x] it works"]);
+    expect(calls[0]).toEqual([
+      "api",
+      "--method",
+      "PATCH",
+      "repos/{owner}/{repo}/issues/2",
+      "-f",
+      "body=- [x] it works",
+    ]);
+  });
+
+  it("opens an issue for a Note through REST and reads its number off the answer", async () => {
+    const issue = await tracker(
+      ok(JSON.stringify({ number: 31, html_url: "https://github.com/acme/repo/issues/31" })),
+    ).createIssue({
+      title: "Nothing cleans up worktrees",
+      body: "From #10 implement\n\nNothing cleans up worktrees.\n",
+      labels: ["needs-triage"],
+    });
+
+    expect(issue).toEqual({ number: 31, url: "https://github.com/acme/repo/issues/31" });
+    expect(calls[0]).toEqual([
+      "api",
+      "--method",
+      "POST",
+      "repos/{owner}/{repo}/issues",
+      "-f",
+      "title=Nothing cleans up worktrees",
+      "-f",
+      "body=From #10 implement\n\nNothing cleans up worktrees.\n",
+      "-f",
+      "labels[]=needs-triage",
+    ]);
+  });
+
+  it("refuses an answer it cannot read an issue number from", async () => {
+    await expect(
+      tracker(ok(JSON.stringify({ html_url: "https://github.com/acme/repo/issues/31" }))).createIssue({
+        title: "t",
+        body: "b",
+        labels: [],
+      }),
+    ).rejects.toThrow("could not read an issue number");
+  });
+
+  it("runs no gh subcommand that goes through GraphQL for any issue-side call", async () => {
+    const gh = tracker(
+      ok("octocat\n"),
+      ok("[]"),
+      ok("{}"),
+      ok(JSON.stringify(restIssue())),
+      ok("[]"),
+      ok("[]"),
+      ok(JSON.stringify({ number: 31, html_url: "https://github.com/acme/repo/issues/31" })),
+      ok("[]"),
+      ok("{}"),
+      ok("{}"),
+      ok("[]"),
+      ok("[]"),
+      ok('{"id":1}'),
+      ok("{}"),
+      ok("{}"),
+    );
+    await gh.authenticated();
+    await gh.listLabels();
+    await gh.createLabel({ name: "x", color: "ffffff", description: "" });
+    await gh.getIssue(2);
+    await gh.createIssue({ title: "t", body: "b", labels: [] });
+    await gh.listCandidates("ready-for-agent");
+    await gh.assign(2, "octocat");
+    await gh.unassign(2, "octocat");
+    await gh.addLabel(2, "x");
+    await gh.removeLabel(2, "x");
+    await gh.comment(2, "b");
+    await gh.updateComment("1", "b");
+    await gh.updateIssueBody(2, "b");
+
+    expect(calls.filter((args) => args[0] !== "api" || args.includes("graphql"))).toEqual([]);
   });
 });
 
@@ -486,40 +587,7 @@ describe("pull requests", () => {
     ]);
   });
 
-  it("opens an issue for a Note and reads its number off the URL", async () => {
-    const issue = await tracker(ok("https://github.com/acme/repo/issues/31\n")).createIssue({
-      title: "Nothing cleans up worktrees",
-      body: "From #10 implement\n\nNothing cleans up worktrees.\n",
-      labels: ["needs-triage"],
-    });
-
-    expect(issue).toEqual({ number: 31, url: "https://github.com/acme/repo/issues/31" });
-    expect(calls[0]).toEqual([
-      "issue",
-      "create",
-      "--title",
-      "Nothing cleans up worktrees",
-      "--body",
-      "From #10 implement\n\nNothing cleans up worktrees.\n",
-      "--label",
-      "needs-triage",
-    ]);
-  });
-
-  it("refuses output it cannot read an issue number from", async () => {
-    await expect(
-      tracker(ok("could not create issue\n")).createIssue({
-        title: "t",
-        body: "b",
-        labels: [],
-      }),
-    ).rejects.toThrow("could not read an issue number");
-  });
-
   it("refuses a last line that starts with digits but is not a URL", async () => {
-    await expect(
-      tracker(ok("3 files changed\n")).createIssue({ title: "t", body: "b", labels: [] }),
-    ).rejects.toThrow("could not read an issue number");
     await expect(
       tracker(ok("3 files changed\n")).createPullRequest({
         base: "main",
@@ -531,24 +599,19 @@ describe("pull requests", () => {
     ).rejects.toThrow("could not read a pull request number");
   });
 
-  it("refuses a URL whose path is not an issue's or a pull request's", async () => {
+  it("refuses a URL whose path is not a pull request's", async () => {
     await expect(
-      tracker(ok("https://github.com/acme/repo/issues/9/issues/31\n")).createIssue({
-        title: "t",
-        body: "b",
-        labels: [],
+      tracker(ok("https://github.com/acme/repo/pull/9/pull/12\n")).createPullRequest({
+        base: "main",
+        head: "agent/2-skeleton",
+        title: "Skeleton (#2)",
+        body: "Closes #2",
+        draft: false,
       }),
-    ).rejects.toThrow("could not read an issue number");
+    ).rejects.toThrow("could not read a pull request number");
   });
 
   it("refuses a URL the last line carries trailing text after", async () => {
-    await expect(
-      tracker(ok("https://github.com/acme/repo/issues/31 (draft)\n")).createIssue({
-        title: "t",
-        body: "b",
-        labels: [],
-      }),
-    ).rejects.toThrow("could not read an issue number");
     await expect(
       tracker(ok("https://github.com/acme/repo/pull/12 (draft)\n")).createPullRequest({
         base: "main",

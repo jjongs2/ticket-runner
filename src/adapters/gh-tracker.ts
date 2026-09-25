@@ -28,29 +28,34 @@ export interface GhTrackerOptions {
   now?: () => number;
 }
 
-/** One issue as `gh issue view --json` reports it. */
+/**
+ * One issue as the REST API reports it, in the fields the pipeline reads. The
+ * issue list, the dependency list and a single issue all answer in this shape.
+ */
 interface RawIssue {
   number: number;
   title: string;
-  url: string;
-  body: string;
-  state: string;
+  html_url: string;
+  body: string | null;
+  /** `open` or `closed`. */
+  state?: string;
   labels: { name: string }[];
-  assignees: { login: string }[];
-  comments: { body: string; url: string }[];
-  subIssuesSummary?: { total?: number };
-  blockedBy?: { nodes: { number: number }[] };
-}
-
-/** The fields the Frontier needs from one entry of the REST issue list. */
-interface RawCandidate {
-  number: number;
-  title: string;
   assignees: { login: string }[] | null;
   /** Present on pull requests only; GitHub lists them as issues too. */
   pull_request?: unknown;
-  /** `blocked_by` counts open blockers only, which is exactly the gate. */
-  issue_dependencies_summary?: { blocked_by?: number };
+  sub_issues_summary?: { total?: number };
+}
+
+/** One entry of an issue's REST comment list. */
+interface RawComment {
+  id?: number;
+  body: string | null;
+}
+
+/** One issue GitHub records as blocking another, and whether it still does. */
+interface Blocker {
+  number: number;
+  open: boolean;
 }
 
 /** One entry of `gh release list --json`, in the three fields a Version needs. */
@@ -107,14 +112,20 @@ export class GhTracker implements Tracker {
   }
 
   /**
-   * Whether `gh` is logged in, which is what `gh auth status` exits zero for.
+   * Whether `gh` can reach GitHub as somebody, which is whether REST will say
+   * who the current user is.
+   *
+   * Not `gh auth status`: on a cloud Host it calls the proxy's placeholder
+   * token invalid while every REST call a Run makes works (ADR-0008).
    *
    * The failure is the answer here, so this is the one call that does not
    * throw on one: `init` reports it as a line rather than as a crash.
    */
   async authenticated(): Promise<boolean> {
     try {
-      const { exitCode } = await this.gh(["auth", "status"], { allowFailure: true });
+      const { exitCode } = await this.gh(["api", "user", "--jq", ".login"], {
+        allowFailure: true,
+      });
       return exitCode === 0;
     } catch {
       // `gh` itself is not on the PATH, which is as unauthenticated as it gets.
@@ -181,19 +192,22 @@ export class GhTracker implements Tracker {
   }
 
   async listLabels(): Promise<string[]> {
-    const { stdout } = await this.gh(["label", "list", "--json", "name", "--limit", "200"]);
-    return (JSON.parse(stdout) as { name: string }[]).map((label) => label.name);
+    const labels = await this.list<{ name: string }>("repos/{owner}/{repo}/labels");
+    return labels.map((label) => label.name);
   }
 
   async createLabel(label: LabelSpec): Promise<void> {
     await this.gh([
-      "label",
-      "create",
-      label.name,
-      "--color",
-      label.color,
-      "--description",
-      label.description,
+      "api",
+      "--method",
+      "POST",
+      "repos/{owner}/{repo}/labels",
+      "-f",
+      `name=${label.name}`,
+      "-f",
+      `color=${label.color}`,
+      "-f",
+      `description=${label.description}`,
     ]);
   }
 
@@ -215,119 +229,152 @@ export class GhTracker implements Tracker {
   }
 
   /**
-   * One issue, with the two native relations the guards read: how many
-   * sub-issues it has, and what GitHub says blocks it. `gh issue view` reports
-   * both, so the guards cost no extra call.
+   * One issue, with its comments and the two native relations the guards read:
+   * how many sub-issues it has, and what GitHub says blocks it.
+   *
+   * Three REST calls, because the issue itself carries neither its comments nor
+   * its blockers, only a count of each.
    */
   async getIssue(number: number): Promise<Issue> {
-    const { stdout } = await this.gh([
-      "issue",
-      "view",
-      String(number),
-      "--json",
-      "number,title,url,body,state,labels,assignees,comments,subIssuesSummary,blockedBy",
-    ]);
+    const { stdout } = await this.gh(["api", `repos/{owner}/{repo}/issues/${number}`]);
     const raw = JSON.parse(stdout) as RawIssue;
+    const comments = await this.list<RawComment>(`repos/{owner}/{repo}/issues/${number}/comments`);
+    const blockers = await this.blockers(number);
     return {
       number: raw.number,
       title: raw.title,
-      url: raw.url,
+      url: raw.html_url,
       body: raw.body ?? "",
-      closed: raw.state === "CLOSED",
+      closed: raw.state === "closed",
       labels: raw.labels.map((label) => label.name),
-      assignees: raw.assignees.map((assignee) => assignee.login),
-      comments: raw.comments.map((comment) => ({
-        ...withCommentId(comment.url),
-        body: comment.body,
-      })),
-      ...relations(raw),
+      assignees: (raw.assignees ?? []).map((assignee) => assignee.login),
+      comments: comments.map((comment) => ({ ...withId(comment), body: comment.body ?? "" })),
+      subIssues: subIssues(raw),
+      blockedBy: blockers.map((blocker) => blocker.number),
     };
   }
 
   /**
-   * Open an issue, and read its number back out of the URL `gh` prints.
+   * Open an issue, and read its number back out of what REST answers with.
    *
-   * Every label is passed in one `--label`, so a repo missing one fails the
-   * whole create rather than opening an issue nobody's filter will find.
+   * GitHub creates a label the Target does not have rather than refusing the
+   * issue, so a missing label is `init`'s to catch, not this call's.
    */
   async createIssue(issue: CreateIssue): Promise<IssueRef> {
     const { stdout } = await this.gh([
-      "issue",
-      "create",
-      "--title",
-      issue.title,
-      "--body",
-      issue.body,
-      ...issue.labels.flatMap((label) => ["--label", label]),
+      "api",
+      "--method",
+      "POST",
+      "repos/{owner}/{repo}/issues",
+      "-f",
+      `title=${issue.title}`,
+      "-f",
+      `body=${issue.body}`,
+      ...issue.labels.flatMap((label) => ["-f", `labels[]=${label}`]),
     ]);
-    const ref = refFromOutput(stdout);
-    if (!ref) {
+    const created = JSON.parse(stdout) as Partial<RawIssue>;
+    if (typeof created.number !== "number" || typeof created.html_url !== "string") {
       throw new Error(`could not read an issue number from gh output: ${stdout}`);
     }
-    return ref;
+    return { number: created.number, url: created.html_url };
   }
 
   /**
-   * The open issues carrying `label`, straight from the REST issue list.
+   * The open issues carrying `label`, straight from the REST issue list, each
+   * with its open blockers counted off its own dependency list.
    *
-   * `gh issue list` cannot report blocking dependencies, so this goes to the
-   * API for `issue_dependencies_summary`, the only blocker source the pipeline
-   * trusts (ADR-0003).
+   * Not off the list's `issue_dependencies_summary`: the summary lags the list,
+   * so a blocker added a moment ago would be missed and its Ticket merged ahead
+   * of it. That costs a call per candidate, and native dependencies are the
+   * only blocker source the pipeline trusts (ADR-0003).
    */
   async listCandidates(label: string): Promise<Candidate[]> {
-    const { stdout } = await this.gh([
-      "api",
-      "--paginate",
-      "--method",
-      "GET",
-      "repos/{owner}/{repo}/issues",
+    const issues = await this.list<RawIssue>("repos/{owner}/{repo}/issues", [
       "-f",
       "state=open",
       "-f",
       `labels=${label}`,
-      "-F",
-      "per_page=100",
     ]);
 
-    const raw = JSON.parse(stdout) as RawCandidate[];
-    return raw
-      .filter((issue) => issue.pull_request === undefined)
-      .map((issue) => ({
+    const candidates: Candidate[] = [];
+    for (const issue of issues.filter((issue) => issue.pull_request === undefined)) {
+      const blockers = await this.blockers(issue.number);
+      candidates.push({
         number: issue.number,
         title: issue.title,
         assignees: (issue.assignees ?? []).map((assignee) => assignee.login),
-        openBlockers: openBlockers(issue),
-      }));
+        openBlockers: blockers.filter((blocker) => blocker.open).length,
+      });
+    }
+    return candidates;
   }
 
   async assign(number: number, user: string): Promise<void> {
-    await this.editIssue(number, "--add-assignee", user);
+    await this.gh([
+      "api",
+      "--method",
+      "POST",
+      `repos/{owner}/{repo}/issues/${number}/assignees`,
+      "-f",
+      `assignees[]=${user}`,
+    ]);
   }
 
   async unassign(number: number, user: string): Promise<void> {
-    await this.editIssue(number, "--remove-assignee", user);
+    await this.gh([
+      "api",
+      "--method",
+      "DELETE",
+      `repos/{owner}/{repo}/issues/${number}/assignees`,
+      "-f",
+      `assignees[]=${user}`,
+    ]);
   }
 
   async addLabel(number: number, label: string): Promise<void> {
-    await this.editIssue(number, "--add-label", label);
-  }
-
-  async removeLabel(number: number, label: string): Promise<void> {
-    await this.editIssue(number, "--remove-label", label);
-  }
-
-  /** `gh` prints the new comment's URL, which is the only handle it gives back. */
-  async comment(number: number, body: string): Promise<IssueComment> {
-    const { stdout } = await this.gh(["issue", "comment", String(number), "--body", body]);
-    return { ...withCommentId(lastLine(stdout)), body };
+    await this.gh([
+      "api",
+      "--method",
+      "POST",
+      `repos/{owner}/{repo}/issues/${number}/labels`,
+      "-f",
+      `labels[]=${label}`,
+    ]);
   }
 
   /**
-   * Edit a comment in place.
+   * Take a label off an issue, and take one it does not wear as already off.
    *
-   * `gh` has no command for this, so it goes to the REST endpoint, which takes
-   * the numeric id {@link commentId} reads out of a comment URL.
+   * REST answers that with a 404 where `gh issue edit --remove-label` did
+   * nothing, and a Ticket must not fail over a label somebody removed first.
+   * Every other failure, a missing issue's 404 included, still throws.
    */
+  async removeLabel(number: number, label: string): Promise<void> {
+    const args = [
+      "api",
+      "--method",
+      "DELETE",
+      `repos/{owner}/{repo}/issues/${number}/labels/${encodeURIComponent(label)}`,
+    ];
+    const result = await this.gh(args, { allowFailure: true });
+    if (/Label does not exist/.test(result.output)) return;
+    throwOnFailure("gh", args, result);
+  }
+
+  /** REST answers with the new comment, whose id is what it is edited by later. */
+  async comment(number: number, body: string): Promise<IssueComment> {
+    const { stdout } = await this.gh([
+      "api",
+      "--method",
+      "POST",
+      `repos/{owner}/{repo}/issues/${number}/comments`,
+      "-f",
+      `body=${body}`,
+    ]);
+    return { ...withId(JSON.parse(stdout) as RawComment), body };
+  }
+
+  /** Edit a comment in place, by the numeric id REST reported it with. */
   async updateComment(id: string, body: string): Promise<void> {
     await this.gh([
       "api",
@@ -340,7 +387,14 @@ export class GhTracker implements Tracker {
   }
 
   async updateIssueBody(number: number, body: string): Promise<void> {
-    await this.editIssue(number, "--body", body);
+    await this.gh([
+      "api",
+      "--method",
+      "PATCH",
+      `repos/{owner}/{repo}/issues/${number}`,
+      "-f",
+      `body=${body}`,
+    ]);
   }
 
   async createPullRequest(pr: CreatePullRequest): Promise<PullRequestRef> {
@@ -478,8 +532,41 @@ export class GhTracker implements Tracker {
     ]);
   }
 
-  private editIssue(number: number, flag: string, value: string) {
-    return this.gh(["issue", "edit", String(number), flag, value]);
+  /**
+   * The issues GitHub records as blocking `number`, open or closed, from the
+   * issue's own dependency list.
+   *
+   * A blocker whose state did not come back counts as open: reading it as
+   * closed would put a blocked Ticket on the Frontier (ADR-0003). A GitHub that
+   * cannot list dependencies at all fails the call, which is no answer rather
+   * than an empty one.
+   */
+  private async blockers(number: number): Promise<Blocker[]> {
+    const blockers = await this.list<RawIssue>(
+      `repos/{owner}/{repo}/issues/${number}/dependencies/blocked_by`,
+    );
+    return blockers.map((blocker) => ({
+      number: blocker.number,
+      open: blocker.state !== "closed",
+    }));
+  }
+
+  /**
+   * Every page of a REST list, as one array: `gh --paginate` joins the pages.
+   * `--method GET` is spelled out because fields would otherwise make it a POST.
+   */
+  private async list<T>(path: string, fields: string[] = []): Promise<T[]> {
+    const { stdout } = await this.gh([
+      "api",
+      "--paginate",
+      "--method",
+      "GET",
+      path,
+      "-F",
+      "per_page=100",
+      ...fields,
+    ]);
+    return JSON.parse(stdout) as T[];
   }
 
   private async gh(
@@ -493,11 +580,8 @@ export class GhTracker implements Tracker {
   }
 }
 
-/** The numeric id a comment URL ends in, which is what the REST API edits by. */
-const COMMENT_ID = /#issuecomment-(\d+)\s*$/;
-
-/** The URL `gh issue create` and `gh pr create` print, and the number it ends in. */
-const ISSUE_OR_PR_URL = /^https?:\/\/[^\s/]+\/[^\s/]+\/[^\s/]+\/(?:issues|pull)\/(\d+)$/;
+/** The URL `gh pr create` prints, and the number it ends in. */
+const PULL_REQUEST_URL = /^https?:\/\/[^\s/]+\/[^\s/]+\/[^\s/]+\/pull\/(\d+)$/;
 
 /** The Actions job a check's link points at: `.../actions/runs/<run>/job/<job>`. */
 const ACTIONS_JOB_URL = /\/actions\/runs\/\d+\/job\/(\d+)(?:[?#]|$)/;
@@ -523,90 +607,54 @@ function lastLine(stdout: string): string {
 }
 
 /**
- * The issue or pull request `gh` just opened, read off the last line of its
- * output, or nothing when that line is not the URL of one.
+ * The pull request `gh` just opened, read off the last line of its output, or
+ * nothing when that line is not the URL of one.
  *
  * A number read loosely is worse than none: taken segment by segment, `3 files
- * changed` is issue 3, and a URL with trailing text yields a number while
- * keeping the text in the URL. Either way the pipeline goes on to wait for CI
- * on, comment on, or merge whatever issue happens to carry that number. So the
- * whole line has to be the URL, matched as strictly as {@link withCommentId}
- * matches a comment's, and anything else becomes the refusal both call sites
- * throw.
+ * changed` is pull request 3, and a URL with trailing text yields a number
+ * while keeping the text in the URL. Either way the pipeline goes on to wait
+ * for CI on, comment on, or merge whatever happens to carry that number. So the
+ * whole line has to be the URL, and anything else becomes the refusal the call
+ * site throws.
  *
  * Only the path shape is matched — host, owner, repo, the kind, the number — so
  * an Enterprise host reads the same as github.com without being named here.
- *
- * A pull request's ref is the same shape as an issue's, so one reader serves
- * both call sites.
  */
-function refFromOutput(stdout: string): IssueRef | undefined {
+function refFromOutput(stdout: string): PullRequestRef | undefined {
   const url = lastLine(stdout);
-  const match = ISSUE_OR_PR_URL.exec(url);
+  const match = PULL_REQUEST_URL.exec(url);
   return match ? { number: Number(match[1]), url } : undefined;
 }
 
 /**
- * A comment's id, read out of its URL, or nothing when the URL carries none.
- *
- * GitHub's REST API edits comments by a numeric id that `gh issue view` does not
- * report — its `id` is the GraphQL node id — and `gh issue comment` reports
- * nothing but a URL. The URL is the one handle both halves agree on, so both go
- * through here.
+ * A comment's id, as the string {@link Tracker.updateComment} takes, or nothing
+ * when REST reported none.
  *
  * Unlike the native relations this adapter refuses to guess, a missing id
  * decides nothing: it costs an edit, never a Ticket. So it is reported as
  * missing rather than thrown, and the one caller that needs to edit posts a
  * fresh comment instead.
  */
-function withCommentId(url: string): { id?: string } {
-  const id = COMMENT_ID.exec(url);
-  return id ? { id: id[1] as string } : {};
+function withId(comment: RawComment): { id?: string } {
+  return typeof comment.id === "number" ? { id: String(comment.id) } : {};
 }
 
 /**
- * A missing dependency summary is an error, not an unblocked Ticket.
+ * How many native sub-issues an issue has, and it may not be guessed.
  *
- * Defaulting it to zero would put every blocked Ticket on the Frontier and
- * merge it, silently, on a GitHub that does not report the field. ADR-0003
- * trusts native relations only, so no answer has to mean no Run.
+ * Reading a missing summary as zero would hand every Spec to an implement
+ * Stage (ADR-0003), so no answer is an error.
  */
-function openBlockers(issue: RawCandidate): number {
-  const blocked = issue.issue_dependencies_summary?.blocked_by;
-  if (typeof blocked !== "number") {
+function subIssues(issue: RawIssue): number {
+  const total = issue.sub_issues_summary?.total;
+  if (typeof total !== "number") {
     throw new Error(
-      `#${issue.number} came back without issue_dependencies_summary.blocked_by, ` +
-        "so its open blockers cannot be read; agent-pipeline trusts GitHub's " +
-        "native dependencies only (ADR-0003)",
+      `#${issue.number} came back without sub_issues_summary.total, so whether ` +
+        "it is a Spec cannot be read; agent-pipeline trusts GitHub's native " +
+        "relations only (ADR-0003)",
     );
   }
-  return blocked;
-}
-
-/**
- * The two native relations the guards read, and neither may be guessed.
- *
- * A missing one is an error for the reason {@link openBlockers} refuses a
- * missing dependency summary: reading it as zero would hand every Spec to an
- * implement Stage and take every body-only blocker at its word (ADR-0003).
- */
-function relations(issue: RawIssue): Pick<Issue, "subIssues" | "blockedBy"> {
-  const missing = [
-    typeof issue.subIssuesSummary?.total === "number" ? "" : "subIssuesSummary.total",
-    issue.blockedBy === undefined ? "blockedBy" : "",
-  ].filter((field) => field !== "");
-
-  if (missing.length > 0) {
-    throw new Error(
-      `#${issue.number} came back without ${missing.join(" or ")}, so whether it ` +
-        "is a Spec and what blocks it cannot be read; agent-pipeline trusts " +
-        "GitHub's native relations only (ADR-0003)",
-    );
-  }
-  return {
-    subIssues: issue.subIssuesSummary?.total as number,
-    blockedBy: (issue.blockedBy?.nodes ?? []).map((blocker) => blocker.number),
-  };
+  return total;
 }
 
 /** `pending` means "ask again"; everything else is an answer. */
