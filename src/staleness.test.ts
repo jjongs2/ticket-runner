@@ -138,13 +138,10 @@ describe("the Version a Target's conventions document was written by", () => {
     expect(warning).toContain("agent-pipeline init");
   });
 
-  it("names `init` for a document carrying no mark at all", () => {
+  it("leaves a document carrying no mark at all to readiness, which refuses it", () => {
     writeDocument("# agent-pipeline conventions\n\nFrom an older pipeline.\n");
 
-    const warning = conventionsWarning(repoRoot, "0.4.0");
-
-    expect(warning).toContain("no Version");
-    expect(warning).toContain("agent-pipeline init");
+    expect(conventionsWarning(repoRoot, "0.4.0")).toBeUndefined();
   });
 
   it("names the upgrade for a document a newer pipeline left", () => {

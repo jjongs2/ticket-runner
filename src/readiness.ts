@@ -13,7 +13,7 @@ import type { Tracker } from "./ports/tracker.js";
  * Target it was only asked to work in is the thing `init` exists to keep to one
  * place — so the refusal names the item and the command that fixes it.
  *
- * Presence only, never content. The conventions document is the pipeline's own
+ * Presence and the Version stamp, never content. The conventions document is the pipeline's own
  * text and changes with it, so comparing it at every start would refuse a Target
  * for carrying last week's copy, which is a thing the next `init` rewrites and
  * nothing a Run is worse for. Its Version stamp is asked for, though never which
@@ -101,7 +101,7 @@ export async function readinessRefusal({
   const missing =
     missingFileMessage(repoRoot) ??
     (await missingLabelMessage(tracker, labels)) ??
-    (await keptBranchesMessage(tracker));
+    (await missingBranchDeletionMessage(tracker));
   if (missing === undefined) return undefined;
 
   return [
@@ -147,7 +147,7 @@ async function missingLabelMessage(
  * Names the repository setting a cloud Host depends on, when it is off: nothing
  * there can delete a branch, so a merged Ticket's goes only if GitHub takes it.
  */
-async function keptBranchesMessage(tracker: Tracker): Promise<string | undefined> {
+async function missingBranchDeletionMessage(tracker: Tracker): Promise<string | undefined> {
   return (await tracker.deletesBranchOnMerge())
     ? undefined
     : "the repository does not delete a pull request's branch when it merges";

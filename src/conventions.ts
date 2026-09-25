@@ -86,7 +86,7 @@ What \`agent-pipeline\` requires of this repository, and nothing else. \`agent-p
 ## Branches
 
 - \`agent/<n>-<slug>\` belongs to the pipeline. A Run creates one per Ticket, works in a worktree of it, and pushes it after every Stage that commits. The repository deletes it when the pull request merges, a setting \`agent-pipeline init\` switches on. Nothing else branches there.
-- \`agent-pipeline/lock\` and \`agent-pipeline/state\` belong to the pipeline too. The first says which Run holds this repository, and the second keeps the State of every Ticket a Run can resume, and the transcripts of a handed-off Ticket's Stages. Nothing else commits to either, except a human releasing a lock a vanished Host left behind.
+- \`agent-pipeline/lock\` and \`agent-pipeline/state\` belong to the pipeline too. The first says which Run holds this repository, and the second keeps the State of every Ticket a Run can resume, and the transcripts of a handed-off Ticket's Stages. Nothing else commits to either, except a human, or an Operator a human asked, releasing a lock a vanished Host left behind.
 - A Stage commits only to the branch already checked out in the worktree it was started in. It creates no branch and switches to none.
 
 ## What a Stage does not do

@@ -82,9 +82,9 @@ export async function startRun(options: StartOptions): Promise<number> {
   }
 
   const { refusal, warnings } = startupMessages(config);
-  // The document's Version is a warning and never a refusal, so it joins the
-  // config's own: readiness has already had its say about the Target, and what
-  // that copy of the document says is nothing a Run is worse for (ADR-0007).
+  // Which Version the document names is a warning and never a refusal, so it
+  // joins the config's own: readiness has already refused a copy naming none,
+  // and one naming another Version is nothing a Run is worse for (ADR-0007).
   const stale = conventionsWarning(repoRoot, options.version);
   for (const warning of [...warnings, ...(stale === undefined ? [] : [stale])]) {
     error(`warning: ${warning}`);

@@ -108,10 +108,11 @@ This Target is not set up: `.gitignore` does not ignore `.worktrees/`. Run
 `agent-pipeline init` here and start again; a Run puts nothing in place itself.
 ```
 
-The check is presence and the Version stamp, never content: a Target carrying an older copy
-of the conventions document starts, and the next `init` brings it up to date. A Run says so on the way past —
-one warning naming the Version that wrote the copy and `agent-pipeline init`, or the upgrade
-where the copy is from a newer pipeline than the Run — and then takes the Frontier as usual.
+The check is presence and the Version stamp, never content: a Target carrying an older
+copy of the conventions document starts, and the next `init` brings it up to date. A Run
+says so on the way past — one warning naming the Version that wrote the copy and
+`agent-pipeline init`, or the upgrade where the copy is from a newer pipeline than the Run
+— and then takes the Frontier as usual.
 
 A Target that still has State files under `.agent-pipeline/state/`, where an earlier
 pipeline kept them, is refused the same way, naming the Tickets they belong to: a Ticket's
