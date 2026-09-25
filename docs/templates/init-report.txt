@@ -79,11 +79,21 @@ when it merges was switched on now or found on already:
 
 A cloud Host can delete nothing on the remote, so that setting is the only way a
 merged Ticket's branch goes there, and Target readiness refuses a repository
-without it (ADR-0008). Where GitHub could not be asked at all,
-its one line is: nothing done: `gh` is not authenticated.
+without it (ADR-0008). Where GitHub could not be asked at all, its one line
+says why, and a `gh` that cannot be run is told apart from one that is not
+logged in:
+
+  nothing done: `gh` is not authenticated
+  nothing done: `gh` is not installed
 
 `Checked:` is one line per item only the human can put right, each marked `✓` or
 `✗`, in a fixed order: `gh`, `claude`, the plugin, a CI workflow, a Check.
+
+The `gh` line has two ways to fail, the same two, and only a `gh` that runs is
+sent to log in:
+
+  ✗ `gh` is not authenticated — run `gh auth login`
+  ✗ `gh` is not installed — install the GitHub CLI from https://cli.github.com
 
 The last line is the exit code in words: `Ready: everything a Run expects of
 this Target is in place.` for 0, and `Not ready: <n> items are yours to put
