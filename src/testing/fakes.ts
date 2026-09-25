@@ -79,8 +79,8 @@ export class FakeTracker implements Tracker {
   labels = new Set<string>();
   /**
    * Labels GitHub adds after {@link listLabels} answers and before a create, as
-   * it does while seeding a repository made seconds ago. Not listed, but
-   * refused as already there.
+   * it does while seeding a repository made seconds ago: not listed, but
+   * there by the time one is created.
    */
   labelsArriving = new Set<string>();
   createdLabels: LabelSpec[] = [];
@@ -161,7 +161,8 @@ export class FakeTracker implements Tracker {
 
   async createLabel(label: LabelSpec): Promise<boolean> {
     this.calls.push(`createLabel:${label.name}`);
-    if (this.labels.has(label.name) || this.labelsArriving.has(label.name)) return false;
+    if (this.labelsArriving.delete(label.name)) this.labels.add(label.name);
+    if (this.labels.has(label.name)) return false;
     this.createdLabels.push(label);
     this.labels.add(label.name);
     return true;
