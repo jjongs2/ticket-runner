@@ -421,6 +421,22 @@ describe("what init does on GitHub", () => {
     expect(out).toMatch(/labels: created needs-info, ready-for-agent/);
   });
 
+  it("carries on past a label GitHub adds between the listing and the create", async () => {
+    // A repository made seconds ago: GitHub is still seeding its default labels.
+    readyToReport(repoRoot);
+    tracker.labelsArriving = new Set(["wontfix"]);
+
+    const { code, out } = await init();
+
+    expect(code).toBe(0);
+    expect(tracker.squashMergeEnabled).toBe(true);
+    expect(tracker.deleteBranchOnMergeEnabled).toBe(true);
+    expect(out).toMatch(
+      /labels: created needs-triage, needs-info, ready-for-agent, ready-for-human, in-progress$/m,
+    );
+    expect(tracker.createdLabels.map((label) => label.name)).not.toContain("wontfix");
+  });
+
   it("switches on deleting a pull request's branch when it merges, and says so", async () => {
     const { out } = await init();
 

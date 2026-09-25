@@ -228,12 +228,23 @@ export class GhTracker implements Tracker {
     return labels.map((label) => label.name);
   }
 
-  async createLabel(label: LabelSpec): Promise<void> {
-    await this.rest("POST", "repos/{owner}/{repo}/labels", [
+  /**
+   * GitHub refuses a name it already has with a 422 whose error code is
+   * `already_exists`, which is the one refusal read as the label being there.
+   * Every other failure, another 422 included, still throws.
+   */
+  async createLabel(label: LabelSpec): Promise<boolean> {
+    const path = "repos/{owner}/{repo}/labels";
+    const fields = [
       `name=${label.name}`,
       `color=${label.color}`,
       `description=${label.description}`,
-    ]);
+    ];
+    const result = await this.rest("POST", path, fields, { allowFailure: true });
+    if (result.exitCode !== 0 && /"code"\s*:\s*"already_exists"/.test(result.output)) return false;
+    const args = ["api", "--method", "POST", path, ...fields.flatMap((field) => ["-f", field])];
+    throwOnFailure("gh", args, result);
+    return true;
   }
 
   /**

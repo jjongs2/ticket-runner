@@ -22,7 +22,8 @@ const LABEL_SPECS: Record<keyof Labels, Omit<LabelSpec, "name">> = {
  * refuses the Target rather than creating it, so setup lives in one command.
  *
  * Returns the names it created; labels that already exist are left untouched,
- * colour and description included.
+ * colour and description included. One GitHub added after the listing counts
+ * as already existing, since this call did not make it.
  */
 export async function ensureLabels(tracker: Tracker, labels: Labels): Promise<string[]> {
   const existing = new Set(await tracker.listLabels());
@@ -34,8 +35,7 @@ export async function ensureLabels(tracker: Tracker, labels: Labels): Promise<st
   ][]) {
     const name = labels[role];
     if (existing.has(name)) continue;
-    await tracker.createLabel({ name, ...spec });
-    created.push(name);
+    if (await tracker.createLabel({ name, ...spec })) created.push(name);
   }
 
   return created;
