@@ -7,7 +7,14 @@ import { CONFIG_FILENAME, loadConfig } from "./config.js";
 import { CLAUDE_SECTION, CONVENTIONS_PATH, conventionsDoc } from "./conventions.js";
 import { type Work, startRun } from "./start.js";
 import type { StopSource } from "./stop.js";
-import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./testing/fakes.js";
+import {
+  ANOTHER_HOST,
+  FakeAgentRunner,
+  FakeTracker,
+  FakeWorkspace,
+  THIS_HOST,
+  stageResult,
+} from "./testing/fakes.js";
 import { settle } from "./testing/settle.js";
 
 /** The six triage labels, under the names a Target keeps by default. */
@@ -297,6 +304,7 @@ describe("a Target init has set up", () => {
 
 describe("the Run lock", () => {
   const holder = {
+    host: THIS_HOST,
     pid: 4321,
     command: "agent-pipeline run",
     runId: "run-0",
@@ -316,7 +324,7 @@ describe("the Run lock", () => {
     expect(tracker.calls).not.toContain("assign:4:pipeline-user");
   });
 
-  it("takes over a lock whose Run has gone, and releases it at the end", async () => {
+  it("takes over a lock whose Run on this Host has gone, and releases it at the end", async () => {
     workspace.lock = { holder, running: false };
     tracker.addIssue({ number: 4 });
 
@@ -326,6 +334,73 @@ describe("the Run lock", () => {
     expect(out).toContain("merged   #4");
     expect(workspace.calls).toContain("takeOverRunLock");
     expect(workspace.lock).toBeUndefined();
+  });
+
+  it("records this Host as the holder, with the Run and its command line", async () => {
+    tracker.addIssue({ number: 4 });
+    let recorded: unknown;
+    runner.leaves("implement", () => {
+      recorded = workspace.lock?.holder;
+    });
+
+    await start();
+
+    expect(recorded).toMatchObject({
+      host: THIS_HOST,
+      pid: process.pid,
+      runId: "run-1",
+      command: "agent-pipeline run",
+    });
+  });
+
+  describe("held from another Host", () => {
+    const foreign = { ...holder, host: ANOTHER_HOST };
+
+    it("refuses the Run, naming the Host, the Run and when it started", async () => {
+      workspace.lock = { holder: foreign, running: true };
+      tracker.addIssue({ number: 4 });
+
+      const { code, err } = await start();
+
+      expect(code).toBe(2);
+      expect(err).toContain("the cloud Host of session `session_01other`");
+      expect(err).toContain("run-0");
+      expect(err).toContain("2026-09-17T09:00:00.000Z");
+      expect(tracker.calls).not.toContain("assign:4:pipeline-user");
+    });
+
+    it("says it is released through an Operator or a free tip on GitHub", async () => {
+      workspace.lock = { holder: foreign, running: true };
+
+      const { err } = await start();
+
+      expect(err).toContain("Operator");
+      expect(err).toContain("free tip to the `agent-pipeline/lock` branch");
+    });
+
+    it("never takes it over, whatever this Host's process table says", async () => {
+      // Nothing here can see a process on another Host, so a Run there that
+      // is gone looks no different from one that is running.
+      workspace.lock = { holder: foreign, running: false };
+      tracker.addIssue({ number: 4 });
+
+      const { code } = await start();
+
+      expect(code).toBe(2);
+      expect(workspace.lock).toEqual({ holder: foreign, running: false });
+      expect(tracker.calls).not.toContain("assign:4:pipeline-user");
+    });
+
+    it("refuses `ticket <n>` too, since it takes the same lock", async () => {
+      workspace.lock = { holder: foreign, running: true };
+      tracker.addIssue({ number: 4 });
+
+      const { code, err } = await start({ command: "ticket", ticket: 4 });
+
+      expect(code).toBe(2);
+      expect(err).toContain("the cloud Host of session `session_01other`");
+      expect(tracker.calls).not.toContain("assign:4:pipeline-user");
+    });
   });
 });
 

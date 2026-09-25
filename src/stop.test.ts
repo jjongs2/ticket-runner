@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { LockHolder } from "./ports/workspace.js";
 import { type StopRequest, StopSignal, listenForStop, requestStop, stopLine } from "./stop.js";
-import { FakeWorkspace } from "./testing/fakes.js";
+import { ANOTHER_HOST, FakeWorkspace, THIS_HOST } from "./testing/fakes.js";
 
 /** A stand-in for the process, so a test raises SIGTERM without sending one. */
 function source(): EventEmitter {
@@ -99,17 +99,17 @@ describe("the line a Run logs", () => {
 });
 
 describe("asking a Run to stop", () => {
-  const repoRoot = "/repo";
   let workspace: FakeWorkspace;
 
   beforeEach(() => {
     workspace = new FakeWorkspace();
   });
 
-  /** The Run lock as a Run that is still running leaves it. */
+  /** The Run lock as a Run on this Host that is still running leaves it. */
   function lock(overrides: Partial<LockHolder> = {}): void {
     workspace.lock = {
       holder: {
+        host: THIS_HOST,
         pid: 4321,
         command: "agent-pipeline run",
         runId: "2026-09-17T09-00-00-000",
@@ -131,7 +131,6 @@ describe("asking a Run to stop", () => {
     const err: string[] = [];
     const signalled: number[] = [];
     const code = await requestStop({
-      repoRoot,
       workspace,
       send: (pid) => signalled.push(pid),
       log: (line) => out.push(line),
@@ -180,6 +179,7 @@ describe("asking a Run to stop", () => {
     expect(code).toBe(2);
     expect(signalled).toEqual([]);
     expect(err).toContain("No Run to stop");
+    expect(err).toContain("`agent-pipeline/lock` branch");
     expect(out).toBe("");
   });
 
@@ -193,6 +193,44 @@ describe("asking a Run to stop", () => {
     expect(signalled).toEqual([]);
     expect(err).toContain("No Run to stop");
     expect(workspace.lock).toBeDefined();
+  });
+
+  it("names a Run on another Host and sends nothing, since only that Host can", async () => {
+    lock({ host: ANOTHER_HOST });
+
+    const { code, signalled, err, out } = await stop();
+
+    expect(code).toBe(2);
+    expect(signalled).toEqual([]);
+    expect(out).toBe("");
+    expect(err).toContain("`agent-pipeline run`");
+    expect(err).toContain("run 2026-09-17T09-00-00-000");
+    expect(err).toContain("the cloud Host of session `session_01other`");
+    expect(err).toContain("started 2026-09-17T09:00:00.000Z");
+    expect(err).toContain("Nothing was sent.");
+  });
+
+  it("names a Run on another Host whatever this Host's process table says", async () => {
+    // Nothing here can see another Host's processes, so a pid that is gone
+    // here says nothing about the Run there.
+    lock({ host: ANOTHER_HOST });
+    abandon();
+
+    const { code, signalled, err } = await stop();
+
+    expect(code).toBe(2);
+    expect(signalled).toEqual([]);
+    expect(err).toContain("holds the Run lock from the cloud Host");
+  });
+
+  it("names a Run a Run on the other Host sees as its own", async () => {
+    // The same lock, read from the cloud Host that holds it: its own Run.
+    lock({ host: ANOTHER_HOST });
+
+    const { code, signalled } = await stop({ workspace: workspace.anotherHost() });
+
+    expect(code).toBe(0);
+    expect(signalled).toEqual([4321]);
   });
 
   it("leaves a `ticket <n>` Run alone, because it ends with its Ticket anyway", async () => {

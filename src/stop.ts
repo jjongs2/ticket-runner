@@ -1,4 +1,5 @@
-import { lockPath } from "./lock.js";
+import { describeHost } from "./host.js";
+import { LOCK_BRANCH } from "./lock.js";
 import type { LockHolder, Workspace } from "./ports/workspace.js";
 
 /**
@@ -90,10 +91,9 @@ export function stopLine(busy: number[]): string {
   return `${held} left to finish · stopped`;
 }
 
-/** What `agent-pipeline stop` needs: the Target's root and lock, and seams for tests. */
+/** What `agent-pipeline stop` needs: the Target's lock, and seams for tests. */
 export interface StopRequest {
-  repoRoot: string;
-  /** Where the Run lock is read from. */
+  /** Where the Run lock is read from, and which Host is asking. */
   workspace: Workspace;
   /** How the Stop is delivered. A real SIGTERM by default. */
   send?: (pid: number) => void;
@@ -112,18 +112,31 @@ export interface StopRequest {
  * the same thing every time rather than reporting a Stop already asked for.
  */
 export async function requestStop({
-  repoRoot,
   workspace,
   send = sendStop,
   log = (line: string) => console.log(line),
   error = (line: string) => console.error(line),
 }: StopRequest): Promise<number> {
-  const holder = await workspace.runLockHolder();
-  if (holder === undefined) {
+  const held = await workspace.runLockHolder();
+  if (held === undefined) {
     error(
-      `No Run to stop: nothing holds the Run lock at ${lockPath(repoRoot)}, or the Run that` +
-        " left it there is gone. A lock like that is the next Run's to reclaim, so nothing" +
-        " here removes it.",
+      `No Run to stop: nothing holds the Run lock on the \`${LOCK_BRANCH}\` branch, or the` +
+        " Run on this Host that left it there is gone. A lock like that is the next Run's to" +
+        " reclaim, so nothing here removes it.",
+    );
+    return 2;
+  }
+
+  // A Stop is a signal to a process, and only the Host the process runs on can
+  // send one (ADR-0006). A pid read off another Host's lock is a stranger's
+  // here, if it is anybody's.
+  const { holder, onAnotherHost } = held;
+  if (onAnotherHost) {
+    error(
+      `\`${holder.command}\` (run ${holder.runId}) holds the Run lock from` +
+        ` ${describeHost(holder.host)}, started ${holder.startedAt}. Only that Host can send` +
+        " it a Stop: `agent-pipeline stop` there, or its Operator on a cloud Host. Nothing" +
+        " was sent.",
     );
     return 2;
   }

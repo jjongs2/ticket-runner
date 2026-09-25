@@ -1,181 +1,140 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import type { LockHolder, LockOutcome, LockTake } from "./ports/workspace.js";
+import { readFileSync } from "node:fs";
+import { type Host, describeHost } from "./host.js";
+import type { HeldLock, LockHolder } from "./ports/workspace.js";
 
 /**
- * One Run at a time per Target.
+ * One Run at a time per Target, whichever Host it is on (ADR-0008).
  *
  * Two Runs sharing a Target would fight over its base branch, over the same
- * Frontier and over the same worktrees. The lock is a PID file rather than an
- * advisory lock so a Run killed mid-flight leaves something a human can read,
- * and so the next Run can tell a live holder from a stale file.
+ * Frontier and over the same worktrees. The lock lives on the Target's GitHub
+ * repository so every Host sees it: {@link LOCK_BRANCH} always exists, and its
+ * tip's {@link LOCK_FILE} says who holds it or that nobody does. It is taken by
+ * compare-and-swap, a "held" commit pushed with a lease on the tip the taker
+ * read, and released by a "free" commit on top of that; nothing is ever
+ * deleted, which a cloud Host could not do.
  *
- * This is how the git-backed Workspace keeps the Run lock the port offers
+ * This module is what the lock says and what it means: the file, the commit
+ * message a human reads on GitHub, and whether a holder is still running. The
+ * git-backed Workspace does the pushing
  * ({@link import("./ports/workspace.js").Workspace.takeRunLock} and the rest).
  */
+
+/** The branch the lock lives on, under the prefix the pipeline owns. */
+export const LOCK_BRANCH = "agent-pipeline/lock";
+
+/** The file at the top of the lock branch's tip that says who holds it. */
+export const LOCK_FILE = "lock.json";
+
+/** What a free lock's file says, and what a human commits to release one. */
+export const FREE_LOCK = '{ "held": false }';
 
 /** Whether a pid is alive, and which process it is when it is. */
 export type ProcessCheck = { alive: false } | { alive: true; startedAt: string | undefined };
 
-export interface LockOptions {
-  /** Seam for tests; defaults to the real process table and its start times. */
-  checkProcess?: (pid: number) => ProcessCheck;
-}
-
-/** The lock lives with the Run logs, under the gitignored run directory. */
-export function lockPath(repoRoot: string): string {
-  return join(repoRoot, ".agent-pipeline", "lock.json");
-}
-
 /**
- * Take the repo's Run lock, or report what stands in the way.
- *
- * A lock whose process is gone is `abandoned` rather than taken here: taking it
- * over is {@link takeOverLock}, which the caller asks for once it has been told.
+ * What a lock's holder is to a Run on `here`: still running, a process on this
+ * same Host that has gone, or a Run on another Host, whose process nothing here
+ * can see and which is therefore never presumed gone.
  */
-export function takeLock(
-  repoRoot: string,
+export type HolderStanding = "running" | "abandoned" | "elsewhere";
+
+export function holderStanding(
   holder: LockHolder,
-  { checkProcess = checkProcessTable }: LockOptions = {},
-): LockTake {
-  const path = lockPath(repoRoot);
-  mkdirSync(dirname(path), { recursive: true });
-  if (claim(path, holder, checkProcess)) return { outcome: "taken" };
-
-  const existing = readHolder(path);
-  if (existing !== undefined && holderIsCurrent(existing, checkProcess(existing.pid))) {
-    return { outcome: "held", holder: existing };
-  }
-  // Gone, a recycled pid wearing someone else's identity, or a file too
-  // corrupt to name anyone to wait for.
-  return { outcome: "abandoned" };
-}
-
-/**
- * Take a lock {@link takeLock} found abandoned.
- *
- * Reclaimed rather than waited on: the alternative is a crashed Run blocking
- * the repo until a human deletes a file they have never heard of. The holder is
- * read again first, since another Run may have taken the lock over since.
- */
-export function takeOverLock(
-  repoRoot: string,
-  holder: LockHolder,
-  { checkProcess = checkProcessTable }: LockOptions = {},
-): LockOutcome {
-  const path = lockPath(repoRoot);
-  const held = currentHolder(path, checkProcess);
-  if (held !== undefined) return { outcome: "held", holder: held };
-
-  rmSync(path, { force: true });
-  if (claim(path, holder, checkProcess)) return { outcome: "taken" };
-
-  // Somebody took the file between the two lines above. A live one has it
-  // fairly; anything else means somebody is racing us for it.
-  const racer = currentHolder(path, checkProcess);
-  if (racer !== undefined) return { outcome: "held", holder: racer };
-  rmSync(path, { force: true });
-  throw new Error(`another process keeps taking the Run lock at ${path}`);
-}
-
-/** Give the Run lock up. */
-export function releaseLock(repoRoot: string): void {
-  rmSync(lockPath(repoRoot), { force: true });
-}
-
-/**
- * Create the lock file for `holder`, or say it was already there. `wx` is the
- * whole mutual exclusion: creating the file is the claim.
- */
-function claim(
-  path: string,
-  holder: LockHolder,
+  here: Host,
   checkProcess: (pid: number) => ProcessCheck,
-): boolean {
-  // The holder is always this process (`holder.pid` is `process.pid`), so its
-  // own start time is read here rather than trusted from a caller a recycled
-  // pid could impersonate just as easily as it impersonates the pid itself.
-  const own = checkProcess(holder.pid);
-  const recorded: LockHolder = {
-    ...holder,
-    ...(own.alive && own.startedAt !== undefined ? { processStartedAt: own.startedAt } : {}),
-  };
-  try {
-    writeFileSync(path, `${JSON.stringify(recorded, null, 2)}\n`, { flag: "wx" });
-    return true;
-  } catch (error) {
-    if (errorCode(error) !== "EEXIST") throw error;
-    return false;
-  }
+): HolderStanding {
+  if (holder.host.kind !== here.kind || holder.host.id !== here.id) return "elsewhere";
+  return holderIsCurrent(holder, checkProcess(holder.pid)) ? "running" : "abandoned";
+}
+
+/** The lock file for `holder`, or a free one when nobody holds the lock. */
+export function lockFileContents(holder: LockHolder | undefined): string {
+  if (holder === undefined) return `${FREE_LOCK}\n`;
+  return `${JSON.stringify({ held: true, ...holder }, null, 2)}\n`;
 }
 
 /**
- * Who holds the Run lock, when anybody still does.
- *
- * Nobody covers all three ways there is no Run to reach: no lock file, a file
- * too corrupt to name one, and a holder whose process has gone. A dead lock is
- * left exactly where it is — reclaiming one belongs to `takeOverLock`, on behalf
- * of a Run that is actually starting, where this only reads.
+ * The commit message a lock change carries, which is what GitHub shows beside
+ * the branch: who holds the Target, or that nobody does.
  */
-export function lockHolder(
-  repoRoot: string,
-  { checkProcess = checkProcessTable }: LockOptions = {},
-): LockHolder | undefined {
-  return currentHolder(lockPath(repoRoot), checkProcess);
+export function lockCommitMessage(holder: LockHolder | undefined): string {
+  if (holder === undefined) return "Free";
+  return `Held by run ${holder.runId} on ${describeHost(holder.host)}: ${holder.command}`;
 }
 
-function currentHolder(
-  path: string,
-  checkProcess: (pid: number) => ProcessCheck,
-): LockHolder | undefined {
-  const holder = readHolder(path);
-  if (holder === undefined || !holderIsCurrent(holder, checkProcess(holder.pid))) {
-    return undefined;
-  }
-  return holder;
-}
-
-/** The one line the Run that lost prints before exiting. */
-export function lockHeldMessage(holder: LockHolder, repoRoot: string): string {
-  return [
-    `Another agent-pipeline is running in this repo: \`${holder.command}\``,
-    `as run ${holder.runId} (pid ${holder.pid}, started ${holder.startedAt}).`,
-    `Wait for it to finish, or delete ${lockPath(repoRoot)} if you are sure it is gone.`,
-  ].join(" ");
-}
-
-function readHolder(path: string): LockHolder | undefined {
+/**
+ * Who a lock file says holds the lock, or nobody.
+ *
+ * Only a file that says it is held, and names a Host and a process, is a
+ * holder. Anything else — `{ "held": false }`, a file a human edited to say
+ * something else, or no file at all — is a free lock, because that is how a
+ * human releases one on GitHub, and the only writers of this file are the
+ * pipeline and that human.
+ */
+export function readLockFile(contents: string): LockHolder | undefined {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(readFileSync(path, "utf8"));
+    parsed = JSON.parse(contents);
   } catch {
     return undefined;
   }
   if (typeof parsed !== "object" || parsed === null) return undefined;
 
-  const holder = parsed as Partial<LockHolder>;
-  if (!Number.isInteger(holder.pid)) return undefined;
+  const record = parsed as Partial<LockHolder> & { held?: unknown };
+  const host = record.host as Partial<Host> | undefined;
+  if (record.held !== true || !Number.isInteger(record.pid)) return undefined;
+  if (host?.kind !== "workstation" && host?.kind !== "cloud") return undefined;
+  if (typeof host.id !== "string" || host.id === "") return undefined;
   return {
-    pid: holder.pid as number,
-    command: holder.command ?? "agent-pipeline",
-    runId: holder.runId ?? "unknown",
-    startedAt: holder.startedAt ?? "unknown",
-    ...(typeof holder.processStartedAt === "string"
-      ? { processStartedAt: holder.processStartedAt }
+    host: { kind: host.kind, id: host.id, name: typeof host.name === "string" ? host.name : host.id },
+    pid: record.pid as number,
+    command: record.command ?? "agent-pipeline",
+    runId: record.runId ?? "unknown",
+    startedAt: record.startedAt ?? "unknown",
+    ...(typeof record.processStartedAt === "string"
+      ? { processStartedAt: record.processStartedAt }
       : {}),
   };
+}
+
+/** The one line the Run that lost prints before exiting. */
+export function lockHeldMessage({ holder, onAnotherHost }: HeldLock): string {
+  if (!onAnotherHost) {
+    return [
+      `Another agent-pipeline is running on this Host: \`${holder.command}\``,
+      `as run ${holder.runId} (pid ${holder.pid}, started ${holder.startedAt}).`,
+      "Wait for it to finish, or ask it to with `agent-pipeline stop`.",
+    ].join(" ");
+  }
+  return [
+    `\`${holder.command}\` holds this Target as run ${holder.runId}`,
+    `on ${describeHost(holder.host)}, started ${holder.startedAt}.`,
+    releaseAdvice(),
+  ].join(" ");
+}
+
+/**
+ * How a lock another Host holds is given up, for every message that meets one.
+ * Nothing here can tell whether that Run is still going, so waiting comes first.
+ */
+export function releaseAdvice(): string {
+  return (
+    "A Run on another Host is never presumed gone, so the lock stays until it is released: " +
+    "wait for that Run to finish or, if it is gone, release the lock through an Operator, " +
+    `or on GitHub by committing a free tip to the \`${LOCK_BRANCH}\` branch, a ` +
+    `\`${LOCK_FILE}\` that reads \`${FREE_LOCK}\`.`
+  );
 }
 
 /**
  * Whether a live process check still names the lock's recorded holder.
  *
- * A holder with no recorded start time is a file written before this check
- * existed, or a claim where the start time could not be read; either way a
- * live pid is trusted alone, which is what every lock did before this. Once a
- * start time is recorded, though, a live pid this check cannot itself read a
- * start time for is not trusted as a match — a lock that claims an identity
- * this check cannot verify is not verified.
+ * A holder with no recorded start time is a claim where the start time could
+ * not be read; a live pid is trusted alone, which is what every lock did
+ * before this. Once a start time is recorded, though, a live pid this check
+ * cannot itself read a start time for is not trusted as a match — a lock that
+ * claims an identity this check cannot verify is not verified.
  */
 function holderIsCurrent(holder: LockHolder, check: ProcessCheck): boolean {
   if (!check.alive) return false;
@@ -185,7 +144,7 @@ function holderIsCurrent(holder: LockHolder, check: ProcessCheck): boolean {
 }
 
 /** Signal 0 tests for existence without delivering anything, then a start time. */
-function checkProcessTable(pid: number): ProcessCheck {
+export function checkProcessTable(pid: number): ProcessCheck {
   if (!processIsAlive(pid)) return { alive: false };
   return { alive: true, startedAt: readProcessStartedAt(pid) };
 }
@@ -204,8 +163,8 @@ function processIsAlive(pid: number): boolean {
  * A pid's start time as the operating system reports it, or `undefined` when
  * it cannot be told — an unsupported platform (Windows has no answer here),
  * a pid already gone by the time this reads it, or anything else this does
- * not recognise. Callers degrade to today's pid-only behaviour rather than
- * fail: this check can only add confidence, never cost a Run its lock.
+ * not recognise. Callers degrade to pid-only behaviour rather than fail: this
+ * check can only add confidence, never cost a Run its lock.
  */
 function readProcessStartedAt(pid: number): string | undefined {
   try {

@@ -1,16 +1,22 @@
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { type Host, currentHost } from "../host.js";
 import {
-  type LockOptions,
-  lockHolder,
-  releaseLock,
-  takeLock,
-  takeOverLock,
+  LOCK_BRANCH,
+  LOCK_FILE,
+  type ProcessCheck,
+  checkProcessTable,
+  holderStanding,
+  lockCommitMessage,
+  lockFileContents,
+  readLockFile,
 } from "../lock.js";
 import type {
   CheckOutcome,
+  HeldLock,
   KeptTranscripts,
+  LockClaim,
   LockHolder,
   LockOutcome,
   LockTake,
@@ -62,6 +68,22 @@ export const STATE_BRANCH = "agent-pipeline/state";
 const STATE_ATTEMPTS = 3;
 
 /**
+ * How many times taking or releasing the Run lock reads the lock branch again
+ * after a push its lease refused. A refused lease is another Run that moved
+ * the lock since this one read it, and reading it again is how this one finds
+ * out who; a third move in a row is not a race but something to report.
+ */
+const LOCK_ATTEMPTS = 3;
+
+/** How the Run lock tells who this Host is, and whether a holder here is running. */
+export interface LockOptions {
+  /** The Host this Workspace runs on; the one the environment names by default. */
+  host?: Host;
+  /** Seam for tests; defaults to the real process table and its start times. */
+  checkProcess?: (pid: number) => ProcessCheck;
+}
+
+/**
  * One change to the state branch: a file written with `contents`, a file
  * written with what is on disk at `from`, or everything at `remove` gone, the
  * file of that name or the directory of it.
@@ -104,9 +126,10 @@ interface TreeEntry {
  * its own, whole — read, rewrite, push — because two Lanes that rewrote the
  * same tip would each push a snapshot missing the other's Ticket.
  *
- * The Run lock is still a plain file under the gitignored run directory, with a
- * PID check telling a live lock from an abandoned one. It takes no git ref or
- * index lock, so it is not queued behind git.
+ * The Run lock lives on the remote too, on {@link LOCK_BRANCH}, where every
+ * Host sees it (ADR-0008). Unlike the state branch it keeps its history: each
+ * take and release is a commit on the tip it read, pushed with a lease on that
+ * tip, so a human reading the branch on GitHub sees who held the Target when.
  */
 export class GitWorkspace implements Workspace {
   /**
@@ -117,13 +140,19 @@ export class GitWorkspace implements Workspace {
   private readonly mainCheckout = new Turns();
   /** Changes to the state branch, and reads of it, one whole operation at a time. */
   private readonly stateBranch = new Turns();
+  private readonly host: Host;
+  private readonly checkProcess: (pid: number) => ProcessCheck;
+  /** The holder this Workspace recorded when it took the lock, which is what it releases. */
+  private holding: LockHolder | undefined;
 
   constructor(
     private readonly repoRoot: string,
     private readonly remote = "origin",
-    /** How the Run lock tells a live holder; the real process table by default. */
-    private readonly lockOptions: LockOptions = {},
-  ) {}
+    { host = currentHost(process.env), checkProcess = checkProcessTable }: LockOptions = {},
+  ) {
+    this.host = host;
+    this.checkProcess = checkProcess;
+  }
 
   async createWorktree({ path, branch }: WorktreeRef, base: string): Promise<void> {
     await this.git(["worktree", "add", "-b", branch, path, base]);
@@ -645,20 +674,135 @@ export class GitWorkspace implements Workspace {
     }
   }
 
-  async takeRunLock(holder: LockHolder): Promise<LockTake> {
-    return takeLock(this.repoRoot, holder, this.lockOptions);
+  async takeRunLock(claim: LockClaim): Promise<LockTake> {
+    return this.acquireLock(claim, false);
   }
 
-  async takeOverRunLock(holder: LockHolder): Promise<LockOutcome> {
-    return takeOverLock(this.repoRoot, holder, this.lockOptions);
+  async takeOverRunLock(claim: LockClaim): Promise<LockOutcome> {
+    return this.acquireLock(claim, true);
   }
 
-  async runLockHolder(): Promise<LockHolder | undefined> {
-    return lockHolder(this.repoRoot, this.lockOptions);
+  async runLockHolder(): Promise<HeldLock | undefined> {
+    const holder = (await this.readLock())?.holder;
+    if (holder === undefined) return undefined;
+    const standing = holderStanding(holder, this.host, this.checkProcess);
+    if (standing === "abandoned") return undefined;
+    return { holder, onAnotherHost: standing === "elsewhere" };
   }
 
+  /**
+   * A "free" commit on the tip, pushed only while that tip is still this
+   * Workspace's own "held" one: a lock a human released and another Run took
+   * since is that Run's.
+   */
   async releaseRunLock(): Promise<void> {
-    releaseLock(this.repoRoot);
+    const mine = this.holding;
+    if (mine === undefined) return;
+    for (let attempt = 1; ; attempt++) {
+      const read = await this.readLock();
+      if (read?.holder === undefined || !sameHolder(read.holder, mine)) break;
+      const push = await this.pushLock(read.tip, undefined);
+      if (push.result.exitCode === 0) break;
+      if (attempt === LOCK_ATTEMPTS) throwOnFailure("git", push.args, push.result);
+    }
+    this.holding = undefined;
+  }
+
+  /**
+   * Take the lock from the tip as it is read, which is free, or held by a Run
+   * this Host can see has gone when `overAbandoned` says so. Its "held" commit
+   * goes on that tip with a lease on it, so a Run that read the same tip and
+   * pushed first leaves this one's push refused; the tip is then read again,
+   * and names who has the lock now.
+   */
+  private async acquireLock(claim: LockClaim, overAbandoned: true): Promise<LockOutcome>;
+  private async acquireLock(claim: LockClaim, overAbandoned: false): Promise<LockTake>;
+  private async acquireLock(claim: LockClaim, overAbandoned: boolean): Promise<LockTake> {
+    for (let attempt = 1; ; attempt++) {
+      const { tip, holder } = (await this.readLock()) ?? (await this.createLock());
+      if (holder !== undefined) {
+        const standing = holderStanding(holder, this.host, this.checkProcess);
+        if (standing !== "abandoned") {
+          return { outcome: "held", holder, onAnotherHost: standing === "elsewhere" };
+        }
+        if (!overAbandoned) return { outcome: "abandoned" };
+      }
+
+      const recorded = this.holderFor(claim);
+      const push = await this.pushLock(tip, recorded);
+      if (push.result.exitCode === 0) {
+        this.holding = recorded;
+        return { outcome: "taken" };
+      }
+      if (attempt === LOCK_ATTEMPTS) throwOnFailure("git", push.args, push.result);
+    }
+  }
+
+  /**
+   * What this Run records as the holder. The process's own start time is read
+   * here rather than taken from the caller, which a recycled pid could
+   * impersonate as easily as it impersonates the pid itself.
+   */
+  private holderFor(claim: LockClaim): LockHolder {
+    const own = this.checkProcess(claim.pid);
+    return {
+      host: this.host,
+      ...claim,
+      ...(own.alive && own.startedAt !== undefined ? { processStartedAt: own.startedAt } : {}),
+    };
+  }
+
+  /** The lock branch's tip, and who it says holds the lock; nothing when there is no branch. */
+  private async readLock(): Promise<{ tip: string; holder: LockHolder | undefined } | undefined> {
+    const tracking = await this.fetchBranch(LOCK_BRANCH);
+    if (tracking === undefined) return undefined;
+    const tip = (await this.git(["rev-parse", tracking])).stdout.trim();
+    const file = await this.tryGit(["cat-file", "blob", `${tip}:${LOCK_FILE}`]);
+    return { tip, holder: file.exitCode === 0 ? readLockFile(file.stdout) : undefined };
+  }
+
+  /**
+   * Create the lock branch free, by the same lease a take is pushed with,
+   * expecting no branch at all: of two Runs that both found it missing, the
+   * second's push is refused, and it reads the first's.
+   */
+  private async createLock(): Promise<{ tip: string; holder: LockHolder | undefined }> {
+    const push = await this.pushLock(undefined, undefined);
+    const read = await this.readLock();
+    if (read === undefined) throwOnFailure("git", push.args, push.result);
+    // A remote that took the push and then shows no branch is not one to argue with.
+    if (read === undefined) throw new Error(`${this.remote} has no ${LOCK_BRANCH} branch`);
+    return read;
+  }
+
+  /**
+   * Push a commit saying `holder` holds the lock, or that nobody does, on top
+   * of `tip`, with a lease on `tip` or on no branch at all. The rest of the
+   * tip's tree is kept: a README a human put there is theirs.
+   *
+   * The push's own result, because a refused lease is an answer here: somebody
+   * moved the lock.
+   */
+  private async pushLock(tip: string | undefined, holder: LockHolder | undefined) {
+    const tree = await this.editTree(tip, [
+      { name: LOCK_FILE, contents: lockFileContents(holder) },
+    ]);
+    const { stdout } = await this.git([
+      "commit-tree",
+      "--no-gpg-sign",
+      tree,
+      ...(tip === undefined ? [] : ["-p", tip]),
+      "-m",
+      lockCommitMessage(holder),
+    ]);
+    const args = [
+      "push",
+      "--no-verify",
+      `--force-with-lease=refs/heads/${LOCK_BRANCH}:${tip ?? ""}`,
+      this.remote,
+      `${stdout.trim()}:refs/heads/${LOCK_BRANCH}`,
+    ];
+    return { args, result: await this.tryGit(args) };
   }
 
   /**
@@ -684,6 +828,16 @@ export class GitWorkspace implements Workspace {
  */
 function transcriptsDir(ticket: number): string {
   return `ticket-${ticket}`;
+}
+
+/** Whether two holders are the same Run on the same Host. */
+function sameHolder(a: LockHolder, b: LockHolder): boolean {
+  return (
+    a.runId === b.runId &&
+    a.pid === b.pid &&
+    a.host.kind === b.host.kind &&
+    a.host.id === b.host.id
+  );
 }
 
 /**

@@ -157,15 +157,24 @@ Frontier blocked.
 Body text is never read for blockers: only GitHub's native dependencies count
 ([ADR-0003](docs/adr/0003-github-native-relations-only.md)).
 
-One Run at a time per Target. A second `run`, or a `ticket` started while a `run` holds the
-lock, exits immediately naming the holder. The lock is a PID file at
-`.agent-pipeline/lock.json`, so a Run that was killed does not block the next one.
+One Run at a time per Target, whichever Host it is on. A second `run`, or a `ticket` started
+while a `run` holds the lock, exits immediately naming the holder. The lock lives on the
+Target's GitHub repository, on the `agent-pipeline/lock` branch, where anyone can see who
+holds the Target: the tip's `lock.json` names the Host, the Run, its command line and when it
+started, or reads `{ "held": false }`, and the tip's commit message says the same. A Run takes
+it by pushing a "held" commit on the tip it read, with a lease on that tip, so of two Runs
+that read the same tip only one gets it, and it releases it by pushing a "free" commit;
+nothing on the branch is ever deleted. A lock whose Run on this same Host has gone — a Run
+ended by Ctrl+C — is taken over by the next Run here by itself. A lock held from another Host
+is never presumed gone, because nothing here can see that Host's processes: the refusal names
+the Host, the Run and when it started, and the lock stays until the Run there finishes or a
+human releases it, by asking an Operator or by committing a free tip — a `lock.json` that
+reads `{ "held": false }` — to the branch on GitHub.
 
 `stop` is the other side of that lock, and asks the Run holding it to Stop — see [A Run that
 did not come back](#a-run-that-did-not-come-back) for what a Run does with one. It needs
-nothing of the Target but its root and that file: no config, no `gh`, and none of the
-readiness `run` insists on, because the Run it is stopping answered all of that when it
-started.
+nothing of the Target but that lock: no config, no `gh`, and none of the readiness `run`
+insists on, because the Run it is stopping answered all of that when it started.
 
 A Stage may not start a Run either. Every Stage session runs with `AGENT_PIPELINE_STAGE`
 set to the Stage's name, and while that variable is set the CLI refuses before it looks at
@@ -320,9 +329,9 @@ A Run can end early two ways, and they leave opposite things behind. SIGTERM is 
 and not a kill; everything else — Ctrl-C, SIGKILL, an OOM, a machine that went away — is a
 kill ([ADR-0006](docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md)).
 
-`agent-pipeline stop`, from any terminal in the Target, is how that SIGTERM is sent: it
-reads the Run lock, signals the process it names, and prints which Run will stop and what
-Ctrl-C would cost instead.
+`agent-pipeline stop`, from any terminal in the Target on the Host the Run is on, is how that
+SIGTERM is sent: it reads the Run lock from GitHub, signals the process it names, and prints
+which Run will stop and what Ctrl-C would cost instead.
 
 ```
 $ agent-pipeline stop
@@ -333,9 +342,12 @@ Stages it is running and leaving their Tickets stranded for the next Run.
 ```
 
 Exit code `0` when the signal went, `2` when there was no Run to send it to — nothing holds
-the lock, or the process it names is gone, in which case the dead lock is left where it is
-for the next Run to reclaim. A lock held by `ticket <n>` is left alone and told about: that
-Run ends with its Ticket anyway, so there is nothing a Stop would add. There is no stop
+the lock, or the process on this Host it names is gone, in which case the dead lock is left
+where it is for the next Run to reclaim. A lock held from another Host is named — the Host,
+the Run and when it started — and nothing is sent: a Stop is a signal, and only the Host the
+Run is on can send it, through `agent-pipeline stop` there or, on a cloud Host, its Operator.
+A lock held by `ticket <n>` is left alone and told about: that Run ends with its Ticket
+anyway, so there is nothing a Stop would add. There is no stop
 file, so a second `stop` prints exactly what the first did and the Run ignores the second
 signal.
 

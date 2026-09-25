@@ -1,22 +1,22 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
+import type { Host } from "./host.js";
 import {
-  type LockOptions,
+  FREE_LOCK,
+  checkProcessTable,
+  holderStanding,
+  lockCommitMessage,
+  lockFileContents,
   lockHeldMessage,
-  lockHolder,
-  lockPath,
-  releaseLock,
-  takeLock,
-  takeOverLock,
+  readLockFile,
 } from "./lock.js";
-import type { LockHolder, LockOutcome } from "./ports/workspace.js";
+import type { LockHolder } from "./ports/workspace.js";
 
-let repoRoot: string;
+const HERE: Host = { kind: "workstation", id: "4f1c0ffee", name: "desk" };
+const CLOUD: Host = { kind: "cloud", id: "session_01abc", name: "runsc" };
 
-function holder(overrides: Partial<LockHolder> = {}) {
+function holder(overrides: Partial<LockHolder> = {}): LockHolder {
   return {
+    host: HERE,
     pid: 4321,
     command: "agent-pipeline run",
     runId: "run-1",
@@ -25,212 +25,135 @@ function holder(overrides: Partial<LockHolder> = {}) {
   };
 }
 
-const nothingAlive = { checkProcess: () => ({ alive: false }) as const };
-const everythingAlive = { checkProcess: () => ({ alive: true, startedAt: undefined }) as const };
-
 /** A fake process table: alive with the given start time, dead for any other pid. */
-function processes(byPid: Record<number, string>) {
-  return {
-    checkProcess: (pid: number) =>
-      pid in byPid ? ({ alive: true, startedAt: byPid[pid] } as const) : ({ alive: false } as const),
-  };
+function processes(byPid: Record<number, string | undefined>) {
+  return (pid: number) =>
+    pid in byPid ? ({ alive: true, startedAt: byPid[pid] } as const) : ({ alive: false } as const);
 }
 
-/** The lock as a starting Run takes it: an abandoned one is taken over. */
-function acquire(root: string, next: LockHolder, options: LockOptions = {}): LockOutcome {
-  const found = takeLock(root, next, options);
-  return found.outcome === "abandoned" ? takeOverLock(root, next, options) : found;
-}
+describe("the lock file", () => {
+  it("reads back the holder it was written for", () => {
+    const written = holder({ processStartedAt: "A" });
 
-beforeEach(() => {
-  repoRoot = mkdtempSync(join(tmpdir(), "agent-pipeline-lock-"));
+    expect(readLockFile(lockFileContents(written))).toEqual(written);
+  });
+
+  it("says it is held, so a human reading it on GitHub need not guess", () => {
+    expect(JSON.parse(lockFileContents(holder()))).toMatchObject({ held: true, runId: "run-1" });
+  });
+
+  it("names nobody when it is free", () => {
+    expect(lockFileContents(undefined).trim()).toBe(FREE_LOCK);
+    expect(readLockFile(lockFileContents(undefined))).toBeUndefined();
+  });
+
+  it("names nobody for whatever else a human commits to release it", () => {
+    expect(readLockFile("")).toBeUndefined();
+    expect(readLockFile("free")).toBeUndefined();
+    expect(readLockFile('{ "held": false, "pid": 4321 }')).toBeUndefined();
+  });
+
+  it("names nobody for a held file that names no Host or no process", () => {
+    const { host: _host, ...hostless } = holder();
+    expect(readLockFile(JSON.stringify({ held: true, ...hostless }))).toBeUndefined();
+    expect(
+      readLockFile(JSON.stringify({ held: true, ...holder(), pid: "4321" })),
+    ).toBeUndefined();
+  });
 });
 
-afterEach(() => {
-  rmSync(repoRoot, { recursive: true, force: true });
+describe("the lock commit's message", () => {
+  it("names the Run and the Host holding the Target", () => {
+    expect(lockCommitMessage(holder({ host: CLOUD }))).toBe(
+      "Held by run run-1 on the cloud Host of session `session_01abc`: agent-pipeline run",
+    );
+  });
+
+  it("says Free when nobody does", () => {
+    expect(lockCommitMessage(undefined)).toBe("Free");
+  });
 });
 
-describe("taking the lock", () => {
-  it("writes the holder where a human can read it", () => {
-    const outcome = acquire(repoRoot, holder(), everythingAlive);
-
-    expect(outcome.outcome).toBe("taken");
-    expect(JSON.parse(readFileSync(lockPath(repoRoot), "utf8"))).toEqual(holder());
+describe("a holder's standing", () => {
+  it("is running while its process on this Host is", () => {
+    expect(holderStanding(holder(), HERE, processes({ 4321: undefined }))).toBe("running");
   });
 
-  it("refuses a second Run and names the holder", () => {
-    acquire(repoRoot, holder({ pid: 111, runId: "first" }), everythingAlive);
-
-    const outcome = acquire(repoRoot, holder({ pid: 222 }), everythingAlive);
-
-    expect(outcome).toEqual({ outcome: "held", holder: holder({ pid: 111, runId: "first" }) });
+  it("is abandoned once its process on this Host has gone", () => {
+    expect(holderStanding(holder(), HERE, processes({}))).toBe("abandoned");
   });
 
-  it("refuses a `ticket` started while a `run` holds the lock", () => {
-    acquire(repoRoot, holder({ command: "agent-pipeline run" }), everythingAlive);
+  it("is abandoned when its pid is alive but is a different process now", () => {
+    const recycled = processes({ 4321: "B" });
 
-    const outcome = acquire(
-      repoRoot,
-      holder({ pid: 222, command: "agent-pipeline ticket 5" }),
-      everythingAlive,
-    );
-
-    expect(outcome.outcome).toBe("held");
+    expect(holderStanding(holder({ processStartedAt: "A" }), HERE, recycled)).toBe("abandoned");
   });
 
-  it("reclaims a lock whose process is no longer alive", () => {
-    acquire(repoRoot, holder({ pid: 111, runId: "crashed" }), everythingAlive);
+  it("is still running when the recorded pid is still it", () => {
+    const same = processes({ 4321: "A" });
 
-    const outcome = acquire(repoRoot, holder({ pid: 222, runId: "second" }), nothingAlive);
-
-    expect(outcome.outcome).toBe("taken");
-    expect(JSON.parse(readFileSync(lockPath(repoRoot), "utf8")).runId).toBe("second");
+    expect(holderStanding(holder({ processStartedAt: "A" }), HERE, same)).toBe("running");
   });
 
-  it("reclaims a lock file too corrupt to name a holder", () => {
-    acquire(repoRoot, holder(), everythingAlive);
-    writeFileSync(lockPath(repoRoot), "{ not json");
-
-    expect(acquire(repoRoot, holder({ pid: 222 }), everythingAlive).outcome).toBe("taken");
-  });
-
-  it("frees the lock for the next Run when released", () => {
-    acquire(repoRoot, holder(), everythingAlive);
-
-    releaseLock(repoRoot);
-
-    expect(existsSync(lockPath(repoRoot))).toBe(false);
-    expect(acquire(repoRoot, holder({ pid: 222 }), everythingAlive).outcome).toBe("taken");
-  });
-
-  it("asks the real process table when no seam is given", () => {
-    // pid 1 always exists; signal 0 answers EPERM rather than ESRCH when it is
-    // owned by another user, and EPERM still means alive.
-    acquire(repoRoot, holder({ pid: 1 }));
-
-    expect(acquire(repoRoot, holder({ pid: process.pid })).outcome).toBe("held");
-  });
-
-  it("records the holder's own start time, so a recycled pid cannot forge it", () => {
-    acquire(repoRoot, holder({ pid: 111 }), processes({ 111: "A" }));
-
-    expect(JSON.parse(readFileSync(lockPath(repoRoot), "utf8")).processStartedAt).toBe("A");
-  });
-
-  it("takes a lock whose recorded pid is alive but is a different process now", () => {
-    acquire(repoRoot, holder({ pid: 111, runId: "crashed" }), processes({ 111: "A" }));
-
-    // pid 111 is alive again, but its start time no longer matches: a stranger.
-    const outcome = acquire(
-      repoRoot,
-      holder({ pid: 222, runId: "second" }),
-      processes({ 222: "C", 111: "B" }),
-    );
-
-    expect(outcome.outcome).toBe("taken");
-    expect(JSON.parse(readFileSync(lockPath(repoRoot), "utf8")).runId).toBe("second");
-  });
-
-  it("still refuses, and still names the holder, when the recorded pid is still it", () => {
-    acquire(repoRoot, holder({ pid: 111, runId: "first" }), processes({ 111: "A" }));
-
-    const outcome = acquire(
-      repoRoot,
-      holder({ pid: 222 }),
-      processes({ 222: "C", 111: "A" }),
-    );
-
-    expect(outcome).toEqual({
-      outcome: "held",
-      holder: holder({ pid: 111, runId: "first", processStartedAt: "A" }),
+  it("is elsewhere on another Host, and no process here is asked about it", () => {
+    const asked: number[] = [];
+    const standing = holderStanding(holder({ host: CLOUD }), HERE, (pid) => {
+      asked.push(pid);
+      return { alive: false };
     });
+
+    expect(standing).toBe("elsewhere");
+    expect(asked).toEqual([]);
   });
 
-  it("takes the lock when the holder's own start time cannot be read", () => {
-    // `everythingAlive` answers alive with no start time, which is exactly
-    // what an unsupported platform, or a pid the read failed for, looks like.
-    const outcome = acquire(repoRoot, holder({ pid: 111 }), everythingAlive);
+  it("is elsewhere on another machine of the same kind", () => {
+    const desk = { ...HERE, id: "another-machine" };
 
-    expect(outcome.outcome).toBe("taken");
-    expect(JSON.parse(readFileSync(lockPath(repoRoot), "utf8")).processStartedAt).toBeUndefined();
+    expect(holderStanding(holder({ host: desk }), HERE, processes({}))).toBe("elsewhere");
   });
 });
 
-describe("taking the lock in two steps", () => {
-  it("finds a lock whose process is gone abandoned, and leaves it for the take-over", () => {
-    takeLock(repoRoot, holder({ pid: 111, runId: "crashed" }), everythingAlive);
+describe("the process table", () => {
+  it("finds this process alive, with a start time where the platform keeps one", () => {
+    const check = checkProcessTable(process.pid);
 
-    const found = takeLock(repoRoot, holder({ pid: 222 }), nothingAlive);
-
-    expect(found).toEqual({ outcome: "abandoned" });
-    expect(JSON.parse(readFileSync(lockPath(repoRoot), "utf8")).runId).toBe("crashed");
+    expect(check.alive).toBe(true);
+    if (process.platform === "linux" && check.alive) expect(check.startedAt).toBeDefined();
   });
 
-  it("takes over an abandoned lock", () => {
-    takeLock(repoRoot, holder({ pid: 111, runId: "crashed" }), everythingAlive);
-
-    const outcome = takeOverLock(repoRoot, holder({ pid: 222, runId: "second" }), nothingAlive);
-
-    expect(outcome).toEqual({ outcome: "taken" });
-    expect(JSON.parse(readFileSync(lockPath(repoRoot), "utf8")).runId).toBe("second");
-  });
-
-  it("takes nothing over from a holder that is running again by the time it is asked", () => {
-    takeLock(repoRoot, holder({ pid: 111, runId: "first" }), everythingAlive);
-
-    const outcome = takeOverLock(repoRoot, holder({ pid: 222 }), processes({ 111: "A" }));
-
-    expect(outcome).toEqual({ outcome: "held", holder: holder({ pid: 111, runId: "first" }) });
+  it("finds pid 1 alive even when it belongs to another user", () => {
+    // Signal 0 answers EPERM rather than ESRCH for a process owned by another
+    // user, and EPERM still means alive.
+    expect(checkProcessTable(1).alive).toBe(true);
   });
 });
 
 describe("lockHeldMessage", () => {
-  it("names the command, run and pid holding the lock", () => {
-    const message = lockHeldMessage(holder(), repoRoot);
+  it("names the command, run and pid of a Run on this Host, and says to wait", () => {
+    const message = lockHeldMessage({ holder: holder(), onAnotherHost: false });
 
     expect(message).toContain("`agent-pipeline run`");
     expect(message).toContain("run run-1");
     expect(message).toContain("pid 4321");
-    expect(message).toContain(lockPath(repoRoot));
-  });
-});
-
-describe("lockHolder", () => {
-  it("names the Run holding the lock", () => {
-    acquire(repoRoot, holder(), everythingAlive);
-
-    expect(lockHolder(repoRoot, everythingAlive)).toEqual(holder());
+    expect(message).toContain("Wait for it to finish");
   });
 
-  it("names nobody when no Run has taken the lock", () => {
-    expect(lockHolder(repoRoot, everythingAlive)).toBeUndefined();
+  it("names another Host, the Run and its start, and how the lock is released", () => {
+    const message = lockHeldMessage({ holder: holder({ host: CLOUD }), onAnotherHost: true });
+
+    expect(message).toContain("the cloud Host of session `session_01abc`");
+    expect(message).toContain("run run-1");
+    expect(message).toContain("started 2026-09-17T09:00:00.000Z");
+    expect(message).toContain("through an Operator");
+    expect(message).toContain("free tip to the `agent-pipeline/lock` branch");
+    expect(message).toContain(FREE_LOCK);
+    expect(message).not.toContain("pid");
   });
 
-  it("names nobody once the holder's process is gone, and leaves the file", () => {
-    acquire(repoRoot, holder(), everythingAlive);
+  it("names a workstation by its hostname", () => {
+    const desk = { kind: "workstation" as const, id: "another-machine", name: "laptop" };
+    const message = lockHeldMessage({ holder: holder({ host: desk }), onAnotherHost: true });
 
-    expect(lockHolder(repoRoot, nothingAlive)).toBeUndefined();
-    // Reclaiming a dead lock belongs to the next Run, not to whoever reads it.
-    expect(existsSync(lockPath(repoRoot))).toBe(true);
-  });
-
-  it("names nobody for a lock file too corrupt to name one", () => {
-    acquire(repoRoot, holder(), everythingAlive);
-    writeFileSync(lockPath(repoRoot), "{ not json");
-
-    expect(lockHolder(repoRoot, everythingAlive)).toBeUndefined();
-  });
-
-  it("asks the real process table when no seam is given", () => {
-    acquire(repoRoot, holder({ pid: process.pid }));
-
-    expect(lockHolder(repoRoot)?.pid).toBe(process.pid);
-  });
-
-  it("names nobody once the recorded pid belongs to a different process, and leaves the file", () => {
-    acquire(repoRoot, holder({ pid: 111 }), processes({ 111: "A" }));
-
-    expect(lockHolder(repoRoot, processes({ 111: "B" }))).toBeUndefined();
-    expect(existsSync(lockPath(repoRoot))).toBe(true);
+    expect(message).toContain("the workstation `laptop`");
   });
 });
