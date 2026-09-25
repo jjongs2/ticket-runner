@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { GitWorkspace } from "./git-workspace.js";
+import { GitWorkspace, STATE_BRANCH } from "./git-workspace.js";
 
 let remote: string;
 let repo: string;
@@ -933,7 +933,6 @@ describe("a Target whose base branch is not main", () => {
 });
 
 describe("the State a Ticket keeps", () => {
-  const STATE_BRANCH = "agent-pipeline/state";
   const state = {
     ticket: 4,
     branch: "agent/4-x",

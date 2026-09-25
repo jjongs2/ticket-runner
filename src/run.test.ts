@@ -619,6 +619,29 @@ describe("stranded Tickets", () => {
     expect(logged).toContain("#4 has closed, so the state it left is gone");
   });
 
+  it("carries on into the Frontier when the remote will not take a closed Ticket's removal", async () => {
+    tracker.addIssue({ number: 4, closed: true, assignees: ["pipeline-user"] });
+    workspace.recordState({
+      ticket: 4,
+      branch: "agent/4-ticket-4",
+      state: "implemented",
+      fixUsed: false,
+      runId: "run-0",
+      updatedAt: "2026-09-17T09:00:00.000Z",
+    });
+    workspace.removeState = async () => {
+      throw new Error("git push: connection reset");
+    };
+    tracker.addIssue({ number: 6 });
+
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes).toEqual([expect.objectContaining({ outcome: "merged", ticket: 6 })]);
+    expect(logged).toContain(
+      "#4 has closed, but removing its state failed: git push: connection reset",
+    );
+  });
+
   it("leaves one somebody else now holds in place, and says so", async () => {
     stranded(4);
     tracker.issue(4).assignees = ["octocat"];

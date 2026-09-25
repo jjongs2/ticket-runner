@@ -49,12 +49,20 @@ const REBASE_DIRS = ["rebase-merge", "rebase-apply"];
 export const STATE_BRANCH = "agent-pipeline/state";
 
 /**
- * How many times a change to the state branch is made over again when the
- * remote moved between reading it and pushing. The Lanes of one Run take turns,
- * and only one Run holds a Target, so a second attempt is already the unusual
- * case; one that keeps losing is a remote something else is writing to.
+ * How many times a change to the state branch is tried, read again from the
+ * remote each time, before its push failing is an error. Meant for a remote
+ * that moved between the read and the push, whose lease then refuses it; a
+ * push that failed for any other reason is tried again too, which costs a
+ * moment. The Lanes of one Run take turns and only one Run holds a Target, so
+ * a second attempt is already the unusual case.
  */
 const STATE_ATTEMPTS = 3;
+
+/** One file of the state branch to write, with its contents, or to remove, without. */
+interface StateEdit {
+  name: string;
+  contents?: string;
+}
 
 /** One entry of the snapshot's tree, as `git ls-tree` names it. */
 interface TreeEntry {
@@ -445,9 +453,13 @@ export class GitWorkspace implements Workspace {
 
   async readState(ticket: number): Promise<TicketState | undefined> {
     return this.stateBranch.take(async () => {
-      const tip = await this.fetchBranch(STATE_BRANCH);
-      if (tip === undefined) return undefined;
-      const read = await this.tryGit(["cat-file", "blob", `${tip}:${stateFileName(ticket)}`]);
+      const tracking = await this.fetchBranch(STATE_BRANCH);
+      if (tracking === undefined) return undefined;
+      const read = await this.tryGit([
+        "cat-file",
+        "blob",
+        `${tracking}:${stateFileName(ticket)}`,
+      ]);
       if (read.exitCode !== 0) return undefined;
       const file = readStateFile(read.stdout, ticket);
       return file.readable ? file.state : undefined;
@@ -456,9 +468,9 @@ export class GitWorkspace implements Workspace {
 
   async readAllStates(): Promise<StateFile[]> {
     return this.stateBranch.take(async () => {
-      const tip = await this.fetchBranch(STATE_BRANCH);
-      if (tip === undefined) return [];
-      const files = (await this.snapshot(tip)).flatMap((entry) => {
+      const tracking = await this.fetchBranch(STATE_BRANCH);
+      if (tracking === undefined) return [];
+      const files = (await this.snapshot(tracking)).flatMap((entry) => {
         const ticket = stateFileTicket(entry.name);
         return entry.type === "blob" && ticket !== undefined ? [{ ticket, entry }] : [];
       });
@@ -497,7 +509,7 @@ export class GitWorkspace implements Workspace {
    */
   private async changeState(
     message: string,
-    edit: { name: string; contents?: string },
+    edit: StateEdit,
   ): Promise<void> {
     await this.stateBranch.take(async () => {
       for (let attempt = 1; ; attempt++) {
@@ -514,7 +526,15 @@ export class GitWorkspace implements Workspace {
         }
 
         const tree = await this.editTree(tip, edit);
-        const { stdout } = await this.git(["commit-tree", tree, "-m", message]);
+        // Unsigned, like the push is unhooked: a signing key that asks for a
+        // passphrase would otherwise stop every write of an unattended Run.
+        const { stdout } = await this.git([
+          "commit-tree",
+          "--no-gpg-sign",
+          tree,
+          "-m",
+          message,
+        ]);
         const args = [
           "push",
           // The state branch holds no code, so a Target's pre-push hooks have
@@ -552,7 +572,7 @@ export class GitWorkspace implements Workspace {
    */
   private async editTree(
     tip: string | undefined,
-    edit: { name: string; contents?: string },
+    edit: StateEdit,
   ): Promise<string> {
     return this.withScratch(async (scratch) => {
       const env = { GIT_INDEX_FILE: join(scratch, "index") };
@@ -562,7 +582,11 @@ export class GitWorkspace implements Workspace {
       } else {
         const path = join(scratch, "blob");
         writeFileSync(path, edit.contents);
-        const blob = (await this.git(["hash-object", "-w", "--", path])).stdout.trim();
+        // --no-filters: the bytes written are the bytes kept, whatever the
+        // checkout's attributes would make of a JSON file.
+        const blob = (
+          await this.git(["hash-object", "-w", "--no-filters", "--", path])
+        ).stdout.trim();
         await this.git(
           ["update-index", "--add", "--cacheinfo", `100644,${blob},${edit.name}`],
           env,

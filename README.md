@@ -246,7 +246,8 @@ exits `0`.
 
 What the release leaves behind is the **State file** the Ticket has been keeping since it
 was claimed, as `ticket-<n>.json` on the `agent-pipeline/state` branch of the Target's
-remote, where a Run on any Host finds it, naming the state it reached, its branch, whether the fix budget was already spent, and the pull request if one is open
+remote, where a Run on any Host finds it. It names the state it reached, its branch,
+whether the fix budget was already spent, and the pull request if one is open
 ([ADR-0004](docs/adr/0004-resume-state-is-a-local-file.md)):
 
 ```json

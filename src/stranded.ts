@@ -88,8 +88,14 @@ export async function strandedTickets(sweep: StrandedSweep): Promise<StrandedTic
     }
 
     if (issue.closed) {
-      await workspace.removeState(ticket);
-      log(`#${ticket} has closed, so the state it left is gone`);
+      // A remote that will not take the removal costs nothing but a second
+      // try from the next Run, where letting it throw would end this one.
+      try {
+        await workspace.removeState(ticket);
+        log(`#${ticket} has closed, so the state it left is gone`);
+      } catch (error) {
+        log(`#${ticket} has closed, but removing its state failed: ${(error as Error).message}`);
+      }
       continue;
     }
     if (issue.assignees.length > 0 && !issue.assignees.includes(user)) {

@@ -624,10 +624,16 @@ async function resumable(
     };
   }
 
-  await pipeline.workspace.removeState(ticket);
   pipeline.log?.(
     `#${ticket} was resumable, but ${state.branch} is neither in ${worktree} nor on the remote`,
   );
+  // Logged and nothing more when it fails: the Claim writes this Ticket's State
+  // over it in a moment, from the top.
+  try {
+    await pipeline.workspace.removeState(ticket);
+  } catch (error) {
+    pipeline.log?.(`#${ticket} could not forget its state: ${(error as Error).message}`);
+  }
   return undefined;
 }
 
