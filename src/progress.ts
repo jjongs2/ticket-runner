@@ -109,7 +109,7 @@ function earlierSections(body: string, runId: string): string {
     else sections.at(-1)?.push(line);
   }
   if (sections.at(-1)?.[0]?.includes(runLabel(runId))) sections.pop();
-  return sections.map(pipelineWrote).join("\n\n");
+  return sections.map(headerAndTable).join("\n\n");
 }
 
 /**
@@ -120,7 +120,7 @@ function earlierSections(body: string, runId: string): string {
  * forward with that table, it would be one more footer for every Run, so
  * whatever follows the table goes, whatever its wording.
  */
-function pipelineWrote([header = "", ...rest]: string[]): string {
+function headerAndTable([header = "", ...rest]: string[]): string {
   const table = rest.findIndex((line) => line.startsWith("|"));
   if (table === -1) return header;
   const after = rest.findIndex((line, index) => index > table && !line.startsWith("|"));

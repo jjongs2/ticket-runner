@@ -483,11 +483,11 @@ notification, not a dozen, and the table reads top to bottom as the Run happened
 ```
 
 A later Run finds that comment by its marker and carries on in it rather than starting a
-second one: it leaves the table each earlier Run wrote, under that Run's header, drops the
-footer a cloud Host appended below it, and adds its own below them, so a Ticket stranded on a cloud Host still shows what that Run did
-after its transcripts have gone with the VM. A Run taking the Ticket back from a human is
-the exception: it posts a comment of its own and leaves the one the human read as they
-read it. Details never go in a cell:
+second one: it leaves the table each earlier Run wrote, under that Run's header, without the
+footer a cloud Host appended to it, and adds its own below them, so a Ticket stranded on
+a cloud Host still shows what that Run did after its transcripts have gone with the VM. A
+Run taking the Ticket back from a human is the exception: it posts a comment of its own
+and leaves the one the human read as they read it. Details never go in a cell:
 a hand-off, its evidence and a guard warning stay comments of their own, because those are
 the ones worth a notification.
 
