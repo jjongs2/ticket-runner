@@ -257,7 +257,7 @@ describe("the Target's base branch", () => {
     expect(workspace.branchedFrom).toEqual(["master"]);
     expect(workspace.rebasedOnto).toEqual(["master"]);
     expect(tracker.pullRequest(100).base).toBe("master");
-    expect(workspace.pulledBase).toEqual(["master"]);
+    expect(workspace.pulledBase).toEqual(["master", "master"]);
   });
 
   it("hands every operation that names a branch the one branch it resolved", async () => {
@@ -384,7 +384,7 @@ describe("the pull request title and the squash commit", () => {
   it("reads the branch commits after the rebase, so the merge lists what lands", async () => {
     await run();
 
-    expect(workspace.calls.indexOf("rebaseOnMain")).toBeLessThan(
+    expect(workspace.calls.indexOf("rebase")).toBeLessThan(
       workspace.calls.lastIndexOf(`commitSubjects:${BRANCH}`),
     );
   });
@@ -635,9 +635,29 @@ describe("rebase", () => {
   it("rebases on main before opening the PR", async () => {
     await run();
 
-    expect(workspace.calls.indexOf("rebaseOnMain")).toBeLessThan(
-      workspace.calls.indexOf(`push:${BRANCH}`),
+    // The push the pull request is opened from, which is the last one.
+    expect(workspace.calls.indexOf("rebase")).toBeLessThan(
+      workspace.calls.lastIndexOf(`push:${BRANCH}`),
     );
+  });
+
+  it("brings the base branch up to the remote before it rebases", async () => {
+    await run();
+
+    expect(workspace.calls.indexOf("pullBase")).toBeLessThan(
+      workspace.calls.indexOf("rebase"),
+    );
+  });
+
+  it("hands off rather than rebase onto a base branch it could not bring up", async () => {
+    workspace.pullBaseFailure = new Error("git pull --ff-only exited 128: Not possible to fast-forward");
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "rebase" });
+    expect(workspace.calls).not.toContain("rebase");
+    expect(tracker.calls).not.toContain("squashMerge:100");
+    expect(handoffBody()).toContain("Not possible to fast-forward");
   });
 
   it("sends no conflict Stage in when the branch rebases cleanly", async () => {
@@ -3530,7 +3550,10 @@ describe("the Landing", () => {
   /** How many Tickets have reached the rebase, which is the Landing's door. */
   const rebases = () => workspace.calls.filter((call) => call === "rebase").length;
 
-  /** The Landing's two ends, in the order the Tickets went through them. */
+  /**
+   * The Landing's pulls and rebases, in the order the Tickets went through
+   * them: the pull at its door, the rebase, and the pull after the merge.
+   */
   const landings = () =>
     workspace.calls.filter((call) => call === "rebase" || call === "pullBase");
 
@@ -3560,7 +3583,14 @@ describe("the Landing", () => {
     conflict.release();
     await Promise.all([first, second]);
 
-    expect(landings()).toEqual(["rebase", "pullBase", "rebase", "pullBase"]);
+    expect(landings()).toEqual([
+      "pullBase",
+      "rebase",
+      "pullBase",
+      "pullBase",
+      "rebase",
+      "pullBase",
+    ]);
   });
 
   it("holds the second Ticket's rebase while the first waits for CI", async () => {
@@ -3576,7 +3606,14 @@ describe("the Landing", () => {
     ci.release();
     await Promise.all([first, second]);
 
-    expect(landings()).toEqual(["rebase", "pullBase", "rebase", "pullBase"]);
+    expect(landings()).toEqual([
+      "pullBase",
+      "rebase",
+      "pullBase",
+      "pullBase",
+      "rebase",
+      "pullBase",
+    ]);
   });
 
   it("lands the Ticket that reached the rebase first, whatever its number", async () => {

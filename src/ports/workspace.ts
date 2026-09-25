@@ -197,7 +197,10 @@ export interface WorktreeRef {
 export type WorktreeFromRemote = "made" | "kept" | "parted" | "gone";
 
 export interface Workspace {
-  /** Create `branch` fresh from `base` and check it out at `path`. */
+  /**
+   * Create `branch` fresh from `base` as the remote holds it now, and check it
+   * out at `path`. The checkout's own `base` is not moved.
+   */
   createWorktree(worktree: WorktreeRef, base: string): Promise<void>;
   /** Remove the worktree and delete its branch. */
   removeWorktree(worktree: WorktreeRef): Promise<void>;
@@ -309,7 +312,11 @@ export interface Workspace {
    * counts as deleted without a delete being sent, which a cloud Host could not.
    */
   deleteRemoteBranch(branch: string): Promise<void>;
-  /** Fast-forward the main checkout's `base` to the remote, after a merge. */
+  /**
+   * Fast-forward the main checkout's `base` to the remote: at the door of the
+   * Landing, so the rebase is onto what the merge will land on, and after a
+   * merge.
+   */
   pullBase(base: string): Promise<void>;
 
   /**

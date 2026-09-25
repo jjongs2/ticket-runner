@@ -192,8 +192,8 @@ function asTicketFailure(error: unknown, point: FailurePoint): TicketFailure {
  * untriaged from its Frontier; `ticket <n>` names an issue by hand and reaches
  * those guards too.
  *
- * From the rebase to the pull of the Base branch after the merge the Ticket
- * holds the Run's Landing, so no other Ticket of the same Run moves the Base
+ * From the pull of the Base branch before the rebase to the pull after the
+ * merge the Ticket holds the Run's Landing, so no other Ticket of the same Run moves the Base
  * branch underneath the branch CI is grading (ADR-0005).
  */
 export async function processTicket(
@@ -391,6 +391,11 @@ async function takeTicket(
         // Ticket waits its turn, and the Base branch it rebases onto is then
         // the one its merge will land on.
         await landing.enter();
+        // Up to the remote first: a Base branch the checkout holds behind it
+        // is a rebase that changes nothing and a pull request that conflicts,
+        // which GitHub then runs no CI for. One that cannot be brought up is a
+        // failure here, since rebasing onto it would be the same mistake.
+        await workspace.pullBase(baseBranch);
         const rebase = await workspace.rebase(worktree, baseBranch);
         if (!rebase.ok) {
           // Once per conflict, not once per Ticket: a pass the fix budget

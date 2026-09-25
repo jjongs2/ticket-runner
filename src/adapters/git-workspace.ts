@@ -152,7 +152,12 @@ export class GitWorkspace implements Workspace {
   }
 
   async createWorktree({ path, branch }: WorktreeRef, base: string): Promise<void> {
-    await this.git(["worktree", "add", "-b", branch, path, base]);
+    // From the remote's base branch, not the checkout's: a cloud session's clone
+    // can start commits behind it, and nothing else here has pulled it yet. The
+    // checkout's own ref is left for the Landing to move. Untracked, so nothing
+    // pushed from the worktree can mistake the base branch for its upstream.
+    const from = (await this.fetchBranch(base)) ?? base;
+    await this.git(["worktree", "add", "--no-track", "-b", branch, path, from]);
   }
 
   async removeWorktree({ path, branch }: WorktreeRef): Promise<void> {

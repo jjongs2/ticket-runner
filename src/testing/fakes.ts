@@ -491,6 +491,8 @@ export class FakeWorkspace implements Workspace {
    * take it, which takes transcripts no better.
    */
   stateWriteFailure: Error | undefined;
+  /** What every pull of the base branch fails with, when set: a checkout git cannot fast-forward. */
+  pullBaseFailure: Error | undefined;
   /**
    * The Run lock as it stands on the remote, and whether the Run it names is
    * still running. Undefined is a lock nobody holds.
@@ -681,6 +683,7 @@ export class FakeWorkspace implements Workspace {
 
   async pullBase(base: string): Promise<void> {
     this.calls.push("pullBase");
+    if (this.pullBaseFailure !== undefined) throw this.pullBaseFailure;
     this.pulledBase.push(base);
     this.basesGiven.push(base);
   }
