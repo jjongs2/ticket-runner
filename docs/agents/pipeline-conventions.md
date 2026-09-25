@@ -30,6 +30,10 @@ A Ticket is one issue the pipeline can implement in a single session. It is refu
 
 - The Checks of different Tickets may run at the same time, each in its own worktree, because a Run has as many Lanes as `lanes` says. A Target whose Checks need a port, a database or anything else they would have to share keeps `lanes` at one, or makes them independent of each other.
 
+## The Operator's skill
+
+- `.claude/skills/agent-pipeline/` belongs to the pipeline. It tells an Operator, the Claude session a human opens on this repository from the Claude app, how to start a Run, report on it and stop it. `agent-pipeline init` writes it and rewrites it like this file, so an edit made there does not survive the next `init` either.
+
 ## Local directories
 
 Both are `agent-pipeline`'s own, both are gitignored by `agent-pipeline init`, and neither is ever committed.

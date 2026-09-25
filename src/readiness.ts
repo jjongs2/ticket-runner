@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Labels } from "./config.js";
 import { CONVENTIONS_PATH, conventionsMark } from "./conventions.js";
+import { OPERATOR_SKILL_PATH } from "./operator-skill.js";
 import type { Tracker } from "./ports/tracker.js";
 
 /**
@@ -13,8 +14,8 @@ import type { Tracker } from "./ports/tracker.js";
  * Target it was only asked to work in is the thing `init` exists to keep to one
  * place — so the refusal names the item and the command that fixes it.
  *
- * Presence and the Version stamp, never content. The conventions document is the pipeline's own
- * text and changes with it, so comparing it at every start would refuse a Target
+ * Presence and the Version stamp, never content. The conventions document and
+ * the Operator's skill are the pipeline's own text and change with it, so comparing it at every start would refuse a Target
  * for carrying last week's copy, which is a thing the next `init` rewrites and
  * nothing a Run is worse for. Its Version stamp is asked for, though never which
  * Version it names: an Operator installs the pipeline a cloud Host runs at that
@@ -22,7 +23,7 @@ import type { Tracker } from "./ports/tracker.js";
  *
  * The Target's own files are read here rather than through a port, which every
  * external effect of a Run goes through. What a port buys is a fake to drive the
- * state machine with, and there is no state machine here: this is four questions
+ * state machine with, and there is no state machine here: this is five questions
  * asked of a directory before a Run exists, and the answers are already driven
  * from a temporary repository root, which is how the local state under
  * `.agent-pipeline/` is tested too (ADR-0004). Widening the `Workspace` port for
@@ -128,6 +129,12 @@ function missingFileMessage(repoRoot: string): string | undefined {
 
   if (!hasClaudePointer(readTargetFile(join(repoRoot, CLAUDE_FILENAME)))) {
     return `\`${CLAUDE_FILENAME}\` does not point at \`${CONVENTIONS_PATH}\``;
+  }
+
+  // Asked of a workstation too, though only a cloud session reads it: a Target
+  // a local Run accepts is then one the app can run as well (ADR-0008).
+  if (readTargetFile(join(repoRoot, OPERATOR_SKILL_PATH)) === undefined) {
+    return `the Operator's skill \`${OPERATOR_SKILL_PATH}\` is not there`;
   }
 
   return undefined;

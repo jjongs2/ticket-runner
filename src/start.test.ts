@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CONFIG_FILENAME, loadConfig } from "./config.js";
 import { CLAUDE_SECTION, CONVENTIONS_PATH, conventionsDoc } from "./conventions.js";
+import { OPERATOR_SKILL_PATH, operatorSkill } from "./operator-skill.js";
 import { type Work, startRun } from "./start.js";
 import type { StopSource } from "./stop.js";
 import {
@@ -43,11 +44,13 @@ let workspace: FakeWorkspace;
 beforeEach(() => {
   repoRoot = mkdtempSync(join(tmpdir(), "agent-pipeline-start-"));
   // A Target as `init` leaves it: its own package.json, the two ignored
-  // directories, the conventions document and a `CLAUDE.md` pointing at it.
+  // directories, the conventions document, a `CLAUDE.md` pointing at it and
+  // the Operator's skill.
   write("package.json", JSON.stringify({ scripts: { test: "vitest run" } }));
   write(".gitignore", ".worktrees/\n.agent-pipeline/\n");
   write(CONVENTIONS_PATH, conventionsDoc(VERSION));
   write("CLAUDE.md", CLAUDE_SECTION);
+  write(OPERATOR_SKILL_PATH, operatorSkill());
 
   tracker = new FakeTracker();
   for (const name of ALL_LABELS) tracker.labels.add(name);
@@ -73,6 +76,7 @@ async function start(
   work: Work = { command: "run" },
   signals?: StopSource,
   repository?: string,
+  lanes?: number,
 ) {
   const out: string[] = [];
   const err: string[] = [];
@@ -86,6 +90,7 @@ async function start(
     runId: "run-1",
     version: VERSION,
     ...(repository === undefined ? {} : { repository }),
+    ...(lanes === undefined ? {} : { lanes }),
     command: "agent-pipeline run",
     log: (line) => out.push(line),
     error: (line) => err.push(line),
@@ -173,6 +178,27 @@ describe("a Target init has not set up", () => {
     expect(err).toContain("agent-pipeline init");
     expect(lockTaken()).toBe(false);
     expect(tracker.calls).toEqual([]);
+  });
+
+  it("refuses a Target without the Operator's skill", async () => {
+    rmSync(join(repoRoot, OPERATOR_SKILL_PATH));
+
+    const { code, err } = await start();
+
+    expect(code).toBe(2);
+    expect(err).toContain(OPERATOR_SKILL_PATH);
+    expect(err).toContain("agent-pipeline init");
+    expect(lockTaken()).toBe(false);
+    expect(tracker.calls).toEqual([]);
+  });
+
+  it("asks only whether the Operator's skill is there, never what it says", async () => {
+    write(OPERATOR_SKILL_PATH, "---\nname: agent-pipeline\n---\n\nAn older copy.\n");
+    tracker.addIssue({ number: 4 });
+
+    const { code } = await start();
+
+    expect(code).toBe(0);
   });
 
   it("refuses `ticket <n>` on a repository that keeps merged branches too", async () => {
@@ -319,6 +345,24 @@ describe("a Target init has set up", () => {
     // No Frontier to drain, so the other two are nobody's business here.
     expect(tracker.calls).not.toContain("listCandidates:ready-for-agent");
     expect(tracker.calls).not.toContain("assign:5:pipeline-user");
+  });
+
+  it("fills as many Lanes as the Run was started with, whatever the config says", async () => {
+    for (const number of [4, 5, 6]) tracker.addIssue({ number });
+    const implementing = runner.holds("implement");
+
+    const run = start({ command: "run" }, undefined, undefined, 2);
+    await implementing.started();
+    await settle();
+
+    // The config names no Lanes, which is one; the Run was told two.
+    expect(runner.stages()).toEqual(["implement", "implement"]);
+
+    implementing.release();
+    const { code, out } = await run;
+
+    expect(code).toBe(0);
+    for (const number of [4, 5, 6]) expect(out).toContain(`merged   #${number}`);
   });
 
   it("exits 1 when a Lane handed its Ticket off and 0 when none did", async () => {
@@ -522,6 +566,15 @@ describe("the Run log", () => {
     const { lines } = await start();
 
     expect(lines[0]).toBe("agent-pipeline run run-1 · 3 lanes");
+  });
+
+  it("names the Lane count the Run was started with, whatever the config says", async () => {
+    write(CONFIG_FILENAME, JSON.stringify({ lanes: 3 }));
+    tracker.addIssue({ number: 4 });
+
+    const { lines } = await start({ command: "run" }, undefined, undefined, 2);
+
+    expect(lines[0]).toBe("agent-pipeline run run-1 · 2 lanes");
   });
 
   it("names the Ticket rather than a Lane count for `ticket <n>`", async () => {

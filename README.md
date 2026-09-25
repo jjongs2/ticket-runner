@@ -50,12 +50,15 @@ because it claims no Ticket.
 
 It writes the two gitignore lines for `.worktrees/` and `.agent-pipeline/`, an empty
 `agent-pipeline.json`, the pipeline's conventions document at
-[`docs/agents/pipeline-conventions.md`](docs/agents/pipeline-conventions.md), and a section
-in `CLAUDE.md` pointing at it. The files a human owns only ever gain lines; the conventions
-document is the pipeline's own text, so a Target carrying an older copy is rewritten and told
-that it was. The document carries the Version that wrote it in a hidden marker on its first
+[`docs/agents/pipeline-conventions.md`](docs/agents/pipeline-conventions.md), a section
+in `CLAUDE.md` pointing at it, and the Operator's skill at
+[`.claude/skills/agent-pipeline/SKILL.md`](.claude/skills/agent-pipeline/SKILL.md), which is
+how a Claude session opened from the app knows how to run the pipeline. The files a human owns
+only ever gain lines; the conventions document and the skill are the pipeline's own text, so a
+Target carrying an older copy is rewritten and told that it was. The document carries the Version that wrote it in a hidden marker on its first
 line, which is what `init` reads before it compares any text: a copy a *newer* pipeline wrote
-is left exactly as it is, and the report names the upgrade instead (ADR-0007). On GitHub it
+is left exactly as it is, and so is the skill beside it, and the report names the upgrade
+instead (ADR-0007). On GitHub it
 creates whichever of the six triage labels are missing, turns squash merging on, touching no
 other merge method, and switches on deleting a pull request's branch when it merges, which is
 the only way a merged branch goes on a cloud Host (ADR-0008).
@@ -81,11 +84,16 @@ Exit code is `1` while any reported item is failing and `0` once none is, so
 ## Usage
 
 ```bash
-agent-pipeline run         # drain the Frontier
-agent-pipeline ticket 3    # one named Ticket
-agent-pipeline stop        # ask the Run in this Target to finish and take no more
-agent-pipeline -v          # which Version this pipeline is
+agent-pipeline run             # drain the Frontier
+agent-pipeline run --lanes 2   # the same, two Tickets at once whatever the config says
+agent-pipeline ticket 3        # one named Ticket
+agent-pipeline stop            # ask the Run in this Target to finish and take no more
+agent-pipeline -v              # which Version this pipeline is
 ```
+
+`--lanes <n>` gives this one Run `n` Lanes, over whatever `lanes` in `agent-pipeline.json`
+says, because how many Tickets a Host can carry at once is the Host's business rather than
+the Target's. It is for `run` alone: `ticket <n>` takes its one Ticket whatever the count.
 
 `-v`, or `--version`, prints one line and exits `0`. An installed copy is its number,
 because a machine installs a tag: two machines that say `0.4.0` run the same code. A
@@ -97,8 +105,8 @@ can be traced to the pipeline that wrote it (ADR-0007).
 
 `run` and `ticket` refuse a Target `init` has not set up rather than repairing it. A
 gitignore missing one of the two directories, no conventions document or one carrying no
-Version, a `CLAUDE.md` that does not point at it, a missing triage label, or a repository
-that keeps a pull request's branch after it merges: whichever comes first is a refusal with
+Version, a `CLAUDE.md` that does not point at it, no Operator's skill, a missing triage
+label, or a repository that keeps a pull request's branch after it merges: whichever comes first is a refusal with
 exit code `2` that names the item and the command that puts it right. Every item is asked
 on every Host, so a Target a workstation accepts is one a cloud Host accepts too.
 
@@ -109,7 +117,7 @@ This Target is not set up: `.gitignore` does not ignore `.worktrees/`. Run
 ```
 
 The check is presence and the Version stamp, never content: a Target carrying an older
-copy of the conventions document starts, and the next `init` brings it up to date. A Run
+copy of the conventions document or the skill starts, and the next `init` brings it up to date. A Run
 says so on the way past — one warning naming the Version that wrote the copy and
 `agent-pipeline init`, or the upgrade where the copy is from a newer pipeline than the Run
 — and then takes the Frontier as usual.
@@ -133,10 +141,10 @@ no network, no `gh`, a repository nobody can see — prints nothing and changes 
 
 `run` drains the **Frontier**: the open Tickets labelled `ready-for-agent` that nobody
 has claimed and whose native `blocked by` issues have all closed. It takes them through its
-**Lanes** — as many Tickets at once as `lanes` says, one per Lane, and one by default. Every
-Lane is filled at the start and refilled the moment its Ticket ends: the Frontier is
-recomputed at every refill and taken from lowest number first, so a merge that closes a
-blocker puts the Ticket it unblocked into the same Run. A Ticket another Lane is still
+**Lanes** — as many Tickets at once as `--lanes` says, or else `lanes`, one per Lane, and
+one by default. Every Lane is filled at the start and refilled the moment its Ticket ends:
+the Frontier is recomputed at every refill and taken from lowest number first, so a merge
+that closes a blocker puts the Ticket it unblocked into the same Run. A Ticket another Lane is still
 working on has not closed, so it is still an open blocker — and those edges are the whole
 of what keeps two Tickets out of each other's way.
 
@@ -253,6 +261,21 @@ Run's `version.txt`, on the Target's remote: under `ticket-<n>/<runId>/` on the
 gone by the time a human looks. The hand-off comment names that directory, and says when
 the Ticket's branch is on the remote. They go when the State file does, so a Ticket that
 merges leaves none behind.
+
+### From the Claude app
+
+A Run can also be started from the Claude app, with the workstation off: open a Claude Code
+cloud session on the Target and say "run it". The session's own Claude is the **Operator**,
+and the skill `init` wrote tells it what to do (ADR-0008). It installs what the cloud
+environment's setup script did not — the pipeline, at the Version the conventions document
+is stamped with, and the `mattpocock-skills` plugin — and then starts `agent-pipeline run` in
+the background, or `agent-pipeline ticket <n>` for a Ticket you name. Ask for a number of
+Tickets at once and it passes `--lanes`, so a cloud Host can carry a different count from
+your workstation without the config changing. It reports each Ticket as the Run ends it and
+the summary when the Run is over, runs `agent-pipeline stop` when you ask for a Stop, and
+releases a lock a vanished Host left behind only when you ask and no Run of its own is
+running. Everything else it leaves alone: the checkout and the worktrees are the Run's while
+it holds the Target, and anything else about a Ticket goes through the board.
 
 ## Rate limits
 
@@ -571,7 +594,7 @@ pulls once they merge — is asked of GitHub once at the start of a Run, so a Ta
   "baseBranch": "main",
 
   // How many Tickets a Run may hold at once, one Lane per Ticket.
-  // A positive whole number. Default: 1. Lanes run their Checks at the same time
+  // A positive whole number. Default: 1. `run --lanes <n>` overrides it for one Run. Lanes run their Checks at the same time
   // in different worktrees, so a Target whose Checks need a port or a database
   // keeps this at 1.
   "lanes": 1,

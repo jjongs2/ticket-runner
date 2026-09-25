@@ -47,6 +47,12 @@ export interface StartOptions {
    * notice is looked up against; see {@link import("./staleness.js")}.
    */
   repository?: string | undefined;
+  /**
+   * How many Lanes this Run has, where it was told on the command line. Wins
+   * over the Target's config, because how many Tickets a Host can carry at
+   * once is the Host's business, not the Target's (ADR-0008).
+   */
+  lanes?: number | undefined;
   /** The command line the Run lock records, for whoever loses it. */
   command: string;
   log?: (line: string) => void;
@@ -64,7 +70,11 @@ export interface StartOptions {
  * nothing to gate a merge. None is a Run that went wrong, so none should leave
  * a lock behind for the next one to reclaim.
  */
-export async function startRun(options: StartOptions): Promise<number> {
+export async function startRun(given: StartOptions): Promise<number> {
+  // The override is folded into the config once, here, so nothing downstream
+  // has two Lane counts to choose between.
+  const options =
+    given.lanes === undefined ? given : { ...given, config: { ...given.config, lanes: given.lanes } };
   const { repoRoot, config, tracker, workspace } = options;
   const log = options.log ?? ((line: string) => console.log(line));
   const error = options.error ?? ((line: string) => console.error(line));
