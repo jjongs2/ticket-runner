@@ -197,16 +197,9 @@ export class GhTracker implements Tracker {
   }
 
   async createLabel(label: LabelSpec): Promise<void> {
-    await this.gh([
-      "api",
-      "--method",
-      "POST",
-      "repos/{owner}/{repo}/labels",
-      "-f",
+    await this.rest("POST", "repos/{owner}/{repo}/labels", [
       `name=${label.name}`,
-      "-f",
       `color=${label.color}`,
-      "-f",
       `description=${label.description}`,
     ]);
   }
@@ -248,7 +241,7 @@ export class GhTracker implements Tracker {
       closed: raw.state === "closed",
       labels: raw.labels.map((label) => label.name),
       assignees: (raw.assignees ?? []).map((assignee) => assignee.login),
-      comments: comments.map((comment) => ({ ...withId(comment), body: comment.body ?? "" })),
+      comments: comments.map((comment) => ({ ...withCommentId(comment), body: comment.body ?? "" })),
       subIssues: subIssues(raw),
       blockedBy: blockers.map((blocker) => blocker.number),
     };
@@ -261,16 +254,10 @@ export class GhTracker implements Tracker {
    * issue, so a missing label is `init`'s to catch, not this call's.
    */
   async createIssue(issue: CreateIssue): Promise<IssueRef> {
-    const { stdout } = await this.gh([
-      "api",
-      "--method",
-      "POST",
-      "repos/{owner}/{repo}/issues",
-      "-f",
+    const { stdout } = await this.rest("POST", "repos/{owner}/{repo}/issues", [
       `title=${issue.title}`,
-      "-f",
       `body=${issue.body}`,
-      ...issue.labels.flatMap((label) => ["-f", `labels[]=${label}`]),
+      ...issue.labels.map((label) => `labels[]=${label}`),
     ]);
     const created = JSON.parse(stdout) as Partial<RawIssue>;
     if (typeof created.number !== "number" || typeof created.html_url !== "string") {
@@ -309,35 +296,33 @@ export class GhTracker implements Tracker {
     return candidates;
   }
 
+  /**
+   * Assign `user`, and refuse an assignment GitHub did not make.
+   *
+   * REST answers a user it cannot assign with the issue as it was and a
+   * success, where `gh issue edit --add-assignee` failed. A Claim nobody can
+   * see is worse than one that fails, so the answer is read back.
+   */
   async assign(number: number, user: string): Promise<void> {
-    await this.gh([
-      "api",
-      "--method",
+    const { stdout } = await this.rest(
       "POST",
       `repos/{owner}/{repo}/issues/${number}/assignees`,
-      "-f",
-      `assignees[]=${user}`,
-    ]);
+      [`assignees[]=${user}`],
+    );
+    const assignees = (JSON.parse(stdout) as Partial<RawIssue>).assignees ?? [];
+    if (!assignees.some((assignee) => assignee.login.toLowerCase() === user.toLowerCase())) {
+      throw new Error(`GitHub did not assign ${user} to #${number}`);
+    }
   }
 
   async unassign(number: number, user: string): Promise<void> {
-    await this.gh([
-      "api",
-      "--method",
-      "DELETE",
-      `repos/{owner}/{repo}/issues/${number}/assignees`,
-      "-f",
+    await this.rest("DELETE", `repos/{owner}/{repo}/issues/${number}/assignees`, [
       `assignees[]=${user}`,
     ]);
   }
 
   async addLabel(number: number, label: string): Promise<void> {
-    await this.gh([
-      "api",
-      "--method",
-      "POST",
-      `repos/{owner}/{repo}/issues/${number}/labels`,
-      "-f",
+    await this.rest("POST", `repos/{owner}/{repo}/issues/${number}/labels`, [
       `labels[]=${label}`,
     ]);
   }
@@ -350,51 +335,27 @@ export class GhTracker implements Tracker {
    * Every other failure, a missing issue's 404 included, still throws.
    */
   async removeLabel(number: number, label: string): Promise<void> {
-    const args = [
-      "api",
-      "--method",
-      "DELETE",
-      `repos/{owner}/{repo}/issues/${number}/labels/${encodeURIComponent(label)}`,
-    ];
-    const result = await this.gh(args, { allowFailure: true });
+    const path = `repos/{owner}/{repo}/issues/${number}/labels/${encodeURIComponent(label)}`;
+    const result = await this.rest("DELETE", path, [], { allowFailure: true });
     if (/Label does not exist/.test(result.output)) return;
-    throwOnFailure("gh", args, result);
+    throwOnFailure("gh", ["api", "--method", "DELETE", path], result);
   }
 
   /** REST answers with the new comment, whose id is what it is edited by later. */
   async comment(number: number, body: string): Promise<IssueComment> {
-    const { stdout } = await this.gh([
-      "api",
-      "--method",
-      "POST",
-      `repos/{owner}/{repo}/issues/${number}/comments`,
-      "-f",
+    const { stdout } = await this.rest("POST", `repos/{owner}/{repo}/issues/${number}/comments`, [
       `body=${body}`,
     ]);
-    return { ...withId(JSON.parse(stdout) as RawComment), body };
+    return { ...withCommentId(JSON.parse(stdout) as RawComment), body };
   }
 
   /** Edit a comment in place, by the numeric id REST reported it with. */
   async updateComment(id: string, body: string): Promise<void> {
-    await this.gh([
-      "api",
-      "--method",
-      "PATCH",
-      `repos/{owner}/{repo}/issues/comments/${id}`,
-      "-f",
-      `body=${body}`,
-    ]);
+    await this.rest("PATCH", `repos/{owner}/{repo}/issues/comments/${id}`, [`body=${body}`]);
   }
 
   async updateIssueBody(number: number, body: string): Promise<void> {
-    await this.gh([
-      "api",
-      "--method",
-      "PATCH",
-      `repos/{owner}/{repo}/issues/${number}`,
-      "-f",
-      `body=${body}`,
-    ]);
+    await this.rest("PATCH", `repos/{owner}/{repo}/issues/${number}`, [`body=${body}`]);
   }
 
   async createPullRequest(pr: CreatePullRequest): Promise<PullRequestRef> {
@@ -552,6 +513,22 @@ export class GhTracker implements Tracker {
   }
 
   /**
+   * One REST write, every field raw with `-f`, so a body is never read as a
+   * file or a number whatever it starts with.
+   */
+  private rest(
+    method: "POST" | "PATCH" | "DELETE",
+    path: string,
+    fields: string[],
+    options: { allowFailure?: boolean } = {},
+  ): Promise<Execution> {
+    return this.gh(
+      ["api", "--method", method, path, ...fields.flatMap((field) => ["-f", field])],
+      options,
+    );
+  }
+
+  /**
    * Every page of a REST list, as one array: `gh --paginate` joins the pages.
    * `--method GET` is spelled out because fields would otherwise make it a POST.
    */
@@ -617,7 +594,7 @@ function lastLine(stdout: string): string {
  * whole line has to be the URL, and anything else becomes the refusal the call
  * site throws.
  *
- * Only the path shape is matched — host, owner, repo, the kind, the number — so
+ * Only the path shape is matched — host, owner, repo, the number — so
  * an Enterprise host reads the same as github.com without being named here.
  */
 function refFromOutput(stdout: string): PullRequestRef | undefined {
@@ -635,7 +612,7 @@ function refFromOutput(stdout: string): PullRequestRef | undefined {
  * missing rather than thrown, and the one caller that needs to edit posts a
  * fresh comment instead.
  */
-function withId(comment: RawComment): { id?: string } {
+function withCommentId(comment: RawComment): { id?: string } {
   return typeof comment.id === "number" ? { id: String(comment.id) } : {};
 }
 

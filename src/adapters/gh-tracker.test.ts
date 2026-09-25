@@ -26,6 +26,11 @@ function restIssue(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** What REST answers an assignment with: the issue, wearing `login`. */
+function assigned(login: string): string {
+  return JSON.stringify(restIssue({ assignees: [{ login }] }));
+}
+
 function tracker(...queued: Execution[]) {
   return trackerWith({}, ...queued);
 }
@@ -407,7 +412,7 @@ describe("writing", () => {
   });
 
   it("assigns, unassigns and moves labels through REST", async () => {
-    const gh = tracker(ok("{}"), ok("{}"), ok("[]"), ok("[]"));
+    const gh = tracker(ok(assigned("octocat")), ok("{}"), ok("[]"), ok("[]"));
     await gh.assign(2, "octocat");
     await gh.unassign(2, "octocat");
     await gh.addLabel(2, "in-progress");
@@ -419,6 +424,17 @@ describe("writing", () => {
       ["api", "--method", "POST", "repos/{owner}/{repo}/issues/2/labels", "-f", "labels[]=in-progress"],
       ["api", "--method", "DELETE", "repos/{owner}/{repo}/issues/2/labels/ready-for-agent"],
     ]);
+  });
+
+  it("refuses an assignment GitHub answered with success but did not make", async () => {
+    // A user who cannot be assigned is dropped without an error by REST.
+    const gh = tracker(ok(JSON.stringify(restIssue({ assignees: [] }))));
+
+    await expect(gh.assign(2, "octocat")).rejects.toThrow(/did not assign octocat to #2/);
+  });
+
+  it("takes an assignment GitHub reports under the login's own capitals", async () => {
+    await expect(tracker(ok(assigned("OctoCat"))).assign(2, "octocat")).resolves.toBeUndefined();
   });
 
   it("names a label with spaces in the path it removes it by", async () => {
@@ -536,7 +552,7 @@ describe("writing", () => {
       ok("[]"),
       ok(JSON.stringify({ number: 31, html_url: "https://github.com/acme/repo/issues/31" })),
       ok("[]"),
-      ok("{}"),
+      ok(assigned("octocat")),
       ok("{}"),
       ok("[]"),
       ok("[]"),
