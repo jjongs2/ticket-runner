@@ -592,7 +592,7 @@ describe("writing", () => {
     expect(calls.filter((args) => args[0] !== "api" || args.includes("graphql"))).toEqual([]);
   });
 
-  it("runs no gh subcommand that goes through GraphQL for any repository-side call", async () => {
+  it("runs no gh subcommand that goes through GraphQL for the current user, the default branch or the merge settings", async () => {
     const gh = tracker(ok("octocat\n"), ok("main\n"), ok("{}"), ok("true\n"), ok("{}"));
     await gh.currentUser();
     await gh.defaultBranch();
