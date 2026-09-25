@@ -9,13 +9,19 @@ end now reaches for the terminal it is running in anyway, and what that costs is
 the one thing about a Stop worth saying twice.
 
 Everything else is one line on stderr with exit code 2 and no signal sent. No
-Run holds the lock, or the process it names is gone:
+Run holds the lock, or the Run on this Host it names is gone:
 
-No Run to stop: nothing holds the Run lock at <path>, or the Run that left it there is gone. A lock like that is the next Run's to reclaim, so nothing here removes it.
+No Run to stop: nothing holds the Run lock on the `agent-pipeline/lock` branch, or the Run on this Host that left it there is gone. A lock like that is the next Run's to reclaim, so nothing here removes it.
 
 One line for both, because they are one thing to whoever asked: there is nobody
 to stop. A dead lock is left exactly where it is — reclaiming one belongs to the
 next Run that starts, not to a command that only reads.
+
+A Run on another Host is named rather than signalled, because a Stop is a
+signal to a process and only the Host the Run is on can send one (ADR-0006).
+The Host is the workstation by its hostname, or the cloud Host by its session:
+
+`agent-pipeline run` (run <runId>) holds the Run lock from <the workstation `<hostname>` | the cloud Host of session `<session>`>, started <startedAt>. Only that Host can send it a Stop: `agent-pipeline stop` there, or its Operator on a cloud Host. Nothing was sent.
 
 A `ticket <n>` holding the lock is named rather than signalled, since a Run
 given one Ticket takes no more whatever happens:

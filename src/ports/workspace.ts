@@ -1,3 +1,5 @@
+import type { Host } from "../host.js";
+
 /**
  * The git working copy a Ticket is implemented in.
  *
@@ -103,8 +105,14 @@ export type StateFile =
       version?: string;
     };
 
-/** Who holds the Run lock: one Run at a time per Target. */
+/** Who holds the Run lock: one Run at a time per Target, whichever Host it is on. */
 export interface LockHolder {
+  /**
+   * The Host the holder runs on. Only a Run on that same Host can see whether
+   * the process below is still running, so a holder on another Host is never
+   * presumed gone (ADR-0008).
+   */
+  host: Host;
   pid: number;
   /** The command line the holder is running, for the message the loser prints. */
   command: string;
@@ -131,13 +139,28 @@ export interface LockHolder {
   processStartedAt?: string;
 }
 
-/** Whether a Run got the lock, and who has it when it did not. */
-export type LockOutcome = { outcome: "taken" } | { outcome: "held"; holder: LockHolder };
+/**
+ * What a Run asks the lock to record about itself. The Host and the process's
+ * own start time are the Workspace's to read, not a caller's to vouch for.
+ */
+export type LockClaim = Pick<LockHolder, "pid" | "command" | "runId" | "startedAt">;
 
 /**
- * What an attempt to take the lock found. `abandoned` is a lock no running Run
- * holds — its holder's process has gone, or it names nobody at all — and is
- * the one a Run may take over.
+ * A lock somebody holds, and whether they hold it from another Host, which is
+ * the difference between a Run to wait for here and one a human releases.
+ */
+export interface HeldLock {
+  holder: LockHolder;
+  onAnotherHost: boolean;
+}
+
+/** Whether a Run got the lock, and who has it when it did not. */
+export type LockOutcome = { outcome: "taken" } | ({ outcome: "held" } & HeldLock);
+
+/**
+ * What an attempt to take the lock found. `abandoned` is a lock a Run on this
+ * same Host held and whose process has gone, and is the one a Run may take
+ * over; a holder on another Host is never abandoned, only `held`.
  */
 export type LockTake = LockOutcome | { outcome: "abandoned" };
 
@@ -321,21 +344,26 @@ export interface Workspace {
    */
   keepTranscripts(ticket: number, runId: string): Promise<KeptTranscripts | undefined>;
   /**
-   * Take the Run lock for `holder`, or say what stands in the way. Taking it is
-   * the whole of the mutual exclusion: two Runs never both get `taken`.
+   * Take the Run lock for this Run, or say what stands in the way. Taking it is
+   * the whole of the mutual exclusion: two Runs never both get `taken`, on one
+   * Host or on two.
    */
-  takeRunLock(holder: LockHolder): Promise<LockTake>;
+  takeRunLock(claim: LockClaim): Promise<LockTake>;
   /**
    * Take a lock {@link takeRunLock} found `abandoned`. A Run that took it in
    * the meantime is `held` again, and is not taken from.
    */
-  takeOverRunLock(holder: LockHolder): Promise<LockOutcome>;
+  takeOverRunLock(claim: LockClaim): Promise<LockOutcome>;
   /**
    * Who holds the Run lock, when anybody still does. An abandoned lock has no
    * holder, and is left exactly where it is: taking it over belongs to a Run
    * that is actually starting, where this only reads.
    */
-  runLockHolder(): Promise<LockHolder | undefined>;
-  /** Give the Run lock up. */
+  runLockHolder(): Promise<HeldLock | undefined>;
+  /**
+   * Give up the Run lock this Workspace took. A lock somebody else holds by
+   * now — a human released this Run's and another Run took it — is theirs,
+   * and is left alone.
+   */
   releaseRunLock(): Promise<void>;
 }

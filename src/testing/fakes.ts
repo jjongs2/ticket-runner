@@ -7,6 +7,7 @@
  * the resulting state, never on internal helper calls.
  */
 
+import { type Host, sameHost } from "../host.js";
 import type {
   AgentPreflight,
   AgentRunner,
@@ -29,7 +30,9 @@ import type {
 } from "../ports/tracker.js";
 import type {
   CheckOutcome,
+  HeldLock,
   KeptTranscripts,
+  LockClaim,
   LockHolder,
   LockOutcome,
   LockTake,
@@ -390,6 +393,18 @@ export function stageResult(overrides: Partial<StageResult> = {}): StageResult {
   };
 }
 
+/** The Run lock a {@link FakeWorkspace} keeps, and whether the Run it names is running. */
+export interface FakeLock {
+  holder: LockHolder;
+  running: boolean;
+}
+
+/** The Host a {@link FakeWorkspace} runs on, unless a test says otherwise. */
+export const THIS_HOST: Host = { kind: "workstation", id: "desk-machine-id", name: "desk" };
+
+/** Another Host of the same Target: a cloud session, as a Run from the app has. */
+export const ANOTHER_HOST: Host = { kind: "cloud", id: "session_01other", name: "runsc" };
+
 export class FakeWorkspace implements Workspace {
   /** worktree path → branch, for the worktrees that currently exist. */
   worktrees = new Map<string, string>();
@@ -462,22 +477,35 @@ export class FakeWorkspace implements Workspace {
    */
   stateWriteFailure: Error | undefined;
   /**
-   * The Run lock as it stands, and whether the Run it names is still running.
-   * Undefined is a lock nobody holds.
+   * The Run lock as it stands on the remote, and whether the Run it names is
+   * still running. Undefined is a lock nobody holds.
    */
-  lock: { holder: LockHolder; running: boolean } | undefined;
+  get lock(): FakeLock | undefined {
+    return this.remoteLock.current;
+  }
+
+  set lock(lock: FakeLock | undefined) {
+    this.remoteLock.current = lock;
+  }
+
+  /** Where {@link lock} is kept, which {@link anotherHost} shares like the rest of the remote. */
+  private remoteLock: { current?: FakeLock | undefined } = {};
+  /** The Host this Workspace runs on, which a lock's holder is compared with. */
+  host: Host = THIS_HOST;
 
   /**
-   * The same Target seen from another Host: the remote — its branches and every
-   * Ticket's State — shared with this one, and none of this Host's worktrees
-   * or branches. What a Run on this Host pushes or records, a Run on that one
-   * finds.
+   * The same Target seen from another Host: the remote — its branches, every
+   * Ticket's State and the Run lock — shared with this one, and none of this
+   * Host's worktrees or branches. What a Run on this Host pushes or records, a
+   * Run on that one finds.
    */
   anotherHost(): FakeWorkspace {
     const other = new FakeWorkspace();
+    other.host = ANOTHER_HOST;
     other.remoteBranches = this.remoteBranches;
     other.states = this.states;
     other.transcripts = this.transcripts;
+    other.remoteLock = this.remoteLock;
     return other;
   }
 
@@ -673,25 +701,37 @@ export class FakeWorkspace implements Workspace {
     return { branch: "agent-pipeline/state", path: `ticket-${ticket}/${runId}/` };
   }
 
-  async takeRunLock(holder: LockHolder): Promise<LockTake> {
+  async takeRunLock(claim: LockClaim): Promise<LockTake> {
     this.calls.push("takeRunLock");
-    if (this.lock === undefined) {
-      this.lock = { holder, running: true };
-      return { outcome: "taken" };
-    }
-    return this.lock.running ? { outcome: "held", holder: this.lock.holder } : { outcome: "abandoned" };
-  }
-
-  async takeOverRunLock(holder: LockHolder): Promise<LockOutcome> {
-    this.calls.push("takeOverRunLock");
-    if (this.lock?.running === true) return { outcome: "held", holder: this.lock.holder };
-    this.lock = { holder, running: true };
+    const held = this.heldLock();
+    if (held !== undefined) return { outcome: "held", ...held };
+    if (this.lock !== undefined) return { outcome: "abandoned" };
+    this.lock = { holder: { host: this.host, ...claim }, running: true };
     return { outcome: "taken" };
   }
 
-  async runLockHolder(): Promise<LockHolder | undefined> {
+  async takeOverRunLock(claim: LockClaim): Promise<LockOutcome> {
+    this.calls.push("takeOverRunLock");
+    const held = this.heldLock();
+    if (held !== undefined) return { outcome: "held", ...held };
+    this.lock = { holder: { host: this.host, ...claim }, running: true };
+    return { outcome: "taken" };
+  }
+
+  async runLockHolder(): Promise<HeldLock | undefined> {
     this.calls.push("runLockHolder");
-    return this.lock?.running === true ? this.lock.holder : undefined;
+    return this.heldLock();
+  }
+
+  /**
+   * The lock as a Run on this Host sees it: held when its Run is running, and
+   * always when it is held from another Host, whose process nothing here sees.
+   */
+  private heldLock(): HeldLock | undefined {
+    if (this.lock === undefined) return undefined;
+    const { holder, running } = this.lock;
+    const onAnotherHost = !sameHost(holder.host, this.host);
+    return onAnotherHost || running ? { holder, onAnotherHost } : undefined;
   }
 
   async releaseRunLock(): Promise<void> {

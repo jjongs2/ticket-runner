@@ -2,7 +2,7 @@ import { resolveBaseBranch } from "./base-branch.js";
 import type { Config } from "./config.js";
 import { Landing } from "./landing.js";
 import { StandingNotes } from "./notes.js";
-import { lockHeldMessage } from "./lock.js";
+import { lockHeldMessage, unreleasedLockMessage } from "./lock.js";
 import { type Pipeline, type TicketOutcome, processTicket } from "./orchestrator.js";
 import type { AgentRunner } from "./ports/agent-runner.js";
 import type { Tracker } from "./ports/tracker.js";
@@ -94,19 +94,22 @@ export async function startRun(options: StartOptions): Promise<number> {
     return 2;
   }
 
-  // Taken before the first write, so two Runs never both claim a Ticket.
-  const holder = {
+  // Taken before the first write, so two Runs never both claim a Ticket, and
+  // on the Target's remote, so that holds whichever Host each Run is on.
+  const claim = {
     pid: process.pid,
     command: options.command,
     runId: options.runId,
     startedAt: new Date().toISOString(),
   };
-  const found = await workspace.takeRunLock(holder);
-  // A lock whose Run has gone is taken over: the alternative is a crashed Run
-  // blocking the Target until a human deletes a lock they have never heard of.
-  const lock = found.outcome === "abandoned" ? await workspace.takeOverRunLock(holder) : found;
+  const found = await workspace.takeRunLock(claim);
+  // A lock whose Run on this Host has gone is taken over: the alternative is a
+  // Run ended by Ctrl+C blocking the Target until a human releases a lock they
+  // have never heard of. One held from another Host is never abandoned, and
+  // waits for that human.
+  const lock = found.outcome === "abandoned" ? await workspace.takeOverRunLock(claim) : found;
   if (lock.outcome === "held") {
-    error(lockHeldMessage(lock.holder, repoRoot));
+    error(lockHeldMessage(lock));
     return 2;
   }
 
@@ -125,6 +128,10 @@ export async function startRun(options: StartOptions): Promise<number> {
     // where one that leaves the Stop unread costs nothing at all.
     try {
       await workspace.releaseRunLock();
+    } catch (failure) {
+      // Reported, and the Run's own exit code kept: every Ticket it took has
+      // already ended, and the lock left behind is the one thing to tell.
+      error(unreleasedLockMessage(failure instanceof Error ? failure.message : String(failure)));
     } finally {
       deafen();
     }

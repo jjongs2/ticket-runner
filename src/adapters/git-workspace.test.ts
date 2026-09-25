@@ -3,6 +3,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { Host } from "../host.js";
+import { LOCK_BRANCH, LOCK_FILE, lockFileContents, readLockFile } from "../lock.js";
+import type { LockHolder } from "../ports/workspace.js";
 import { stageLogDir, writeRunVersion } from "../run-log.js";
 import { GitWorkspace, STATE_BRANCH } from "./git-workspace.js";
 
@@ -1210,60 +1213,202 @@ describe("hasRemoteBranch", () => {
 });
 
 describe("the Run lock", () => {
-  const holder = {
-    pid: 4321,
+  const HERE: Host = { kind: "workstation", id: "4f1c0ffee", name: "desk" };
+  const CLOUD: Host = { kind: "cloud", id: "session_01abc", name: "runsc" };
+  const claim = {
+    pid: 111,
     command: "agent-pipeline run",
     runId: "run-1",
     startedAt: "2026-09-17T09:00:00.000Z",
   };
-  const lockFile = () => join(repo, ".agent-pipeline", "lock.json");
 
-  /** The same checkout, with the process table answering as told. */
-  function withProcesses(alive: boolean): GitWorkspace {
-    return new GitWorkspace(repo, "origin", {
-      checkProcess: () => (alive ? { alive: true, startedAt: undefined } : { alive: false }),
+  /** A checkout of the remote on `host`, whose process table holds `alive` pids. */
+  function on(host: Host, alive: Record<number, string>, cwd = repo): GitWorkspace {
+    return new GitWorkspace(cwd, "origin", {
+      host,
+      checkProcess: (pid) =>
+        pid in alive ? { alive: true, startedAt: alive[pid] } : { alive: false },
     });
   }
 
-  it("is the PID file under the run directory, naming its holder", async () => {
-    const running = withProcesses(true);
+  /** A second checkout of the same remote, standing for another Host's. */
+  function clone(): string {
+    const other = mkdtempSync(join(tmpdir(), "agent-pipeline-host-"));
+    created.push(other);
+    git(other, "clone", remote, ".");
+    git(other, "config", "user.email", "pipeline@example.com");
+    git(other, "config", "user.name", "agent-pipeline");
+    return other;
+  }
 
-    expect(await running.takeRunLock(holder)).toEqual({ outcome: "taken" });
-    expect(JSON.parse(readFileSync(lockFile(), "utf8"))).toEqual(holder);
-    expect(await running.runLockHolder()).toEqual(holder);
-  });
+  /** The lock branch's commit subjects on the remote, newest first. */
+  function history(): string[] {
+    return git(remote, "log", "--format=%s", LOCK_BRANCH).split("\n");
+  }
 
-  it("refuses a second Run while the holder is running, naming it", async () => {
-    const running = withProcesses(true);
-    await running.takeRunLock(holder);
+  /** Who the lock file at the remote's tip names. */
+  function tipHolder(): LockHolder | undefined {
+    return readLockFile(git(remote, "show", `${LOCK_BRANCH}:${LOCK_FILE}`));
+  }
 
-    expect(await running.takeRunLock({ ...holder, pid: 222 })).toEqual({
-      outcome: "held",
-      holder,
+  /** What a human, or a Run elsewhere, commits to the lock branch from `cwd`. */
+  function commitLock(cwd: string, holder: LockHolder | undefined): void {
+    git(cwd, "fetch", "origin", LOCK_BRANCH);
+    git(cwd, "checkout", "-B", "lock", "FETCH_HEAD");
+    writeFileSync(join(cwd, LOCK_FILE), lockFileContents(holder));
+    git(cwd, "commit", "-am", holder === undefined ? "Release it by hand" : "Take it elsewhere");
+    git(cwd, "push", "origin", `lock:${LOCK_BRANCH}`);
+  }
+
+  it("creates the branch free where the remote has none, and takes it on top", async () => {
+    const workspace = on(HERE, { 111: "A" });
+
+    expect(await workspace.takeRunLock(claim)).toEqual({ outcome: "taken" });
+
+    expect(history()).toEqual([
+      "Held by run run-1 on the workstation `desk`: agent-pipeline run",
+      "Free",
+    ]);
+    expect(tipHolder()).toEqual({ host: HERE, ...claim, processStartedAt: "A" });
+    expect(await workspace.runLockHolder()).toEqual({
+      holder: { host: HERE, ...claim, processStartedAt: "A" },
+      onAnotherHost: false,
     });
   });
 
-  it("finds a lock whose holder has gone abandoned, and takes it over", async () => {
-    await withProcesses(true).takeRunLock(holder);
-    const next = withProcesses(false);
+  it("refuses a second Run on this Host while the holder is running, naming it", async () => {
+    await on(HERE, { 111: "A" }).takeRunLock(claim);
+
+    const second = on(HERE, { 111: "A", 222: "B" });
+
+    expect(await second.takeRunLock({ ...claim, pid: 222, runId: "run-2" })).toEqual({
+      outcome: "held",
+      holder: { host: HERE, ...claim, processStartedAt: "A" },
+      onAnotherHost: false,
+    });
+    expect(tipHolder()?.runId).toBe("run-1");
+  });
+
+  it("refuses a Run whose push lands on a tip another Run moved since it read it", async () => {
+    const first = on(HERE, { 111: "A" });
+    await first.takeRunLock(claim);
+    await first.releaseRunLock();
+    const freeTip = git(remote, "rev-parse", LOCK_BRANCH);
+    const elsewhere = { host: CLOUD, ...claim, runId: "cloud-run" };
+
+    // Asked for its own start time between reading the free tip and pushing
+    // on it, which is where a Run on the cloud Host takes the same tip first.
+    const other = clone();
+    let raced = false;
+    const racing = new GitWorkspace(repo, "origin", {
+      host: HERE,
+      checkProcess: (pid) => {
+        if (pid === 222 && !raced) {
+          raced = true;
+          commitLock(other, elsewhere);
+        }
+        return { alive: true, startedAt: "B" };
+      },
+    });
+
+    const outcome = await racing.takeRunLock({ ...claim, pid: 222, runId: "run-2" });
+
+    expect(raced).toBe(true);
+    expect(git(remote, "rev-parse", `${LOCK_BRANCH}^`)).toBe(freeTip);
+    expect(outcome).toEqual({ outcome: "held", holder: elsewhere, onAnotherHost: true });
+    expect(tipHolder()).toEqual(elsewhere);
+  });
+
+  it("lets only one of two Runs starting at once on two Hosts take it", async () => {
+    const outcomes = await Promise.all([
+      on(HERE, { 111: "A" }).takeRunLock(claim),
+      on(CLOUD, { 111: "A" }, clone()).takeRunLock({ ...claim, runId: "cloud-run" }),
+    ]);
+
+    expect(outcomes.filter((outcome) => outcome.outcome === "taken")).toHaveLength(1);
+    expect(outcomes.filter((outcome) => outcome.outcome === "held")).toHaveLength(1);
+  });
+
+  it("finds a holder on this Host whose process has gone abandoned, and takes it over", async () => {
+    await on(HERE, { 111: "A" }).takeRunLock(claim);
+    const deadTip = git(remote, "rev-parse", LOCK_BRANCH);
+    const next = on(HERE, { 222: "B" });
 
     expect(await next.runLockHolder()).toBeUndefined();
-    expect(await next.takeRunLock({ ...holder, runId: "run-2" })).toEqual({
+    expect(await next.takeRunLock({ ...claim, pid: 222, runId: "run-2" })).toEqual({
       outcome: "abandoned",
     });
-    expect(await next.takeOverRunLock({ ...holder, runId: "run-2" })).toEqual({
+    expect(await next.takeOverRunLock({ ...claim, pid: 222, runId: "run-2" })).toEqual({
       outcome: "taken",
     });
-    expect(JSON.parse(readFileSync(lockFile(), "utf8")).runId).toBe("run-2");
+
+    expect(tipHolder()?.runId).toBe("run-2");
+    // Taken over on top of the dead holder's commit, which is still there.
+    expect(git(remote, "rev-parse", `${LOCK_BRANCH}^`)).toBe(deadTip);
   });
 
-  it("is free for the next Run once released", async () => {
-    const running = withProcesses(true);
-    await running.takeRunLock(holder);
+  it("never takes over a holder on another Host, whatever this Host's processes say", async () => {
+    await on(CLOUD, { 111: "A" }, clone()).takeRunLock(claim);
+    const here = on(HERE, {});
+
+    const held = { holder: { host: CLOUD, ...claim, processStartedAt: "A" }, onAnotherHost: true };
+    expect(await here.takeRunLock({ ...claim, pid: 222 })).toEqual({ outcome: "held", ...held });
+    expect(await here.takeOverRunLock({ ...claim, pid: 222 })).toEqual({ outcome: "held", ...held });
+    expect(await here.runLockHolder()).toEqual(held);
+    expect(tipHolder()?.host).toEqual(CLOUD);
+  });
+
+  it("is released by a free commit on top, and nothing is deleted", async () => {
+    const running = on(HERE, { 111: "A" });
+    await running.takeRunLock(claim);
 
     await running.releaseRunLock();
 
-    expect(existsSync(lockFile())).toBe(false);
-    expect(await running.takeRunLock({ ...holder, pid: 222 })).toEqual({ outcome: "taken" });
+    expect(history()).toEqual([
+      "Free",
+      "Held by run run-1 on the workstation `desk`: agent-pipeline run",
+      "Free",
+    ]);
+    expect(tipHolder()).toBeUndefined();
+    expect(await running.runLockHolder()).toBeUndefined();
+    expect(await on(HERE, { 222: "B" }).takeRunLock({ ...claim, pid: 222 })).toEqual({
+      outcome: "taken",
+    });
+  });
+
+  it("is taken again once a human commits a free tip to it on GitHub", async () => {
+    await on(CLOUD, { 111: "A" }, clone()).takeRunLock(claim);
+
+    commitLock(clone(), undefined);
+
+    expect(await on(HERE, {}).takeRunLock({ ...claim, pid: 222 })).toEqual({ outcome: "taken" });
+    expect(tipHolder()?.host).toEqual(HERE);
+  });
+
+  it("releases nothing another Run holds by now", async () => {
+    const released = on(HERE, { 111: "A" });
+    await released.takeRunLock(claim);
+    // A human released the lock on GitHub, and a cloud Run took it.
+    const other = clone();
+    commitLock(other, undefined);
+    const elsewhere = { host: CLOUD, ...claim, runId: "cloud-run" };
+    commitLock(other, elsewhere);
+
+    await released.releaseRunLock();
+
+    expect(tipHolder()).toEqual(elsewhere);
+  });
+
+  it("releases nothing when this Workspace took nothing", async () => {
+    await on(HERE, { 111: "A" }).takeRunLock(claim);
+
+    await on(HERE, { 111: "A" }).releaseRunLock();
+
+    expect(tipHolder()?.runId).toBe("run-1");
+  });
+
+  it("reads nobody, and creates nothing, where the remote has no lock branch", async () => {
+    expect(await on(HERE, {}).runLockHolder()).toBeUndefined();
+    expect(git(remote, "branch", "--list", LOCK_BRANCH)).toBe("");
   });
 });

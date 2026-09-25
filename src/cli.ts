@@ -123,7 +123,7 @@ async function main(argv: string[]): Promise<number> {
   // answered when it started.
   if (command === "stop") {
     const root = await findRepoRoot();
-    return await requestStop({ repoRoot: root, workspace: new GitWorkspace(root) });
+    return await requestStop({ workspace: new GitWorkspace(root) });
   }
 
   if (command === "init") {
