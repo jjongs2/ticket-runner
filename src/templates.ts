@@ -393,10 +393,10 @@ function noteProvenance({ origin, stage, intended, because }: NoteSubject): stri
 
 /**
  * The labelled paragraph one part of a Note becomes, or nothing when the Stage
- * left that part out.
+ * left that part out or blank.
  */
-function notePart(label: string, text: string | undefined): string[] {
-  if (text === undefined) return [];
+function labelledPart(label: string, text: string | undefined): string[] {
+  if (text === undefined || text.trim() === "") return [];
   return [`**${label}**: ${escapeCheckboxes(text.trim())}`];
 }
 
@@ -411,9 +411,9 @@ export function noteComment(subject: NoteSubject): string {
   const { summary, evidence, impact, next } = subject.note;
   const paragraphs = [
     `**${escapeCheckboxes(summary.trim().replaceAll(/\s+/g, " "))}**`,
-    ...notePart("Evidence", evidence),
-    ...notePart("Impact", impact),
-    ...notePart("Next", next),
+    ...labelledPart("Evidence", evidence),
+    ...labelledPart("Impact", impact),
+    ...labelledPart("Next", next),
   ];
   return [NOTE_MARKER, noteProvenance(subject), "", paragraphs.join("\n\n"), ""].join("\n");
 }

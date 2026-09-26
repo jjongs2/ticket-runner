@@ -620,6 +620,14 @@ describe("noteComment", () => {
     );
   });
 
+  it("leaves out a part the Stage left blank, label and all", () => {
+    const comment = noteComment({ ...subject, note: { ...note, evidence: " \n", next: "" } });
+
+    expect(comment).not.toContain("**Evidence**");
+    expect(comment).not.toContain("**Next**");
+    expect(comment).toContain("**Impact**");
+  });
+
   it("keeps the summary on one line, so its bold holds", () => {
     const comment = noteComment({ ...subject, note: { summary: "  the flag\n\nis wrong \n" } });
 

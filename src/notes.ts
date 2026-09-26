@@ -73,7 +73,7 @@ export interface RoutedNote {
 }
 
 /** A part of a Note beside its summary, which costs only itself when it is malformed. */
-const notePart = z.string().optional().catch(undefined);
+const forgivenPart = z.string().optional().catch(undefined);
 
 /**
  * One entry of a Stage's `notes` list.
@@ -88,9 +88,9 @@ const notePart = z.string().optional().catch(undefined);
 const noteSchema = z.object({
   ticket: z.number().int().positive().optional().catch(undefined),
   summary: z.string(),
-  evidence: notePart,
-  impact: notePart,
-  next: notePart,
+  evidence: forgivenPart,
+  impact: forgivenPart,
+  next: forgivenPart,
 });
 
 /** The parts of a Note beside its summary. */
