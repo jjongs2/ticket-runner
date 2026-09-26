@@ -39,7 +39,7 @@ describe("parseVerdict", () => {
     const verdict = parseVerdict({
       criteria: [criterion("met")],
       pass: true,
-      notes: [{ note: "the help text drifts" }],
+      notes: [{ summary: "the help text drifts" }],
     });
 
     expect(Object.keys(verdict)).toEqual(["criteria", "pass"]);

@@ -426,7 +426,7 @@ describe("a Ticket the rate limit released", () => {
 describe("a Ticket that throws", () => {
   it("still reports the Notes it had already routed", async () => {
     tracker.addIssue({ number: 4 });
-    runner.queue("implement", stageResult({ result: { notes: [{ note: "no cleanup" }] } }));
+    runner.queue("implement", stageResult({ result: { notes: [{ summary: "no cleanup" }] } }));
     // The Notes are routed first; the Ticket then fails, and the hand-off's own
     // writes are outside processTicket's net, so the tracker going down there
     // throws past the outcome the Notes would otherwise have ridden out on.
@@ -451,7 +451,7 @@ describe("a Ticket that throws", () => {
         stage: "setup",
         failure: "gh: connection reset",
         notes: [
-          { origin: 4, stage: "implement", issue: 200, opened: true, note: "no cleanup" },
+          { origin: 4, stage: "implement", issue: 200, opened: true, summary: "no cleanup" },
         ],
       },
     ]);

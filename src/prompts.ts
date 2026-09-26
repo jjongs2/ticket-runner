@@ -73,7 +73,7 @@ const verifyNotesGuidance = (standingNotes?: number) => `Notes for other Tickets
 
 - What you make of a criterion belongs in the Verdict. A criterion you judge \`unmet\` or \`unverifiable\` is reported in its own slot with the evidence you gathered, and never in a Note as well.
 - A defect the criteria do not cover is a Note. Your structured output carries a \`notes\` list beside the criteria, and the pipeline posts each entry where a human will meet it.
-- A Note of yours carries the evidence that the defect is real, held to the standard you hold a criterion you judge \`unmet\` to. You have the branch and you can run it, so something you suspect but did not demonstrate is not a Note.
+- A Note of yours carries the evidence that the defect is real in its \`evidence\` field, held to the standard you hold a criterion you judge \`unmet\` to. You have the branch and you can run it, so something you suspect but did not demonstrate is not a Note.
 - Writing the Note is all you do about it: fix nothing, commit nothing, stage nothing, exactly as the rest of your brief says.
 ${noteEntryGuidance(standingNotes)}`;
 
@@ -90,8 +90,8 @@ ${noteEntryGuidance(standingNotes)}`;
  */
 const noteEntryGuidance = (standingNotes?: number) => `- A Note is a defect — something that behaves wrongly or breaks. A preference of yours, a refactor you would enjoy and a test that would be nice to have are not Notes, however right you are about them.
 - Set \`ticket\` to the issue number the Note belongs to, and leave it out when you are not sure which one: a Note with no number becomes a comment on the issue the pipeline gathers Notes for triage on, where a wrong number lands on somebody else's Ticket.
-- Write each \`note\` as plain sentences. No checkboxes: they would read as Acceptance Criteria.
-- Open with one short sentence that names the finding, and put the detail in the sentences after it.
+- Write each Note in its parts: \`summary\` is one short sentence naming the defect; \`evidence\` is where the defect is and what shows it is real, what you ran or read, what you expected and what came back; \`impact\` is what breaks, and for whom; \`next\` is the fix, or the decision a human has to take before anyone can fix it, and is left out when there is neither.
+- Write every part as plain sentences. No checkboxes: they would read as Acceptance Criteria.
 - Emit \`"notes": []\` when you found nothing. That is the ordinary case and costs you nothing.${standingLine(standingNotes)}`;
 
 /**

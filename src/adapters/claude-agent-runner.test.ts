@@ -290,7 +290,7 @@ describe("a session that woke for a background agent", () => {
     is_error: false,
     num_turns: 54,
     duration_ms: 421_549,
-    structured_output: { notes: [{ note: "the glossary drifts" }] },
+    structured_output: { notes: [{ summary: "the glossary drifts" }] },
     result: '{"notes":[{"note":"the glossary drifts"}]}',
   };
   const waking = (text: string) => ({
@@ -326,27 +326,27 @@ describe("a session that woke for a background agent", () => {
     );
 
     expect(result.ok).toBe(true);
-    expect(result.result).toEqual({ notes: [{ note: "the glossary drifts" }] });
+    expect(result.result).toEqual({ notes: [{ summary: "the glossary drifts" }] });
   });
 
   it("keeps a later answer over an earlier one", async () => {
     const stdout = transcript(
       answer([]),
       waking("one review is in"),
-      answer([{ note: "the review found a drift" }]),
+      answer([{ summary: "the review found a drift" }]),
     );
 
     const result = await runner(execution({ stdout })).run(
       request({ jsonSchema: { type: "object" }, resultRequired: false }),
     );
 
-    expect(result.result).toEqual({ notes: [{ note: "the review found a drift" }] });
+    expect(result.result).toEqual({ notes: [{ summary: "the review found a drift" }] });
   });
 
   it("keeps the latest answer when the last waking carries none", async () => {
     const stdout = transcript(
       answer([]),
-      answer([{ note: "the review found a drift" }]),
+      answer([{ summary: "the review found a drift" }]),
       waking("both are in"),
     );
 
@@ -354,7 +354,7 @@ describe("a session that woke for a background agent", () => {
       request({ jsonSchema: { type: "object" }, resultRequired: false }),
     );
 
-    expect(result.result).toEqual({ notes: [{ note: "the review found a drift" }] });
+    expect(result.result).toEqual({ notes: [{ summary: "the review found a drift" }] });
   });
 
   it("fails a Stage that needed an answer when no waking gave one", async () => {

@@ -36,10 +36,24 @@ import { z } from "zod";
  */
 export type NotingStage = "implement" | "verify" | "fix";
 
+/**
+ * What a Note says, part by part. `summary` is the one part a Note cannot do
+ * without; the others are posted when the Stage wrote them.
+ */
+export interface NoteText {
+  /** One short sentence naming the defect. */
+  summary: string;
+  /** Where the defect is and what shows it is real. */
+  evidence?: string;
+  /** What breaks, and for whom. */
+  impact?: string;
+  /** The fix, or the decision a human has to take before anyone can fix it. */
+  next?: string;
+}
+
 /** One finding, and the Ticket it belongs to when the Stage knew of one. */
-export interface Note {
+export interface Note extends NoteText {
   ticket?: number;
-  note: string;
 }
 
 /** A Note that reached GitHub, which is what a Run summary reports. */
@@ -54,21 +68,33 @@ export interface RoutedNote {
    * most: the one that found no standing Notes issue open and needed one.
    */
   opened: boolean;
-  note: string;
+  /** The Note's summary: the part a Run summary has room for. */
+  summary: string;
 }
+
+/** A part of a Note beside its summary, which costs only itself when it is malformed. */
+const notePart = z.string().optional().catch(undefined);
 
 /**
  * One entry of a Stage's `notes` list.
  *
- * `ticket` is read separately from `note` and forgiven separately: a number the
- * Stage wrote as a string, a float or a zero is no number, but the words beside
- * it are still a finding. Dropping the entry over its label would lose exactly
- * what this whole module exists to keep.
+ * `ticket` is read separately from the words and forgiven separately: a number
+ * the Stage wrote as a string, a float or a zero is no number, but the words
+ * beside it are still a finding. Dropping the entry over its label would lose
+ * exactly what this whole module exists to keep. The parts beside the summary
+ * are forgiven the same way, for the same reason: a Note without its impact is
+ * still a defect somebody should hear about.
  */
 const noteSchema = z.object({
   ticket: z.number().int().positive().optional().catch(undefined),
-  note: z.string(),
+  summary: z.string(),
+  evidence: notePart,
+  impact: notePart,
+  next: notePart,
 });
+
+/** The parts of a Note beside its summary. */
+const NOTE_PARTS = ["evidence", "impact", "next"] as const;
 
 /**
  * The `--json-schema` the implement and fix Stages are invoked with.
@@ -89,9 +115,10 @@ export const NOTES_JSON_SCHEMA = {
  *
  * Forgiving at every level, because a Stage that reported its work badly has
  * still done the work: output that is not an object, a missing list, an entry
- * the schema rejects and an entry with no words in it each cost that one entry
- * and leave the rest. The alternative is a Ticket that fails over a malformed
- * aside.
+ * the schema rejects and an entry with no summary each cost that one entry and
+ * leave the rest. A part beside the summary that is missing, malformed or blank
+ * costs that part, and the Note is posted with the ones it has. The alternative
+ * is a Ticket that fails over a malformed aside.
  */
 export function parseNotes(result: unknown): Note[] {
   if (typeof result !== "object" || result === null) return [];
@@ -100,9 +127,14 @@ export function parseNotes(result: unknown): Note[] {
 
   return raw.flatMap((item) => {
     const parsed = noteSchema.safeParse(item);
-    if (!parsed.success || parsed.data.note.trim() === "") return [];
-    const { ticket, note } = parsed.data;
-    return [ticket === undefined ? { note } : { ticket, note }];
+    if (!parsed.success || parsed.data.summary.trim() === "") return [];
+    const { ticket, summary } = parsed.data;
+    const note: Note = ticket === undefined ? { summary } : { ticket, summary };
+    for (const part of NOTE_PARTS) {
+      const text = parsed.data[part];
+      if (text !== undefined && text.trim() !== "") note[part] = text;
+    }
+    return [note];
   });
 }
 
@@ -344,29 +376,30 @@ export async function routeNotes(
  */
 async function route(routing: NoteRouting, note: Note): Promise<RoutedNote> {
   const { tracker, origin, stage } = routing;
-  const from = { origin, stage, note: note.note };
+  const { ticket, ...text } = note;
+  const from = { origin, stage, note: text };
 
-  if (note.ticket !== undefined && note.ticket !== origin) {
+  if (ticket !== undefined && ticket !== origin) {
     let buried: string | undefined;
     try {
-      buried = await buriedOn(routing, note.ticket);
+      buried = await buriedOn(routing, ticket);
       if (buried === undefined) {
-        await tracker.comment(note.ticket, noteComment(from));
-        routing.log?.(`#${origin} noted on #${note.ticket}`);
-        return { origin, stage, issue: note.ticket, opened: false, note: note.note };
+        await tracker.comment(ticket, noteComment(from));
+        routing.log?.(`#${origin} noted on #${ticket}`);
+        return { origin, stage, issue: ticket, opened: false, summary: text.summary };
       }
     } catch (error) {
       routing.log?.(
-        `#${origin} could not comment its Note on #${note.ticket} ` +
+        `#${origin} could not comment its Note on #${ticket} ` +
           `(${(error as Error).message}); sending it to triage instead`,
       );
-      return await sendToTriage(routing, { ...from, intended: note.ticket });
+      return await sendToTriage(routing, { ...from, intended: ticket });
     }
     routing.log?.(
-      `#${origin} will not comment its Note on #${note.ticket}, which ${buried}; ` +
+      `#${origin} will not comment its Note on #${ticket}, which ${buried}; ` +
         "sending it to triage instead",
     );
-    return await sendToTriage(routing, { ...from, intended: note.ticket, because: buried });
+    return await sendToTriage(routing, { ...from, intended: ticket, because: buried });
   }
 
   return await sendToTriage(routing, from);
@@ -410,6 +443,6 @@ async function sendToTriage(
     stage: routing.stage,
     issue: number,
     opened,
-    note: subject.note,
+    summary: subject.note.summary,
   };
 }
