@@ -1,7 +1,13 @@
 <!-- agent-pipeline:note -->
 From #<origin> <stage>
 
-<note>
+**<summary>**
+
+**Evidence**: <evidence>
+
+**Impact**: <impact>
+
+**Next**: <next>
 
 One Note, as a comment. On the Ticket it names when that Ticket is open,
 unclaimed and not a Spec; otherwise on the standing Notes issue
@@ -32,7 +38,32 @@ fourth variant, for a number the Stage invented or an issue somebody locked: the
 one reason the pipeline cannot name. Without that line a finding about #7, read
 on the standing issue, has lost the only thing that placed it.
 
-The note is the Stage's own words, with one edit: a `- [ ]` at the start of a
+The rest is the Note in its parts, each a field the Stage fills in. `<summary>`
+is one short sentence naming the defect, in bold as a paragraph of its own, and
+folded onto one line so a line break inside it cannot undo the bold.
+`<evidence>` is where the defect is and what shows it is real: what was run or
+read, what was expected and what came back. `<impact>` is what breaks, and for
+whom. `<next>` is the fix, or the decision a human has to take before anyone can
+fix it. Each part sits under a label of its own so a triager finds the evidence
+without reading the whole Note, and tells one that waits on a decision from one
+that only needs a Ticket. A part the Stage left out or left blank is left out
+of the comment, label and all; `next` is the one the Stage is allowed to leave
+out, and a Note with no summary is not posted at all.
+
+```
+<!-- agent-pipeline:note -->
+From #12 verify
+
+**`tool sync --help` prints a dump in place of its help text.**
+
+**Evidence**: the subcommand's help string contains a literal `50%`, which argparse reads as %-formatting. `tool sync --help` prints the action dict mid-sentence. The string is at src/cli/sync.py:40 and is the same on main.
+
+**Impact**: every reader of that help text.
+
+**Next**: write it as `50%%`.
+```
+
+Every part is the Stage's own words, with one edit: a `- [ ]` at the start of a
 list item is escaped to `- \[ \]`. An unescaped one would read as an Acceptance
 Criterion, and the guards, the Verdict and the tick-on-merge all take a Ticket's
 checkboxes at face value.

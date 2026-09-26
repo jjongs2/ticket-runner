@@ -310,7 +310,7 @@ describe("the Notes channel", () => {
   it("holds a verify Note to the evidence bar a criterion is held to", () => {
     const prompt = verifyPrompt(url, "");
 
-    expect(prompt).toMatch(/carries the evidence that the defect is real/i);
+    expect(prompt).toMatch(/carries the evidence that the defect is real in its `evidence` field/i);
     expect(prompt).toContain("something you suspect but did not demonstrate is not a Note");
   });
 
@@ -318,9 +318,18 @@ describe("the Notes channel", () => {
     expect(implementPrompt(url, BASE, "")).toContain("leave it out when you are not sure");
   });
 
-  it("asks a Stage to open with one short sentence that names the finding", () => {
-    expect(implementPrompt(url, BASE, "")).toContain("one short sentence");
-    expect(fixPrompt(url, FAILED_CHECK, BASE, "")).toContain("one short sentence");
+  it("asks every Stage with the channel for a Note in its parts, not as one string", () => {
+    for (const prompt of [
+      implementPrompt(url, BASE, ""),
+      fixPrompt(url, FAILED_CHECK, BASE, ""),
+      verifyPrompt(url, ""),
+    ]) {
+      expect(prompt).toContain("`summary` is one short sentence naming the defect");
+      expect(prompt).toContain("`evidence` is where the defect is and what shows it is real");
+      expect(prompt).toContain("`impact` is what breaks, and for whom");
+      expect(prompt).toContain("`next` is the fix, or the decision a human has to take");
+      expect(prompt).not.toContain("`note`");
+    }
   });
 
   it("promises a Stage nothing about issue titles", () => {

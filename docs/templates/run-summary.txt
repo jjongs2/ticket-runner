@@ -69,7 +69,7 @@ for a Note that reached an issue already there — the Ticket it named, or a
 standing Notes issue already open — and `new` for the one Note of a Run that
 found no standing Notes issue and opened it. Most of a Run's Notes land on the
 same number as `comment`, which is what gathering them on one issue means. The
-note itself is trimmed to one line; the whole of it is on GitHub.
+row shows the Note's summary trimmed to one line; the whole Note is on GitHub.
 
 The last line says why the Run stopped: `Frontier empty.` when nothing is left,
 `Frontier blocked.` when every remaining candidate has an open blocker,

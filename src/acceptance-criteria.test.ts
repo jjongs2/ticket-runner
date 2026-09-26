@@ -49,9 +49,13 @@ async function tickedByMerge(text: string): Promise<{ body: string; lines: strin
   return { body: tracker.issue(TICKET).body, lines };
 }
 
-/** A Note carrying `text`, as the escaper leaves it for a human to read. */
+/** A Note whose evidence is `text`, as the escaper leaves it for a human to read. */
 function posted(text: string): string {
-  return noteComment({ origin: 10, stage: "implement", note: text });
+  return noteComment({
+    origin: 10,
+    stage: "implement",
+    note: { summary: "found", evidence: text },
+  });
 }
 
 /**

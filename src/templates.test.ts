@@ -577,34 +577,85 @@ describe("runSummary", () => {
 });
 
 describe("noteComment", () => {
-  const subject = { origin: 10, stage: "implement" as const, note: "the help text drifts" };
+  const note = {
+    summary: "`tool sync --help` prints a dump in place of its help text.",
+    evidence:
+      "argparse reads the literal `50%` as %-formatting.\nThe string is at src/cli/sync.py:40.",
+    impact: "every reader of that help text.",
+    next: "write it as `50%%`.",
+  };
+  const subject = { origin: 12, stage: "verify" as const, note };
 
   it("opens with the marker, then where the Note came from", () => {
-    expect(noteComment(subject).split("\n").slice(0, 2)).toEqual([
-      NOTE_MARKER,
-      "From #10 implement",
-    ]);
+    expect(noteComment(subject).split("\n").slice(0, 2)).toEqual([NOTE_MARKER, "From #12 verify"]);
   });
 
-  it("carries the Note under it", () => {
+  it("carries the summary in bold, then each part under a label of its own, in order", () => {
     expect(noteComment(subject)).toBe(
-      `${NOTE_MARKER}\nFrom #10 implement\n\nthe help text drifts\n`,
+      [
+        NOTE_MARKER,
+        "From #12 verify",
+        "",
+        "**`tool sync --help` prints a dump in place of its help text.**",
+        "",
+        "**Evidence**: argparse reads the literal `50%` as %-formatting.",
+        "The string is at src/cli/sync.py:40.",
+        "",
+        "**Impact**: every reader of that help text.",
+        "",
+        "**Next**: write it as `50%%`.",
+        "",
+      ].join("\n"),
     );
   });
 
-  it("defuses a checkbox so no guard reads it as Acceptance Criteria", () => {
-    const comment = noteComment({ ...subject, note: "- [ ] rename the flag" });
+  it("leaves out a part the Stage did not write", () => {
+    const comment = noteComment({
+      ...subject,
+      note: { summary: note.summary, impact: note.impact },
+    });
 
-    expect(comment).toContain("- \\[ \\] rename the flag");
-    expect(new RegExp(UNCHECKED_BOX, "m").test(comment)).toBe(false);
+    expect(comment).toBe(
+      `${NOTE_MARKER}\nFrom #12 verify\n\n**${note.summary}**\n\n**Impact**: ${note.impact}\n`,
+    );
   });
+
+  it("leaves out a part the Stage left blank, label and all", () => {
+    const comment = noteComment({ ...subject, note: { ...note, evidence: " \n", next: "" } });
+
+    expect(comment).not.toContain("**Evidence**");
+    expect(comment).not.toContain("**Next**");
+    expect(comment).toContain("**Impact**");
+  });
+
+  it("keeps the summary on one line, so its bold holds", () => {
+    const comment = noteComment({ ...subject, note: { summary: "  the flag\n\nis wrong \n" } });
+
+    expect(comment).toContain("\n**the flag is wrong**\n");
+  });
+
+  it.each(["summary", "evidence", "impact", "next"] as const)(
+    "defuses a checkbox in the %s so no guard reads it as Acceptance Criteria",
+    (part) => {
+      const comment = noteComment({
+        ...subject,
+        note: { ...note, [part]: "- [ ] rename the flag" },
+      });
+
+      expect(comment).toContain("- \\[ \\] rename the flag");
+      expect(new RegExp(UNCHECKED_BOX, "m").test(comment)).toBe(false);
+    },
+  );
 });
 
 describe("a Note that fell back to the standing Notes issue", () => {
   const subject = {
     origin: 10,
     stage: "fix" as const,
-    note: "Nothing cleans up abandoned worktrees. A Run leaks one per hand-off.",
+    note: {
+      summary: "Nothing cleans up abandoned worktrees.",
+      impact: "A Run leaks one per hand-off.",
+    },
   };
 
   it("names the Ticket it was meant for, and why that Ticket did not get it", () => {
@@ -622,7 +673,11 @@ describe("a Note that fell back to the standing Notes issue", () => {
   });
 
   it("carries the Note under the provenance, checkboxes defused", () => {
-    const comment = noteComment({ ...subject, intended: 7, note: "todo\n- [ ] one" });
+    const comment = noteComment({
+      ...subject,
+      intended: 7,
+      note: { ...subject.note, evidence: "todo\n- [ ] one" },
+    });
 
     expect(comment).toContain("- \\[ \\] one");
     expect(new RegExp(UNCHECKED_BOX, "m").test(comment)).toBe(false);
@@ -679,7 +734,7 @@ describe("Notes in a Run summary", () => {
     stage: "implement" as const,
     issue: 8,
     opened: false,
-    note: "the CLI help drifts from the README",
+    summary: "the CLI help drifts from the README",
   };
 
   it("follows the row of the Ticket whose Stage made it", () => {
@@ -715,7 +770,9 @@ describe("Notes in a Run summary", () => {
       version: VERSION,
       runId: "r1",
       durationMs: 0,
-      outcomes: [{ ...merged, notes: [{ ...note, issue: 31, opened: true, note: "no cleanup" }] }],
+      outcomes: [
+        { ...merged, notes: [{ ...note, issue: 31, opened: true, summary: "no cleanup" }] },
+      ],
     });
 
     expect(summary).toContain("  noted    #31 new · from #3 implement · no cleanup");
@@ -727,7 +784,7 @@ describe("Notes in a Run summary", () => {
       version: VERSION,
       runId: "r1",
       durationMs: 0,
-      outcomes: [{ ...merged, notes: [{ ...note, note: long }] }],
+      outcomes: [{ ...merged, notes: [{ ...note, summary: long }] }],
     });
 
     const row = summary.split("\n").find((line) => line.includes("noted")) as string;

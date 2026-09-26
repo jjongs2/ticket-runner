@@ -14,6 +14,12 @@
  * `ticket` is optional on purpose: a Stage that guesses a number puts the Note
  * on an unrelated issue, where a Stage that leaves it out gets a comment on the
  * standing Notes issue a human reads. Not knowing is an answer.
+ *
+ * The rest are the parts nearly every Note has anyway, asked for one by one so
+ * each lands under a label of its own: a triager finds the evidence without
+ * reading the whole Note, and tells one that waits on a decision from one that
+ * only needs a Ticket by its `next`. `next` alone is optional, because a Stage
+ * that knows neither a fix nor the decision in the way has nothing to put there.
  */
 export const NOTES_LIST_SCHEMA = {
   type: "array",
@@ -27,13 +33,26 @@ export const NOTES_LIST_SCHEMA = {
         description:
           "The issue number this belongs to. Omit it unless you are sure which one.",
       },
-      note: {
+      summary: {
+        type: "string",
+        description: "One short sentence naming the defect.",
+      },
+      evidence: {
         type: "string",
         description:
-          "What you found and why it matters, in plain sentences. Open with one short sentence that names the finding and put the detail after it. No checkboxes.",
+          "Where the defect is and what shows it is real: what you ran or read, what you expected and what came back.",
+      },
+      impact: {
+        type: "string",
+        description: "What breaks, and for whom.",
+      },
+      next: {
+        type: "string",
+        description:
+          "The fix, or the decision a human has to take before anyone can fix it. Leave it out when there is neither.",
       },
     },
-    required: ["note"],
+    required: ["summary", "evidence", "impact"],
     additionalProperties: false,
   },
 } as const;

@@ -1523,7 +1523,7 @@ describe("a fix Stage that committed nothing", () => {
     workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
     runner.queue(
       "fix",
-      stageResult({ result: { notes: [{ ticket: other, note: "found while fixing" }] } }),
+      stageResult({ result: { notes: [{ ticket: other, summary: "found while fixing" }] } }),
     );
 
     const outcome = await run();
@@ -1531,7 +1531,7 @@ describe("a fix Stage that committed nothing", () => {
     expect(outcome).toMatchObject({
       outcome: "handed-off",
       stage: "fix",
-      notes: [{ origin: TICKET, stage: "fix", issue: other, note: "found while fixing" }],
+      notes: [{ origin: TICKET, stage: "fix", issue: other, summary: "found while fixing" }],
     });
   });
 
@@ -3357,18 +3357,18 @@ describe("Notes a Stage makes", () => {
   });
 
   it("posts a Note on the Ticket it names", async () => {
-    runner.queue("implement", noteResult([{ ticket: OTHER, note: "the help drifts" }]));
+    runner.queue("implement", noteResult([{ ticket: OTHER, summary: "the help drifts" }]));
 
     await run();
 
     expect(tracker.comments).toContainEqual({
       issue: OTHER,
-      body: "<!-- agent-pipeline:note -->\nFrom #2 implement\n\nthe help drifts\n",
+      body: "<!-- agent-pipeline:note -->\nFrom #2 implement\n\n**the help drifts**\n",
     });
   });
 
   it("comments a Note that names no Ticket on the standing Notes issue", async () => {
-    runner.queue("implement", noteResult([{ note: "Nothing cleans up worktrees." }]));
+    runner.queue("implement", noteResult([{ summary: "Nothing cleans up worktrees." }]));
 
     await run();
 
@@ -3380,7 +3380,7 @@ describe("Notes a Stage makes", () => {
     expect(tracker.createdIssues[0]?.body).toContain("<!-- agent-pipeline:notes-issue -->");
     expect(tracker.comments).toContainEqual({
       issue: 200,
-      body: "<!-- agent-pipeline:note -->\nFrom #2 implement\n\nNothing cleans up worktrees.\n",
+      body: "<!-- agent-pipeline:note -->\nFrom #2 implement\n\n**Nothing cleans up worktrees.**\n",
     });
   });
 
@@ -3409,7 +3409,7 @@ describe("Notes a Stage makes", () => {
 
   it("tells the fix Stage the issue this Run's own Notes opened", async () => {
     workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
-    runner.queue("implement", noteResult([{ note: "Nothing cleans up worktrees." }]));
+    runner.queue("implement", noteResult([{ summary: "Nothing cleans up worktrees." }]));
 
     await run();
 
@@ -3419,7 +3419,7 @@ describe("Notes a Stage makes", () => {
   });
 
   it("opens it under the label this repo calls needs-triage", async () => {
-    runner.queue("implement", noteResult([{ note: "no cleanup" }]));
+    runner.queue("implement", noteResult([{ summary: "no cleanup" }]));
 
     await run({
       labels: { ...config().labels, needsTriage: "inbox" },
@@ -3429,7 +3429,7 @@ describe("Notes a Stage makes", () => {
   });
 
   it("escapes a checkbox so the guards never read a Note as criteria", async () => {
-    runner.queue("implement", noteResult([{ ticket: OTHER, note: "- [ ] rename the flag" }]));
+    runner.queue("implement", noteResult([{ ticket: OTHER, summary: "- [ ] rename the flag" }]));
 
     await run();
 
@@ -3441,7 +3441,7 @@ describe("Notes a Stage makes", () => {
   it("reports every Note it routed, with where it went", async () => {
     runner.queue(
       "implement",
-      noteResult([{ ticket: OTHER, note: "the help drifts" }, { note: "no cleanup" }]),
+      noteResult([{ ticket: OTHER, summary: "the help drifts" }, { summary: "no cleanup" }]),
     );
 
     const outcome = await run();
@@ -3449,38 +3449,44 @@ describe("Notes a Stage makes", () => {
     expect(outcome).toMatchObject({
       outcome: "merged",
       notes: [
-        { origin: TICKET, stage: "implement", issue: OTHER, opened: false, note: "the help drifts" },
-        { origin: TICKET, stage: "implement", issue: 200, opened: true, note: "no cleanup" },
+        {
+          origin: TICKET,
+          stage: "implement",
+          issue: OTHER,
+          opened: false,
+          summary: "the help drifts",
+        },
+        { origin: TICKET, stage: "implement", issue: 200, opened: true, summary: "no cleanup" },
       ],
     });
   });
 
   it("routes the fix Stage's Notes too", async () => {
     workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
-    runner.queue("fix", noteResult([{ ticket: OTHER, note: "found while fixing" }]));
+    runner.queue("fix", noteResult([{ ticket: OTHER, summary: "found while fixing" }]));
 
     const outcome = await run();
 
     expect(outcome).toMatchObject({
-      notes: [{ origin: TICKET, stage: "fix", issue: OTHER, note: "found while fixing" }],
+      notes: [{ origin: TICKET, stage: "fix", issue: OTHER, summary: "found while fixing" }],
     });
   });
 
   it("routes the verify Stage's Notes too", async () => {
-    runner.queue("verify", verdictWithNotes([{ ticket: OTHER, note: "found while grading" }]));
+    runner.queue("verify", verdictWithNotes([{ ticket: OTHER, summary: "found while grading" }]));
 
     const outcome = await run();
 
     expect(outcome).toMatchObject({
       outcome: "merged",
-      notes: [{ origin: TICKET, stage: "verify", issue: OTHER, note: "found while grading" }],
+      notes: [{ origin: TICKET, stage: "verify", issue: OTHER, summary: "found while grading" }],
     });
   });
 
   it("sends a verify Note naming the Ticket it is grading to triage", async () => {
     runner.queue(
       "verify",
-      verdictWithNotes([{ ticket: TICKET, note: "the lock file is never read" }]),
+      verdictWithNotes([{ ticket: TICKET, summary: "the lock file is never read" }]),
     );
 
     const outcome = await run();
@@ -3495,7 +3501,7 @@ describe("Notes a Stage makes", () => {
 
   it("routes a failed verify Stage's Notes before handing the Ticket off", async () => {
     runner.queue("verify", {
-      ...verdictWithNotes([{ ticket: OTHER, note: "noticed before I ran out of turns" }]),
+      ...verdictWithNotes([{ ticket: OTHER, summary: "noticed before I ran out of turns" }]),
       ok: false,
       failure: "turn-capped",
     });
@@ -3505,14 +3511,14 @@ describe("Notes a Stage makes", () => {
     expect(outcome).toMatchObject({
       outcome: "handed-off",
       stage: "verify",
-      notes: [{ stage: "verify", issue: OTHER, note: "noticed before I ran out of turns" }],
+      notes: [{ stage: "verify", issue: OTHER, summary: "noticed before I ran out of turns" }],
     });
   });
 
   it("routes the Notes of a verify Stage whose Verdict was unusable", async () => {
     runner.queue(
       "verify",
-      stageResult({ result: { notes: [{ ticket: OTHER, note: "graded nothing, saw this" }] } }),
+      stageResult({ result: { notes: [{ ticket: OTHER, summary: "graded nothing, saw this" }] } }),
     );
 
     const outcome = await run();
@@ -3520,7 +3526,7 @@ describe("Notes a Stage makes", () => {
     expect(outcome).toMatchObject({
       outcome: "handed-off",
       stage: "verify",
-      notes: [{ stage: "verify", issue: OTHER, note: "graded nothing, saw this" }],
+      notes: [{ stage: "verify", issue: OTHER, summary: "graded nothing, saw this" }],
     });
   });
 
@@ -3528,13 +3534,13 @@ describe("Notes a Stage makes", () => {
     workspace.discardChanges = async () => {
       throw new Error("git: unable to unlink");
     };
-    runner.queue("verify", verdictWithNotes([{ ticket: OTHER, note: "noticed while grading" }]));
+    runner.queue("verify", verdictWithNotes([{ ticket: OTHER, summary: "noticed while grading" }]));
 
     const outcome = await run();
 
     expect(outcome).toMatchObject({
       outcome: "handed-off",
-      notes: [{ stage: "verify", issue: OTHER, note: "noticed while grading" }],
+      notes: [{ stage: "verify", issue: OTHER, summary: "noticed while grading" }],
     });
   });
 
@@ -3542,7 +3548,7 @@ describe("Notes a Stage makes", () => {
     tracker.createIssue = async () => {
       throw new Error("gh: connection reset");
     };
-    runner.queue("verify", verdictWithNotes([{ note: "lost" }]));
+    runner.queue("verify", verdictWithNotes([{ summary: "lost" }]));
 
     expect(await run()).toMatchObject({ outcome: "merged", notes: [] });
   });
@@ -3564,7 +3570,7 @@ describe("Notes a Stage makes", () => {
 
   it("routes a failed Stage's Notes before handing the Ticket off", async () => {
     runner.queue("implement", {
-      ...noteResult([{ ticket: OTHER, note: "noticed before I died" }]),
+      ...noteResult([{ ticket: OTHER, summary: "noticed before I died" }]),
       ok: false,
       failure: "turn-capped",
     });
@@ -3574,25 +3580,25 @@ describe("Notes a Stage makes", () => {
     expect(outcome).toMatchObject({
       outcome: "handed-off",
       stage: "implement",
-      notes: [{ issue: OTHER, note: "noticed before I died" }],
+      notes: [{ issue: OTHER, summary: "noticed before I died" }],
     });
   });
 
   it("sends a Note to triage when the Ticket it named will not take it", async () => {
-    runner.queue("implement", noteResult([{ ticket: 404, note: "the flag is wrong" }]));
+    runner.queue("implement", noteResult([{ ticket: 404, summary: "the flag is wrong" }]));
 
     const outcome = await run();
 
     expect(outcome).toMatchObject({
       outcome: "merged",
-      notes: [{ issue: 200, opened: true, note: "the flag is wrong" }],
+      notes: [{ issue: 200, opened: true, summary: "the flag is wrong" }],
     });
   });
 
   it("opens one standing issue for the Notes of both its Stages", async () => {
     workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
-    runner.queue("implement", noteResult([{ note: "worktrees leak" }]));
-    runner.queue("fix", noteResult([{ note: "so does the lock file" }]));
+    runner.queue("implement", noteResult([{ summary: "worktrees leak" }]));
+    runner.queue("fix", noteResult([{ summary: "so does the lock file" }]));
 
     const outcome = await run();
 
@@ -3609,7 +3615,7 @@ describe("Notes a Stage makes", () => {
     tracker.createIssue = async () => {
       throw new Error("gh: connection reset");
     };
-    runner.queue("implement", noteResult([{ ticket: 404, note: "lost" }]));
+    runner.queue("implement", noteResult([{ ticket: 404, summary: "lost" }]));
 
     expect(await run()).toMatchObject({ outcome: "merged", notes: [] });
   });

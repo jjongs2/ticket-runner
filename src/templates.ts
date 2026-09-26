@@ -7,7 +7,7 @@ import { UNCHECKED_BOX } from "./acceptance-criteria.js";
 import type { GuardReason } from "./guards.js";
 import type { HostKind } from "./host.js";
 import type { FailurePoint } from "./lifecycle.js";
-import type { NotingStage, RoutedNote } from "./notes.js";
+import type { NoteText, NotingStage, RoutedNote } from "./notes.js";
 import type { TicketOutcome } from "./orchestrator.js";
 import type { IssueComment, SquashCommit } from "./ports/tracker.js";
 import type { KeptTranscripts } from "./ports/workspace.js";
@@ -344,7 +344,7 @@ export interface NoteSubject {
   /** The Ticket whose Stage made the finding. */
   origin: number;
   stage: NotingStage;
-  note: string;
+  note: NoteText;
   /**
    * The Ticket this was meant to be a comment on, when that Ticket would not
    * take it or nobody would read it there. Set only on a Note that fell back to
@@ -364,7 +364,7 @@ export interface NoteSubject {
 const NOTE_CHECKBOX = new RegExp(UNCHECKED_BOX, "gm");
 
 /**
- * A Note's prose, with every checkbox defused.
+ * One part of a Note's prose, with every checkbox defused.
  *
  * `- [ ]` is Acceptance Criteria to everything that reads a Ticket: the
  * `no-criteria` guard counts one as a usable Ticket, verify grades it, and the
@@ -391,15 +391,31 @@ function noteProvenance({ origin, stage, intended, because }: NoteSubject): stri
   return `${from}, meant for #${intended}, which ${because ?? "would not take the comment"}`;
 }
 
-/** One Note, as a comment on the Ticket it names or on the standing Notes issue. */
+/**
+ * The labelled paragraph one part of a Note becomes, or nothing when the Stage
+ * left that part out or blank.
+ */
+function labelledPart(label: string, text: string | undefined): string[] {
+  if (text === undefined || text.trim() === "") return [];
+  return [`**${label}**: ${escapeCheckboxes(text.trim())}`];
+}
+
+/**
+ * One Note, as a comment on the Ticket it names or on the standing Notes issue:
+ * the summary in bold, then each part the Stage wrote under a label of its own.
+ *
+ * The summary is folded onto one line so the bold around it holds: a blank
+ * line inside it would end the paragraph and leave the asterisks showing.
+ */
 export function noteComment(subject: NoteSubject): string {
-  return [
-    NOTE_MARKER,
-    noteProvenance(subject),
-    "",
-    escapeCheckboxes(subject.note.trim()),
-    "",
-  ].join("\n");
+  const { summary, evidence, impact, next } = subject.note;
+  const paragraphs = [
+    `**${escapeCheckboxes(summary.trim().replaceAll(/\s+/g, " "))}**`,
+    ...labelledPart("Evidence", evidence),
+    ...labelledPart("Impact", impact),
+    ...labelledPart("Next", next),
+  ];
+  return [NOTE_MARKER, noteProvenance(subject), "", paragraphs.join("\n\n"), ""].join("\n");
 }
 
 /** Whether an issue's body says it is the standing Notes issue. */
@@ -530,7 +546,7 @@ function ticketRows(outcome: TicketOutcome): string[] {
   ];
 }
 
-/** A Note's opening line, which is as much of it as any summary has room for. */
+/** A Note summary's opening line, which is as much of it as a Run summary has room for. */
 function firstLine(text: string): string {
   return (text.split("\n").find((line) => line.trim() !== "") ?? "").trim();
 }
@@ -548,12 +564,12 @@ function truncate(text: string, limit: number): string {
 const NOTE_WIDTH = 40;
 
 /** One Note's line: where it went, where it came from, and the gist of it. */
-function noteRow({ origin, stage, issue, opened, note }: RoutedNote): string {
+function noteRow({ origin, stage, issue, opened, summary }: RoutedNote): string {
   const destination = opened ? "new" : "comment";
   return row(
     "noted",
     issue,
-    `${destination} · from #${origin} ${stage} · ${truncate(firstLine(note), NOTE_WIDTH)}`,
+    `${destination} · from #${origin} ${stage} · ${truncate(firstLine(summary), NOTE_WIDTH)}`,
   );
 }
 
