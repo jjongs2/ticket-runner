@@ -71,6 +71,20 @@ describe("what a State file says", () => {
     expect(file.readable && file.state).not.toHaveProperty("version");
   });
 
+  it("carries the title a Stage answered for the branch", () => {
+    expect(read(stateFileContents(state({ title: "feat: title the branch" })))).toEqual({
+      readable: true,
+      state: state({ title: "feat: title the branch" }),
+    });
+  });
+
+  it("still resumes a file written before a title was recorded in one", () => {
+    const file = read(JSON.stringify(state()));
+
+    expect(file).toEqual({ readable: true, state: state() });
+    expect(file.readable && file.state).not.toHaveProperty("title");
+  });
+
   it("keeps reading a file a later pipeline added fields to", () => {
     expect(read(JSON.stringify({ ...state(), somethingNewer: "from a later version" }))).toEqual(
       { readable: true, state: state() },

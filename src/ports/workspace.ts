@@ -75,6 +75,13 @@ export interface TicketState {
    * resuming Run would try to open a second one for the branch.
    */
   pullRequest?: number;
+  /**
+   * The latest title a Stage answered for the whole branch, which names the
+   * pull request and the squash commit. Without it a Run that resumes after the
+   * Stage that wrote it would fall back to the first commit subject. Absent
+   * when no Stage has answered one, and in State an earlier pipeline left.
+   */
+  title?: string;
   /** The Run that last wrote the State, and when — both for a human reading it. */
   runId: string;
   /**

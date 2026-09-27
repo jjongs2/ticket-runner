@@ -7,6 +7,7 @@
 import { CONVENTIONS_PATH } from "./conventions.js";
 import type { FailureKind } from "./lifecycle.js";
 import { STAGE_ENV_VAR } from "./stage-guard.js";
+import { BRANCH_TITLE } from "./title.js";
 
 /**
  * Appended to every Stage prompt, the fix Stage included. The mechanical guard
@@ -31,6 +32,15 @@ const FINISH_GUIDANCE = `- Never end your turn while uncommitted work waits on a
 - Keep gitignored files, such as dependencies you installed. The pipeline does not count them against a clean worktree, and deleting them only leaves the next Stage to install them again.`;
 
 /**
+ * How the two Stages that write code are told to title the branch. The title is
+ * an answer rather than a commit subject because a commit subject describes its
+ * own commit, and a later Stage could not retitle a branch whose first commit
+ * was already pushed without rewriting it.
+ */
+const titleGuidance = (base: string) =>
+  `- Answer a \`title\` beside your Notes: ${BRANCH_TITLE}, in the \`<type>(<scope>): <summary>\` shape \`${CONVENTIONS_PATH}\` states and without the \`(#<n>)\`. It titles the pull request and the squash commit on \`${base}\`, so each commit subject describes only its own commit.`;
+
+/**
  * Guidance appended to every implement Stage, working around known defects of
  * the `implement` skill in an unattended session.
  */
@@ -38,7 +48,7 @@ const implementGuidance = (base: string) => `This session is unattended. Follow 
 
 - Confirm the Ticket title matches what you are about to build before you start.
 - Make an initial commit before running \`/mattpocock-skills:code-review\`, so the reviewed diff is not empty.
-- Your first commit's subject becomes the pull request title and the squash commit on \`${base}\`, so write it in the convention \`${CONVENTIONS_PATH}\` states and make it summarise the whole Ticket, not just that first commit.
+${titleGuidance(base)}
 - The review the skill asks for is \`/mattpocock-skills:code-review\`. Invoke it by that full name: the short name also matches the CLI's own built-in review skill, which runs neither the Standards review nor the Spec review.
 - Spawn its review sub-agents with \`run_in_background: false\` set explicitly, several in one message so they still run in parallel. Omitting \`run_in_background\` still runs them in the background, and you would then reach your answer before the review has come back.
 - Do not answer the schema until the review has returned and the fixes you take from it are committed. An answer you have already given does not stop you committing: the pipeline waits for this session to exit before it reads the branch.
@@ -121,14 +131,15 @@ const VERIFY_INSTRUCTIONS = `You are the verify Stage of an unattended pipeline.
 - Mark a criterion \`unverifiable\` only when no evidence can be gathered, never as a substitute for looking.
 - End by emitting the Verdict: one entry per criterion with its status and the evidence you actually gathered.`;
 
-const FIX_INSTRUCTIONS = `You are the fix Stage of an unattended pipeline. The Ticket below is already implemented on the branch you are on, and one gate failed. You are what its fix budget bought, and the budget is spent: a second failure of any kind hands the Ticket to a human.
+const fixInstructions = (base: string) => `You are the fix Stage of an unattended pipeline. The Ticket below is already implemented on the branch you are on, and one gate failed. You are what its fix budget bought, and the budget is spent: a second failure of any kind hands the Ticket to a human.
 
 - Commit your fix on the branch you are on, in this worktree. Do not create a branch, do not open pull requests, and do not close the Ticket.
 - Start from the evidence: reproduce the failure, find what actually causes it, and fix that rather than the symptom.
 - Where the failure is an unmet Acceptance Criterion, add the regression test that would have caught it and commit it with the fix.
 - Stay inside this Ticket's Acceptance Criteria. Anything else you find belongs to another Ticket, not to this session; record it as a Note rather than mending it.
 ${FINISH_GUIDANCE}
-- Write commit subjects in the convention \`${CONVENTIONS_PATH}\` states. The pipeline re-runs the Checks and the verify Stage as soon as you finish.`;
+- Write commit subjects in the convention \`${CONVENTIONS_PATH}\` states. The pipeline re-runs the Checks and the verify Stage as soon as you finish.
+${titleGuidance(base)}`;
 
 const conflictInstructions = (base: string) => `You are the conflict Stage of an unattended pipeline. The Ticket below is already implemented on the branch you are on, and rebasing it onto \`${base}\` stopped on a conflict. That rebase is still in progress in this worktree, and finishing it is the whole of your job.
 
@@ -215,7 +226,7 @@ export function fixPrompt(
 ): string {
   return sections([
     `Ticket: ${issueUrl}`,
-    FIX_INSTRUCTIONS,
+    fixInstructions(base),
     failureSection(failure, base),
     SELF_HOSTING_GUIDANCE,
     notesGuidance(standingNotes),

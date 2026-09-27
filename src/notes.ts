@@ -16,7 +16,6 @@
  * list and is not treated differently for it.
  */
 
-import { NOTES_LIST_SCHEMA } from "./note-schema.js";
 import type { Tracker } from "./ports/tracker.js";
 import {
   NOTES_ISSUE_TITLE,
@@ -95,20 +94,6 @@ const noteSchema = z.object({
 
 /** The parts of a Note beside its summary. */
 const NOTE_PARTS = ["evidence", "impact", "next"] as const;
-
-/**
- * The `--json-schema` the implement and fix Stages are invoked with.
- *
- * Notes are the whole of it, so the list is required: a Stage that found
- * nothing says so with an empty one. The verify Stage carries the same list
- * beside its criteria instead, and requires nothing of it.
- */
-export const NOTES_JSON_SCHEMA = {
-  type: "object",
-  properties: { notes: NOTES_LIST_SCHEMA },
-  required: ["notes"],
-  additionalProperties: false,
-} as const;
 
 /**
  * The Notes in a Stage's structured output, and nothing else from it.

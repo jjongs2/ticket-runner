@@ -31,6 +31,14 @@ describe("the conventions document", () => {
     expect(checks).toContain("`lanes`");
   });
 
+  it("says under Commits that a Stage's title answer, not the first commit, titles the pull request", () => {
+    const commits = section(conventionsDoc("0.4.0"), "Commits");
+
+    expect(commits).toContain("`title` the implement and fix Stages each answer");
+    expect(commits).toContain("becomes the pull request title");
+    expect(commits).not.toMatch(/first commit/i);
+  });
+
   /**
    * The mark is the one thing `init` and a Run read the document for, and the
    * one thing its readers must never meet: it sits on the first line, inside an

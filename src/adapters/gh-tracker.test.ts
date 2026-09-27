@@ -784,6 +784,19 @@ describe("pull requests", () => {
     ]);
   });
 
+  it("retitles a PR a later Stage answered a new title for through REST", async () => {
+    await tracker(ok("{}")).updatePullRequestTitle(12, "feat(cli): title the branch");
+
+    expect(calls[0]).toEqual([
+      "api",
+      "--method",
+      "PATCH",
+      "repos/{owner}/{repo}/pulls/12",
+      "-f",
+      "title=feat(cli): title the branch",
+    ]);
+  });
+
   it("squash-merges through REST with the subject and body the pipeline composed", async () => {
     await tracker(ok("{}")).squashMerge(12, {
       subject: "feat(cli): add a flag",
@@ -887,6 +900,7 @@ describe("pull requests", () => {
       { host },
       ok(restPullRequest()),
       ok("{}"),
+      ok("{}"),
       ok(restPullRequest({ draft: false })),
       ok("{}"),
       ok(restPullRequest({ draft: true })),
@@ -899,12 +913,13 @@ describe("pull requests", () => {
     );
     await gh.createPullRequest({ base: "main", head: "b", title: "t", body: "b", draft: false });
     await gh.updatePullRequestBody(12, "b");
+    await gh.updatePullRequestTitle(12, "t");
     await gh.convertPullRequestToDraft(12);
     await gh.markPullRequestReady(12);
     expect(await gh.waitForCi(12, 60_000)).toEqual({ state: "passed" });
     await gh.squashMerge(12, { subject: "s", body: "b" });
     await gh.latestVersionTag("acme/repo");
-    expect(calls).toHaveLength(11);
+    expect(calls).toHaveLength(12);
   }
 
   /** The calls that are not `gh api` REST: another subcommand, or GraphQL. */
