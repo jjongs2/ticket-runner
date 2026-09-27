@@ -111,6 +111,94 @@ describe("worktrees", () => {
   });
 });
 
+describe("what remove finds and takes out", () => {
+  /** A `ticket-<n>` worktree on its own branch, fresh from main. */
+  async function ticketWorktree(ticket: number): Promise<string> {
+    const path = join(repo, ".worktrees", `ticket-${ticket}`);
+    await workspace.createWorktree({ path, branch: `agent/${ticket}-x` }, "main");
+    return path;
+  }
+
+  it("lists every ticket worktree, and nothing else under .worktrees or elsewhere", async () => {
+    const path = await ticketWorktree(2);
+    execFileSync("git", ["worktree", "add", "-b", "human/scratch", join(repo, ".worktrees", "scratch"), "main"], {
+      cwd: repo,
+      stdio: "ignore",
+    });
+
+    expect(await workspace.ticketWorktrees()).toEqual([
+      { path, branch: "agent/2-x", uncommitted: false, unpushed: false },
+    ]);
+  });
+
+  it("says a worktree holding uncommitted changes holds them", async () => {
+    const path = await ticketWorktree(2);
+    writeFileSync(join(path, "draft.txt"), "draft\n");
+
+    const [found] = await workspace.ticketWorktrees();
+
+    expect(found).toMatchObject({ uncommitted: true, unpushed: false });
+  });
+
+  it("says a branch nobody pushed holds commits the remote does not have", async () => {
+    const path = await ticketWorktree(2);
+    commit(path, "a.txt", "a\n", "feat: a (#2)");
+
+    const [found] = await workspace.ticketWorktrees();
+
+    expect(found).toMatchObject({ uncommitted: false, unpushed: true });
+  });
+
+  it("measures a pushed branch against itself on the remote", async () => {
+    const path = await ticketWorktree(2);
+    commit(path, "a.txt", "a\n", "feat: a (#2)");
+    await workspace.push(path, "agent/2-x");
+
+    expect((await workspace.ticketWorktrees())[0]).toMatchObject({ unpushed: false });
+
+    commit(path, "b.txt", "b\n", "feat: b (#2)");
+
+    expect((await workspace.ticketWorktrees())[0]).toMatchObject({ unpushed: true });
+  });
+
+  it("lists a detached worktree without a branch, and removes it alone", async () => {
+    const path = await ticketWorktree(2);
+    git(path, "checkout", "--detach");
+
+    const [found] = await workspace.ticketWorktrees();
+    expect(found).toEqual({ path, uncommitted: false, unpushed: false });
+
+    await workspace.removeWorktree({ path });
+
+    expect(existsSync(path)).toBe(false);
+    expect(git(repo, "branch", "--list", "agent/2-x")).not.toBe("");
+  });
+
+  it("lists local and remote branches under a prefix, and deletes a local one", async () => {
+    git(repo, "branch", "agent/3-y");
+    git(repo, "branch", "agentic");
+    git(repo, "branch", "human/4-z");
+    git(repo, "push", "origin", "agent/3-y", "agentic");
+
+    expect(await workspace.listBranches("agent/")).toEqual(["agent/3-y"]);
+    expect(await workspace.listRemoteBranches("agent/")).toEqual(["agent/3-y"]);
+
+    await workspace.deleteBranch("agent/3-y");
+
+    expect(await workspace.listBranches("agent/")).toEqual([]);
+  });
+
+  it("deletes a branch whose worktree a human deleted by hand", async () => {
+    const path = await ticketWorktree(2);
+    rmSync(path, { recursive: true, force: true });
+
+    expect(await workspace.ticketWorktrees()).toEqual([]);
+    await workspace.deleteBranch("agent/2-x");
+
+    expect(await workspace.listBranches("agent/")).toEqual([]);
+  });
+});
+
 describe("hasBranch", () => {
   it("says yes about a branch that is checked out in a worktree", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
@@ -1369,6 +1457,7 @@ describe("the Run lock", () => {
     expect(await next.runLockHolder()).toBeUndefined();
     expect(await next.takeRunLock({ ...claim, pid: 222, runId: "run-2" })).toEqual({
       outcome: "abandoned",
+      holder: { host: HERE, ...claim, processStartedAt: "A" },
     });
     expect(await next.takeOverRunLock({ ...claim, pid: 222, runId: "run-2" })).toEqual({
       outcome: "taken",

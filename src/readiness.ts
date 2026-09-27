@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Labels } from "./config.js";
-import { CONVENTIONS_PATH, conventionsMark } from "./conventions.js";
+import { CLAUDE_SECTION, CONVENTIONS_PATH, conventionsMark } from "./conventions.js";
 import { OPERATOR_SKILL_PATH } from "./operator-skill.js";
-import type { Tracker } from "./ports/tracker.js";
+import type { Authentication, Tracker } from "./ports/tracker.js";
 
 /**
  * What `ticket-runner init` must have left in a Target before a Run may start.
@@ -44,7 +44,12 @@ export interface IgnoredDirectory {
   line: string;
 }
 
-const IGNORED: readonly IgnoredDirectory[] = [
+/**
+ * The pipeline's two directories, each under the comment `init` writes it
+ * with, in the order it writes them. `remove` takes an entry out only where
+ * both lines still read exactly this, so the two commands share one text.
+ */
+export const IGNORED: readonly IgnoredDirectory[] = [
   { comment: "# Pipeline worktrees, one per Ticket.", line: ".worktrees/" },
   { comment: "# Run logs, transcripts and state.", line: ".ticket-runner/" },
 ];
@@ -67,6 +72,53 @@ export function missingIgnoreLines(repoRoot: string): IgnoredDirectory[] {
  */
 function ignorePattern(line: string): string {
   return line.trim().replace(/^\//, "").replace(/\/$/, "");
+}
+
+/**
+ * A gitignore without `entry`, where `init`'s comment and line are still there
+ * exactly and one straight after the other, and nothing where they are not:
+ * a line the Target ignores under a comment of its own may be the Target's.
+ *
+ * The blank line `init` put between the entry and what came before goes with
+ * it, so a gitignore reads as it did before `init` wrote into it.
+ */
+export function withoutIgnoreEntry(
+  gitignore: string,
+  entry: IgnoredDirectory,
+): string | undefined {
+  const lines = gitignore.split("\n");
+  // The empty string after a last newline is no line of the file.
+  const ended = lines.at(-1) === "";
+  if (ended) lines.pop();
+
+  const at = lines.findIndex(
+    (line, index) => line === entry.comment && lines[index + 1] === entry.line,
+  );
+  if (at === -1) return undefined;
+  lines.splice(at, 2);
+  if (lines[at] === "" && (at === 0 || lines[at - 1] === "")) lines.splice(at, 1);
+  else if (at === lines.length && lines[at - 1] === "") lines.splice(at - 1, 1);
+
+  return lines.length === 0 ? "" : `${lines.join("\n")}${ended ? "\n" : ""}`;
+}
+
+/**
+ * A `CLAUDE.md` without the section `init` appends, where it is still there
+ * exactly and starts a line, and nothing where it is not: a section a human
+ * reworded is theirs, pointer or not. The blank line before it goes too.
+ */
+export function withoutClaudeSection(claude: string): string | undefined {
+  let at = claude.indexOf(CLAUDE_SECTION);
+  while (at > 0 && claude[at - 1] !== "\n") at = claude.indexOf(CLAUDE_SECTION, at + 1);
+  if (at === -1) return undefined;
+
+  let before = claude.slice(0, at);
+  let after = claude.slice(at + CLAUDE_SECTION.length);
+  if (after === "" || after.startsWith("\n")) {
+    if (before.endsWith("\n\n")) before = before.slice(0, -1);
+    else if (before === "") after = after.slice(1);
+  }
+  return `${before}${after}`;
 }
 
 /**
@@ -149,6 +201,19 @@ export const GH_NOT_INSTALLED = "`gh` is not installed";
 
 /** What the human does about it, which neither of them can do for them. */
 export const GH_INSTALL = "install the GitHub CLI from https://cli.github.com";
+
+/**
+ * What is wrong with a `gh` that cannot speak to GitHub, as `init` and `remove`
+ * both say it, and what the human does about it: only a `gh` that runs can be
+ * logged in.
+ */
+export const GH_FAILURE: Record<
+  Exclude<Authentication, "authenticated">,
+  { failure: string; remedy: string }
+> = {
+  unauthenticated: { failure: "`gh` is not authenticated", remedy: "run `gh auth login`" },
+  "not-installed": { failure: GH_NOT_INSTALLED, remedy: GH_INSTALL },
+};
 
 /**
  * Names a `gh` that cannot be run at all, and the install that comes before

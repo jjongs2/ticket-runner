@@ -18,6 +18,7 @@ Humans read all of these, so each stays short: one line of status, details folde
 | `squash-commit.txt` | the PR is squash-merged | none (commit message) |
 | `run-summary.txt` | a Run ends (terminal) | none |
 | `init-report.txt` | `ticket-runner init` finishes (terminal) | none |
+| `remove-report.txt` | `ticket-runner remove` takes the pipeline out of a Target, asks first, or says why it did not (terminal) | none |
 | `stop-report.txt` | `ticket-runner stop` asks a Run to stop, or says why it did not (terminal) | none |
 | `operator-skill.md` | `ticket-runner init` writes it into the Target as `.claude/skills/ticket-runner/SKILL.md` | none (a project skill) |
 | `version-notes.md` | a Version PR is opened, by the `cut-a-version` skill | none (a `CHANGELOG.md` section) |

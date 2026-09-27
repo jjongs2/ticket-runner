@@ -86,3 +86,28 @@ describe("the Lane count a Run is started with", () => {
     expect(USAGE).toMatch(/^ {2}--lanes <n> {2,}With `run`/m);
   });
 });
+
+describe("taking the pipeline out of a Target", () => {
+  it("reads `remove` as asking first, and `-y` or `--yes` as going ahead", () => {
+    expect(readCommandLine(["remove"])).toEqual({ kind: "remove", yes: false });
+    expect(readCommandLine(["remove", "-y"])).toEqual({ kind: "remove", yes: true });
+    expect(readCommandLine(["--yes", "remove"])).toEqual({ kind: "remove", yes: true });
+  });
+
+  it.each([["run"], ["ticket", "12"], ["init"], ["stop"]])(
+    "refuses `--yes` with `%s`, with the usage",
+    (...command) => {
+      for (const yes of ["-y", "--yes"]) {
+        const read = readCommandLine([...command, yes]);
+
+        expect(read.kind).toBe("refused");
+        expect(read.kind === "refused" && read.message).toMatch(/^`--yes` is for `remove` only/);
+      }
+    },
+  );
+
+  it("is documented in the usage in plain words", () => {
+    expect(USAGE).toMatch(/^ {2}ticket-runner remove {2,}Take the pipeline out of this repository\.$/m);
+    expect(USAGE).toMatch(/^ {2}-y, --yes {2,}With `remove`/m);
+  });
+});

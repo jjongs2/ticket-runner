@@ -19,9 +19,12 @@ export function slug(title: string): string {
   return (lastDash > 0 ? cut.slice(0, lastDash) : cut).replace(/-+$/, "");
 }
 
+/** Where every branch a Run creates lives, and nothing else branches. */
+export const AGENT_BRANCH_PREFIX = "agent/";
+
 /** `agent/<n>-<slug>`, the name reserved for pipeline Runs. */
 export function branchName(ticket: number, title: string): string {
-  return `agent/${ticket}-${slug(title)}`;
+  return `${AGENT_BRANCH_PREFIX}${ticket}-${slug(title)}`;
 }
 
 /** The gitignored worktree a Ticket is implemented in. */

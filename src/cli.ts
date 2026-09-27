@@ -1,3 +1,4 @@
+import { createInterface } from "node:readline/promises";
 import { ClaudeAgentRunner } from "./adapters/claude-agent-runner.js";
 import { GhTracker } from "./adapters/gh-tracker.js";
 import { GitWorkspace } from "./adapters/git-workspace.js";
@@ -6,6 +7,7 @@ import { pipelineRepository, pipelineVersion } from "./adapters/version.js";
 import { USAGE, readCommandLine } from "./command-line.js";
 import { ConfigError, loadConfig } from "./config.js";
 import { initTarget } from "./init.js";
+import { removeTarget } from "./remove.js";
 import { newRunId } from "./run-log.js";
 import { nestedRunRefusal } from "./stage-guard.js";
 import { startRun } from "./start.js";
@@ -16,7 +18,9 @@ import { requestStop } from "./stop.js";
  * taken at all — the Run never started, or `ticket <n>` named an issue a guard
  * refused. `init` reads them as its own: 0 every reported item passed, 1 one of
  * them is the human's to put right, 2 a Stage's shell was refused. `stop` reads
- * 0 as a Stop sent and 2 as no Run there was anything to ask.
+ * 0 as a Stop sent and 2 as no Run there was anything to ask. `remove` reads 0
+ * as everything gone or nothing to remove, 1 as a removal that failed, and 2 as
+ * refused before anything changed.
  */
 async function main(argv: string[]): Promise<number> {
   // First, before the repo, the config, `gh` or even `--help`: a Stage's shell
@@ -72,6 +76,24 @@ async function main(argv: string[]): Promise<number> {
     });
   }
 
+  if (commandLine.kind === "remove") {
+    const root = await findRepoRoot();
+    return removeTarget({
+      repoRoot: root,
+      version,
+      repository,
+      config: loadConfig(root, version),
+      tracker: new GhTracker({ cwd: root }),
+      workspace: new GitWorkspace(root),
+      yes: commandLine.yes,
+      // Asked of stdin, which is where the answer would come from.
+      interactive: process.stdin.isTTY === true,
+      ask,
+      runId: newRunId(),
+      command: ["ticket-runner", ...argv].join(" "),
+    });
+  }
+
   const repoRoot = await findRepoRoot();
   const config = loadConfig(repoRoot, version);
   return startRun({
@@ -93,6 +115,16 @@ async function main(argv: string[]): Promise<number> {
     // the Run was started.
     command: ["ticket-runner", ...argv].join(" "),
   });
+}
+
+/** Put a question to the human at the terminal, and give back what they typed. */
+async function ask(question: string): Promise<string> {
+  const terminal = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return await terminal.question(question);
+  } finally {
+    terminal.close();
+  }
 }
 
 try {

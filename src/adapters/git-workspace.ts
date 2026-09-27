@@ -1,6 +1,6 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { type Host, currentHost, sameHost } from "../host.js";
 import {
   LOCK_BRANCH,
@@ -25,10 +25,12 @@ import type {
   RebaseState,
   StateFile,
   TicketState,
+  TicketWorktree,
   Workspace,
   WorktreeFromRemote,
 } from "../ports/workspace.js";
 import {
+  STATE_BRANCH,
   readStateFile,
   stateFileContents,
   stateFileName,
@@ -47,12 +49,10 @@ const CONFLICT_MARKER = "^(<{7}|>{7}|\\|{7}) ";
 /** The two directories git keeps a rebase in, depending on which one it used. */
 const REBASE_DIRS = ["rebase-merge", "rebase-apply"];
 
-/**
- * The branch of the Target's remote that holds every Ticket's State, one file
- * per Ticket, and the transcripts of a handed-off Ticket's Stages beside it,
- * under the prefix the pipeline owns (ADR-0004).
- */
-export const STATE_BRANCH = "ticket-runner/state";
+export { STATE_BRANCH };
+
+/** The name every Ticket's worktree has under `.worktrees/`. */
+const TICKET_WORKTREE = /^ticket-\d+$/;
 
 /**
  * How many times a change to the state branch is tried, read again from the
@@ -160,10 +160,91 @@ export class GitWorkspace implements Workspace {
     await this.git(["worktree", "add", "--no-track", "-b", branch, path, from]);
   }
 
-  async removeWorktree({ path, branch }: WorktreeRef): Promise<void> {
+  async removeWorktree({ path, branch }: { path: string; branch?: string }): Promise<void> {
     await this.git(["worktree", "remove", "--force", path]);
     // A worktree directory left behind would block the next Run on this Ticket.
     rmSync(path, { recursive: true, force: true });
+    if (branch !== undefined) await this.git(["branch", "-D", branch]);
+  }
+
+  /**
+   * The worktrees git lists whose directory is still there, so one a human
+   * deleted by hand is left for {@link deleteBranch} to have git forget. Paths
+   * are compared resolved, and against the repo root's real path, which is the
+   * spelling git lists them in.
+   */
+  async ticketWorktrees(): Promise<TicketWorktree[]> {
+    const { stdout } = await this.git(["worktree", "list", "--porcelain"]);
+    const worktrees = resolve(realpathSync(this.repoRoot), ".worktrees");
+    const found: TicketWorktree[] = [];
+    for (const entry of stdout.split("\n\n")) {
+      const lines = entry.split("\n");
+      const listed = lines.find((line) => line.startsWith("worktree "))?.slice(9);
+      if (listed === undefined) continue;
+      const path = resolve(listed);
+      if (dirname(path) !== worktrees || !TICKET_WORKTREE.test(basename(path))) continue;
+      if (!existsSync(path)) continue;
+
+      const branch = lines
+        .find((line) => line.startsWith("branch refs/heads/"))
+        ?.slice("branch refs/heads/".length);
+      found.push({
+        path,
+        ...(branch === undefined ? {} : { branch }),
+        uncommitted: (await this.uncommittedPaths(path)).length > 0,
+        unpushed: await this.holdsUnpushed(path, branch),
+      });
+    }
+    return found;
+  }
+
+  /**
+   * Whether the worktree's tip has commits the remote lacks: measured against
+   * its own branch there when the remote has one, which is fetched first, and
+   * against every branch the remote has when it does not, so a branch nobody
+   * pushed still counts what it shares with the base branch as pushed.
+   */
+  private async holdsUnpushed(path: string, branch: string | undefined): Promise<boolean> {
+    const tip = (await execOrThrow("git", ["rev-parse", "HEAD"], { cwd: path })).stdout.trim();
+    const tracking = branch === undefined ? undefined : await this.fetchBranch(branch);
+    const { stdout } = await this.git([
+      "rev-list",
+      "--count",
+      tip,
+      "--not",
+      tracking ?? `--remotes=${this.remote}`,
+    ]);
+    return Number(stdout.trim()) > 0;
+  }
+
+  async listBranches(prefix: string): Promise<string[]> {
+    const { stdout } = await this.git([
+      "for-each-ref",
+      "--format=%(refname)",
+      `refs/heads/${prefix}`.replace(/\/$/, ""),
+    ]);
+    return branchNames(stdout.split("\n"), prefix);
+  }
+
+  async listRemoteBranches(prefix: string): Promise<string[]> {
+    const { stdout } = await this.git([
+      "ls-remote",
+      "--heads",
+      this.remote,
+      `refs/heads/${prefix}*`,
+    ]);
+    return branchNames(
+      stdout.split("\n").map((line) => line.split("\t")[1] ?? ""),
+      prefix,
+    );
+  }
+
+  /**
+   * Git is asked to forget a worktree whose directory a human deleted first:
+   * it still counts the branch as checked out there, and refuses the delete.
+   */
+  async deleteBranch(branch: string): Promise<void> {
+    await this.git(["worktree", "prune"]);
     await this.git(["branch", "-D", branch]);
   }
 
@@ -731,7 +812,7 @@ export class GitWorkspace implements Workspace {
         if (standing !== "abandoned") {
           return { outcome: "held", holder, onAnotherHost: standing === "elsewhere" };
         }
-        if (!overAbandoned) return { outcome: "abandoned" };
+        if (!overAbandoned) return { outcome: "abandoned", holder };
       }
 
       const recorded = this.holderFor(claim);
@@ -826,6 +907,17 @@ export class GitWorkspace implements Workspace {
   private tryGit(args: string[]) {
     return this.mainCheckout.take(() => exec("git", args, { cwd: this.repoRoot }));
   }
+}
+
+/**
+ * The branch names among full ref names, those under `prefix` alone: a pattern
+ * git matched on a path boundary can still name a ref the caller did not mean.
+ */
+function branchNames(refs: string[], prefix: string): string[] {
+  return refs
+    .map((ref) => ref.trim())
+    .filter((ref) => ref.startsWith(`refs/heads/${prefix}`))
+    .map((ref) => ref.slice("refs/heads/".length));
 }
 
 /**

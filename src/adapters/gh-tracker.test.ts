@@ -469,6 +469,47 @@ describe("writing", () => {
     ).rejects.toThrow(/HTTP 403/);
   });
 
+  it("deletes a label through REST, and says it did", async () => {
+    const gh = tracker(ok(""));
+
+    expect(await gh.deleteLabel("in progress")).toBe(true);
+    expect(calls[0]).toEqual([
+      "api",
+      "--method",
+      "DELETE",
+      "repos/{owner}/{repo}/labels/in%20progress",
+    ]);
+  });
+
+  it("takes a label GitHub does not have as not deleted, rather than failing", async () => {
+    const gh = tracker(failedExecution("gh: Not Found (HTTP 404)"));
+
+    expect(await gh.deleteLabel("in-progress")).toBe(false);
+  });
+
+  it("still fails a label delete GitHub refused", async () => {
+    const gh = tracker(failedExecution("gh: Resource not accessible by integration (HTTP 403)"));
+
+    await expect(gh.deleteLabel("in-progress")).rejects.toThrow(/HTTP 403/);
+  });
+
+  it("lists the open pull requests by the branch each would merge", async () => {
+    const gh = tracker(ok(JSON.stringify([{ number: 40, head: { ref: "agent/12-x" } }])));
+
+    expect(await gh.openPullRequests()).toEqual([{ number: 40, head: "agent/12-x" }]);
+    expect(calls[0]).toEqual([
+      "api",
+      "--paginate",
+      "--method",
+      "GET",
+      "repos/{owner}/{repo}/pulls",
+      "-F",
+      "per_page=100",
+      "-f",
+      "state=open",
+    ]);
+  });
+
   it("assigns, unassigns and moves labels through REST", async () => {
     const gh = tracker(ok(assigned("octocat")), ok("{}"), ok("[]"), ok("[]"));
     await gh.assign(2, "octocat");
