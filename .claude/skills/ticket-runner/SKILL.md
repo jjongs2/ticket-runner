@@ -1,25 +1,25 @@
 ---
-name: agent-pipeline
-description: Operate agent-pipeline on this repository from a Claude Code cloud session — ready the Host, start a Run or one Ticket in the background, report what it prints, pass on a Stop, and release a Run lock a vanished Host left behind. Use when the human asks to run the pipeline ("run it"), to work one Ticket, to stop the Run, or to release its lock. Never from a Stage.
+name: ticket-runner
+description: Operate ticket-runner on this repository from a Claude Code cloud session — ready the Host, start a Run or one Ticket in the background, report what it prints, pass on a Stop, and release a Run lock a vanished Host left behind. Use when the human asks to run the pipeline ("run it"), to work one Ticket, to stop the Run, or to release its lock. Never from a Stage.
 ---
 
-# Operating agent-pipeline
+# Operating ticket-runner
 
-You are the Operator: the Claude session a human opened on this repository to run `agent-pipeline` for them, and to watch and steer it from the app. You start the Run, report what it prints, pass on a Stop, and release a lock when asked. Nothing else. The Run does the work, and everything else a human wants of a Ticket goes through the board.
+You are the Operator: the Claude session a human opened on this repository to run `ticket-runner` for them, and to watch and steer it from the app. You start the Run, report what it prints, pass on a Stop, and release a lock when asked. Nothing else. The Run does the work, and everything else a human wants of a Ticket goes through the board.
 
-If `AGENT_PIPELINE_STAGE` is set in your shell, you are a Stage of a Run, not an Operator. Stop here and use none of this.
+If `TICKET_RUNNER_STAGE` is set in your shell, you are a Stage of a Run, not an Operator. Stop here and use none of this.
 
 ## Ready the Host
 
 Install only what this Host does not already have. What the cloud environment's setup script installed is used as it is, whichever Version it is.
 
-1. The pipeline. If `agent-pipeline --version` answers, use that copy. Otherwise read the Version on the first line of `docs/agents/pipeline-conventions.md`, the `<number>` in `<!-- agent-pipeline:version <number> -->`, and install that Version:
+1. The pipeline. If `ticket-runner --version` answers, use that copy. Otherwise read the Version on the first line of `docs/agents/pipeline-conventions.md`, the `<number>` in `<!-- ticket-runner:version <number> -->`, and install that Version:
 
    ```bash
-   npm install -g "github:jjongs2/agent-pipeline#v<number>"
+   npm install -g "github:jjongs2/ticket-runner#v<number>"
    ```
 
-   If the first line carries no Version, install nothing and tell the human to run `agent-pipeline init` on this repository from a workstation.
+   If the first line carries no Version, install nothing and tell the human to run `ticket-runner init` on this repository from a workstation.
 
 2. The skills plugin. If `claude plugin list` lists `mattpocock-skills`, it is there. Otherwise register the official marketplace first, then install the plugin from it:
 
@@ -45,9 +45,9 @@ Tell the human in one line which of these you installed, this repository's depen
 
 Start what the human asked for as a background command, so the session stays free to answer them while it runs:
 
-- `agent-pipeline run` to work through every Ticket that is ready.
-- `agent-pipeline ticket <n>` when the human names one Ticket.
-- `agent-pipeline run --lanes <count>` when the human asks for a number of Tickets at once. Pass it only when they do; otherwise the repository's own config decides. `ticket` takes no count.
+- `ticket-runner run` to work through every Ticket that is ready.
+- `ticket-runner ticket <n>` when the human names one Ticket.
+- `ticket-runner run --lanes <count>` when the human asks for a number of Tickets at once. Pass it only when they do; otherwise the repository's own config decides. `ticket` takes no count.
 
 Start one at a time. While a Run of yours is running, start no other.
 
@@ -59,14 +59,14 @@ When the Run ends, report its summary and what its exit code means: `0` nothing 
 
 ## Stop
 
-When the human asks for a Stop, send the Run SIGTERM by running `agent-pipeline stop`, which signals the Run this Host holds the lock for. Report what it prints, then keep reporting the Run: a Stop finishes the Tickets the Run already holds and takes no more, so the Run ends by itself with its summary. A `ticket` ends with its one Ticket whatever happens, so `stop` sends it nothing and says so; tell the human that it is finishing that Ticket. Never end a Run any other way. SIGINT or SIGKILL ends it in the middle of a Ticket.
+When the human asks for a Stop, send the Run SIGTERM by running `ticket-runner stop`, which signals the Run this Host holds the lock for. Report what it prints, then keep reporting the Run: a Stop finishes the Tickets the Run already holds and takes no more, so the Run ends by itself with its summary. A `ticket` ends with its one Ticket whatever happens, so `stop` sends it nothing and says so; tell the human that it is finishing that Ticket. Never end a Run any other way. SIGINT or SIGKILL ends it in the middle of a Ticket.
 
 ## Release a lock another Host left
 
-A Run is refused when a Run on another Host holds the lock on the `agent-pipeline/lock` branch. Report the refusal, which names that Host, its Run and when it started, and wait. Release the lock only when the human asks you to and no Run of yours is running. Then commit a free `lock.json` on top of the tip you read, with a lease on that tip, so a Run that took the lock meanwhile keeps it:
+A Run is refused when a Run on another Host holds the lock on the `ticket-runner/lock` branch. Report the refusal, which names that Host, its Run and when it started, and wait. Release the lock only when the human asks you to and no Run of yours is running. Then commit a free `lock.json` on top of the tip you read, with a lease on that tip, so a Run that took the lock meanwhile keeps it:
 
 ```bash
-git fetch origin agent-pipeline/lock
+git fetch origin ticket-runner/lock
 tip=$(git rev-parse FETCH_HEAD)
 git show "$tip:lock.json"
 index=$(mktemp -u)
@@ -76,7 +76,7 @@ GIT_INDEX_FILE=$index git update-index --add --cacheinfo "100644,$blob,lock.json
 tree=$(GIT_INDEX_FILE=$index git write-tree)
 rm -f "$index"
 free=$(git commit-tree --no-gpg-sign "$tree" -p "$tip" -m "Free")
-git push --no-verify --force-with-lease="refs/heads/agent-pipeline/lock:$tip" origin "$free:refs/heads/agent-pipeline/lock"
+git push --no-verify --force-with-lease="refs/heads/ticket-runner/lock:$tip" origin "$free:refs/heads/ticket-runner/lock"
 ```
 
 Check that the `lock.json` it shows names the Host the refusal named before you push. If the push is refused, the lock moved: read it again and tell the human who holds it now. Delete nothing, on the remote or here.

@@ -4,4 +4,4 @@ node_modules
 .worktrees/
 
 # Run logs, transcripts and state.
-.agent-pipeline/
+.ticket-runner/

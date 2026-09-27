@@ -111,7 +111,7 @@ describe("asking a Run to stop", () => {
       holder: {
         host: THIS_HOST,
         pid: 4321,
-        command: "agent-pipeline run",
+        command: "ticket-runner run",
         runId: "2026-09-17T09-00-00-000",
         startedAt: "2026-09-17T09:00:00.000Z",
         ...overrides,
@@ -125,7 +125,7 @@ describe("asking a Run to stop", () => {
     if (workspace.lock !== undefined) workspace.lock.running = false;
   }
 
-  /** One `agent-pipeline stop`, with the lock and the signal faked. */
+  /** One `ticket-runner stop`, with the lock and the signal faked. */
   async function stop(options: Partial<StopRequest> = {}) {
     const out: string[] = [];
     const err: string[] = [];
@@ -148,7 +148,7 @@ describe("asking a Run to stop", () => {
     expect(signalled).toEqual([4321]);
     expect(code).toBe(0);
     expect(lines).toHaveLength(2);
-    expect(lines[0]).toContain("`agent-pipeline run`");
+    expect(lines[0]).toContain("`ticket-runner run`");
     expect(lines[0]).toContain("pid 4321");
     expect(lines[0]).toContain("2026-09-17T09-00-00-000");
   });
@@ -179,7 +179,7 @@ describe("asking a Run to stop", () => {
     expect(code).toBe(2);
     expect(signalled).toEqual([]);
     expect(err).toContain("No Run to stop");
-    expect(err).toContain("`agent-pipeline/lock` branch");
+    expect(err).toContain("`ticket-runner/lock` branch");
     expect(out).toBe("");
   });
 
@@ -203,7 +203,7 @@ describe("asking a Run to stop", () => {
     expect(code).toBe(2);
     expect(signalled).toEqual([]);
     expect(out).toBe("");
-    expect(err).toContain("`agent-pipeline run`");
+    expect(err).toContain("`ticket-runner run`");
     expect(err).toContain("run 2026-09-17T09-00-00-000");
     expect(err).toContain("the cloud Host of session `session_01other`");
     expect(err).toContain("started 2026-09-17T09:00:00.000Z");
@@ -234,19 +234,19 @@ describe("asking a Run to stop", () => {
   });
 
   it("leaves a `ticket <n>` Run alone, because it ends with its Ticket anyway", async () => {
-    lock({ command: "agent-pipeline ticket 5" });
+    lock({ command: "ticket-runner ticket 5" });
 
     const { code, signalled, err } = await stop();
 
     expect(code).toBe(2);
     expect(signalled).toEqual([]);
-    expect(err).toContain("`agent-pipeline ticket 5`");
+    expect(err).toContain("`ticket-runner ticket 5`");
     expect(err).toContain("Ticket");
   });
 
   it("asks a holder whose command line names no command, rather than passing it over", async () => {
     // What a lock file with no command line at all reads back as.
-    lock({ command: "agent-pipeline" });
+    lock({ command: "ticket-runner" });
 
     const { code, signalled } = await stop();
 

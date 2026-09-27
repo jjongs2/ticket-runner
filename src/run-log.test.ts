@@ -17,7 +17,7 @@ const RUN_ID = "2026-09-17T09-00-00-000";
 let repoRoot: string;
 
 beforeEach(() => {
-  repoRoot = mkdtempSync(join(tmpdir(), "agent-pipeline-run-log-"));
+  repoRoot = mkdtempSync(join(tmpdir(), "ticket-runner-run-log-"));
 });
 
 afterEach(() => {
@@ -27,7 +27,7 @@ afterEach(() => {
 describe("where a Run writes", () => {
   it("gives each Run a directory, and each of its Tickets one inside it", () => {
     expect(runLogDir(repoRoot, RUN_ID)).toBe(
-      join(repoRoot, ".agent-pipeline", "runs", RUN_ID),
+      join(repoRoot, ".ticket-runner", "runs", RUN_ID),
     );
     expect(stageLogDir(repoRoot, RUN_ID, 8)).toBe(join(runLogDir(repoRoot, RUN_ID), "8"));
     expect(retryLogDir(repoRoot, RUN_ID, 8)).toBe(join(stageLogDir(repoRoot, RUN_ID, 8), "retry"));

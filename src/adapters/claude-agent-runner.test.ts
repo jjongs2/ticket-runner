@@ -63,7 +63,7 @@ function request(overrides: Partial<StageRequest> = {}): StageRequest {
 }
 
 beforeEach(() => {
-  logDir = mkdtempSync(join(tmpdir(), "agent-pipeline-logs-"));
+  logDir = mkdtempSync(join(tmpdir(), "ticket-runner-logs-"));
   calls = [];
 });
 
@@ -164,10 +164,10 @@ describe("the command line", () => {
 
   it("marks the child environment with the Stage, so it cannot start a nested Run", async () => {
     await runner(execution({ stdout: SUCCESS })).run(request());
-    expect(calls[0]?.options.extraEnv).toEqual({ AGENT_PIPELINE_STAGE: "implement" });
+    expect(calls[0]?.options.extraEnv).toEqual({ TICKET_RUNNER_STAGE: "implement" });
 
     await runner(execution({ stdout: SUCCESS })).run(request({ stage: "verify" }));
-    expect(calls[1]?.options.extraEnv).toEqual({ AGENT_PIPELINE_STAGE: "verify" });
+    expect(calls[1]?.options.extraEnv).toEqual({ TICKET_RUNNER_STAGE: "verify" });
   });
 
   it("passes the JSON schema only when the Stage asks for structured output", async () => {
@@ -184,7 +184,7 @@ describe("the command line", () => {
   it("reports the exact command line a human could paste", async () => {
     const result = await runner(execution({ stdout: SUCCESS })).run(request());
 
-    expect(result.commandLine).toMatch(/^AGENT_PIPELINE_STAGE=implement claude --print/);
+    expect(result.commandLine).toMatch(/^TICKET_RUNNER_STAGE=implement claude --print/);
     expect(result.commandLine).toContain("'/mattpocock-skills:implement https://example.com/issues/2'");
   });
 });

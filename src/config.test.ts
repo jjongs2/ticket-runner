@@ -8,7 +8,7 @@ import { CONFIG_FILENAME, ConfigError, loadConfig } from "./config.js";
 const VERSION = "0.4.0+331d79c";
 
 function repoWith(files: Record<string, string>): string {
-  const root = mkdtempSync(join(tmpdir(), "agent-pipeline-config-"));
+  const root = mkdtempSync(join(tmpdir(), "ticket-runner-config-"));
   for (const [name, contents] of Object.entries(files)) {
     writeFileSync(join(root, name), contents);
   }
@@ -277,14 +277,14 @@ describe("a key this install does not know", () => {
     expect(message).toContain("retries");
     expect(
       message.endsWith(
-        `Refused by agent-pipeline ${VERSION}, so the key may be newer than this install.`,
+        `Refused by ticket-runner ${VERSION}, so the key may be newer than this install.`,
       ),
     ).toBe(true);
   });
 
   it("says the same of a key nested inside one the schema knows", () => {
     expect(refusal({ gates: { flakes: true } })).toContain(
-      `Refused by agent-pipeline ${VERSION}`,
+      `Refused by ticket-runner ${VERSION}`,
     );
   });
 

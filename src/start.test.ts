@@ -42,12 +42,12 @@ let runner: FakeAgentRunner;
 let workspace: FakeWorkspace;
 
 beforeEach(() => {
-  repoRoot = mkdtempSync(join(tmpdir(), "agent-pipeline-start-"));
+  repoRoot = mkdtempSync(join(tmpdir(), "ticket-runner-start-"));
   // A Target as `init` leaves it: its own package.json, the two ignored
   // directories, the conventions document, a `CLAUDE.md` pointing at it and
   // the Operator's skill.
   write("package.json", JSON.stringify({ scripts: { test: "vitest run" } }));
-  write(".gitignore", ".worktrees/\n.agent-pipeline/\n");
+  write(".gitignore", ".worktrees/\n.ticket-runner/\n");
   write(CONVENTIONS_PATH, conventionsDoc(VERSION));
   write("CLAUDE.md", CLAUDE_SECTION);
   write(OPERATOR_SKILL_PATH, operatorSkill());
@@ -69,7 +69,7 @@ function write(path: string, contents: string): void {
 }
 
 /** The pipeline's own repository, as the CLI reads it off the package. */
-const REPOSITORY = "jjongs2/agent-pipeline";
+const REPOSITORY = "jjongs2/ticket-runner";
 
 /** One invocation, as the CLI makes it once the arguments are understood. */
 async function start(
@@ -89,7 +89,7 @@ async function start(
     runId: "run-1",
     version: VERSION,
     ...(repository === undefined ? {} : { repository }),
-    command: "agent-pipeline run",
+    command: "ticket-runner run",
     log: (line) => out.push(line),
     error: (line) => err.push(line),
     ...(signals === undefined ? {} : { signals }),
@@ -104,13 +104,13 @@ function lockTaken(): boolean {
 
 describe("a Target init has not set up", () => {
   it("refuses a gitignore missing one of the pipeline's directories", async () => {
-    write(".gitignore", "node_modules/\n.agent-pipeline/\n");
+    write(".gitignore", "node_modules/\n.ticket-runner/\n");
 
     const { code, err } = await start();
 
     expect(code).toBe(2);
     expect(err).toContain(".worktrees/");
-    expect(err).toContain("agent-pipeline init");
+    expect(err).toContain("ticket-runner init");
     expect(lockTaken()).toBe(false);
     // No Candidate read, and nothing written on GitHub either.
     expect(tracker.calls).toEqual([]);
@@ -123,7 +123,7 @@ describe("a Target init has not set up", () => {
 
     expect(code).toBe(2);
     expect(err).toContain("ready-for-human");
-    expect(err).toContain("agent-pipeline init");
+    expect(err).toContain("ticket-runner init");
     expect(tracker.createdLabels).toEqual([]);
     expect(lockTaken()).toBe(false);
     expect(tracker.calls).toEqual([]);
@@ -136,7 +136,7 @@ describe("a Target init has not set up", () => {
 
     expect(code).toBe(2);
     expect(err).toContain(CONVENTIONS_PATH);
-    expect(err).toContain("agent-pipeline init");
+    expect(err).toContain("ticket-runner init");
     expect(lockTaken()).toBe(false);
     expect(tracker.calls).toEqual([]);
   });
@@ -148,20 +148,20 @@ describe("a Target init has not set up", () => {
 
     expect(code).toBe(2);
     expect(err).toContain("CLAUDE.md");
-    expect(err).toContain("agent-pipeline init");
+    expect(err).toContain("ticket-runner init");
     expect(lockTaken()).toBe(false);
     expect(tracker.calls).toEqual([]);
   });
 
   it("refuses a conventions document carrying no Version stamp", async () => {
-    write(CONVENTIONS_PATH, "# agent-pipeline conventions\n\nFrom an older pipeline.\n");
+    write(CONVENTIONS_PATH, "# ticket-runner conventions\n\nFrom an older pipeline.\n");
 
     const { code, err } = await start();
 
     expect(code).toBe(2);
     expect(err).toContain(CONVENTIONS_PATH);
     expect(err).toContain("no Version");
-    expect(err).toContain("agent-pipeline init");
+    expect(err).toContain("ticket-runner init");
     expect(lockTaken()).toBe(false);
     expect(tracker.calls).toEqual([]);
   });
@@ -173,7 +173,7 @@ describe("a Target init has not set up", () => {
 
     expect(code).toBe(2);
     expect(err).toContain("does not delete a pull request's branch");
-    expect(err).toContain("agent-pipeline init");
+    expect(err).toContain("ticket-runner init");
     expect(lockTaken()).toBe(false);
     expect(tracker.calls).toEqual([]);
   });
@@ -185,7 +185,7 @@ describe("a Target init has not set up", () => {
 
     expect(code).toBe(2);
     expect(err).toBe(
-      "This Target is not set up: `gh` is not installed — install the GitHub CLI from https://cli.github.com first. Run `agent-pipeline init` here and start again; a Run puts nothing in place itself.",
+      "This Target is not set up: `gh` is not installed — install the GitHub CLI from https://cli.github.com first. Run `ticket-runner init` here and start again; a Run puts nothing in place itself.",
     );
     expect(lockTaken()).toBe(false);
   });
@@ -218,13 +218,13 @@ describe("a Target init has not set up", () => {
 
     expect(code).toBe(2);
     expect(err).toContain(OPERATOR_SKILL_PATH);
-    expect(err).toContain("agent-pipeline init");
+    expect(err).toContain("ticket-runner init");
     expect(lockTaken()).toBe(false);
     expect(tracker.calls).toEqual([]);
   });
 
   it("asks only whether the Operator's skill is there, never what it says", async () => {
-    write(OPERATOR_SKILL_PATH, "---\nname: agent-pipeline\n---\n\nAn older copy.\n");
+    write(OPERATOR_SKILL_PATH, "---\nname: ticket-runner\n---\n\nAn older copy.\n");
     tracker.addIssue({ number: 4 });
 
     const { code } = await start();
@@ -268,7 +268,7 @@ describe("a Target init has not set up", () => {
   });
 
   it("takes a gitignore line however the Target punctuated it", async () => {
-    write(".gitignore", "/.worktrees\n.agent-pipeline\n");
+    write(".gitignore", "/.worktrees\n.ticket-runner\n");
     tracker.addIssue({ number: 4 });
 
     const { code } = await start();
@@ -284,7 +284,7 @@ describe("a Target init has not set up", () => {
 
     expect(code).toBe(2);
     expect(err).toContain(CONVENTIONS_PATH);
-    expect(err).toContain("agent-pipeline init");
+    expect(err).toContain("ticket-runner init");
     expect(lockTaken()).toBe(false);
     expect(tracker.calls).toEqual([]);
   });
@@ -309,21 +309,21 @@ describe("a Target init has not set up", () => {
  */
 describe("a Target with State files left in its checkout", () => {
   it("refuses to start, naming the Tickets they belong to, and takes nothing", async () => {
-    write(".agent-pipeline/state/ticket-9.json", "{}");
-    write(".agent-pipeline/state/ticket-4.json", "{}");
+    write(".ticket-runner/state/ticket-9.json", "{}");
+    write(".ticket-runner/state/ticket-4.json", "{}");
     tracker.addIssue({ number: 6 });
 
     const { code, err } = await start();
 
     expect(code).toBe(2);
     expect(err).toContain("#4, #9");
-    expect(err).toContain(join(".agent-pipeline", "state"));
+    expect(err).toContain(join(".ticket-runner", "state"));
     expect(lockTaken()).toBe(false);
     expect(tracker.calls).toEqual([]);
   });
 
   it("refuses `ticket <n>` too", async () => {
-    write(".agent-pipeline/state/ticket-4.json", "{}");
+    write(".ticket-runner/state/ticket-4.json", "{}");
     tracker.addIssue({ number: 4 });
 
     const { code, err } = await start({ command: "ticket", ticket: 4 });
@@ -334,7 +334,7 @@ describe("a Target with State files left in its checkout", () => {
   });
 
   it("starts as usual once the directory holds no Ticket's State", async () => {
-    write(".agent-pipeline/state/notes.txt", "a human's note");
+    write(".ticket-runner/state/notes.txt", "a human's note");
     tracker.addIssue({ number: 6 });
 
     const { code } = await start();
@@ -422,7 +422,7 @@ describe("the Run lock", () => {
   const holder = {
     host: THIS_HOST,
     pid: 4321,
-    command: "agent-pipeline run",
+    command: "ticket-runner run",
     runId: "run-0",
     startedAt: "2026-09-17T09:00:00.000Z",
   };
@@ -434,7 +434,7 @@ describe("the Run lock", () => {
     const { code, err } = await start();
 
     expect(code).toBe(2);
-    expect(err).toContain("`agent-pipeline run`");
+    expect(err).toContain("`ticket-runner run`");
     expect(err).toContain("pid 4321");
     expect(workspace.lock).toEqual({ holder, running: true });
     expect(tracker.calls).not.toContain("assign:4:pipeline-user");
@@ -465,7 +465,7 @@ describe("the Run lock", () => {
       host: THIS_HOST,
       pid: process.pid,
       runId: "run-1",
-      command: "agent-pipeline run",
+      command: "ticket-runner run",
     });
   });
 
@@ -480,7 +480,7 @@ describe("the Run lock", () => {
     expect(code).toBe(0);
     expect(out).toContain("merged   #4");
     expect(err).toContain("could not reach origin");
-    expect(err).toContain("`agent-pipeline/lock`");
+    expect(err).toContain("`ticket-runner/lock`");
   });
 
   describe("held from another Host", () => {
@@ -505,7 +505,7 @@ describe("the Run lock", () => {
       const { err } = await start();
 
       expect(err).toContain("Operator");
-      expect(err).toContain("free tip to the `agent-pipeline/lock` branch");
+      expect(err).toContain("free tip to the `ticket-runner/lock` branch");
     });
 
     it("never takes it over, whatever this Host's process table says", async () => {
@@ -537,7 +537,7 @@ describe("the Run lock", () => {
 describe("the Version a Run ran", () => {
   /** What the file beside this Run's transcripts says, if it is there at all. */
   function recorded(): string | undefined {
-    const path = join(repoRoot, ".agent-pipeline", "runs", "run-1", "version.txt");
+    const path = join(repoRoot, ".ticket-runner", "runs", "run-1", "version.txt");
     return existsSync(path) ? readFileSync(path, "utf8") : undefined;
   }
 
@@ -566,7 +566,7 @@ describe("the Version a Run ran", () => {
   it("heads the summary the Run ends with", async () => {
     const { lines } = await start();
 
-    expect(lines.at(-1)?.split("\n")[1]).toBe(`agent-pipeline ${VERSION} run run-1 · 0m`);
+    expect(lines.at(-1)?.split("\n")[1]).toBe(`ticket-runner ${VERSION} run run-1 · 0m`);
   });
 
   it("is the same string the Progress comment on its Ticket carries", async () => {
@@ -576,7 +576,7 @@ describe("the Version a Run ran", () => {
 
     const progress = tracker.updatedComments.at(-1)?.body ?? "";
     expect(progress.split("\n")[1]).toBe(
-      `**agent-pipeline** \`${VERSION}\` · run \`run-1\` · \`agent/4-ticket-4\``,
+      `**ticket-runner** \`${VERSION}\` · run \`run-1\` · \`agent/4-ticket-4\``,
     );
   });
 });
@@ -587,7 +587,7 @@ describe("the Run log", () => {
 
     const { lines } = await start();
 
-    expect(lines[0]).toBe("agent-pipeline run run-1 · 1 lane");
+    expect(lines[0]).toBe("ticket-runner run run-1 · 1 lane");
   });
 
   it("names a configured Lane count in the plural", async () => {
@@ -596,7 +596,7 @@ describe("the Run log", () => {
 
     const { lines } = await start();
 
-    expect(lines[0]).toBe("agent-pipeline run run-1 · 3 lanes");
+    expect(lines[0]).toBe("ticket-runner run run-1 · 3 lanes");
   });
 
   it("names the Lane count the Run was started with, whatever the config says", async () => {
@@ -605,7 +605,7 @@ describe("the Run log", () => {
 
     const { lines } = await start({ command: "run", lanes: 2 });
 
-    expect(lines[0]).toBe("agent-pipeline run run-1 · 2 lanes");
+    expect(lines[0]).toBe("ticket-runner run run-1 · 2 lanes");
   });
 
   it("names the Ticket rather than a Lane count for `ticket <n>`", async () => {
@@ -614,7 +614,7 @@ describe("the Run log", () => {
 
     const { lines } = await start({ command: "ticket", ticket: 4 });
 
-    expect(lines[0]).toBe("agent-pipeline run run-1 · #4");
+    expect(lines[0]).toBe("ticket-runner run run-1 · #4");
   });
 
   it("starts every line between the opening and the summary with a Ticket number", async () => {
@@ -716,12 +716,12 @@ describe("what a Run says about another Version", () => {
     const { lines, out } = await start({ command: "run" }, undefined, REPOSITORY);
 
     // Straight after the opening line, and again above the summary's header.
-    expect(lines[0]).toContain("agent-pipeline run run-1");
+    expect(lines[0]).toContain("ticket-runner run run-1");
     expect(lines[1]).toContain("0.5.0");
     expect(lines[1]).toContain("0.4.0");
     const summary = (lines.at(-1) ?? "").trim().split("\n");
     expect(summary[0]).toBe(lines[1]);
-    expect(summary[1]).toContain(`agent-pipeline ${VERSION} run run-1`);
+    expect(summary[1]).toContain(`ticket-runner ${VERSION} run run-1`);
   });
 
   it("says it once to `ticket <n>` as well", async () => {
@@ -782,7 +782,7 @@ describe("what a Run says about the Target's conventions document", () => {
 
     expect(err).toContain("warning:");
     expect(err).toContain("0.3.0");
-    expect(err).toContain("agent-pipeline init");
+    expect(err).toContain("ticket-runner init");
     expect(err.split("\n").filter((line) => line.includes(CONVENTIONS_PATH))).toHaveLength(1);
     // Warned, and then the Run did exactly what it came for.
     expect(out).toContain("merged   #4");
@@ -797,7 +797,7 @@ describe("what a Run says about the Target's conventions document", () => {
 
     expect(err).toContain("0.5.0");
     expect(err).toContain("upgrade");
-    expect(err).not.toContain("agent-pipeline init");
+    expect(err).not.toContain("ticket-runner init");
     expect(out).toContain("merged   #4");
     expect(code).toBe(0);
   });

@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
  */
 
 /** Where the skill goes in a Target, relative to the Target's root. */
-export const OPERATOR_SKILL_PATH = ".claude/skills/agent-pipeline/SKILL.md";
+export const OPERATOR_SKILL_PATH = ".claude/skills/ticket-runner/SKILL.md";
 
 /** The skill as {@link OPERATOR_SKILL_PATH} must contain it. */
 export function operatorSkill(): string {

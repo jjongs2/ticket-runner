@@ -18,7 +18,7 @@ function holder(overrides: Partial<LockHolder> = {}): LockHolder {
   return {
     host: HERE,
     pid: 4321,
-    command: "agent-pipeline run",
+    command: "ticket-runner run",
     runId: "run-1",
     startedAt: "2026-09-17T09:00:00.000Z",
     ...overrides,
@@ -65,7 +65,7 @@ describe("the lock file", () => {
 describe("the lock commit's message", () => {
   it("names the Run and the Host holding the Target", () => {
     expect(lockCommitMessage(holder({ host: CLOUD }))).toBe(
-      "Held by run run-1 on the cloud Host of session `session_01abc`: agent-pipeline run",
+      "Held by run run-1 on the cloud Host of session `session_01abc`: ticket-runner run",
     );
   });
 
@@ -132,7 +132,7 @@ describe("lockHeldMessage", () => {
   it("names the command, run and pid of a Run on this Host, and says to wait", () => {
     const message = lockHeldMessage({ holder: holder(), onAnotherHost: false });
 
-    expect(message).toContain("`agent-pipeline run`");
+    expect(message).toContain("`ticket-runner run`");
     expect(message).toContain("run run-1");
     expect(message).toContain("pid 4321");
     expect(message).toContain("Wait for it to finish");
@@ -145,7 +145,7 @@ describe("lockHeldMessage", () => {
     expect(message).toContain("run run-1");
     expect(message).toContain("started 2026-09-17T09:00:00.000Z");
     expect(message).toContain("through an Operator");
-    expect(message).toContain("free tip to the `agent-pipeline/lock` branch");
+    expect(message).toContain("free tip to the `ticket-runner/lock` branch");
     expect(message).toContain(FREE_LOCK);
     expect(message).not.toContain("pid");
   });

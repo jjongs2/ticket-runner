@@ -127,7 +127,7 @@ describe("routing a Note that names a Ticket", () => {
     expect(tracker.comments).toEqual([
       {
         issue: 7,
-        body: "<!-- agent-pipeline:note -->\nFrom #10 implement\n\n**the help drifts**\n",
+        body: "<!-- ticket-runner:note -->\nFrom #10 implement\n\n**the help drifts**\n",
       },
     ]);
   });
@@ -189,7 +189,7 @@ describe("routing a Note that names no Ticket", () => {
       {
         issue: OPENED,
         body:
-          "<!-- agent-pipeline:note -->\nFrom #10 implement\n\n" +
+          "<!-- ticket-runner:note -->\nFrom #10 implement\n\n" +
           "**Nothing cleans up abandoned worktrees. A Run leaks one per hand-off.**\n",
       },
     ]);

@@ -21,7 +21,7 @@ import type { IssueComment, Tracker } from "./ports/tracker.js";
 import { findMarkedComment } from "./templates.js";
 
 /** How the pipeline finds its own progress comment again. */
-export const PROGRESS_MARKER = "<!-- agent-pipeline:progress -->";
+export const PROGRESS_MARKER = "<!-- ticket-runner:progress -->";
 
 /**
  * What a row is about. Named after the lifecycle step rather than the Stage, for
@@ -65,7 +65,7 @@ export interface ProgressCommentBody {
 }
 
 /** Opens every section, and is how one is told from the table above it. */
-const SECTION_HEADER = "**agent-pipeline**";
+const SECTION_HEADER = "**ticket-runner**";
 
 /** How a section's header names its Run, which is how a Run finds its own. */
 function runLabel(runId: string): string {

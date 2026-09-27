@@ -1,4 +1,4 @@
-<!-- agent-pipeline:note -->
+<!-- ticket-runner:note -->
 From #<origin> <stage>
 
 **<summary>**
@@ -22,7 +22,7 @@ wrote it.
 
 `<origin>` is the Ticket whose Stage made the finding and `<stage>` is that
 Stage's name, so the transcript that produced the Note can be found under
-`.agent-pipeline/runs/`.
+`.ticket-runner/runs/`.
 
 A Note that was meant for a Ticket and reached the standing Notes issue instead
 carries the number it was reaching for, and why that Ticket did not get it:
@@ -51,7 +51,7 @@ of the comment, label and all; `next` is the one the Stage is allowed to leave
 out, and a Note with no summary is not posted at all.
 
 ```
-<!-- agent-pipeline:note -->
+<!-- ticket-runner:note -->
 From #12 verify
 
 **`tool sync --help` prints a dump in place of its help text.**

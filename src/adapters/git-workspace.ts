@@ -52,7 +52,7 @@ const REBASE_DIRS = ["rebase-merge", "rebase-apply"];
  * per Ticket, and the transcripts of a handed-off Ticket's Stages beside it,
  * under the prefix the pipeline owns (ADR-0004).
  */
-export const STATE_BRANCH = "agent-pipeline/state";
+export const STATE_BRANCH = "ticket-runner/state";
 
 /**
  * How many times a change to the state branch is tried, read again from the
@@ -672,7 +672,7 @@ export class GitWorkspace implements Workspace {
   }
 
   private async withScratch<T>(use: (scratch: string) => Promise<T>): Promise<T> {
-    const scratch = mkdtempSync(join(tmpdir(), "agent-pipeline-state-"));
+    const scratch = mkdtempSync(join(tmpdir(), "ticket-runner-state-"));
     try {
       return await use(scratch);
     } finally {

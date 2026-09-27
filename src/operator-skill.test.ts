@@ -14,6 +14,6 @@ describe("the Operator's skill", () => {
 
   /** A project skill with no name or description is one no session loads. */
   it("opens with the frontmatter a project skill is loaded by", () => {
-    expect(operatorSkill()).toMatch(/^---\nname: agent-pipeline\ndescription: .+\n---\n/);
+    expect(operatorSkill()).toMatch(/^---\nname: ticket-runner\ndescription: .+\n---\n/);
   });
 });

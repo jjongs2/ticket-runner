@@ -8,7 +8,7 @@ import {
   type PermissionMode,
 } from "./ports/agent-runner.js";
 
-export const CONFIG_FILENAME = "agent-pipeline.json";
+export const CONFIG_FILENAME = "ticket-runner.json";
 
 /** The default model for every Stage: Opus 5.5, what a bare `claude -p` picks. */
 const DEFAULT_MODEL = "claude-opus-5-5";
@@ -221,7 +221,7 @@ function refusal(error: z.ZodError, version: string): string {
     .join("; ");
   const said = `Invalid ${CONFIG_FILENAME}: ${detail}`;
   if (!error.issues.some((issue) => issue.code === "unrecognized_keys")) return said;
-  return `${said}. Refused by agent-pipeline ${version}, so the key may be newer than this install.`;
+  return `${said}. Refused by ticket-runner ${version}, so the key may be newer than this install.`;
 }
 
 /** Config label overrides win, but only where the file actually names one. */

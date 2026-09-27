@@ -62,7 +62,7 @@ describe("startupMessages", () => {
     const { refusal } = startupMessages(config({ checks: [] }));
 
     expect(refusal).toMatch(/no check commands/i);
-    expect(refusal).toContain("agent-pipeline.json");
+    expect(refusal).toContain("ticket-runner.json");
     expect(refusal).toMatch(/gates.*checks.*false/is);
   });
 

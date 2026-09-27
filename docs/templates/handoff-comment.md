@@ -1,9 +1,9 @@
-<!-- agent-pipeline:handoff -->
+<!-- ticket-runner:handoff -->
 **Handed off.** Failed at **<stage>**<, after the fix budget was used>.
 
 - Failure: <one line>
 - Branch `<branch>` on the remote · worktree `<path>` · PR #<pr> (draft)
-- Transcripts: `ticket-<n>/<runId>/` on the `agent-pipeline/state` branch
+- Transcripts: `ticket-<n>/<runId>/` on the `ticket-runner/state` branch
 
 <details><summary>Evidence</summary>
 
@@ -56,7 +56,7 @@ something has to say that a kill is why.
 ## Once the Ticket has been taken again
 
 ```
-<!-- agent-pipeline:handoff -->
+<!-- ticket-runner:handoff -->
 _Taken again by a later Run; this hand-off is history._
 
 **Handed off.** Failed at **<stage>**.

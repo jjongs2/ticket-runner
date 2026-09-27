@@ -120,7 +120,7 @@ describe("the State files an earlier pipeline left in the checkout", () => {
   let repoRoot: string;
 
   beforeEach(() => {
-    repoRoot = mkdtempSync(join(tmpdir(), "agent-pipeline-resume-"));
+    repoRoot = mkdtempSync(join(tmpdir(), "ticket-runner-resume-"));
   });
 
   afterEach(() => {

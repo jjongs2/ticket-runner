@@ -7,13 +7,13 @@ import { conventionsWarning, newerVersionLine } from "./staleness.js";
 import { FakeTracker } from "./testing/fakes.js";
 
 /** The pipeline's own repository, as its package names it. */
-const REPOSITORY = "jjongs2/agent-pipeline";
+const REPOSITORY = "jjongs2/ticket-runner";
 
 let repoRoot: string;
 let tracker: FakeTracker;
 
 beforeEach(() => {
-  repoRoot = mkdtempSync(join(tmpdir(), "agent-pipeline-staleness-"));
+  repoRoot = mkdtempSync(join(tmpdir(), "ticket-runner-staleness-"));
   tracker = new FakeTracker();
 });
 
@@ -135,11 +135,11 @@ describe("the Version a Target's conventions document was written by", () => {
 
     expect(warning).toContain("0.3.0");
     expect(warning).toContain("0.4.0");
-    expect(warning).toContain("agent-pipeline init");
+    expect(warning).toContain("ticket-runner init");
   });
 
   it("leaves a document carrying no mark at all to readiness, which refuses it", () => {
-    writeDocument("# agent-pipeline conventions\n\nFrom an older pipeline.\n");
+    writeDocument("# ticket-runner conventions\n\nFrom an older pipeline.\n");
 
     expect(conventionsWarning(repoRoot, "0.4.0")).toBeUndefined();
   });
@@ -151,7 +151,7 @@ describe("the Version a Target's conventions document was written by", () => {
 
     expect(warning).toContain("0.5.0");
     expect(warning).toContain("upgrade");
-    expect(warning).not.toContain("agent-pipeline init");
+    expect(warning).not.toContain("ticket-runner init");
   });
 
   it("says nothing where this copy has no number to compare", () => {

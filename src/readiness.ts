@@ -6,7 +6,7 @@ import { OPERATOR_SKILL_PATH } from "./operator-skill.js";
 import type { Tracker } from "./ports/tracker.js";
 
 /**
- * What `agent-pipeline init` must have left in a Target before a Run may start.
+ * What `ticket-runner init` must have left in a Target before a Run may start.
  *
  * One module says what a set-up Target looks like and two commands read it:
  * `init` puts each item in place, and `run` and `ticket` refuse a Target that is
@@ -27,7 +27,7 @@ import type { Tracker } from "./ports/tracker.js";
  * state machine with, and there is no state machine here: this is five questions
  * asked of a directory before a Run exists, and the answers are already driven
  * from a temporary repository root, which is how the local state under
- * `.agent-pipeline/` is tested too (ADR-0004). Widening the `Workspace` port for
+ * `.ticket-runner/` is tested too (ADR-0004). Widening the `Workspace` port for
  * them would put reads no Stage and no Ticket ever makes on the interface the
  * orchestrator depends on.
  *
@@ -46,7 +46,7 @@ export interface IgnoredDirectory {
 
 const IGNORED: readonly IgnoredDirectory[] = [
   { comment: "# Pipeline worktrees, one per Ticket.", line: ".worktrees/" },
-  { comment: "# Run logs, transcripts and state.", line: ".agent-pipeline/" },
+  { comment: "# Run logs, transcripts and state.", line: ".ticket-runner/" },
 ];
 
 /**
@@ -111,7 +111,7 @@ export async function readinessRefusal({
 
   return [
     `This Target is not set up: ${missing}.`,
-    "Run `agent-pipeline init` here and start again;",
+    "Run `ticket-runner init` here and start again;",
     "a Run puts nothing in place itself.",
   ].join(" ");
 }

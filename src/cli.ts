@@ -91,7 +91,7 @@ async function main(argv: string[]): Promise<number> {
     repository,
     // Every argument, `--lanes` included, so whoever meets the lock sees how
     // the Run was started.
-    command: ["agent-pipeline", ...argv].join(" "),
+    command: ["ticket-runner", ...argv].join(" "),
   });
 }
 

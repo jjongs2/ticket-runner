@@ -7,7 +7,7 @@ import type { LockHolder, Workspace } from "./ports/workspace.js";
  *
  * SIGTERM is the whole of what a Stop is on the wire (ADR-0006): no file beside
  * the Run lock, and no meaning for Ctrl+C. So both ends of it are small enough
- * to live together — `agent-pipeline stop` reads the lock and signals the
+ * to live together — `ticket-runner stop` reads the lock and signals the
  * process it names, and the Run listening at the other end turns that signal
  * into something a test can raise without a process to send one to. What the
  * Run then does with it — finish the Tickets its Lanes hold and claim nothing
@@ -91,7 +91,7 @@ export function stopLine(busy: number[]): string {
   return `${held} left to finish · stopped`;
 }
 
-/** What `agent-pipeline stop` needs: the Target's lock, and seams for tests. */
+/** What `ticket-runner stop` needs: the Target's lock, and seams for tests. */
 export interface StopRequest {
   /** Where the Run lock is read from, and which Host is asking. */
   workspace: Workspace;
@@ -135,7 +135,7 @@ export async function requestStop({
     error(
       `\`${holder.command}\` (run ${holder.runId}) holds the Run lock from` +
         ` ${describeHost(holder.host)}, started ${holder.startedAt}. Only that Host can send` +
-        " it a Stop: `agent-pipeline stop` there, or its Operator on a cloud Host. Nothing" +
+        " it a Stop: `ticket-runner stop` there, or its Operator on a cloud Host. Nothing" +
         " was sent.",
     );
     return 2;

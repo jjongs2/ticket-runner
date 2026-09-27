@@ -11,8 +11,8 @@ const NOTES = `### Lanes
 
 - nothing
 
-[#82]: https://github.com/jjongs2/agent-pipeline/pull/82
-[#83]: https://github.com/jjongs2/agent-pipeline/pull/83`;
+[#82]: https://github.com/jjongs2/ticket-runner/pull/82
+[#83]: https://github.com/jjongs2/ticket-runner/pull/83`;
 
 /** A changelog in the template's shape, carrying a section per number given. */
 function changelog(...numbers: string[]): string {
@@ -58,7 +58,7 @@ describe("the notes a Version published", () => {
 
   it("keeps the link definitions the section's numbers are written as", () => {
     const notes = versionNotes(changelog("0.4.0", "0.3.1"), "0.4.0") ?? "";
-    expect(notes).toContain("[#82]: https://github.com/jjongs2/agent-pipeline/pull/82");
+    expect(notes).toContain("[#82]: https://github.com/jjongs2/ticket-runner/pull/82");
     expect(notes.indexOf("[#82]:")).toBeGreaterThan(notes.indexOf("### After upgrading"));
   });
 
@@ -66,7 +66,10 @@ describe("the notes a Version published", () => {
     for (const number of ["0.1.0", "0.1.1", "0.2.0", "0.3.0", "0.3.1", "0.4.0"]) {
       const notes = versionNotes(CHANGELOG, number) ?? "";
       for (const [, pr] of notes.matchAll(/\[#(\d+)\](?!:)/g)) {
-        expect(notes).toContain(`[#${pr}]: https://github.com/jjongs2/agent-pipeline/pull/${pr}`);
+        // Sections cut before the rename to ticket-runner link its former name.
+        expect(notes).toMatch(
+          new RegExp(`^\\[#${pr}\\]: https://github\\.com/jjongs2/[\\w-]+/pull/${pr}$`, "m"),
+        );
       }
     }
   });
@@ -94,8 +97,13 @@ describe("the notes a Version published", () => {
     for (const number of ["0.1.0", "0.1.1", "0.2.0", "0.3.0", "0.3.1"]) {
       expect(versionNotes(CHANGELOG, number)).toContain("### After upgrading");
     }
-    // The body GitHub published for that Version, to the character.
-    expect(versionNotes(CHANGELOG, "0.2.0")).toBe(`### Any Target
+    // The body GitHub published for that Version, to the character. It was cut
+    // before the rename to ticket-runner, so it names the pipeline by its former
+    // name, read here from its first link definition.
+    const notes = versionNotes(CHANGELOG, "0.2.0") ?? "";
+    const former = /github\.com\/jjongs2\/([\w-]+)\/pull\//.exec(notes)?.[1] ?? "";
+    expect(former).not.toBe("");
+    expect(notes.replaceAll(former, "<name>")).toBe(`### Any Target
 
 - \`init\` sets a Target up and reports what only a human can ([#71])
 - A Run refuses a Target \`init\` has not set up ([#72])
@@ -103,11 +111,11 @@ describe("the notes a Version published", () => {
 
 ### After upgrading
 
-- Run \`agent-pipeline init\` once in every Target; a Run now refuses one without it.
+- Run \`<name> init\` once in every Target; a Run now refuses one without it.
 
-[#70]: https://github.com/jjongs2/agent-pipeline/pull/70
-[#71]: https://github.com/jjongs2/agent-pipeline/pull/71
-[#72]: https://github.com/jjongs2/agent-pipeline/pull/72`);
+[#70]: https://github.com/jjongs2/<name>/pull/70
+[#71]: https://github.com/jjongs2/<name>/pull/71
+[#72]: https://github.com/jjongs2/<name>/pull/72`);
   });
 });
 

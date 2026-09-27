@@ -12,7 +12,7 @@ function git(cwd: string, ...args: string[]): void {
 }
 
 beforeEach(() => {
-  repo = realpathSync(mkdtempSync(join(tmpdir(), "agent-pipeline-root-")));
+  repo = realpathSync(mkdtempSync(join(tmpdir(), "ticket-runner-root-")));
   git(repo, "init", "--initial-branch=main");
   git(repo, "config", "user.email", "pipeline@example.com");
   git(repo, "config", "user.name", "pipeline");

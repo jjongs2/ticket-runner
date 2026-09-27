@@ -15,10 +15,10 @@ import type { RunStop } from "./run.js";
 import { type Criterion, type Verdict, countStatuses } from "./verdict.js";
 
 /** How the pipeline finds its own hand-off comment again. */
-export const HANDOFF_MARKER = "<!-- agent-pipeline:handoff -->";
+export const HANDOFF_MARKER = "<!-- ticket-runner:handoff -->";
 
 /** What a Note comment is signed with. Nothing looks it up; a human reads it. */
-export const NOTE_MARKER = "<!-- agent-pipeline:note -->";
+export const NOTE_MARKER = "<!-- ticket-runner:note -->";
 
 /**
  * How the pipeline finds the standing Notes issue again.
@@ -31,7 +31,7 @@ export const NOTE_MARKER = "<!-- agent-pipeline:note -->";
  * a marker survives a human tidying the thread, and it is the only thing the
  * lookup trusts. The title is a fast path and nothing more.
  */
-export const NOTES_ISSUE_MARKER = "<!-- agent-pipeline:notes-issue -->";
+export const NOTES_ISSUE_MARKER = "<!-- ticket-runner:notes-issue -->";
 
 /**
  * The title the standing Notes issue is opened with.
@@ -44,7 +44,7 @@ export const NOTES_ISSUE_TITLE = "Notes from the pipeline";
 
 /** How the pipeline finds a warning it has already posted: one marker per reason. */
 export function guardMarker(reason: GuardReason): string {
-  return `<!-- agent-pipeline:guard:${reason} -->`;
+  return `<!-- ticket-runner:guard:${reason} -->`;
 }
 
 /** What each guard tells the human: what was wrong, and what to do about it. */
@@ -103,7 +103,7 @@ export function hasGuardWarning(comments: IssueComment[], reason: GuardReason): 
 export function guardComment(reason: GuardReason): string {
   return [
     guardMarker(reason),
-    `**Skipped by agent-pipeline.** ${GUARD_SENTENCES[reason]}`,
+    `**Skipped by ticket-runner.** ${GUARD_SENTENCES[reason]}`,
     "",
   ].join("\n");
 }
@@ -137,7 +137,7 @@ export function pullRequestBody({ ticket, verdict, runId, host }: PullRequestBod
   // A merged Ticket keeps no transcripts on the remote, so the run directory is
   // the only place they are, and a cloud Host's goes with its session.
   const where =
-    host === "workstation" ? `\`.agent-pipeline/runs/${runId}/${ticket}/\`` : undefined;
+    host === "workstation" ? `\`.ticket-runner/runs/${runId}/${ticket}/\`` : undefined;
 
   return [
     `Closes #${ticket}`,
@@ -498,7 +498,7 @@ export function runSummary({
 
   return [
     ...(newer === undefined ? [] : [newer]),
-    `agent-pipeline ${version} run ${runId} · ${Math.round(durationMs / 60_000)}m`,
+    `ticket-runner ${version} run ${runId} · ${Math.round(durationMs / 60_000)}m`,
     "",
     ...(rows.length === 0 ? ["  nothing to do"] : rows),
     "",

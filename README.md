@@ -1,8 +1,8 @@
-# agent-pipeline
+# ticket-runner
 
 Humans plan, the pipeline executes.
 
-`agent-pipeline` owns Execution in the **Target**, the repository the command was started
+`ticket-runner` owns Execution in the **Target**, the repository the command was started
 in: it claims a Ticket, runs the implement Stage as a headless `claude -p` session driving
 `/mattpocock-skills:implement`, runs the Checks itself, has a fresh session adversarially
 grade the Acceptance Criteria, opens a PR, waits for CI and squash-merges. One failure
@@ -32,14 +32,14 @@ than `main`, so an installed copy is always a Version it can name (ADR-0007). Th
 line updates it:
 
 ```bash
-npm install -g "github:jjongs2/agent-pipeline#semver:*"
+npm install -g "github:jjongs2/ticket-runner#semver:*"
 ```
 
 ## Set a Target up
 
 ```bash
 cd ~/code/acme
-agent-pipeline init
+ticket-runner init
 ```
 
 `init` puts in place everything a Run expects to find in the Target and reports on
@@ -48,11 +48,11 @@ first whether the Target already has the thing. It commits nothing, so what it w
 the Target's history through whatever process that repository uses, and it takes no Run lock,
 because it claims no Ticket.
 
-It writes the two gitignore lines for `.worktrees/` and `.agent-pipeline/`, an empty
-`agent-pipeline.json`, the pipeline's conventions document at
+It writes the two gitignore lines for `.worktrees/` and `.ticket-runner/`, an empty
+`ticket-runner.json`, the pipeline's conventions document at
 [`docs/agents/pipeline-conventions.md`](docs/agents/pipeline-conventions.md), a section in
 `CLAUDE.md` pointing at it, and the Operator's skill at
-[`.claude/skills/agent-pipeline/SKILL.md`](.claude/skills/agent-pipeline/SKILL.md), which
+[`.claude/skills/ticket-runner/SKILL.md`](.claude/skills/ticket-runner/SKILL.md), which
 is how a Claude session opened from the app knows how to run the pipeline. The files a
 human owns only ever gain lines; the conventions document and the skill are the pipeline's
 own text, so a Target carrying an older copy is rewritten and told that it was. The
@@ -80,19 +80,19 @@ Not ready: 1 item is yours to put right.
 ```
 
 Exit code is `1` while any reported item is failing and `0` once none is, so
-`agent-pipeline init && agent-pipeline run` stops before a doomed Run.
+`ticket-runner init && ticket-runner run` stops before a doomed Run.
 
 ## Usage
 
 ```bash
-agent-pipeline run             # drain the Frontier
-agent-pipeline run --lanes 2   # the same, two Tickets at once whatever the config says
-agent-pipeline ticket 3        # one named Ticket
-agent-pipeline stop            # ask the Run in this Target to finish and take no more
-agent-pipeline -v              # which Version this pipeline is
+ticket-runner run             # drain the Frontier
+ticket-runner run --lanes 2   # the same, two Tickets at once whatever the config says
+ticket-runner ticket 3        # one named Ticket
+ticket-runner stop            # ask the Run in this Target to finish and take no more
+ticket-runner -v              # which Version this pipeline is
 ```
 
-`--lanes <n>` gives this one Run `n` Lanes, over whatever `lanes` in `agent-pipeline.json`
+`--lanes <n>` gives this one Run `n` Lanes, over whatever `lanes` in `ticket-runner.json`
 says, because how many Tickets a Host can carry at once is the Host's business rather than
 the Target's. It is for `run` alone: `ticket <n>` takes its one Ticket whatever the count.
 
@@ -113,18 +113,18 @@ right. Every item is asked on every Host, so a Target a workstation accepts is o
 Host accepts too.
 
 ```
-$ agent-pipeline run
+$ ticket-runner run
 This Target is not set up: `.gitignore` does not ignore `.worktrees/`. Run
-`agent-pipeline init` here and start again; a Run puts nothing in place itself.
+`ticket-runner init` here and start again; a Run puts nothing in place itself.
 ```
 
 The check is presence and the Version stamp, never content: a Target carrying an older copy
 of the conventions document or the skill starts, and the next `init` brings it up to date.
 A Run says so on the way past — one warning naming the Version that wrote the copy and
-`agent-pipeline init`, or the upgrade where the copy is from a newer pipeline than the Run
+`ticket-runner init`, or the upgrade where the copy is from a newer pipeline than the Run
 — and then takes the Frontier as usual.
 
-A Target that still has State files under `.agent-pipeline/state/`, where an earlier
+A Target that still has State files under `.ticket-runner/state/`, where an earlier
 pipeline kept them, is refused the same way, naming the Tickets they belong to: a Ticket's
 State lives on the Target's remote now, and nothing moves the old files there. Finish those
 Tickets with the Version that wrote them, or hand them to a human, then delete the
@@ -134,7 +134,7 @@ A Run and `init` also say when a newer Version has been published, in one line n
 numbers, at the top of the Run log and again at the head of the Run summary:
 
 ```
-A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g "github:jjongs2/agent-pipeline#semver:*"`.
+A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g "github:jjongs2/ticket-runner#semver:*"`.
 ```
 
 Nothing is refused over either. A development checkout is compared by number alone, so
@@ -157,7 +157,7 @@ pick — the Frontier is empty, or everything still on it is blocked — and pri
 with a row per Ticket in the order the Tickets ended:
 
 ```
-agent-pipeline run 2026-09-17T09-00-00-000 · 84m
+ticket-runner run 2026-09-17T09-00-00-000 · 84m
 
   merged   #4 Planning guards (PR #12)
   noted    #8 comment · from #4 implement · the CLI help drifts
@@ -173,7 +173,7 @@ Body text is never read for blockers: only GitHub's native dependencies count
 
 One Run at a time per Target, whichever Host it is on. A second `run`, or a `ticket` started
 while a `run` holds the lock, exits immediately naming the holder. The lock lives on the
-Target's GitHub repository, on the `agent-pipeline/lock` branch, where anyone can see who
+Target's GitHub repository, on the `ticket-runner/lock` branch, where anyone can see who
 holds the Target: the tip's `lock.json` names the Host, the Run, its command line and when it
 started, or reads `{ "held": false }`, and the tip's commit message says the same. A Run takes
 it by pushing a "held" commit on the tip it read, with a lease on that tip, so of two Runs
@@ -190,14 +190,14 @@ did not come back](#a-run-that-did-not-come-back) for what a Run does with one. 
 nothing of the Target but that lock: no config, no `gh`, and none of the readiness `run`
 insists on, because the Run it is stopping answered all of that when it started.
 
-A Stage may not start a Run either. Every Stage session runs with `AGENT_PIPELINE_STAGE`
+A Stage may not start a Run either. Every Stage session runs with `TICKET_RUNNER_STAGE`
 set to the Stage's name, and while that variable is set the CLI refuses before it looks at
 the repository, the config or `gh` — `--help` and `--version` included, because there is
 nothing a Stage legitimately needs from this command:
 
 ```
-$ agent-pipeline ticket 13
-Refusing to start: AGENT_PIPELINE_STAGE is set to `implement`, so this shell belongs to
+$ ticket-runner ticket 13
+Refusing to start: TICKET_RUNNER_STAGE is set to `implement`, so this shell belongs to
 the implement Stage of a Run that is already in progress. A Stage may not run the
 pipeline: doing so claims a Ticket on the live tracker, creates a second worktree and
 starts a nested Run. Exercise the pipeline through its tests and fakes instead.
@@ -247,11 +247,11 @@ handed off, `1` when something was, and `2` when nothing was taken at all — th
 never started, or a guard refused the issue named. A `run` that skipped every candidate
 still exits `0`.
 
-A Run names its Version in `.agent-pipeline/runs/<runId>/version.txt` before its first
+A Run names its Version in `.ticket-runner/runs/<runId>/version.txt` before its first
 Stage, so a transcript sits beside the pipeline that wrote it.
 
 Every Stage writes its exact command line, stdout, stderr and stream-json transcript to
-`.agent-pipeline/runs/<runId>/<n>/`, so any Stage can be reproduced by hand. The command
+`.ticket-runner/runs/<runId>/<n>/`, so any Stage can be reproduced by hand. The command
 line lands there before the Stage starts, and its output as the Stage prints it, so a Run
 killed mid-Stage still leaves behind what it had reached. A Ticket that spends its fix
 budget writes the fix Stage and the pass it bought to `<n>/retry/`, so the transcripts of
@@ -259,7 +259,7 @@ the pass that failed survive alongside them.
 
 A Ticket that is handed off also keeps its Stages' command lines and transcripts, and the
 Run's `version.txt`, on the Target's remote: under `ticket-<n>/<runId>/` on the
-`agent-pipeline/state` branch, beside its State file, since the Host that wrote them may be
+`ticket-runner/state` branch, beside its State file, since the Host that wrote them may be
 gone by the time a human looks. The hand-off comment and the draft pull request name that
 directory, and the comment says when the Ticket's branch is on the remote. They go when the
 State file does, so a Ticket that merges leaves none behind, and its pull request names the
@@ -273,10 +273,10 @@ and the skill `init` wrote tells it what to do (ADR-0008). It installs what the 
 environment's setup script did not — the pipeline, at the Version the conventions document
 is stamped with, the `mattpocock-skills` plugin, `gh` from apt, and the Target's own
 dependencies in its main checkout, where every worktree's Checks find them — and then starts
-`agent-pipeline run` in the background, or `agent-pipeline ticket <n>` for a Ticket you
+`ticket-runner run` in the background, or `ticket-runner ticket <n>` for a Ticket you
 name. Ask for a number of Tickets at once and it passes `--lanes`, so a cloud Host can carry
 a different count from your workstation without the config changing. It reports each
-Ticket as the Run ends it and the summary when the Run is over, runs `agent-pipeline stop`
+Ticket as the Run ends it and the summary when the Run is over, runs `ticket-runner stop`
 when you ask for a Stop, and releases a lock a vanished Host left behind only when you ask
 and no Run of its own is running. Everything else it leaves alone: the checkout and the
 worktrees are the Run's while it holds the Target, and anything else about a Ticket goes
@@ -294,7 +294,7 @@ report. A released Ticket does not change the exit code, so a Run the limit stop
 exits `0`.
 
 What the release leaves behind is the **State file** the Ticket has been keeping since it
-was claimed, as `ticket-<n>.json` on the `agent-pipeline/state` branch of the Target's
+was claimed, as `ticket-<n>.json` on the `ticket-runner/state` branch of the Target's
 remote, where a Run on any Host finds it. It names the state it reached, its branch,
 whether the fix budget was already spent, and the pull request if one is open
 ([ADR-0004](docs/adr/0004-resume-state-is-a-local-file.md)):
@@ -362,13 +362,13 @@ A Run can end early two ways, and they leave opposite things behind. SIGTERM is 
 and not a kill; everything else — Ctrl-C, SIGKILL, an OOM, a machine that went away — is a
 kill ([ADR-0006](docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md)).
 
-`agent-pipeline stop`, from any terminal in the Target on the Host the Run is on, is how that
+`ticket-runner stop`, from any terminal in the Target on the Host the Run is on, is how that
 SIGTERM is sent: it reads the Run lock from GitHub, signals the process it names, and prints
 which Run will stop and what Ctrl-C would cost instead.
 
 ```
-$ agent-pipeline stop
-`agent-pipeline run` (run 2026-09-17T09-00-00-000, pid 4321) will stop once the Tickets it
+$ ticket-runner stop
+`ticket-runner run` (run 2026-09-17T09-00-00-000, pid 4321) will stop once the Tickets it
 holds are finished. It claims no more.
 Ctrl+C in that Run's own terminal stops it at once instead, at the cost of killing the
 Stages it is running and leaving their Tickets stranded for the next Run.
@@ -378,7 +378,7 @@ Exit code `0` when the signal went, `2` when there was no Run to send it to — 
 the lock, or the process on this Host it names is gone, in which case the dead lock is left
 where it is for the next Run to reclaim. A lock held from another Host is named — the Host,
 the Run and when it started — and nothing is sent: a Stop is a signal, and only the Host the
-Run is on can send it, through `agent-pipeline stop` there or, on a cloud Host, its Operator.
+Run is on can send it, through `ticket-runner stop` there or, on a cloud Host, its Operator.
 A lock held by `ticket <n>` is left alone and told about: that Run ends with its Ticket
 anyway, so there is nothing a Stop would add. There is no stop
 file, so a second `stop` prints exactly what the first did and the Run ignores the second
@@ -589,7 +589,7 @@ untriaged one.
 
 ## Configuration
 
-`agent-pipeline.json` at the Target's root. Every field is optional.
+`ticket-runner.json` at the Target's root. Every field is optional.
 
 The base branch — what a Run branches from, rebases onto, targets its pull requests at and
 pulls once they merge — is asked of GitHub once at the start of a Run, so a Target on
@@ -664,8 +664,8 @@ checkout rather than off the global install:
 
 ```bash
 npm install
-npm run agent-pipeline -- run         # drain the Frontier
-npm run agent-pipeline -- ticket 3    # one named Ticket
+npm run ticket-runner -- run         # drain the Frontier
+npm run ticket-runner -- ticket 3    # one named Ticket
 npm test                              # vitest
 npm run typecheck                     # tsc --noEmit
 ```

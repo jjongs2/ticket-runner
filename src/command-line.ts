@@ -10,7 +10,7 @@ import type { Work } from "./start.js";
  * what it does about the answer.
  */
 
-export const USAGE = `agent-pipeline — humans plan, the pipeline executes.
+export const USAGE = `ticket-runner — humans plan, the pipeline executes.
 
 It works in the GitHub repository you start it in, on the open issues
 labelled \`ready-for-agent\`. For each one it has a Claude Code session
@@ -23,14 +23,14 @@ The repository has to be set up for this first: \`init\` puts in place what
 it can and reports the rest, which is yours to put right.
 
 Usage:
-  agent-pipeline init          Set this repository up for the pipeline.
-  agent-pipeline run           Work through every issue that is ready.
-  agent-pipeline ticket <n>    Work through issue <n> and nothing else.
-  agent-pipeline stop          Tell the run in progress to take no more.
+  ticket-runner init          Set this repository up for the pipeline.
+  ticket-runner run           Work through every issue that is ready.
+  ticket-runner ticket <n>    Work through issue <n> and nothing else.
+  ticket-runner stop          Tell the run in progress to take no more.
 
 Options:
   --lanes <n>                  With \`run\`: work on up to <n> issues at once,
-                               whatever \`lanes\` in agent-pipeline.json says.
+                               whatever \`lanes\` in ticket-runner.json says.
   -h, --help                   Show this message.
   -v, --version                Show which version this pipeline is.`;
 
