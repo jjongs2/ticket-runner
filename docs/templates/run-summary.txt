@@ -1,4 +1,4 @@
-agent-pipeline <version> run <runId> · <duration>
+ticket-runner <version> run <runId> · <duration>
 
   merged   #3 Run: drain the Frontier (PR #12)
   noted    #8 comment · from #3 implement · the CLI help drifts from the README
@@ -15,14 +15,14 @@ took no Ticket prints `  nothing to do` in place of the rows.
 `<version>` is the Version the Run ran (ADR-0007): the number alone from an
 installed copy, and the number, the commit and a `dirty` mark from a development
 checkout — `0.4.0`, `0.4.0+331d79c`, `0.4.0+331d79c.dirty`. Every stamp of one
-Run says the same thing, and `.agent-pipeline/runs/<runId>/version.txt` says it
+Run says the same thing, and `.ticket-runner/runs/<runId>/version.txt` says it
 again beside the transcripts.
 
 A Run whose Version is below the highest one published on GitHub gains a line
 above that header, which is also the first thing it logged hours earlier:
 
-A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g "github:jjongs2/agent-pipeline#semver:*"`.
-agent-pipeline <version> run <runId> · <duration>
+A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g "github:jjongs2/ticket-runner#semver:*"`.
+ticket-runner <version> run <runId> · <duration>
 
   merged   #3 Run: drain the Frontier (PR #12)
 
@@ -44,7 +44,7 @@ why it is not `handed`. It stops the Run filling Lanes, so no Ticket is claimed
 after it; the Lanes still busy finish what they hold, and whatever they end as
 has its row after the `released` one:
 
-agent-pipeline <version> run <runId> · <duration>
+ticket-runner <version> run <runId> · <duration>
 
   released #6 Rebase conflict resolution · rate limit at implement
   merged   #3 Run: drain the Frontier (PR #12)
@@ -90,7 +90,7 @@ arrived finish what they hold. Its last line names the clock time the Stop
 arrived and the Tickets those Lanes were holding, so the rows above it can be
 read as everything the Run had left to do:
 
-agent-pipeline <version> run <runId> · <duration>
+ticket-runner <version> run <runId> · <duration>
 
   merged   #3 Run: drain the Frontier (PR #12)
   merged   #6 Rebase conflict resolution (PR #14)

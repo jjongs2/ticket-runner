@@ -4,7 +4,7 @@ Closes #<n>
 
 See the hand-off comment on #<n> for the branch, worktree and evidence.
 
-Run `<runId>` · transcripts in `ticket-<n>/<runId>/` on the `agent-pipeline/state` branch
+Run `<runId>` · transcripts in `ticket-<n>/<runId>/` on the `ticket-runner/state` branch
 
 The last line names the Run, and where the hand-off kept its Stages'
 transcripts: the place the hand-off comment's `Transcripts:` line names. It is

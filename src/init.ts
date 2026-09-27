@@ -28,7 +28,7 @@ import { newerVersionLine } from "./staleness.js";
 import { isHigher, versionNumber } from "./version-number.js";
 
 /**
- * `agent-pipeline init`: put in place what a Run will expect to find in a
+ * `ticket-runner init`: put in place what a Run will expect to find in a
  * Target, and report on what only the human can put there.
  *
  * Three parts, in the order a reader of the report meets them: what was written
@@ -52,7 +52,7 @@ import { isHigher, versionNumber } from "./version-number.js";
  * a fourth port for five `writeFileSync` calls would be a port with one
  * implementation and one caller. What the ports buy elsewhere — a fake to
  * drive the state machine with — a temporary repository root buys here, which
- * is how the local state under `.agent-pipeline/` is already tested (ADR-0004).
+ * is how the local state under `.ticket-runner/` is already tested (ADR-0004).
  */
 
 /** Where GitHub Actions keeps a Target's workflows. */
@@ -105,7 +105,7 @@ export async function initTarget(options: InitOptions): Promise<number> {
     return 2;
   }
 
-  log(`agent-pipeline ${version} init · ${repoRoot}`);
+  log(`ticket-runner ${version} init · ${repoRoot}`);
 
   // The first thing after the opening line, so a human setting a Target up with
   // an old copy reads it before the report it is about to change their mind
@@ -193,7 +193,7 @@ interface NewerSetUp {
 
 /** The line for a file of the pipeline's own that a newer pipeline wrote. */
 function leftAlone(path: string, { mark, own }: NewerSetUp): string {
-  return `${path}: left alone, because ${mark} set this Target up and this is ${own} — upgrade \`agent-pipeline\` to rewrite it`;
+  return `${path}: left alone, because ${mark} set this Target up and this is ${own} — upgrade \`ticket-runner\` to rewrite it`;
 }
 
 /**

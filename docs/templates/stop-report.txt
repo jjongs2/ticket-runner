@@ -1,4 +1,4 @@
-`agent-pipeline run` (run <runId>, pid <pid>) will stop once the Tickets it holds are finished. It claims no more.
+`ticket-runner run` (run <runId>, pid <pid>) will stop once the Tickets it holds are finished. It claims no more.
 Ctrl+C in that Run's own terminal stops it at once instead, at the cost of killing the Stages it is running and leaving their Tickets stranded for the next Run.
 
 Two lines on stdout, and exit code 0: the Stop reached the process the Run lock
@@ -11,7 +11,7 @@ the one thing about a Stop worth saying twice.
 Everything else is one line on stderr with exit code 2 and no signal sent. No
 Run holds the lock, or the Run on this Host it names is gone:
 
-No Run to stop: nothing holds the Run lock on the `agent-pipeline/lock` branch, or the Run on this Host that left it there is gone. A lock like that is the next Run's to reclaim, so nothing here removes it.
+No Run to stop: nothing holds the Run lock on the `ticket-runner/lock` branch, or the Run on this Host that left it there is gone. A lock like that is the next Run's to reclaim, so nothing here removes it.
 
 One line for both, because they are one thing to whoever asked: there is nobody
 to stop. A dead lock is left exactly where it is — reclaiming one belongs to the
@@ -21,17 +21,17 @@ A Run on another Host is named rather than signalled, because a Stop is a
 signal to a process and only the Host the Run is on can send one (ADR-0006).
 The Host is the workstation by its hostname, or the cloud Host by its session:
 
-`agent-pipeline run` (run <runId>) holds the Run lock from <the workstation `<hostname>` | the cloud Host of session `<session>`>, started <startedAt>. Only that Host can send it a Stop: `agent-pipeline stop` there, or its Operator on a cloud Host. Nothing was sent.
+`ticket-runner run` (run <runId>) holds the Run lock from <the workstation `<hostname>` | the cloud Host of session `<session>`>, started <startedAt>. Only that Host can send it a Stop: `ticket-runner stop` there, or its Operator on a cloud Host. Nothing was sent.
 
 A `ticket <n>` holding the lock is named rather than signalled, since a Run
 given one Ticket takes no more whatever happens:
 
-`agent-pipeline ticket 5` (run <runId>, pid <pid>) holds the Run lock, and a Run given one Ticket ends with it anyway. Nothing was sent.
+`ticket-runner ticket 5` (run <runId>, pid <pid>) holds the Run lock, and a Run given one Ticket ends with it anyway. Nothing was sent.
 
 A signal that could not be delivered — the Run ended between the liveness check
 and the SIGTERM, or it belongs to a user this shell may not signal — says why:
 
-Could not ask `agent-pipeline run` (run <runId>, pid <pid>) to stop: <reason>
+Could not ask `ticket-runner run` (run <runId>, pid <pid>) to stop: <reason>
 
 There is no stop file, so nothing here is written and nothing is read back: a
 second `stop` prints exactly what the first did, and the Run ignores the second

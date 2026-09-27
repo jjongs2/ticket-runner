@@ -1,5 +1,5 @@
-<!-- agent-pipeline:guard:<reason> -->
-**Skipped by agent-pipeline.** <Reason sentence>. <Fix sentence>.
+<!-- ticket-runner:guard:<reason> -->
+**Skipped by ticket-runner.** <Reason sentence>. <Fix sentence>.
 
 Reasons and their two sentences:
 

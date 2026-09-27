@@ -106,7 +106,7 @@ describe("the criteria guard", () => {
       guard({
         body: "nothing to grade",
         comments: [
-          "<!-- agent-pipeline:guard:no-criteria -->\n**Skipped by agent-pipeline.** No `- [ ]` acceptance criteria found in the body or comments.",
+          "<!-- ticket-runner:guard:no-criteria -->\n**Skipped by ticket-runner.** No `- [ ]` acceptance criteria found in the body or comments.",
         ],
       }),
     ).toBe("no-criteria");

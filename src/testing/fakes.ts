@@ -733,7 +733,7 @@ export class FakeWorkspace implements Workspace {
   async keepTranscripts(ticket: number, runId: string): Promise<KeptTranscripts | undefined> {
     if (this.stateWriteFailure !== undefined) throw this.stateWriteFailure;
     this.transcripts.set(ticket, [...(this.transcripts.get(ticket) ?? []), runId]);
-    return { branch: "agent-pipeline/state", path: `ticket-${ticket}/${runId}/` };
+    return { branch: "ticket-runner/state", path: `ticket-${ticket}/${runId}/` };
   }
 
   async takeRunLock(claim: LockClaim): Promise<LockTake> {

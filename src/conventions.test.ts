@@ -39,8 +39,8 @@ describe("the conventions document", () => {
   it("carries the Version in a hidden marker on its first line", () => {
     const [first = "", ...rest] = conventionsDoc("0.4.0").split("\n");
 
-    expect(first).toBe("# agent-pipeline conventions <!-- agent-pipeline:version 0.4.0 -->");
-    expect(rest.join("\n")).not.toContain("agent-pipeline:version");
+    expect(first).toBe("# ticket-runner conventions <!-- ticket-runner:version 0.4.0 -->");
+    expect(rest.join("\n")).not.toContain("ticket-runner:version");
   });
 
   it("marks a development checkout with its number and not its commit", () => {
@@ -63,7 +63,7 @@ describe("a copy with no Version to stamp", () => {
   it("carries no marker rather than one saying so", () => {
     const doc = conventionsDoc("unknown");
 
-    expect(doc.split("\n")[0]).toBe("# agent-pipeline conventions");
+    expect(doc.split("\n")[0]).toBe("# ticket-runner conventions");
     expect(conventionsMark(doc)).toBeUndefined();
   });
 });
@@ -74,7 +74,7 @@ describe("the mark a Target's copy bears", () => {
   });
 
   it("reads nothing from a copy an older pipeline wrote", () => {
-    expect(conventionsMark("# agent-pipeline conventions\n\nWhat it requires.\n")).toBeUndefined();
+    expect(conventionsMark("# ticket-runner conventions\n\nWhat it requires.\n")).toBeUndefined();
   });
 
   it("reads nothing from a Target that has no copy at all", () => {
@@ -82,13 +82,13 @@ describe("the mark a Target's copy bears", () => {
   });
 
   it("reads only the first line, so a document quoting the marker is unmarked", () => {
-    const quoted = "# agent-pipeline conventions\n\n<!-- agent-pipeline:version 9.0.0 -->\n";
+    const quoted = "# ticket-runner conventions\n\n<!-- ticket-runner:version 9.0.0 -->\n";
 
     expect(conventionsMark(quoted)).toBeUndefined();
   });
 
   it("reads nothing from a mark carrying something that is not a number", () => {
-    expect(conventionsMark("# c <!-- agent-pipeline:version unknown -->\n")).toBeUndefined();
+    expect(conventionsMark("# c <!-- ticket-runner:version unknown -->\n")).toBeUndefined();
   });
 });
 

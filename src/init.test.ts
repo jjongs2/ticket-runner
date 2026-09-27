@@ -90,7 +90,7 @@ async function init(
 }
 
 beforeEach(() => {
-  repoRoot = mkdtempSync(join(tmpdir(), "agent-pipeline-init-"));
+  repoRoot = mkdtempSync(join(tmpdir(), "ticket-runner-init-"));
   tracker = new FakeTracker();
   runner = new FakeAgentRunner();
 });
@@ -105,8 +105,8 @@ describe("what init writes into the Target", () => {
 
     const gitignore = read(repoRoot, ".gitignore");
     expect(gitignore).toContain(".worktrees/");
-    expect(gitignore).toContain(".agent-pipeline/");
-    expect(read(repoRoot, "agent-pipeline.json")).toBe("{}\n");
+    expect(gitignore).toContain(".ticket-runner/");
+    expect(read(repoRoot, "ticket-runner.json")).toBe("{}\n");
     expect(read(repoRoot, CONVENTIONS_PATH)).toBe(conventionsDoc(VERSION));
     expect(read(repoRoot, "CLAUDE.md")).toContain(CONVENTIONS_PATH);
     expect(read(repoRoot, OPERATOR_SKILL_PATH)).toBe(operatorSkill());
@@ -115,14 +115,14 @@ describe("what init writes into the Target", () => {
   it("heads the report with the Version doing the setting up", async () => {
     const { out } = await init();
 
-    expect(out.split("\n")[0]).toBe(`agent-pipeline ${VERSION} init · ${repoRoot}`);
+    expect(out.split("\n")[0]).toBe(`ticket-runner ${VERSION} init · ${repoRoot}`);
   });
 
   it("says what it wrote, one line per file", async () => {
     const { out } = await init();
 
     expect(out).toMatch(/\.gitignore: added/);
-    expect(out).toMatch(/agent-pipeline\.json: created/);
+    expect(out).toMatch(/ticket-runner\.json: created/);
     expect(out).toMatch(new RegExp(`${CONVENTIONS_PATH}: written`));
     expect(out).toMatch(/CLAUDE\.md: created/);
     expect(out).toContain(`${OPERATOR_SKILL_PATH}: written`);
@@ -159,8 +159,8 @@ describe("what init writes into the Target", () => {
 
     const doc = read(repoRoot, CONVENTIONS_PATH);
     expect(doc).toContain("`agent/<n>-<slug>`");
-    expect(doc).toContain("`agent-pipeline/lock`");
-    expect(doc).toContain("`agent-pipeline/state`");
+    expect(doc).toContain("`ticket-runner/lock`");
+    expect(doc).toContain("`ticket-runner/state`");
   });
 
   it("adds only the missing lines to a gitignore that already has its own", async () => {
@@ -171,8 +171,8 @@ describe("what init writes into the Target", () => {
     const gitignore = read(repoRoot, ".gitignore");
     expect(gitignore.startsWith("node_modules/\ndist/\n")).toBe(true);
     expect(gitignore).toContain(".worktrees/");
-    expect(gitignore).toContain(".agent-pipeline/");
-    expect(out).toMatch(/\.gitignore: added `\.worktrees\/` and `\.agent-pipeline\/`/);
+    expect(gitignore).toContain(".ticket-runner/");
+    expect(out).toMatch(/\.gitignore: added `\.worktrees\/` and `\.ticket-runner\/`/);
   });
 
   it("adds only the one directory a gitignore is missing", async () => {
@@ -180,18 +180,18 @@ describe("what init writes into the Target", () => {
 
     const { out } = await init();
 
-    expect(out).toMatch(/\.gitignore: added `\.agent-pipeline\/`$/m);
+    expect(out).toMatch(/\.gitignore: added `\.ticket-runner\/`$/m);
     expect(read(repoRoot, ".gitignore")).toBe(
-      "# ours\n.worktrees/\n\n# Run logs, transcripts and state.\n.agent-pipeline/\n",
+      "# ours\n.worktrees/\n\n# Run logs, transcripts and state.\n.ticket-runner/\n",
     );
   });
 
   it("adds nothing for a directory the Target ignores under another spelling", async () => {
-    write(repoRoot, ".gitignore", "/.worktrees/\n.agent-pipeline\n");
+    write(repoRoot, ".gitignore", "/.worktrees/\n.ticket-runner\n");
 
     const { out } = await init();
 
-    expect(read(repoRoot, ".gitignore")).toBe("/.worktrees/\n.agent-pipeline\n");
+    expect(read(repoRoot, ".gitignore")).toBe("/.worktrees/\n.ticket-runner\n");
     expect(out).not.toMatch(/\.gitignore:/);
   });
 
@@ -218,12 +218,12 @@ describe("what init writes into the Target", () => {
 
   it("leaves a config file that exists untouched, whatever it says", async () => {
     const existing = '{\n  "baseBranch": "trunk"\n}\n';
-    write(repoRoot, "agent-pipeline.json", existing);
+    write(repoRoot, "ticket-runner.json", existing);
 
     const { out } = await init();
 
-    expect(read(repoRoot, "agent-pipeline.json")).toBe(existing);
-    expect(out).not.toMatch(/agent-pipeline\.json:/);
+    expect(read(repoRoot, "ticket-runner.json")).toBe(existing);
+    expect(out).not.toMatch(/ticket-runner\.json:/);
   });
 
   it("overwrites a conventions document that says something else, and says it did", async () => {
@@ -236,7 +236,7 @@ describe("what init writes into the Target", () => {
   });
 
   it("overwrites an Operator's skill that says something else, and says it did", async () => {
-    write(repoRoot, OPERATOR_SKILL_PATH, "---\nname: agent-pipeline\n---\n\nEdited by hand.\n");
+    write(repoRoot, OPERATOR_SKILL_PATH, "---\nname: ticket-runner\n---\n\nEdited by hand.\n");
 
     const { out } = await init();
 
@@ -261,7 +261,7 @@ describe("what init writes into the Target", () => {
 
 describe("what init says about another Version", () => {
   /** The pipeline's own repository, as the CLI reads it off the package. */
-  const REPOSITORY = "jjongs2/agent-pipeline";
+  const REPOSITORY = "jjongs2/ticket-runner";
 
   it("prints the newer-Version line first, right after the opening line", async () => {
     tracker.publishedVersionTag = "v0.5.0";
@@ -312,14 +312,14 @@ describe("what init says about another Version", () => {
 
     expect(read(repoRoot, CONVENTIONS_PATH)).toBe(newer);
     expect(out).toMatch(new RegExp(`${CONVENTIONS_PATH}: left alone, because 0.5.0`));
-    expect(out).toContain("upgrade `agent-pipeline`");
+    expect(out).toContain("upgrade `ticket-runner`");
     // Nothing a human has to put right before a Run: the Target is set up.
     expect(code).toBe(0);
   });
 
   it("leaves the Operator's skill of a Target a newer pipeline set up alone too", async () => {
     write(repoRoot, CONVENTIONS_PATH, conventionsDoc("0.5.0"));
-    const newer = "---\nname: agent-pipeline\n---\n\nWhat 0.5.0 tells an Operator.\n";
+    const newer = "---\nname: ticket-runner\n---\n\nWhat 0.5.0 tells an Operator.\n";
     write(repoRoot, OPERATOR_SKILL_PATH, newer);
 
     const { out } = await init();
@@ -349,7 +349,7 @@ describe("what init says about another Version", () => {
   });
 
   it("rewrites an unmarked document, and says the copy carried no Version", async () => {
-    write(repoRoot, CONVENTIONS_PATH, "# agent-pipeline conventions\n\nOlder.\n");
+    write(repoRoot, CONVENTIONS_PATH, "# ticket-runner conventions\n\nOlder.\n");
 
     const { out } = await init();
 
@@ -454,7 +454,7 @@ describe("what init does on GitHub", () => {
   });
 
   it("creates the labels the config names rather than the default ones", async () => {
-    write(repoRoot, "agent-pipeline.json", '{"labels":{"readyForAgent":"afk-ready"}}');
+    write(repoRoot, "ticket-runner.json", '{"labels":{"readyForAgent":"afk-ready"}}');
 
     await init();
 
@@ -589,10 +589,10 @@ describe("the reference Target", () => {
   const ownRoot = fileURLToPath(new URL("..", import.meta.url));
 
   /** What no Target of any kind carries into a copy of itself. */
-  const NOT_THE_TARGET = new Set([".git", "node_modules", ".worktrees", ".agent-pipeline"]);
+  const NOT_THE_TARGET = new Set([".git", "node_modules", ".worktrees", ".ticket-runner"]);
 
   it("changes no file of this repository", async () => {
-    const copy = mkdtempSync(join(tmpdir(), "agent-pipeline-reference-"));
+    const copy = mkdtempSync(join(tmpdir(), "ticket-runner-reference-"));
     try {
       cpSync(ownRoot, copy, {
         recursive: true,

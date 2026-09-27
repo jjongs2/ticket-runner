@@ -21,7 +21,7 @@ import type { HeldLock, LockHolder } from "./ports/workspace.js";
  */
 
 /** The branch the lock lives on, under the prefix the pipeline owns. */
-export const LOCK_BRANCH = "agent-pipeline/lock";
+export const LOCK_BRANCH = "ticket-runner/lock";
 
 /** The file at the top of the lock branch's tip that says who holds it. */
 export const LOCK_FILE = "lock.json";
@@ -89,7 +89,7 @@ export function readLockFile(contents: string): LockHolder | undefined {
   return {
     host: { kind: host.kind, id: host.id, name: typeof host.name === "string" ? host.name : host.id },
     pid: record.pid as number,
-    command: record.command ?? "agent-pipeline",
+    command: record.command ?? "ticket-runner",
     runId: record.runId ?? "unknown",
     startedAt: record.startedAt ?? "unknown",
     ...(typeof record.processStartedAt === "string"
@@ -102,9 +102,9 @@ export function readLockFile(contents: string): LockHolder | undefined {
 export function lockHeldMessage({ holder, onAnotherHost }: HeldLock): string {
   if (!onAnotherHost) {
     return [
-      `Another agent-pipeline is running on this Host: \`${holder.command}\``,
+      `Another ticket-runner is running on this Host: \`${holder.command}\``,
       `as run ${holder.runId} (pid ${holder.pid}, started ${holder.startedAt}).`,
-      "Wait for it to finish, or ask it to with `agent-pipeline stop`.",
+      "Wait for it to finish, or ask it to with `ticket-runner stop`.",
     ].join(" ");
   }
   return [

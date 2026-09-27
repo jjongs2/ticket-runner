@@ -111,7 +111,7 @@ function parseJson(contents: string): unknown {
 }
 
 /** Where a pipeline before the state branch kept the State files, in the checkout. */
-export const LOCAL_STATE_DIR = join(".agent-pipeline", "state");
+export const LOCAL_STATE_DIR = join(".ticket-runner", "state");
 
 /**
  * The Tickets whose State files a pipeline before the state branch left in this

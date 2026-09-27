@@ -8,7 +8,7 @@
 
 - <what a Target or its human has to do> — or the single word: nothing
 
-[#<pr>]: https://github.com/jjongs2/agent-pipeline/pull/<pr>
+[#<pr>]: https://github.com/jjongs2/ticket-runner/pull/<pr>
 
 The Version notes: one section of `CHANGELOG.md`, written in the Version PR and
 published as the body of that Version's GitHub Release (ADR-0007). The skill in

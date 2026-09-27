@@ -1,6 +1,6 @@
 Notes from the pipeline
 
-<!-- agent-pipeline:notes-issue -->
+<!-- ticket-runner:notes-issue -->
 **Notes from the pipeline.** Every defect a Stage met outside its own Ticket and
 could not post on another one arrives here as a comment: one that named no
 Ticket, one whose Ticket would have buried it, and one whose Ticket refused the
@@ -41,5 +41,5 @@ A closed one is never written to. Nothing reopens it: the next Note opens a fres
 issue, which is what closing this one means.
 
 The marker here is the issue's, not a Note's. `note-comment.md` signs every Note
-with `<!-- agent-pipeline:note -->`, and a lookup that confused the two would
+with `<!-- ticket-runner:note -->`, and a lookup that confused the two would
 write Notes into a Note.

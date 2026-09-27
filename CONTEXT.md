@@ -1,4 +1,4 @@
-# agent-pipeline
+# ticket-runner
 
 A tool that drives the mattpocock-skills chain unattended: humans plan, the pipeline executes.
 
@@ -71,7 +71,7 @@ What stops two Runs, or a Run and a `ticket`, sharing one Target, whichever Host
 _Avoid_: mutex, pidfile, lease
 
 **Target readiness**:
-What `agent-pipeline init` must have left in a Target before a Run may start: the two gitignored directories, the conventions document stamped with a Version, a `CLAUDE.md` pointing at it, the Operator's skill, the six triage labels, and a repository that deletes a pull request's branch when it merges. Before the GitHub items it asks for a `gh` the Host can run, the one thing on the list `init` only reports: a refusal over it names the install first. The same on every Host, so a Target a local Run accepts is one an Operator can run from the app too. Asked for presence, never content. A Run that finds one missing refuses the Target and names `init`, rather than putting it there itself.
+What `ticket-runner init` must have left in a Target before a Run may start: the two gitignored directories, the conventions document stamped with a Version, a `CLAUDE.md` pointing at it, the Operator's skill, the six triage labels, and a repository that deletes a pull request's branch when it merges. Before the GitHub items it asks for a `gh` the Host can run, the one thing on the list `init` only reports: a refusal over it names the install first. The same on every Host, so a Target a local Run accepts is one an Operator can run from the app too. Asked for presence, never content. A Run that finds one missing refuses the Target and names `init`, rather than putting it there itself.
 _Avoid_: preflight, setup check, validation, guard (a Guard rejects a Candidate, readiness rejects the Target)
 
 **Stage**:
@@ -79,7 +79,7 @@ One Claude Code session inside a Run with a single purpose: implement, verify, f
 _Avoid_: step, phase, task
 
 **Stage mark**:
-The `AGENT_PIPELINE_STAGE` variable a Run sets in every Stage's shell. The pipeline refuses to start while it is present, so a Stage cannot start a nested Run. A tripwire, not a sandbox, where the Run lock stops two humans.
+The `TICKET_RUNNER_STAGE` variable a Run sets in every Stage's shell. The pipeline refuses to start while it is present, so a Stage cannot start a nested Run. A tripwire, not a sandbox, where the Run lock stops two humans.
 _Avoid_: flag, sandbox, guard variable
 
 **Progress comment**:
@@ -123,7 +123,7 @@ What a rate-limited Stage does to a Ticket: the Claim is undone, `ready-for-agen
 _Avoid_: pause, defer, requeue, unclaim
 
 **Stop**:
-What a human asks of a running Run: finish the Tickets its Lanes hold, to merge or Hand-off, and take no more — not from the Frontier and not from the Stranded Tickets. Nothing about any Ticket changes, so nothing is written to the board and the exit code is the outcomes' as usual. Not a kill: a killed Run leaves Stranded Tickets, a stopped one leaves none. Asked for in the only way there is, SIGTERM to the Run's process, which only the Host it runs on can send: `agent-pipeline stop` on that Host, or the Operator on a cloud Host.
+What a human asks of a running Run: finish the Tickets its Lanes hold, to merge or Hand-off, and take no more — not from the Frontier and not from the Stranded Tickets. Nothing about any Ticket changes, so nothing is written to the board and the exit code is the outcomes' as usual. Not a kill: a killed Run leaves Stranded Tickets, a stopped one leaves none. Asked for in the only way there is, SIGTERM to the Run's process, which only the Host it runs on can send: `ticket-runner stop` on that Host, or the Operator on a cloud Host.
 _Avoid_: drain (a Run drains the Frontier), pause, cancel, abort, kill, graceful shutdown
 
 **State file**:

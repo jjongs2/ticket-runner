@@ -781,7 +781,7 @@ function subIssues(issue: RawIssue): number {
   if (typeof total !== "number") {
     throw new Error(
       `#${issue.number} came back without sub_issues_summary.total, so whether ` +
-        "it is a Spec cannot be read; agent-pipeline trusts GitHub's native " +
+        "it is a Spec cannot be read; ticket-runner trusts GitHub's native " +
         "relations only (ADR-0003)",
     );
   }

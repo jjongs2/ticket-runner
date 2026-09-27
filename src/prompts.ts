@@ -14,7 +14,7 @@ import { STAGE_ENV_VAR } from "./stage-guard.js";
  */
 export const SELF_HOSTING_GUIDANCE = `This checkout is the pipeline that started this session, so running it is running yourself:
 
-- Exercise the pipeline only through its tests and fakes. Never run its commands against this repository or GitHub, by any spelling: \`agent-pipeline\`, \`npm run agent-pipeline\`, \`npx tsx src/cli.ts\`.
+- Exercise the pipeline only through its tests and fakes. Never run its commands against this repository or GitHub, by any spelling: \`ticket-runner\`, \`npm run ticket-runner\`, \`npx tsx src/cli.ts\`.
 - Never kill processes you did not start. A pattern kill such as \`pkill -f tsx\` takes down the Run you belong to.
 - ${STAGE_ENV_VAR} is set in this shell and the pipeline's own CLI refuses to start while it is. That refusal is expected; do not work around it.`;
 

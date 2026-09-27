@@ -30,7 +30,7 @@ function checkout(): void {
 }
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), "agent-pipeline-version-"));
+  root = mkdtempSync(join(tmpdir(), "ticket-runner-version-"));
 });
 
 afterEach(() => {

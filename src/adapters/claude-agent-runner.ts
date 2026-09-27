@@ -151,7 +151,7 @@ function countTurns(results: ResultEvent[]): number | undefined {
 
 /** A session that could not even start still has to leave a trace behind. */
 async function spawnFailure(error: unknown): Promise<Execution> {
-  const message = `agent-pipeline could not start the Stage: ${(error as Error).message}\n`;
+  const message = `ticket-runner could not start the Stage: ${(error as Error).message}\n`;
   return { exitCode: 1, stdout: "", stderr: message, output: message, timedOut: false };
 }
 

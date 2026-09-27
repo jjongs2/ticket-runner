@@ -9,7 +9,7 @@ Closes #<n>
 
 </details>
 
-Run `<runId>` · transcripts in `.agent-pipeline/runs/<runId>/<n>/`
+Run `<runId>` · transcripts in `.ticket-runner/runs/<runId>/<n>/`
 
 The last line names the Run, and the directory on the Host that ran it where
 its Stages' transcripts are. That is the shape on a workstation, whose run

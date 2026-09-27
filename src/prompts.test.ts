@@ -8,7 +8,7 @@ import {
   verifyPrompt,
 } from "./prompts.js";
 
-const url = "https://github.com/jjongs2/agent-pipeline/issues/2";
+const url = "https://github.com/jjongs2/ticket-runner/issues/2";
 
 /** The base branch the Run resolved, which most of these prompts only carry. */
 const BASE = "main";

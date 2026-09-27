@@ -13,7 +13,7 @@ function request(stage: StageName): StageRequest {
     maxTurns: 10,
     maxMinutes: 5,
     permissionMode: "auto",
-    logDir: "/repo/.agent-pipeline/logs",
+    logDir: "/repo/.ticket-runner/logs",
   };
 }
 

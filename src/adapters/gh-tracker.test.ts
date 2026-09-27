@@ -410,7 +410,7 @@ describe("writing", () => {
     await tracker(ok("{}")).createLabel({
       name: "in-progress",
       color: "1d76db",
-      description: "Claimed by an agent-pipeline Run",
+      description: "Claimed by a ticket-runner Run",
     });
 
     expect(calls[0]).toEqual([
@@ -423,7 +423,7 @@ describe("writing", () => {
       "-f",
       "color=1d76db",
       "-f",
-      "description=Claimed by an agent-pipeline Run",
+      "description=Claimed by a ticket-runner Run",
     ]);
   });
 
@@ -516,7 +516,7 @@ describe("writing", () => {
   });
 
   it("comments through REST with the body as a single field", async () => {
-    await tracker(ok('{"id":99}')).comment(2, "<!-- agent-pipeline:handoff -->\nline two");
+    await tracker(ok('{"id":99}')).comment(2, "<!-- ticket-runner:handoff -->\nline two");
 
     expect(calls[0]).toEqual([
       "api",
@@ -524,16 +524,16 @@ describe("writing", () => {
       "POST",
       "repos/{owner}/{repo}/issues/2/comments",
       "-f",
-      "body=<!-- agent-pipeline:handoff -->\nline two",
+      "body=<!-- ticket-runner:handoff -->\nline two",
     ]);
   });
 
   it("reports the id of the comment it just posted, for editing later", async () => {
     const posted = await tracker(
-      ok(JSON.stringify({ id: 5714903734, body: "<!-- agent-pipeline:progress -->" })),
-    ).comment(2, "<!-- agent-pipeline:progress -->");
+      ok(JSON.stringify({ id: 5714903734, body: "<!-- ticket-runner:progress -->" })),
+    ).comment(2, "<!-- ticket-runner:progress -->");
 
-    expect(posted).toEqual({ id: "5714903734", body: "<!-- agent-pipeline:progress -->" });
+    expect(posted).toEqual({ id: "5714903734", body: "<!-- ticket-runner:progress -->" });
   });
 
   it("reports a comment with no id rather than failing, since an id costs an edit only", async () => {

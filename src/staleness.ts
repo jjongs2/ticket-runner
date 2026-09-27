@@ -95,7 +95,7 @@ export function conventionsWarning(repoRoot: string, version: string): string | 
 
   const subject = `This Target's \`${CONVENTIONS_PATH}\``;
   if (isHigher(mark, own)) {
-    return `${subject} was left by ${mark}, and this Run is ${own} — upgrade \`agent-pipeline\`.`;
+    return `${subject} was left by ${mark}, and this Run is ${own} — upgrade \`ticket-runner\`.`;
   }
-  return `${subject} was left by ${mark}, and this Run is ${own} — run \`agent-pipeline init\` here to bring it up to date.`;
+  return `${subject} was left by ${mark}, and this Run is ${own} — run \`ticket-runner init\` here to bring it up to date.`;
 }

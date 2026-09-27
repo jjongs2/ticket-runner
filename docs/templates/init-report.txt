@@ -1,11 +1,11 @@
-agent-pipeline <version> init · <repo root>
+ticket-runner <version> init · <repo root>
 
 Wrote:
-  .gitignore: added `.worktrees/` and `.agent-pipeline/`
-  agent-pipeline.json: created, with every setting left at its default
+  .gitignore: added `.worktrees/` and `.ticket-runner/`
+  ticket-runner.json: created, with every setting left at its default
   docs/agents/pipeline-conventions.md: written
   CLAUDE.md: created, pointing at docs/agents/pipeline-conventions.md
-  .claude/skills/agent-pipeline/SKILL.md: written
+  .claude/skills/ticket-runner/SKILL.md: written
 
 GitHub:
   labels: created needs-triage, needs-info, ready-for-agent
@@ -26,8 +26,8 @@ The first line names the Version doing the setting up (ADR-0007), in the shape
 files it is about to gain. Where a newer Version has been published, one line
 follows it and nothing comes between them:
 
-agent-pipeline <version> init · <repo root>
-A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g "github:jjongs2/agent-pipeline#semver:*"`.
+ticket-runner <version> init · <repo root>
+A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g "github:jjongs2/ticket-runner#semver:*"`.
 
 Wrote:
   ...
@@ -48,7 +48,7 @@ read before its text is compared (ADR-0007). Five lines, one per case:
   docs/agents/pipeline-conventions.md: overwritten, because the copy here carried no Version
   docs/agents/pipeline-conventions.md: overwritten, because the copy here was left by 0.3.0
   docs/agents/pipeline-conventions.md: overwritten, because the copy here said something else
-  docs/agents/pipeline-conventions.md: left alone, because 0.5.0 set this Target up and this is 0.4.0 — upgrade `agent-pipeline` to rewrite it
+  docs/agents/pipeline-conventions.md: left alone, because 0.5.0 set this Target up and this is 0.4.0 — upgrade `ticket-runner` to rewrite it
 
 The fourth is a copy marked with this very Version: nothing about the pipeline
 moved, so whatever the difference is, the Target made it. Identical text is not
@@ -62,9 +62,9 @@ something else and left alone where a newer pipeline set the Target up, which
 the conventions document's mark is how `init` knows. It carries no mark of its
 own, so it has three lines of its own rather than five:
 
-  .claude/skills/agent-pipeline/SKILL.md: written
-  .claude/skills/agent-pipeline/SKILL.md: overwritten, because the copy here said something else
-  .claude/skills/agent-pipeline/SKILL.md: left alone, because 0.5.0 set this Target up and this is 0.4.0 — upgrade `agent-pipeline` to rewrite it
+  .claude/skills/ticket-runner/SKILL.md: written
+  .claude/skills/ticket-runner/SKILL.md: overwritten, because the copy here said something else
+  .claude/skills/ticket-runner/SKILL.md: left alone, because 0.5.0 set this Target up and this is 0.4.0 — upgrade `ticket-runner` to rewrite it
 
 A copy with no number to stamp — a pipeline that could not read its own package
 — writes no marker at all, so the document it writes is the document it next

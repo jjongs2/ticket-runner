@@ -69,7 +69,7 @@ describe("pullRequestBody", () => {
         "",
         "</details>",
         "",
-        "Run `r1` · transcripts in `.agent-pipeline/runs/r1/2/`",
+        "Run `r1` · transcripts in `.ticket-runner/runs/r1/2/`",
         "",
       ].join("\n"),
     );
@@ -94,13 +94,13 @@ describe("draftPullRequestBody", () => {
   it("names where the hand-off kept the transcripts on the remote", () => {
     const body = draftPullRequestBody({
       ...base,
-      transcripts: { branch: "agent-pipeline/state", path: "ticket-2/r1/" },
+      transcripts: { branch: "ticket-runner/state", path: "ticket-2/r1/" },
     });
 
     expect(body).toContain(
-      "Run `r1` · transcripts in `ticket-2/r1/` on the `agent-pipeline/state` branch",
+      "Run `r1` · transcripts in `ticket-2/r1/` on the `ticket-runner/state` branch",
     );
-    expect(body).not.toContain(".agent-pipeline/runs/");
+    expect(body).not.toContain(".ticket-runner/runs/");
   });
 
   it("names the Run alone when the hand-off kept no transcripts", () => {
@@ -215,11 +215,11 @@ describe("handoffComment", () => {
   it("names where the Stages' transcripts were kept, on its own line", () => {
     const comment = handoffComment({
       ...base,
-      transcripts: { branch: "agent-pipeline/state", path: "ticket-2/run-1/" },
+      transcripts: { branch: "ticket-runner/state", path: "ticket-2/run-1/" },
     });
 
     expect(comment).toContain(
-      "- Transcripts: `ticket-2/run-1/` on the `agent-pipeline/state` branch",
+      "- Transcripts: `ticket-2/run-1/` on the `ticket-runner/state` branch",
     );
     expect(handoffComment(base)).not.toContain("Transcripts");
   });
@@ -328,7 +328,7 @@ describe("handoffTakenComment", () => {
 
 describe("guardComment", () => {
   it("opens with the marker the pipeline finds its own warning by", () => {
-    expect(guardComment("spec").split("\n")[0]).toBe("<!-- agent-pipeline:guard:spec -->");
+    expect(guardComment("spec").split("\n")[0]).toBe("<!-- ticket-runner:guard:spec -->");
   });
 
   it("gives a marker per reason, so one warning does not silence another", () => {
@@ -338,7 +338,7 @@ describe("guardComment", () => {
   it("says a Spec was treated as one and that the label is gone", () => {
     const comment = guardComment("spec");
 
-    expect(comment).toContain("**Skipped by agent-pipeline.**");
+    expect(comment).toContain("**Skipped by ticket-runner.**");
     expect(comment).toContain("it is a Spec, not a Ticket");
     expect(comment).toContain("`ready-for-agent` was removed");
   });
@@ -390,7 +390,7 @@ describe("runSummary", () => {
       stop: { reason: "frontier", blocked: [] },
     });
 
-    expect(summary.split("\n")[0]).toBe(`agent-pipeline ${VERSION} run r1 · 42m`);
+    expect(summary.split("\n")[0]).toBe(`ticket-runner ${VERSION} run r1 · 42m`);
   });
 
   /**
@@ -411,7 +411,7 @@ describe("runSummary", () => {
 
     const [first, second] = summary.split("\n");
     expect(first).toBe(newer);
-    expect(second).toBe(`agent-pipeline ${VERSION} run r1 · 0m`);
+    expect(second).toBe(`ticket-runner ${VERSION} run r1 · 0m`);
   });
 
   it("heads the summary with the Run where no newer Version is out", () => {
@@ -423,7 +423,7 @@ describe("runSummary", () => {
       stop: { reason: "frontier", blocked: [] },
     });
 
-    expect(summary.split("\n")[0]).toBe(`agent-pipeline ${VERSION} run r1 · 0m`);
+    expect(summary.split("\n")[0]).toBe(`ticket-runner ${VERSION} run r1 · 0m`);
   });
 
   it("lists merged, handed-off and skipped Tickets by number", () => {

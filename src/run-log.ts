@@ -3,7 +3,7 @@ import { join, sep } from "node:path";
 
 /** Where one Run's transcripts live: one directory per Run, under the repo root. */
 export function runLogDir(repoRoot: string, runId: string): string {
-  return join(repoRoot, ".agent-pipeline", "runs", runId);
+  return join(repoRoot, ".ticket-runner", "runs", runId);
 }
 
 /**

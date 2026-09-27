@@ -11,14 +11,14 @@ const LABEL_SPECS: Record<keyof Labels, Omit<LabelSpec, "name">> = {
   readyForAgent: { color: "0e8a16", description: "Fully specified, ready for an AFK agent" },
   readyForHuman: { color: "d93f0b", description: "Requires human implementation" },
   wontfix: { color: "cfd3d7", description: "Will not be actioned" },
-  inProgress: { color: "1d76db", description: "Claimed by an agent-pipeline Run" },
+  inProgress: { color: "1d76db", description: "Claimed by a ticket-runner Run" },
 };
 
 /**
  * Create whatever the triage state machine needs and the Target does not have
  * yet, so a fresh Target works without manual label setup.
  *
- * `agent-pipeline init` is the only caller: a Run that finds a label missing
+ * `ticket-runner init` is the only caller: a Run that finds a label missing
  * refuses the Target rather than creating it, so setup lives in one command.
  *
  * Returns the names it created; labels that already exist are left untouched,

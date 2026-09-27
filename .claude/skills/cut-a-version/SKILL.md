@@ -1,6 +1,6 @@
 ---
 name: cut-a-version
-description: Cut a Version of agent-pipeline by opening the Version PR that raises the number and carries the notes.
+description: Cut a Version of ticket-runner by opening the Version PR that raises the number and carries the notes.
 disable-model-invocation: true
 ---
 
@@ -12,7 +12,7 @@ A Version is cut by merging a **Version PR** (ADR-0007): it raises the number in
 whose body is the section.
 
 Work in a worktree when a Run may be active, as `CONTRIBUTING.md` asks: one is
-when `git show origin/agent-pipeline/lock:lock.json` reads `"held": true` for a
+when `git show origin/ticket-runner/lock:lock.json` reads `"held": true` for a
 `workstation` Host named as this machine is. A cloud Host's Run pulls its own
 checkout, not this one.
 
@@ -59,7 +59,7 @@ Each number is a reference link — `([#94], [#95])` — and every one it names 
 defined at the end of the section, below `After upgrading`:
 
 ```markdown
-[#94]: https://github.com/jjongs2/agent-pipeline/pull/94
+[#94]: https://github.com/jjongs2/ticket-runner/pull/94
 ```
 
 A bare `#94` is plain text both in this file and in the Release the workflow

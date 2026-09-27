@@ -247,7 +247,7 @@ describe("the happy path", () => {
     await run();
 
     expect(tracker.pullRequest(100).body).toContain(
-      `Run \`run-1\` · transcripts in \`.agent-pipeline/runs/run-1/${TICKET}/\``,
+      `Run \`run-1\` · transcripts in \`.ticket-runner/runs/run-1/${TICKET}/\``,
     );
   });
 
@@ -461,7 +461,7 @@ describe("Stage invocation", () => {
     await run();
 
     for (const request of runner.requests) {
-      expect(request.logDir).toBe(`${repoRoot}/.agent-pipeline/runs/run-1/${TICKET}`);
+      expect(request.logDir).toBe(`${repoRoot}/.ticket-runner/runs/run-1/${TICKET}`);
     }
   });
 
@@ -1023,7 +1023,7 @@ describe("hand-off", () => {
  * branch and the Stages' transcripts, both on the remote.
  */
 describe("the transcripts a hand-off keeps on the remote", () => {
-  const KEPT = "- Transcripts: `ticket-2/run-1/` on the `agent-pipeline/state` branch";
+  const KEPT = "- Transcripts: `ticket-2/run-1/` on the `ticket-runner/state` branch";
 
   it("keeps this Run's beside the State, and the comment says where they and the branch are", async () => {
     workspace.failCheck("npm test", "FAIL src/a.test.ts");
@@ -1059,9 +1059,9 @@ describe("the transcripts a hand-off keeps on the remote", () => {
     const body = tracker.pullRequest(100).body;
     expect(tracker.pullRequest(100).draft).toBe(true);
     expect(body).toContain(
-      "Run `run-1` · transcripts in `ticket-2/run-1/` on the `agent-pipeline/state` branch",
+      "Run `run-1` · transcripts in `ticket-2/run-1/` on the `ticket-runner/state` branch",
     );
-    expect(body).not.toContain(".agent-pipeline/runs/");
+    expect(body).not.toContain(".ticket-runner/runs/");
   });
 
   it("names none in the draft PR's body when the remote will not take them", async () => {
@@ -1086,9 +1086,9 @@ describe("the transcripts a hand-off keeps on the remote", () => {
     expect(tracker.calls).toContain("convertPullRequestToDraft:100");
     expect(body).toContain("**Handed off at ci.**");
     expect(body).toContain(
-      "Run `run-1` · transcripts in `ticket-2/run-1/` on the `agent-pipeline/state` branch",
+      "Run `run-1` · transcripts in `ticket-2/run-1/` on the `ticket-runner/state` branch",
     );
-    expect(body).not.toContain(".agent-pipeline/runs/");
+    expect(body).not.toContain(".ticket-runner/runs/");
   });
 
   it("names none in a PR made a draft when the remote will not take them", async () => {
@@ -1131,7 +1131,7 @@ describe("the transcripts a hand-off keeps on the remote", () => {
     expect(await run()).toMatchObject({ outcome: "merged" });
     expect(workspace.transcripts.has(TICKET)).toBe(false);
     // The merge took what the draft's body pointed at, so the body goes too.
-    expect(tracker.pullRequest(100).body).not.toContain("agent-pipeline/state");
+    expect(tracker.pullRequest(100).body).not.toContain("ticket-runner/state");
   });
 
   it("keeps none for a released Ticket, which nobody has to look into", async () => {
@@ -1423,7 +1423,7 @@ describe("the fix Stage", () => {
   });
 
   it("logs the second pass beside the first rather than over it", async () => {
-    const ticketLogs = `${repoRoot}/.agent-pipeline/runs/run-1/${TICKET}`;
+    const ticketLogs = `${repoRoot}/.ticket-runner/runs/run-1/${TICKET}`;
     runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
 
     await run();
@@ -2930,7 +2930,7 @@ describe("the Planning guards", () => {
       reason: "spec",
     });
     expect(warnings()).toHaveLength(1);
-    expect(warnings()[0]).toContain("<!-- agent-pipeline:guard:spec -->");
+    expect(warnings()[0]).toContain("<!-- ticket-runner:guard:spec -->");
     expect(warnings()[0]).toContain("it is a Spec, not a Ticket");
     expectUntouched();
   });
@@ -2950,7 +2950,7 @@ describe("the Planning guards", () => {
     const outcome = await run();
 
     expect(outcome).toMatchObject({ outcome: "skipped", reason: "no-criteria" });
-    expect(warnings()[0]).toContain("<!-- agent-pipeline:guard:no-criteria -->");
+    expect(warnings()[0]).toContain("<!-- ticket-runner:guard:no-criteria -->");
     expectUntouched();
   });
 
@@ -2978,7 +2978,7 @@ describe("the Planning guards", () => {
     const outcome = await run();
 
     expect(outcome).toMatchObject({ outcome: "skipped", reason: "body-only-blockers" });
-    expect(warnings()[0]).toContain("<!-- agent-pipeline:guard:body-only-blockers -->");
+    expect(warnings()[0]).toContain("<!-- ticket-runner:guard:body-only-blockers -->");
     expectUntouched();
   });
 
@@ -3007,7 +3007,7 @@ describe("the Planning guards", () => {
     const issue = tracker.issue(TICKET);
     issue.body = "## What to build\n\nSomething good.";
     issue.comments = [
-      { id: "c0", body: "<!-- agent-pipeline:guard:body-only-blockers -->\n**Skipped.**" },
+      { id: "c0", body: "<!-- ticket-runner:guard:body-only-blockers -->\n**Skipped.**" },
     ];
 
     await run();
@@ -3146,7 +3146,7 @@ describe("the progress comment", () => {
 
     expect(tracker.comments.filter(({ body }) => body.startsWith(PROGRESS_MARKER))).toEqual([]);
     expect(tracker.updatedComments.every(({ id }) => id === "99")).toBe(true);
-    expect(progressTable()).toContain(`${earlier}\n**agent-pipeline**`);
+    expect(progressTable()).toContain(`${earlier}\n**ticket-runner**`);
     expect(progressTable().indexOf("run \`run-1\`")).toBeGreaterThan(
       progressTable().indexOf("run \`run-0\`"),
     );
@@ -3168,7 +3168,7 @@ describe("what stays a separate comment", () => {
     await run();
 
     const handoff = tracker.comments.filter(({ body }) =>
-      body.startsWith("<!-- agent-pipeline:handoff -->"),
+      body.startsWith("<!-- ticket-runner:handoff -->"),
     );
     expect(handoff).toHaveLength(1);
     expect(handoff[0]?.body).toContain("1 failing · expected true to be false");
@@ -3186,7 +3186,7 @@ describe("what stays a separate comment", () => {
     await run();
 
     expect(tracker.comments.map(({ body }) => body.split("\n")[0])).toEqual([
-      "<!-- agent-pipeline:guard:no-criteria -->",
+      "<!-- ticket-runner:guard:no-criteria -->",
     ]);
   });
 });
@@ -3363,7 +3363,7 @@ describe("Notes a Stage makes", () => {
 
     expect(tracker.comments).toContainEqual({
       issue: OTHER,
-      body: "<!-- agent-pipeline:note -->\nFrom #2 implement\n\n**the help drifts**\n",
+      body: "<!-- ticket-runner:note -->\nFrom #2 implement\n\n**the help drifts**\n",
     });
   });
 
@@ -3377,10 +3377,10 @@ describe("Notes a Stage makes", () => {
       title: "Notes from the pipeline",
       labels: ["needs-triage"],
     });
-    expect(tracker.createdIssues[0]?.body).toContain("<!-- agent-pipeline:notes-issue -->");
+    expect(tracker.createdIssues[0]?.body).toContain("<!-- ticket-runner:notes-issue -->");
     expect(tracker.comments).toContainEqual({
       issue: 200,
-      body: "<!-- agent-pipeline:note -->\nFrom #2 implement\n\n**Nothing cleans up worktrees.**\n",
+      body: "<!-- ticket-runner:note -->\nFrom #2 implement\n\n**Nothing cleans up worktrees.**\n",
     });
   });
 
@@ -3388,7 +3388,7 @@ describe("Notes a Stage makes", () => {
     tracker.addIssue({
       number: 50,
       title: "Notes from the pipeline",
-      body: "<!-- agent-pipeline:notes-issue -->\n**Notes from the pipeline.**\n",
+      body: "<!-- ticket-runner:notes-issue -->\n**Notes from the pipeline.**\n",
       labels: ["needs-triage"],
     });
 
@@ -3557,7 +3557,7 @@ describe("Notes a Stage makes", () => {
     tracker.addIssue({
       number: 50,
       title: "Notes from the pipeline",
-      body: "<!-- agent-pipeline:notes-issue -->\n**Notes from the pipeline.**\n",
+      body: "<!-- ticket-runner:notes-issue -->\n**Notes from the pipeline.**\n",
       labels: ["needs-triage"],
     });
 

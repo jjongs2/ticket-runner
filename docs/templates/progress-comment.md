@@ -1,5 +1,5 @@
-<!-- agent-pipeline:progress -->
-**agent-pipeline** `<version>` · run `<runId>` · `<branch>`
+<!-- ticket-runner:progress -->
+**ticket-runner** `<version>` · run `<runId>` · `<branch>`
 
 | Stage | Outcome | Turns | Duration |
 |---|---|---|---|
@@ -7,7 +7,7 @@
 | checks | ✅ passed | – | <m>m |
 | verify | ⏸ rate limited | <n> | <m>m |
 
-**agent-pipeline** `<version>` · run `<runId>` · `<branch>`
+**ticket-runner** `<version>` · run `<runId>` · `<branch>`
 
 | Stage | Outcome | Turns | Duration |
 |---|---|---|---|
@@ -52,7 +52,7 @@ most one such footer, the one the Host appended to the latest write, however
 many Runs wrote to it.
 
 The header names no Host. The runId finds it: every commit on the
-`agent-pipeline/lock` branch that takes the lock opens ``Held by run <runId> on
+`ticket-runner/lock` branch that takes the lock opens ``Held by run <runId> on
 <Host>``.
 
 One Run does not carry on: the one taking the Ticket back from a human, which is

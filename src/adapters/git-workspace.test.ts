@@ -47,14 +47,14 @@ function conflictingWorktree(): string {
  * allowed to assume `main`.
  */
 function setUpRepo(base: string): { remote: string; repo: string } {
-  const remote = mkdtempSync(join(tmpdir(), "agent-pipeline-remote-"));
-  const repo = mkdtempSync(join(tmpdir(), "agent-pipeline-repo-"));
+  const remote = mkdtempSync(join(tmpdir(), "ticket-runner-remote-"));
+  const repo = mkdtempSync(join(tmpdir(), "ticket-runner-repo-"));
   created.push(remote, repo);
 
   git(remote, "init", "--bare", `--initial-branch=${base}`, ".");
   git(repo, "init", `--initial-branch=${base}`, ".");
   git(repo, "config", "user.email", "pipeline@example.com");
-  git(repo, "config", "user.name", "agent-pipeline");
+  git(repo, "config", "user.name", "ticket-runner");
   git(repo, "remote", "add", "origin", remote);
   commit(repo, "README.md", "hello\n", "docs: initial commit (#1)");
   git(repo, "push", "-u", "origin", base);
@@ -81,7 +81,7 @@ describe("worktrees", () => {
   });
 
   it("branches from the remote's main when the checkout's is behind it, and leaves the checkout's alone", async () => {
-    const other = mkdtempSync(join(tmpdir(), "agent-pipeline-other-"));
+    const other = mkdtempSync(join(tmpdir(), "ticket-runner-other-"));
     created.push(other);
     git(other, "clone", remote, ".");
     git(other, "config", "user.email", "human@example.com");
@@ -592,7 +592,7 @@ describe("push and pullBase", () => {
   });
 
   it("advances the local main ref while another branch is checked out", async () => {
-    const other = mkdtempSync(join(tmpdir(), "agent-pipeline-other-"));
+    const other = mkdtempSync(join(tmpdir(), "ticket-runner-other-"));
     created.push(other);
     git(other, "clone", remote, ".");
     git(other, "config", "user.email", "human@example.com");
@@ -607,7 +607,7 @@ describe("push and pullBase", () => {
   });
 
   it("fast-forwards main when main is the branch checked out", async () => {
-    const other = mkdtempSync(join(tmpdir(), "agent-pipeline-other-"));
+    const other = mkdtempSync(join(tmpdir(), "ticket-runner-other-"));
     created.push(other);
     git(other, "clone", remote, ".");
     git(other, "config", "user.email", "human@example.com");
@@ -636,11 +636,11 @@ describe("a worktree from the remote branch", () => {
 
   /** A second Host: its own clone of the remote, with the Ticket's branch on it. */
   function otherHost(): string {
-    const clone = mkdtempSync(join(tmpdir(), "agent-pipeline-host-"));
+    const clone = mkdtempSync(join(tmpdir(), "ticket-runner-host-"));
     created.push(clone);
     git(clone, "clone", remote, ".");
     git(clone, "config", "user.email", "pipeline@example.com");
-    git(clone, "config", "user.name", "agent-pipeline");
+    git(clone, "config", "user.name", "ticket-runner");
     return clone;
   }
 
@@ -820,7 +820,7 @@ describe("a worktree from the remote branch", () => {
 describe("two Tickets at the main checkout at once", () => {
   /** A commit pushed to the remote from elsewhere, as another Run's merge is. */
   function moveMainOnTheRemote(): string {
-    const other = mkdtempSync(join(tmpdir(), "agent-pipeline-other-"));
+    const other = mkdtempSync(join(tmpdir(), "ticket-runner-other-"));
     created.push(other);
     git(other, "clone", remote, ".");
     git(other, "config", "user.email", "human@example.com");
@@ -939,7 +939,7 @@ describe("a Target whose base branch is not main", () => {
   });
 
   it("pulls master after the merge, while another branch is checked out", async () => {
-    const other = mkdtempSync(join(tmpdir(), "agent-pipeline-other-"));
+    const other = mkdtempSync(join(tmpdir(), "ticket-runner-other-"));
     created.push(other);
     git(other, "clone", masterRemote, ".");
     git(other, "config", "user.email", "human@example.com");
@@ -954,7 +954,7 @@ describe("a Target whose base branch is not main", () => {
   });
 
   it("fast-forwards master when master is the branch checked out", async () => {
-    const other = mkdtempSync(join(tmpdir(), "agent-pipeline-other-"));
+    const other = mkdtempSync(join(tmpdir(), "ticket-runner-other-"));
     created.push(other);
     git(other, "clone", masterRemote, ".");
     git(other, "config", "user.email", "human@example.com");
@@ -980,11 +980,11 @@ describe("the State a Ticket keeps", () => {
 
   /** A second checkout of the same remote, standing for another Host. */
   function anotherHost(): { repo: string; workspace: GitWorkspace } {
-    const other = mkdtempSync(join(tmpdir(), "agent-pipeline-host-"));
+    const other = mkdtempSync(join(tmpdir(), "ticket-runner-host-"));
     created.push(other);
     git(other, "clone", remote, ".");
     git(other, "config", "user.email", "pipeline@example.com");
-    git(other, "config", "user.name", "agent-pipeline");
+    git(other, "config", "user.name", "ticket-runner");
     return { repo: other, workspace: new GitWorkspace(other) };
   }
 
@@ -1013,7 +1013,7 @@ describe("the State a Ticket keeps", () => {
     expect(JSON.parse(git(remote, "show", `${STATE_BRANCH}:ticket-4.json`))).toEqual(state);
     expect(await workspace.readState(4)).toEqual(state);
     // Nothing under the run directory any more: that is only this Host's.
-    expect(existsSync(join(repo, ".agent-pipeline", "state"))).toBe(false);
+    expect(existsSync(join(repo, ".ticket-runner", "state"))).toBe(false);
   });
 
   it("is read by a Run on another Host", async () => {
@@ -1249,7 +1249,7 @@ describe("the Run lock", () => {
   const CLOUD: Host = { kind: "cloud", id: "session_01abc", name: "runsc" };
   const claim = {
     pid: 111,
-    command: "agent-pipeline run",
+    command: "ticket-runner run",
     runId: "run-1",
     startedAt: "2026-09-17T09:00:00.000Z",
   };
@@ -1265,11 +1265,11 @@ describe("the Run lock", () => {
 
   /** A second checkout of the same remote, standing for another Host's. */
   function clone(): string {
-    const other = mkdtempSync(join(tmpdir(), "agent-pipeline-host-"));
+    const other = mkdtempSync(join(tmpdir(), "ticket-runner-host-"));
     created.push(other);
     git(other, "clone", remote, ".");
     git(other, "config", "user.email", "pipeline@example.com");
-    git(other, "config", "user.name", "agent-pipeline");
+    git(other, "config", "user.name", "ticket-runner");
     return other;
   }
 
@@ -1298,7 +1298,7 @@ describe("the Run lock", () => {
     expect(await workspace.takeRunLock(claim)).toEqual({ outcome: "taken" });
 
     expect(history()).toEqual([
-      "Held by run run-1 on the workstation `desk`: agent-pipeline run",
+      "Held by run run-1 on the workstation `desk`: ticket-runner run",
       "Free",
     ]);
     expect(tipHolder()).toEqual({ host: HERE, ...claim, processStartedAt: "A" });
@@ -1398,7 +1398,7 @@ describe("the Run lock", () => {
 
     expect(history()).toEqual([
       "Free",
-      "Held by run run-1 on the workstation `desk`: agent-pipeline run",
+      "Held by run run-1 on the workstation `desk`: ticket-runner run",
       "Free",
     ]);
     expect(tipHolder()).toBeUndefined();

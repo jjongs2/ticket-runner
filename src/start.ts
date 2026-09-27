@@ -272,7 +272,7 @@ function opening(runId: string, work: Work, lanes: number): string {
     work.command === "run"
       ? `${lanes} ${lanes === 1 ? "lane" : "lanes"}`
       : `#${work.ticket}`;
-  return `agent-pipeline run ${runId} · ${subject}`;
+  return `ticket-runner run ${runId} · ${subject}`;
 }
 
 /**

@@ -39,7 +39,7 @@ describe("marking a hand-off as history", () => {
 
     const [marked = ""] = bodies(tracker);
     expect(marked.split("\n").slice(0, 2)).toEqual([
-      "<!-- agent-pipeline:handoff -->",
+      "<!-- ticket-runner:handoff -->",
       HANDOFF_TAKEN_LINE,
     ]);
     expect(marked).toContain("**Handed off.** Failed at **verify**.");

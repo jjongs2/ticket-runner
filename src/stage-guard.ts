@@ -9,7 +9,7 @@
  */
 
 /** The Stage mark: set by the AgentRunner to the name of the Stage it starts. */
-export const STAGE_ENV_VAR = "AGENT_PIPELINE_STAGE";
+export const STAGE_ENV_VAR = "TICKET_RUNNER_STAGE";
 
 /**
  * Why this invocation must not start, when the shell carries the Stage mark.
