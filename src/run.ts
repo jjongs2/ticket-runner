@@ -90,7 +90,7 @@ export async function processRun(
   tickets?: readonly number[],
 ): Promise<RunResult> {
   const { tracker, config } = pipeline;
-  const given = tickets === undefined ? undefined : new Set(tickets);
+  const named = tickets === undefined ? undefined : new Set(tickets);
 
   const outcomes: TicketOutcome[] = [];
   // Every Ticket this Run has taken. A Ticket normally leaves the candidate
@@ -134,7 +134,7 @@ export async function processRun(
     tracker,
     workspace: pipeline.workspace,
     inProgress: config.labels.inProgress,
-    ...(given === undefined ? {} : { only: given }),
+    ...(named === undefined ? {} : { only: named }),
     ...(pipeline.log === undefined ? {} : { log: pipeline.log }),
   });
 
@@ -183,7 +183,7 @@ export async function processRun(
 
     const candidates = await tracker.listCandidates(config.labels.readyForAgent);
     const selection = selectFrontier(
-      given === undefined ? candidates : candidates.filter(({ number }) => given.has(number)),
+      named === undefined ? candidates : candidates.filter(({ number }) => named.has(number)),
     );
     blocked = selection.blocked.map((candidate) => candidate.number);
     // Asked again after the listing, because a Lane that came back while it was
@@ -219,10 +219,10 @@ export async function processRun(
 
   if (listing !== undefined) throw listing;
   const stop = runStop ?? { reason: "frontier", blocked };
-  if (given !== undefined) {
-    const held = stop.reason === "frontier" ? stop.blocked : [];
-    for (const ticket of given) {
-      if (taken.has(ticket) || held.includes(ticket)) continue;
+  if (named !== undefined) {
+    const stillBlocked = stop.reason === "frontier" ? stop.blocked : [];
+    for (const ticket of named) {
+      if (taken.has(ticket) || stillBlocked.includes(ticket)) continue;
       const skipped = await neverMet(pipeline, ticket);
       if (skipped !== undefined) outcomes.push(skipped);
     }
@@ -243,33 +243,38 @@ export async function processRun(
  * Release kept it from, or for one the tracker would not answer about: the Run
  * has no reason to give for either, and the last line says why it stopped.
  */
-async function neverMet(pipeline: Pipeline, ticket: number): Promise<TicketOutcome | undefined> {
-  let skipped: { reason: Refusal; title?: string } | undefined;
+async function neverMet(pipeline: Pipeline, ticket: number): Promise<Skipped | undefined> {
+  let skipped: Skipped | undefined;
   try {
-    skipped = await refusal(pipeline, ticket);
+    skipped = await nobodysToTake(pipeline, ticket);
   } catch (error) {
     pipeline.log?.(`#${ticket} was never met, and reading it failed: ${(error as Error).message}`);
     return undefined;
   }
-  if (skipped === undefined) return undefined;
-  pipeline.log?.(`#${ticket} skipped · ${skipped.reason}`);
-  return { outcome: "skipped", ticket, ...skipped };
+  if (skipped !== undefined) pipeline.log?.(`#${ticket} skipped · ${skipped.reason}`);
+  return skipped;
 }
 
-/** Why `ticket` is nobody's to take, or nothing where it is somebody's. */
-async function refusal(
-  pipeline: Pipeline,
-  ticket: number,
-): Promise<{ reason: Refusal; title?: string } | undefined> {
+/** The row a Ticket passed over earns. */
+type Skipped = Extract<TicketOutcome, { outcome: "skipped" }>;
+
+/** `ticket` skipped for why it is nobody's to take, or nothing where it is somebody's. */
+async function nobodysToTake(pipeline: Pipeline, ticket: number): Promise<Skipped | undefined> {
   const { tracker, workspace, config } = pipeline;
+  const skipped = (reason: Refusal, title?: string): Skipped => ({
+    outcome: "skipped",
+    ticket,
+    ...(title === undefined ? {} : { title }),
+    reason,
+  });
 
   const kind = await tracker.numberKind(ticket);
-  if (kind === "nothing") return { reason: "no-issue" };
-  if (kind === "pull-request") return { reason: "pull-request" };
+  if (kind === "nothing") return skipped("no-issue");
+  if (kind === "pull-request") return skipped("pull-request");
 
   const issue = await tracker.getIssue(ticket);
   // A closed issue is offered to nobody, whatever labels it kept.
-  if (issue.closed) return { reason: "not-ready", title: issue.title };
+  if (issue.closed) return skipped("not-ready", issue.title);
   // Read as the Run's own guards read it, so a Stranded Ticket the Run never
   // got to is not reported as somebody else's.
   const stranded =
@@ -277,7 +282,7 @@ async function refusal(
     holdsClaim(issue, await tracker.currentUser(), config.labels.inProgress);
   const reason = skipReason(issue, config.labels.readyForAgent, stranded);
   if (reason === undefined || isGuardReason(reason)) return undefined;
-  return { reason, title: issue.title };
+  return skipped(reason, issue.title);
 }
 
 /**

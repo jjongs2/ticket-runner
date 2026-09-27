@@ -81,8 +81,8 @@ behind it, and `pull-request` a pull request's number. None of them is commented
 on. A guard's reason is the guard's, with its warning comment posted once, as on
 any Run. `blocked` is a named Ticket an open blocker still held back when the
 Run ended, whatever that blocker is; one another named Ticket blocked is taken
-once that Ticket merges. The Tickets
-it was not given have no row at all: the Run left them as it found them.
+once that Ticket merges. The Tickets it was not given have no row at all: the
+Run left them as it found them.
 
 `noted` is a Note a Stage made, and follows the row of the Ticket whose Stage
 made it. Its number is where the Note went, not where it came from: `comment`

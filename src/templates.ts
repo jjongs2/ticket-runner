@@ -487,7 +487,7 @@ export function runSummary({
     ...outcomes.flatMap(ticketRows),
     // Only a Run that reached the end of the Frontier can name what was held
     // back all Run, so only that stop carries candidates to skip.
-    ...(stop?.reason === "frontier"
+    ...(stop.reason === "frontier"
       ? stop.blocked.map((ticket) => row("skipped", ticket, "blocked"))
       : []),
   ];
