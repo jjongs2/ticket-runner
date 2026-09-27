@@ -88,7 +88,8 @@ export type TicketOutcome =
   | {
       outcome: "skipped";
       ticket: number;
-      title: string;
+      /** Absent where the number has no issue behind it to take a title from. */
+      title?: string;
       /** The guard that passed it over, in the guard's own word for it. */
       reason: SkipReason;
     };
@@ -195,8 +196,8 @@ function asTicketFailure(error: unknown, point: FailurePoint): TicketFailure {
  *
  * The guards come before the claim, so an issue the pipeline will not take is
  * never marked as taken. A Run has already dropped the claimed and the
- * untriaged from its Frontier; `ticket <n>` names an issue by hand and reaches
- * those guards too.
+ * untriaged from its Frontier, but the Ticket may have changed hands since the
+ * listing, so the guards ask again.
  *
  * From the pull of the Base branch before the rebase to the pull after the
  * merge the Ticket holds the Run's Landing, so no other Ticket of the same Run moves the Base

@@ -166,6 +166,12 @@ export type CiOutcome =
  */
 export type Authentication = "authenticated" | "unauthenticated" | "not-installed";
 
+/**
+ * What a number is on the Target. GitHub numbers issues and pull requests
+ * from one sequence, so a number a human types can be either, or neither.
+ */
+export type NumberKind = "issue" | "pull-request" | "nothing";
+
 export interface Tracker {
   /**
    * Whether `gh` can speak to GitHub as somebody, and if not, whether it is
@@ -243,6 +249,16 @@ export interface Tracker {
   /** Switch on {@link deletesBranchOnMerge}, and change no other setting. */
   enableDeleteBranchOnMerge(): Promise<void>;
   getIssue(number: number): Promise<Issue>;
+  /**
+   * Whether `number` is an issue, a pull request, or nothing the Target has.
+   *
+   * Asked of a number a human named to a Run that the Run then never met, so
+   * the summary can say why: {@link getIssue} fails over a number with nothing
+   * behind it, and reads a pull request as though it were an issue. A number
+   * GitHub has nothing for, or had and deleted, is `nothing`; every other
+   * failure throws.
+   */
+  numberKind(number: number): Promise<NumberKind>;
   /** Open an issue, and say which one it is so a summary can name it. */
   createIssue(issue: CreateIssue): Promise<IssueRef>;
   /**

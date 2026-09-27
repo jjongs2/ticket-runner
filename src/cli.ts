@@ -14,9 +14,9 @@ import { startRun } from "./start.js";
 import { requestStop } from "./stop.js";
 
 /**
- * Exit codes: 0 nothing handed off, 1 at least one hand-off, 2 nothing was
- * taken at all — the Run never started, or `ticket <n>` named an issue a guard
- * refused. `init` reads them as its own: 0 every reported item passed, 1 one of
+ * Exit codes: 1 at least one hand-off, 2 nothing was taken at all — the Run
+ * never started, or it was given Ticket numbers and took none of them — and 0
+ * otherwise. `init` reads them as its own: 0 every reported item passed, 1 one of
  * them is the human's to put right, 2 a Stage's shell was refused. `stop` reads
  * 0 as a Stop sent and 2 as no Run there was anything to ask. `remove` reads 0
  * as everything gone or nothing to remove, 1 as a removal that failed, and 2 as

@@ -6,23 +6,15 @@ describe("the commands", () => {
     expect(readCommandLine(["run"])).toEqual({ kind: "work", work: { command: "run" } });
   });
 
-  it("reads `ticket <n>` as that one Ticket", () => {
-    expect(readCommandLine(["ticket", "12"])).toEqual({
-      kind: "work",
-      work: { command: "ticket", ticket: 12 },
-    });
-  });
-
-  it("refuses `ticket` without an issue number", () => {
-    const read = readCommandLine(["ticket", "twelve"]);
-
-    expect(read.kind).toBe("refused");
-    expect(read.kind === "refused" && read.message).toMatch(/^`ticket` needs an issue number/);
-  });
-
   it("reads `init` and `stop` as themselves", () => {
     expect(readCommandLine(["init"])).toEqual({ kind: "init" });
     expect(readCommandLine(["stop"])).toEqual({ kind: "stop" });
+  });
+
+  it("refuses `ticket <n>` as a command it does not have", () => {
+    const read = readCommandLine(["ticket", "12"]);
+
+    expect(read).toEqual({ kind: "refused", message: `Unknown command \`ticket\`.\n\n${USAGE}` });
   });
 
   it("refuses a command it does not have, with the usage", () => {
@@ -75,7 +67,7 @@ describe("the Lane count a Run is started with", () => {
     expect(readCommandLine(["run", "--lanes"]).kind).toBe("refused");
   });
 
-  it.each([["ticket", "4"], ["init"], ["stop"]])("refuses `--lanes` on `%s`", (...command) => {
+  it.each([["init"], ["stop"]])("refuses `--lanes` on `%s`", (...command) => {
     const read = readCommandLine([...command, "--lanes", "2"]);
 
     expect(read.kind).toBe("refused");
@@ -87,6 +79,60 @@ describe("the Lane count a Run is started with", () => {
   });
 });
 
+describe("the Tickets a Run is narrowed to", () => {
+  it("reads the numbers after `run` as the only Tickets it takes", () => {
+    expect(readCommandLine(["run", "12", "13"])).toEqual({
+      kind: "work",
+      work: { command: "run", tickets: [12, 13] },
+    });
+  });
+
+  it("reads `--lanes` before the numbers and after them alike", () => {
+    const before = readCommandLine(["run", "--lanes", "3", "12", "13", "14"]);
+    const after = readCommandLine(["run", "12", "13", "14", "--lanes", "3"]);
+
+    expect(before).toEqual({ kind: "work", work: { command: "run", lanes: 3, tickets: [12, 13, 14] } });
+    expect(after).toEqual(before);
+  });
+
+  it("puts the numbers in ascending order, whatever order they were given in", () => {
+    expect(readCommandLine(["run", "14", "12", "13"])).toMatchObject({
+      work: { tickets: [12, 13, 14] },
+    });
+  });
+
+  it("takes a number given twice once", () => {
+    expect(readCommandLine(["run", "12", "13", "12"])).toMatchObject({
+      work: { tickets: [12, 13] },
+    });
+  });
+
+  it("reads `#12` as 12", () => {
+    expect(readCommandLine(["run", "#12", "13"])).toMatchObject({ work: { tickets: [12, 13] } });
+  });
+
+  it.each(["abc", "0", "-3", "1.5", "#", "12a"])("refuses `run %s`, with the usage", (given) => {
+    const read = readCommandLine(["run", "12", given]);
+
+    expect(read.kind).toBe("refused");
+    expect(read.kind === "refused" && read.message.endsWith(USAGE)).toBe(true);
+  });
+
+  it("names the argument it could not read as a Ticket number", () => {
+    const read = readCommandLine(["run", "abc"]);
+
+    expect(read.kind === "refused" && read.message).toMatch(
+      /^`run` takes Ticket numbers, each a whole number of one or more, not `abc`\./,
+    );
+  });
+
+  it("is documented in the usage as naming which Tickets, not their order", () => {
+    expect(USAGE).toMatch(/^ {2}ticket-runner run \[<n>\.\.\.\] {2,}/m);
+    expect(USAGE).not.toMatch(/ticket <n>/);
+    expect(USAGE).toMatch(/not the order/);
+  });
+});
+
 describe("taking the pipeline out of a Target", () => {
   it("reads `remove` as asking first, and `-y` or `--yes` as going ahead", () => {
     expect(readCommandLine(["remove"])).toEqual({ kind: "remove", yes: false });
@@ -94,7 +140,7 @@ describe("taking the pipeline out of a Target", () => {
     expect(readCommandLine(["--yes", "remove"])).toEqual({ kind: "remove", yes: true });
   });
 
-  it.each([["run"], ["ticket", "12"], ["init"], ["stop"]])(
+  it.each([["run"], ["run", "12"], ["init"], ["stop"]])(
     "refuses `--yes` with `%s`, with the usage",
     (...command) => {
       for (const yes of ["-y", "--yes"]) {

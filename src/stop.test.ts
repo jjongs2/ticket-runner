@@ -233,26 +233,18 @@ describe("asking a Run to stop", () => {
     expect(signalled).toEqual([4321]);
   });
 
-  it("leaves a `ticket <n>` Run alone, because it ends with its Ticket anyway", async () => {
-    lock({ command: "ticket-runner ticket 5" });
+  it.each(["ticket-runner run 12 13", "ticket-runner run --lanes 3 12"])(
+    "asks a narrowed Run to stop like any other: `%s`",
+    async (command) => {
+      lock({ command });
 
-    const { code, signalled, err } = await stop();
+      const { code, signalled, out } = await stop();
 
-    expect(code).toBe(2);
-    expect(signalled).toEqual([]);
-    expect(err).toContain("`ticket-runner ticket 5`");
-    expect(err).toContain("Ticket");
-  });
-
-  it("asks a holder whose command line names no command, rather than passing it over", async () => {
-    // What a lock file with no command line at all reads back as.
-    lock({ command: "ticket-runner" });
-
-    const { code, signalled } = await stop();
-
-    expect(signalled).toEqual([4321]);
-    expect(code).toBe(0);
-  });
+      expect(code).toBe(0);
+      expect(signalled).toEqual([4321]);
+      expect(out).toContain(`\`${command}\``);
+    },
+  );
 
   it("reports a signal it could not deliver, and claims nothing was stopped", async () => {
     lock();

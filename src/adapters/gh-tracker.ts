@@ -8,6 +8,7 @@ import type {
   IssueComment,
   IssueRef,
   LabelSpec,
+  NumberKind,
   OpenPullRequest,
   PullRequestRef,
   SquashCommit,
@@ -323,6 +324,19 @@ export class GhTracker implements Tracker {
       subIssues: subIssues(raw),
       blockedBy: blockers.map((blocker) => blocker.number),
     };
+  }
+
+  /**
+   * GitHub serves a pull request at its issue URL too, marked by the field
+   * only a pull request has. A 404 is a number it never gave out, and a 410 one
+   * whose issue was deleted: neither has anything behind it to take.
+   */
+  async numberKind(number: number): Promise<NumberKind> {
+    const args = ["api", `repos/{owner}/{repo}/issues/${number}`, "--jq", ".pull_request != null"];
+    const result = await this.gh(args, { allowFailure: true });
+    if (result.exitCode !== 0 && /HTTP 4(04|10)\b/.test(result.output)) return "nothing";
+    const { stdout } = throwOnFailure("gh", args, result);
+    return stdout.trim() === "true" ? "pull-request" : "issue";
   }
 
   /**

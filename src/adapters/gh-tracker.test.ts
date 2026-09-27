@@ -286,6 +286,28 @@ describe("reading", () => {
     await expect(issue).rejects.toThrow(/HTTP 404/);
   });
 
+  it("reads a number as an issue off REST's own issue", async () => {
+    expect(await tracker(ok("false\n")).numberKind(2)).toBe("issue");
+    expect(calls[0]).toEqual(["api", "repos/{owner}/{repo}/issues/2", "--jq", ".pull_request != null"]);
+  });
+
+  it("reads a number as a pull request where REST says it is one", async () => {
+    expect(await tracker(ok("true\n")).numberKind(7)).toBe("pull-request");
+  });
+
+  it.each(["gh: Not Found (HTTP 404)", "gh: This issue was deleted (HTTP 410)"])(
+    "reads a number as nothing where GitHub answers `%s`",
+    async (answer) => {
+      expect(await tracker(failedExecution(answer)).numberKind(99)).toBe("nothing");
+    },
+  );
+
+  it("throws any other failure rather than calling the number nothing", async () => {
+    const kind = tracker(failedExecution("gh: Bad credentials (HTTP 401)")).numberKind(2);
+
+    await expect(kind).rejects.toThrow(/HTTP 401/);
+  });
+
   it("reads candidates, their assignees and their open native blockers", async () => {
     const candidates = await tracker(
       ok(

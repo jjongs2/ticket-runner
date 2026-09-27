@@ -9,8 +9,8 @@ import type { Authentication, Tracker } from "./ports/tracker.js";
  * What `ticket-runner init` must have left in a Target before a Run may start.
  *
  * One module says what a set-up Target looks like and two commands read it:
- * `init` puts each item in place, and `run` and `ticket` refuse a Target that is
- * missing one. A Run repairs nothing — a command that quietly wrote into the
+ * `init` puts each item in place, and `run` refuses a Target that is missing
+ * one. A Run repairs nothing — a command that quietly wrote into the
  * Target it was only asked to work in is the thing `init` exists to keep to one
  * place — so the refusal names the item and the command that fixes it.
  *

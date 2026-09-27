@@ -23,10 +23,10 @@ The Host is the workstation by its hostname, or the cloud Host by its session:
 
 `ticket-runner run` (run <runId>) holds the Run lock from <the workstation `<hostname>` | the cloud Host of session `<session>`>, started <startedAt>. Only that Host can send it a Stop: `ticket-runner stop` there, or its Operator on a cloud Host. Nothing was sent.
 
-A `ticket <n>` holding the lock is named rather than signalled, since a Run
-given one Ticket takes no more whatever happens:
+A Run given Ticket numbers is asked like any other, and its first line names
+the command line it was started with, numbers and all:
 
-`ticket-runner ticket 5` (run <runId>, pid <pid>) holds the Run lock, and a Run given one Ticket ends with it anyway. Nothing was sent.
+`ticket-runner run 12 13` (run <runId>, pid <pid>) will stop once the Tickets it holds are finished. It claims no more.
 
 A signal that could not be delivered — the Run ended between the liveness check
 and the SIGTERM, or it belongs to a user this shell may not signal — says why:

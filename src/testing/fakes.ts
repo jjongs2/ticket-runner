@@ -27,6 +27,7 @@ import type {
   IssueComment,
   IssueRef,
   LabelSpec,
+  NumberKind,
   OpenPullRequest,
   PullRequestRef,
   SquashCommit,
@@ -209,6 +210,12 @@ export class FakeTracker implements Tracker {
 
   async getIssue(number: number): Promise<Issue> {
     return structuredClone({ ...this.issue(number), closed: this.closed.has(number) });
+  }
+
+  // Not in `calls`: a read, and one that only decides what a summary row says.
+  async numberKind(number: number): Promise<NumberKind> {
+    if (this.issues.has(number)) return "issue";
+    return this.pullRequests.some((pr) => pr.number === number) ? "pull-request" : "nothing";
   }
 
   /** Numbered from 200 so a new issue is never mistaken for a seeded one. */

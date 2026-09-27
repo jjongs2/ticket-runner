@@ -4,7 +4,7 @@ import { hostKind } from "./host.js";
 import { Landing } from "./landing.js";
 import { StandingNotes } from "./notes.js";
 import { lockHeldMessage, unreleasedLockMessage } from "./lock.js";
-import { type Pipeline, type TicketOutcome, processTicket } from "./orchestrator.js";
+import type { Pipeline, TicketOutcome } from "./orchestrator.js";
 import type { AgentRunner } from "./ports/agent-runner.js";
 import type { Tracker } from "./ports/tracker.js";
 import type { Workspace } from "./ports/workspace.js";
@@ -13,7 +13,7 @@ import { LOCAL_STATE_DIR, localStateTickets } from "./resume.js";
 import { writeRunVersion } from "./run-log.js";
 import { type RunStop, processRun } from "./run.js";
 import { conventionsWarning, newerVersionLine } from "./staleness.js";
-import { type StopSource, StopSignal, listenForStop, stopLine } from "./stop.js";
+import { type StopSource, StopSignal, listenForStop } from "./stop.js";
 import { startupMessages } from "./startup.js";
 import { runSummary } from "./templates.js";
 
@@ -30,12 +30,16 @@ import { runSummary } from "./templates.js";
 /**
  * What this invocation was asked to do, once the arguments are understood.
  *
- * A `run` may be told how many Lanes it has, which wins over the Target's config
+ * A Run may be told how many Lanes it has, which wins over the Target's config
  * because how many Tickets a Host can carry at once is the Host's business, not
- * the Target's (ADR-0008). A `ticket` has no Frontier to share out, so it has
- * no count to be told.
+ * the Target's (ADR-0008). It may also be narrowed to the Tickets a human
+ * named, ascending and each once; with none it drains the whole Frontier.
  */
-export type Work = { command: "run"; lanes?: number } | { command: "ticket"; ticket: number };
+export interface Work {
+  command: "run";
+  lanes?: number;
+  tickets?: number[];
+}
 
 export interface StartOptions {
   work: Work;
@@ -73,9 +77,9 @@ export interface StartOptions {
  * a lock behind for the next one to reclaim.
  */
 export async function startRun(given: StartOptions): Promise<number> {
-  // The count a `run` was told is folded into the config once, here, so
+  // The count a Run was told is folded into the config once, here, so
   // nothing downstream has two Lane counts to choose between.
-  const lanes = given.work.command === "run" ? given.work.lanes : undefined;
+  const { lanes } = given.work;
   const options =
     lanes === undefined ? given : { ...given, config: { ...given.config, lanes } };
   const { repoRoot, config, tracker, workspace } = options;
@@ -204,37 +208,19 @@ async function execute(
   const startedAt = Date.now();
   log(opening(runId, work, config.lanes));
   if (newer !== undefined) log(newer);
-  const summary = (outcomes: TicketOutcome[], stop?: RunStop) =>
+  const summary = (outcomes: TicketOutcome[], stop: RunStop) =>
     runSummary({
       version,
       runId,
       durationMs: Date.now() - startedAt,
       outcomes,
       ...(newer === undefined ? {} : { newer }),
-      ...(stop === undefined ? {} : { stop }),
+      stop,
     });
 
-  if (work.command === "run") {
-    const { outcomes, stop } = await processRun(pipeline, stopping);
-    log(`\n${summary(outcomes, stop)}`);
-    return exitCode(outcomes);
-  }
-
-  // `ticket <n>` takes the one Ticket it was given whatever happens, so a Stop
-  // asks it for nothing but to finish — which is what listening for the signal
-  // at all already bought. The line still goes out: a human who asked for a
-  // Stop is owed an answer, and the Ticket in flight is what the answer is.
-  stopping.watch(() => log(stopLine([work.ticket])));
-
-  // `ticket <n>` drains no Frontier, so its summary does not claim one.
-  const outcome = await processTicket(pipeline, work.ticket);
-  log(`\n${summary([outcome])}`);
-  // A guard that refused the named issue leaves the invocation with nothing
-  // taken, which is the same nothing a lock or a bad argument reports. A `run`
-  // that skipped every candidate still exits 0: draining a Frontier of
-  // unusable Tickets is the job, not a failure to do it.
-  if (outcome.outcome === "skipped") return 2;
-  return exitCode([outcome]);
+  const { outcomes, stop } = await processRun(pipeline, stopping, work.tickets);
+  log(`\n${summary(outcomes, stop)}`);
+  return exitCode(outcomes, work.tickets !== undefined);
 }
 
 /**
@@ -263,23 +249,30 @@ function localStateMessage(tickets: number[]): string {
  * so a transcript of interleaved Lanes can be read one Ticket at a time; the
  * lines about the Run itself — this one, and the summary — carry no number.
  *
- * `ticket <n>` names its Ticket instead. It takes the one Ticket it was given
- * whatever the config says, so a Lane count there would describe a Frontier it
- * never drains.
+ * A narrowed Run names the Tickets it was given after its Lanes, ascending,
+ * which is also the order it takes the ones the Frontier offers in.
  */
 function opening(runId: string, work: Work, lanes: number): string {
-  const subject =
-    work.command === "run"
-      ? `${lanes} ${lanes === 1 ? "lane" : "lanes"}`
-      : `#${work.ticket}`;
-  return `ticket-runner run ${runId} · ${subject}`;
+  const subject = [
+    `${lanes} ${lanes === 1 ? "lane" : "lanes"}`,
+    ...(work.tickets === undefined ? [] : [work.tickets.map((ticket) => `#${ticket}`).join(" ")]),
+  ];
+  return `ticket-runner run ${runId} · ${subject.join(" · ")}`;
 }
 
 /**
- * A hand-off is what the exit code reports, because it is the one outcome that
- * asks a human for something. A Run that took nothing is a 0, and so is one
- * that released what it took: the rate limit resets and a later Run resumes it.
+ * A hand-off is what the exit code reports first, because it is the one outcome
+ * that asks a human for something. A released Ticket was taken all the same:
+ * the rate limit resets and a later Run resumes it.
+ *
+ * A narrowed Run that took none of the Tickets it was given — every one
+ * skipped, blocked, or a mix — took nothing at all, which is the same nothing a
+ * lock or a bad argument reports. A Run that was not narrowed and skipped every
+ * candidate still exits 0: draining a Frontier of unusable Tickets is the job,
+ * not a failure to do it.
  */
-function exitCode(outcomes: TicketOutcome[]): number {
-  return outcomes.some((outcome) => outcome.outcome === "handed-off") ? 1 : 0;
+function exitCode(outcomes: TicketOutcome[], narrowed: boolean): number {
+  if (outcomes.some((outcome) => outcome.outcome === "handed-off")) return 1;
+  if (narrowed && outcomes.every((outcome) => outcome.outcome === "skipped")) return 2;
+  return 0;
 }

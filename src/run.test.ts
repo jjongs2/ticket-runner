@@ -181,7 +181,7 @@ describe("draining the Frontier", () => {
     );
   });
 
-  it("runs each Ticket through the same claim-to-merge flow as `ticket <n>`", async () => {
+  it("runs each Ticket through the same claim-to-merge flow", async () => {
     tracker.addIssue({ number: 4 });
 
     await processRun(pipeline());
@@ -1202,5 +1202,193 @@ describe("a Run a human stopped", () => {
     });
     // The Release stopped nothing that the Stop had not stopped already.
     expect(logged).not.toContain("#4 stopped the Run · rate limit");
+  });
+});
+
+/**
+ * A Run given Ticket numbers: the same Run in every way, except that it takes
+ * only the Tickets it was given and leaves every other one as it found it.
+ */
+describe("a Run narrowed to the Tickets it was given", () => {
+  /** Every tracker write that names `ticket`, which a Ticket left alone has none of. */
+  function writesTo(ticket: number): string[] {
+    return tracker.calls.filter((call) => call.split(":")[1] === String(ticket));
+  }
+
+  it("takes only those Tickets, and leaves the Frontier and the Stranded Tickets it was not given alone", async () => {
+    for (const number of [4, 5, 6]) tracker.addIssue({ number });
+    stranded(3);
+    const left = structuredClone(workspace.state(3));
+
+    const result = await processRun(pipeline(), undefined, [4, 6]);
+
+    expect(processed()).toEqual([4, 6]);
+    expect(result.outcomes.map((outcome) => outcome.ticket)).toEqual([4, 6]);
+    for (const untouched of [3, 5]) expect(writesTo(untouched)).toEqual([]);
+    expect(tracker.issue(5).labels).toEqual(["ready-for-agent"]);
+    expect(tracker.issue(3)).toMatchObject({ assignees: ["pipeline-user"], labels: ["in-progress"] });
+    expect(workspace.state(3)).toEqual(left);
+    expect(workspace.state(5)).toBeUndefined();
+    expect(runner.stages()).toEqual(["implement", "verify", "implement", "verify"]);
+  });
+
+  it("resumes a Stranded Ticket it was given", async () => {
+    stranded(4);
+    tracker.addIssue({ number: 6 });
+
+    const result = await processRun(pipeline(), undefined, [4]);
+
+    expect(result.outcomes).toEqual([expect.objectContaining({ outcome: "merged", ticket: 4 })]);
+    expect(runner.stages()).toEqual(["verify"]);
+    expect(writesTo(6)).toEqual([]);
+  });
+
+  it("asks nothing about a closed Ticket's State it was not given, and leaves the State there", async () => {
+    tracker.addIssue({ number: 3, closed: true, assignees: ["pipeline-user"] });
+    workspace.recordState({
+      ticket: 3,
+      branch: "agent/3-ticket-3",
+      state: "implemented",
+      fixUsed: false,
+      runId: "run-0",
+      updatedAt: "2026-09-17T09:00:00.000Z",
+    });
+    tracker.addIssue({ number: 4 });
+
+    await processRun(pipeline(), undefined, [4]);
+
+    expect(workspace.states.has(3)).toBe(true);
+    expect(logged.filter((line) => line.startsWith("#3"))).toEqual([]);
+  });
+
+  it("takes the Stranded Tickets it was given first, then the rest lowest number first", async () => {
+    for (const number of [7, 4, 5]) tracker.addIssue({ number });
+    stranded(9);
+
+    const result = await processRun(pipeline(), undefined, [4, 5, 7, 9]);
+
+    expect(result.outcomes.map((outcome) => outcome.ticket)).toEqual([9, 4, 5, 7]);
+  });
+
+  it("takes a Ticket another given Ticket blocks once that one has merged", async () => {
+    tracker.addIssue({ number: 12 });
+    tracker.addIssue({ number: 13 });
+    tracker.openBlockers.set(13, 1);
+    tracker.onSquashMerge = () => tracker.openBlockers.set(13, 0);
+
+    const result = await processRun(pipeline(2), undefined, [12, 13]);
+
+    expect(processed()).toEqual([12, 13]);
+    expect(result.stop).toEqual({ reason: "frontier", blocked: [] });
+  });
+
+  it("reports a given Ticket still blocked at the end, and no blocked Ticket it was not given", async () => {
+    for (const number of [4, 5, 6]) tracker.addIssue({ number });
+    tracker.openBlockers.set(5, 1);
+    tracker.openBlockers.set(6, 1);
+
+    const result = await processRun(pipeline(), undefined, [4, 5]);
+
+    expect(processed()).toEqual([4]);
+    expect(result.stop).toEqual({ reason: "frontier", blocked: [5] });
+    expect(result.outcomes.map((outcome) => outcome.ticket)).toEqual([4]);
+  });
+
+  it("skips a given Ticket somebody else holds as claimed, and takes the rest", async () => {
+    tracker.addIssue({ number: 4, assignees: ["octocat"] });
+    tracker.addIssue({ number: 5 });
+
+    const result = await processRun(pipeline(), undefined, [4, 5]);
+
+    expect(processed()).toEqual([5]);
+    expect(result.outcomes).toEqual([
+      expect.objectContaining({ outcome: "merged", ticket: 5 }),
+      { outcome: "skipped", ticket: 4, title: "Ticket 4", reason: "claimed" },
+    ]);
+    expect(writesTo(4)).toEqual([]);
+    expect(logged).toContain("#4 skipped · claimed");
+  });
+
+  it("skips a given Ticket that is not ready, or closed, as not-ready, and comments on neither", async () => {
+    tracker.addIssue({ number: 4, labels: ["ready-for-human"] });
+    tracker.addIssue({ number: 5, closed: true });
+
+    const result = await processRun(pipeline(), undefined, [4, 5]);
+
+    expect(result.outcomes).toEqual([
+      { outcome: "skipped", ticket: 4, title: "Ticket 4", reason: "not-ready" },
+      { outcome: "skipped", ticket: 5, title: "Ticket 5", reason: "not-ready" },
+    ]);
+    expect(tracker.comments).toEqual([]);
+    expect(writesTo(4)).toEqual([]);
+    expect(writesTo(5)).toEqual([]);
+  });
+
+  it("skips a given Ticket a guard rejects with the guard's reason, warning about it once", async () => {
+    tracker.addIssue({ number: 4, body: "no criteria here" });
+
+    const first = await processRun(pipeline(), undefined, [4]);
+    const second = await processRun(pipeline(), undefined, [4]);
+
+    for (const result of [first, second]) {
+      expect(result.outcomes).toEqual([
+        { outcome: "skipped", ticket: 4, title: "Ticket 4", reason: "no-criteria" },
+      ]);
+    }
+    expect(tracker.comments.filter((comment) => comment.issue === 4)).toHaveLength(1);
+  });
+
+  it("skips a number with no issue behind it, and a pull request's, saying which", async () => {
+    tracker.addIssue({ number: 4 });
+    tracker.pullRequests.push({
+      number: 57,
+      base: "main",
+      head: "feature",
+      title: "A pull request",
+      body: "",
+      draft: false,
+      merged: false,
+    });
+
+    const result = await processRun(pipeline(), undefined, [4, 57, 99]);
+
+    expect(result.outcomes).toEqual([
+      expect.objectContaining({ outcome: "merged", ticket: 4 }),
+      { outcome: "skipped", ticket: 57, reason: "pull-request" },
+      { outcome: "skipped", ticket: 99, reason: "no-issue" },
+    ]);
+    expect(writesTo(57)).toEqual([]);
+    expect(writesTo(99)).toEqual([]);
+  });
+
+  it("gives a Lane nothing when it has more Lanes than Tickets", async () => {
+    for (const number of [4, 5, 6]) tracker.addIssue({ number });
+
+    const result = await processRun(pipeline(3), undefined, [5]);
+
+    expect(processed()).toEqual([5]);
+    expect(result).toEqual({
+      outcomes: [expect.objectContaining({ outcome: "merged", ticket: 5 })],
+      stop: { reason: "frontier", blocked: [] },
+    });
+  });
+
+  it("finishes what its Lanes hold when stopped, and takes no more of the Tickets it was given", async () => {
+    for (const number of [4, 5, 6]) tracker.addIssue({ number });
+    const implementing = runner.holds("implement");
+    const stopping = new StopSignal();
+
+    const run = processRun(pipeline(), stopping, [4, 5]);
+    await implementing.started();
+    await settle();
+    stopping.request(new Date("2026-09-20T22:07:13.000Z"));
+    implementing.release();
+    const result = await run;
+
+    expect(processed()).toEqual([4]);
+    expect(result).toEqual({
+      outcomes: [expect.objectContaining({ outcome: "merged", ticket: 4 })],
+      stop: { reason: "stopped", at: "2026-09-20T22:07:13.000Z", busy: [4] },
+    });
   });
 });
