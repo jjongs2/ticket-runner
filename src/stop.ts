@@ -141,17 +141,6 @@ export async function requestStop({
     return 2;
   }
 
-  // A Run given one Ticket takes no more whatever happens, so a Stop would ask
-  // it for what it is already doing. It is left alone rather than signalled so
-  // that the answer says which Run is running, not just that nothing happened.
-  if (namesOneTicket(holder.command)) {
-    error(
-      `${describeHolder(holder)} holds the Run lock, and a Run given one Ticket ends with it anyway.` +
-        " Nothing was sent.",
-    );
-    return 2;
-  }
-
   try {
     send(holder.pid);
   } catch (failure) {
@@ -177,18 +166,6 @@ export async function requestStop({
  */
 export function describeHolder(holder: LockHolder): string {
   return `\`${holder.command}\` (run ${holder.runId}, pid ${holder.pid})`;
-}
-
-/**
- * Whether the command line the lock recorded is a `ticket <n>` rather than a `run`.
- *
- * The lock records the line, not the work, so this is where the two are told
- * apart. Anything it cannot read as a `ticket` counts as a `run`: the cost of
- * guessing wrong is one misleading line, since a `ticket` hears SIGTERM as a
- * Stop too, where refusing to send would leave a real Run running.
- */
-function namesOneTicket(command: string): boolean {
-  return command.trim().split(/\s+/)[1] === "ticket";
 }
 
 /** SIGTERM to the process the lock names, which is the whole of a Stop. */

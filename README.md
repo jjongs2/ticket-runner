@@ -87,14 +87,15 @@ Exit code is `1` while any reported item is failing and `0` once none is, so
 ```bash
 ticket-runner run             # drain the Frontier
 ticket-runner run --lanes 2   # the same, two Tickets at once whatever the config says
-ticket-runner ticket 3        # one named Ticket
+ticket-runner run 3 7         # the same Run, narrowed to #3 and #7
 ticket-runner stop            # ask the Run in this Target to finish and take no more
 ticket-runner -v              # which Version this pipeline is
 ```
 
 `--lanes <n>` gives this one Run `n` Lanes, over whatever `lanes` in `ticket-runner.json`
 says, because how many Tickets a Host can carry at once is the Host's business rather than
-the Target's. It is for `run` alone: `ticket <n>` takes its one Ticket whatever the count.
+the Target's. It goes before the numbers of a narrowed Run or after them alike, and a
+count above the number of Tickets named is not refused.
 
 `-v`, or `--version`, prints one line and exits `0`. An installed copy is its number,
 because a machine installs a tag: two machines that say `0.4.0` run the same code. A
@@ -104,7 +105,7 @@ mark when the tree has uncommitted changes — `0.4.0`, `0.4.0+331d79c`,
 `init` report and each State file a Ticket keeps, so anything the pipeline wrote
 can be traced to the pipeline that wrote it (ADR-0007).
 
-`run` and `ticket` refuse a Target `init` has not set up rather than repairing it. A
+`run` refuses a Target `init` has not set up rather than repairing it. A
 gitignore missing one of the two directories, no conventions document or one carrying no
 Version, a `CLAUDE.md` that does not point at it, no Operator's skill, a missing triage
 label, or a repository that keeps a pull request's branch after it merges: whichever comes
@@ -171,8 +172,8 @@ Frontier blocked.
 Body text is never read for blockers: only GitHub's native dependencies count
 ([ADR-0003](docs/adr/0003-github-native-relations-only.md)).
 
-One Run at a time per Target, whichever Host it is on. A second `run`, or a `ticket` started
-while a `run` holds the lock, exits immediately naming the holder. The lock lives on the
+One Run at a time per Target, whichever Host it is on. A second `run`, narrowed or not,
+exits immediately naming the holder. The lock lives on the
 Target's GitHub repository, on the `ticket-runner/lock` branch, where anyone can see who
 holds the Target: the tip's `lock.json` names the Host, the Run, its command line and when it
 started, or reads `{ "held": false }`, and the tip's commit message says the same. A Run takes
@@ -196,7 +197,7 @@ the repository, the config or `gh` — `--help` and `--version` included, becaus
 nothing a Stage legitimately needs from this command:
 
 ```
-$ ticket-runner ticket 13
+$ ticket-runner run 13
 Refusing to start: TICKET_RUNNER_STAGE is set to `implement`, so this shell belongs to
 the implement Stage of a Run that is already in progress. A Stage may not run the
 pipeline: doing so claims a Ticket on the live tracker, creates a second worktree and
@@ -208,7 +209,7 @@ an honest mistake rather than a sandbox, so every Stage prompt carries the same 
 in words. It is also written into the command line saved beside each Stage's transcript, so
 reproducing a Stage by hand reproduces its environment too.
 
-`ticket <n>` takes exactly one Ticket from claimed to merged:
+Each Ticket a Run takes goes from claimed to merged the same way:
 
 1. run the guards, then assign it and swap `ready-for-agent` for `in-progress`
 2. create `agent/<n>-<slug>` from the base branch in a worktree under `.worktrees/`,
@@ -242,9 +243,10 @@ that never finishes is somebody else's infrastructure, and stays budget-free.
 A failure the fix budget cannot cover hands the Ticket over instead: `ready-for-human`,
 unassigned, draft PR, branch and worktree preserved — and the State file kept, so moving
 the label back to `ready-for-agent` hands the Ticket back and the next Run carries on from
-what it reached rather than implementing it again. Exit code is `0` when nothing was
-handed off, `1` when something was, and `2` when nothing was taken at all — the Run
-never started, or a guard refused the issue named. A `run` that skipped every candidate
+what it reached rather than implementing it again. Exit code is `1` when something was
+handed off, `2` when nothing was taken at all — the Run never started, or it was given
+Ticket numbers and took none of them, every one skipped or blocked — and `0` otherwise. A
+released Ticket counts as taken, and a Run given no numbers that skipped every candidate
 still exits `0`.
 
 A Run names its Version in `.ticket-runner/runs/<runId>/version.txt` before its first
@@ -265,6 +267,25 @@ directory, and the comment says when the Ticket's branch is on the remote. They 
 State file does, so a Ticket that merges leaves none behind, and its pull request names the
 Run's directory only on a workstation, where it is still there.
 
+### A Run given Ticket numbers
+
+`ticket-runner run 12 13 14` is a Run narrowed to #12, #13 and #14. It is the same Run in
+every way — its Lanes, the Landing, the Run lock, a Release stopping all claims, a Stop —
+except that it takes only those Tickets, from the stranded Tickets and the Frontier alike,
+and leaves every other Ticket as it found it. The numbers say which Tickets to take, not
+the order: stranded ones first, then the rest lowest number first, whatever order they
+were given in. `#12` reads as `12`, a number given twice is taken once, and anything that
+is not a whole number of one or more is refused with the usage and exit code `2` before
+the Run lock is taken.
+
+Blockers still hold: a named Ticket another named Ticket blocks is taken once that one
+merges in the same Run, and one still blocked when the Run ends is `skipped  #<n> blocked`
+in the summary, whatever blocks it. Every other named Ticket the Run did not take has a
+`skipped` row of its own, and the rest go ahead: `claimed` when somebody else holds it,
+`not-ready` when it is not labelled `ready-for-agent` or has closed, `no-issue` or
+`pull-request` for a number with no issue behind it, and a guard's reason, with its warning
+comment, for Planning a guard rejected. None but the guard's is commented on.
+
 ### From the Claude app
 
 A Run can also be started from the Claude app, with the workstation off: open a Claude Code
@@ -273,8 +294,8 @@ and the skill `init` wrote tells it what to do (ADR-0008). It installs what the 
 environment's setup script did not — the pipeline, at the Version the conventions document
 is stamped with, the `mattpocock-skills` plugin, `gh` from apt, and the Target's own
 dependencies in its main checkout, where every worktree's Checks find them — and then starts
-`ticket-runner run` in the background, or `ticket-runner ticket <n>` for a Ticket you
-name. Ask for a number of Tickets at once and it passes `--lanes`, so a cloud Host can carry
+`ticket-runner run` in the background, narrowed to the Tickets you name when you name
+any. Ask for a number of Tickets at once and it passes `--lanes`, so a cloud Host can carry
 a different count from your workstation without the config changing. It reports each
 Ticket as the Run ends it and the summary when the Run is over, runs `ticket-runner stop`
 when you ask for a Stop, and releases a lock a vanished Host left behind only when you ask
@@ -379,9 +400,7 @@ the lock, or the process on this Host it names is gone, in which case the dead l
 where it is for the next Run to reclaim. A lock held from another Host is named — the Host,
 the Run and when it started — and nothing is sent: a Stop is a signal, and only the Host the
 Run is on can send it, through `ticket-runner stop` there or, on a cloud Host, its Operator.
-A lock held by `ticket <n>` is left alone and told about: that Run ends with its Ticket
-anyway, so there is nothing a Stop would add. There is no stop
-file, so a second `stop` prints exactly what the first did and the Run ignores the second
+A Run given Ticket numbers is asked like any other. There is no stop file, so a second `stop` prints exactly what the first did and the Run ignores the second
 signal.
 
 A Run that receives SIGTERM logs one line naming the Tickets its Lanes hold at that moment
@@ -392,8 +411,9 @@ back; one with no Lane busy ends at once. Nothing is written to the board becaus
 label and no comment, and the exit code is the outcomes' as usual: 1 if a Ticket was handed
 off, 0 otherwise. Its summary ends with `Stopped at 22:07 · finishing #4 #9.` A second
 SIGTERM is ignored rather than escalated to a kill, and a Stop cannot be taken back: the
-lock is held until the Lanes are back, and a new Run is the way to carry on. `ticket <n>`
-hears it the same way and finishes the one Ticket it was given.
+lock is held until the Lanes are back, and a new Run is the way to carry on. A Run given
+Ticket numbers hears it the same way, and takes none of the named Tickets it had not
+started.
 
 So a stopped Run strands nothing: every Ticket it held ran to an end of its own. A killed
 one strands all of them. Ctrl-C stays a kill on purpose — the Stages are spawned in the
@@ -418,8 +438,9 @@ Run that left it was on another Host. A free Lane takes a stranded Ticket, in as
 anything the Frontier is offering, and the Frontier is not computed at all while there are
 enough of them to fill every Lane — so with more than one Lane a stranded Ticket may still
 be running when a Frontier Ticket starts beside it. The Claim stays exactly as it is: nothing is
-re-assigned, nothing is relabelled, and nobody is notified. `ticket <n>` naming a stranded
-Ticket resumes it too, where it would otherwise refuse it as claimed.
+re-assigned, nothing is relabelled, and nobody is notified. A Run given Ticket numbers
+sweeps only those: a stranded Ticket among them is resumed, and every other one is left
+claimed, its State file untouched, for the next Run given none.
 
 Nothing records a process id. One Run at a time holds the Run lock, so a Run that holds it
 and finds a Ticket still wearing this pipeline's Claim knows the Run that claimed it is
@@ -452,7 +473,7 @@ Ticket back. The next Run finds it on the Frontier and carries on from the state
 reached: a Ticket that got as far as `implemented` goes straight to the Checks, and the
 implement Stage is not paid for a second time. Until that relabel the file is inert —
 no Frontier can offer a `ready-for-human` Ticket, the sweep passes over it in silence,
-and `ticket <n>` naming it is refused as not ready — and the sweep forgets it altogether
+and a Run given its number skips it as `not-ready` — and the sweep forgets it altogether
 once the issue closes, so finishing the work by hand leaves nothing behind.
 
 Two things about the Ticket are not what the failing Run left. Its fix budget comes back
@@ -582,10 +603,8 @@ gets one warning comment saying what to fix, and appears in the summary as
 | `body-only-blockers` | has a `Blocked by` line naming issues with no native edge | skips it and leaves the label; the body line is never read as a blocker |
 
 The warning is posted at most once per reason, so a nightly Run that meets the
-same unfixed candidate again says nothing further. `ticket <n>` applies the same
-guards, and refuses in silence when the issue named is already assigned or is not
-labelled `ready-for-agent`: it may not steal a claimed Ticket or take an
-untriaged one.
+same unfixed candidate again says nothing further.
+
 
 ## Configuration
 

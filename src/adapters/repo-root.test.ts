@@ -31,7 +31,7 @@ describe("findRepoRoot", () => {
   });
 
   it("is still the main checkout from inside a linked worktree", async () => {
-    // Otherwise a `ticket` started in .worktrees/ticket-n would take its own
+    // Otherwise a Run started in .worktrees/ticket-n would take its own
     // Run lock and never see the Run that is already draining the Frontier.
     const worktree = join(repo, ".worktrees", "ticket-5");
     git(repo, "worktree", "add", "-b", "agent/5-slug", worktree, "main");

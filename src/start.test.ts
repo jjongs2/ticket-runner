@@ -190,11 +190,11 @@ describe("a Target init has not set up", () => {
     expect(lockTaken()).toBe(false);
   });
 
-  it("refuses `ticket <n>` on a Host without gh too", async () => {
+  it("refuses a narrowed Run on a Host without gh too", async () => {
     tracker.addIssue({ number: 4 });
     tracker.authenticationAnswer = "not-installed";
 
-    const { code, err } = await start({ command: "ticket", ticket: 4 });
+    const { code, err } = await start({ command: "run", tickets: [4] });
 
     expect(code).toBe(2);
     expect(err).toContain("`gh` is not installed");
@@ -232,11 +232,11 @@ describe("a Target init has not set up", () => {
     expect(code).toBe(0);
   });
 
-  it("refuses `ticket <n>` on a repository that keeps merged branches too", async () => {
+  it("refuses a narrowed Run on a repository that keeps merged branches too", async () => {
     tracker.addIssue({ number: 4 });
     tracker.deleteBranchOnMergeEnabled = false;
 
-    const { code, err } = await start({ command: "ticket", ticket: 4 });
+    const { code, err } = await start({ command: "run", tickets: [4] });
 
     expect(code).toBe(2);
     expect(err).toContain("does not delete a pull request's branch");
@@ -276,11 +276,11 @@ describe("a Target init has not set up", () => {
     expect(code).toBe(0);
   });
 
-  it("refuses `ticket <n>` on the same Target as `run`", async () => {
+  it("refuses a narrowed Run on the same Target as any Run", async () => {
     tracker.addIssue({ number: 4 });
     rmSync(join(repoRoot, CONVENTIONS_PATH));
 
-    const { code, err } = await start({ command: "ticket", ticket: 4 });
+    const { code, err } = await start({ command: "run", tickets: [4] });
 
     expect(code).toBe(2);
     expect(err).toContain(CONVENTIONS_PATH);
@@ -289,11 +289,11 @@ describe("a Target init has not set up", () => {
     expect(tracker.calls).toEqual([]);
   });
 
-  it("refuses `ticket <n>` over a missing label too, and claims nothing", async () => {
+  it("refuses a narrowed Run over a missing label too, and claims nothing", async () => {
     tracker.addIssue({ number: 4 });
     tracker.labels.delete("in-progress");
 
-    const { code, err } = await start({ command: "ticket", ticket: 4 });
+    const { code, err } = await start({ command: "run", tickets: [4] });
 
     expect(code).toBe(2);
     expect(err).toContain("in-progress");
@@ -322,11 +322,11 @@ describe("a Target with State files left in its checkout", () => {
     expect(tracker.calls).toEqual([]);
   });
 
-  it("refuses `ticket <n>` too", async () => {
+  it("refuses a narrowed Run too", async () => {
     write(".ticket-runner/state/ticket-4.json", "{}");
     tracker.addIssue({ number: 4 });
 
-    const { code, err } = await start({ command: "ticket", ticket: 4 });
+    const { code, err } = await start({ command: "run", tickets: [4] });
 
     expect(code).toBe(2);
     expect(err).toContain("#4");
@@ -356,25 +356,25 @@ describe("a Target init has set up", () => {
     expect(tracker.calls).not.toContain("createLabel:in-progress");
   });
 
-  it("takes one named Ticket and creates no label either", async () => {
+  it("takes a named Ticket and creates no label either", async () => {
     tracker.addIssue({ number: 4 });
 
-    const { code } = await start({ command: "ticket", ticket: 4 });
+    const { code } = await start({ command: "run", tickets: [4] });
 
     expect(code).toBe(0);
     expect(tracker.createdLabels).toEqual([]);
   });
 
-  it("takes the one Ticket `ticket <n>` names however many Lanes are configured", async () => {
+  it("takes only the Tickets a narrowed Run names, however many Lanes it has", async () => {
     write(CONFIG_FILENAME, JSON.stringify({ lanes: 3 }));
     for (const number of [4, 5, 6]) tracker.addIssue({ number });
 
-    const { code, out } = await start({ command: "ticket", ticket: 4 });
+    const { code, out } = await start({ command: "run", tickets: [4, 6] });
 
     expect(code).toBe(0);
     expect(out).toContain("merged   #4");
-    // No Frontier to drain, so the other two are nobody's business here.
-    expect(tracker.calls).not.toContain("listCandidates:ready-for-agent");
+    expect(out).toContain("merged   #6");
+    expect(out).not.toContain("#5");
     expect(tracker.calls).not.toContain("assign:5:pipeline-user");
   });
 
@@ -415,6 +415,69 @@ describe("a Target init has set up", () => {
     await start();
 
     expect(workspace.lock).toBeUndefined();
+  });
+});
+
+/**
+ * What the exit code reads off a Run: a hand-off first, then, for a narrowed
+ * Run alone, whether it took any of the Tickets it was given.
+ */
+describe("the exit code", () => {
+  it("is 1 for a narrowed Run that handed a Ticket off, whatever else it skipped", async () => {
+    tracker.addIssue({ number: 4 });
+    tracker.addIssue({ number: 5, labels: ["needs-triage"] });
+    runner.queue("implement", { ok: false, failure: "nonzero-exit" });
+
+    const { code } = await start({ command: "run", tickets: [4, 5] });
+
+    expect(code).toBe(1);
+  });
+
+  it("is 2 for a narrowed Run that took none of its Tickets: skipped, blocked, or both", async () => {
+    tracker.addIssue({ number: 4, labels: ["needs-triage"] });
+    tracker.addIssue({ number: 5, body: "no criteria here" });
+    tracker.addIssue({ number: 6 });
+    tracker.openBlockers.set(6, 1);
+
+    const { code, out } = await start({ command: "run", tickets: [4, 5, 6, 99] });
+
+    expect(code).toBe(2);
+    expect(out).toContain("skipped  #4 not-ready");
+    expect(out).toContain("skipped  #5 no-criteria");
+    expect(out).toContain("skipped  #6 blocked");
+    expect(out).toContain("skipped  #99 no-issue");
+    // Refused nothing: the Run started, took its lock and gave it back.
+    expect(lockTaken()).toBe(true);
+    expect(workspace.lock).toBeUndefined();
+  });
+
+  it("is 0 for a narrowed Run that merged one Ticket and skipped the rest", async () => {
+    tracker.addIssue({ number: 4 });
+    tracker.addIssue({ number: 5, assignees: ["octocat"] });
+
+    const { code, out } = await start({ command: "run", tickets: [4, 5] });
+
+    expect(code).toBe(0);
+    expect(out).toContain("skipped  #5 claimed");
+  });
+
+  it("is 0 for a narrowed Run whose only Ticket was released, which counts as taken", async () => {
+    tracker.addIssue({ number: 4 });
+    runner.queue("implement", { ok: false, failure: "rate-limited" });
+
+    const { code, out } = await start({ command: "run", tickets: [4] });
+
+    expect(code).toBe(0);
+    expect(out).toContain("released #4");
+  });
+
+  it("is 0 for a Run that was not narrowed and skipped every candidate", async () => {
+    tracker.addIssue({ number: 4, body: "no criteria here" });
+
+    const { code, out } = await start();
+
+    expect(code).toBe(0);
+    expect(out).toContain("skipped  #4 no-criteria");
   });
 });
 
@@ -521,11 +584,11 @@ describe("the Run lock", () => {
       expect(tracker.calls).not.toContain("assign:4:pipeline-user");
     });
 
-    it("refuses `ticket <n>` too, since it takes the same lock", async () => {
+    it("refuses a narrowed Run too, since it takes the same lock", async () => {
       workspace.lock = { holder: foreign, running: true };
       tracker.addIssue({ number: 4 });
 
-      const { code, err } = await start({ command: "ticket", ticket: 4 });
+      const { code, err } = await start({ command: "run", tickets: [4] });
 
       expect(code).toBe(2);
       expect(err).toContain("the cloud Host of session `session_01other`");
@@ -608,13 +671,13 @@ describe("the Run log", () => {
     expect(lines[0]).toBe("ticket-runner run run-1 · 2 lanes");
   });
 
-  it("names the Ticket rather than a Lane count for `ticket <n>`", async () => {
+  it("names the Tickets a narrowed Run was given after its Lane count", async () => {
     write(CONFIG_FILENAME, JSON.stringify({ lanes: 3 }));
     tracker.addIssue({ number: 4 });
 
-    const { lines } = await start({ command: "ticket", ticket: 4 });
+    const { lines } = await start({ command: "run", tickets: [4, 12, 13] });
 
-    expect(lines[0]).toBe("ticket-runner run run-1 · #4");
+    expect(lines[0]).toBe("ticket-runner run run-1 · 3 lanes · #4 #12 #13");
   });
 
   it("starts every line between the opening and the summary with a Ticket number", async () => {
@@ -678,12 +741,12 @@ describe("a Run a human stopped", () => {
     expect(code).toBe(1);
   });
 
-  it("lets `ticket <n>` finish its Ticket instead of dying", async () => {
-    tracker.addIssue({ number: 4 });
+  it("stops a narrowed Run as it stops any Run", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
     const signals = new EventEmitter();
     const implementing = runner.holds("implement");
 
-    const run = start({ command: "ticket", ticket: 4 }, signals);
+    const run = start({ command: "run", tickets: [4, 5] }, signals);
     await implementing.started();
     await settle();
     signals.emit("SIGTERM");
@@ -693,9 +756,8 @@ describe("a Run a human stopped", () => {
     expect(code).toBe(0);
     expect(lines).toContain("#4 left to finish · stopped");
     expect(tracker.pullRequest(100).merged).toBe(true);
-    // It drains no Frontier, so its summary claims nothing about one, and a
-    // Stop that asked it for nothing it was not already doing is no exception.
-    expect(out).not.toContain("Stopped at");
+    expect(tracker.calls).not.toContain("assign:5:pipeline-user");
+    expect(out.trimEnd().split("\n").at(-1)).toMatch(/^Stopped at \d\d:\d\d · finishing #4\.$/);
   });
 
   it("stops listening once the Run is over, so the process can exit", async () => {
@@ -724,11 +786,11 @@ describe("what a Run says about another Version", () => {
     expect(summary[1]).toContain(`ticket-runner ${VERSION} run run-1`);
   });
 
-  it("says it once to `ticket <n>` as well", async () => {
+  it("says it once to a narrowed Run as well", async () => {
     tracker.publishedVersionTag = "v0.5.0";
     tracker.addIssue({ number: 4 });
 
-    const { lines } = await start({ command: "ticket", ticket: 4 }, undefined, REPOSITORY);
+    const { lines } = await start({ command: "run", tickets: [4] }, undefined, REPOSITORY);
 
     expect(lines[1]).toContain("0.5.0");
   });

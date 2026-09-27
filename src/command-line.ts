@@ -24,8 +24,10 @@ it can and reports the rest, which is yours to put right.
 
 Usage:
   ticket-runner init          Set this repository up for the pipeline.
-  ticket-runner run           Work through every issue that is ready.
-  ticket-runner ticket <n>    Work through issue <n> and nothing else.
+  ticket-runner run [<n>...]  Work through every issue that is ready, or
+                              only the issues numbered <n>. The numbers say
+                              which issues to take, not the order to take
+                              them in: they are taken lowest number first.
   ticket-runner stop          Tell the run in progress to take no more.
   ticket-runner remove        Take the pipeline out of this repository.
 
@@ -66,9 +68,9 @@ export function readCommandLine(argv: string[]): CommandLine {
   const [command, ...rest] = positionals;
   if (!isCommand(command)) return refused(`Unknown command \`${command}\`.`);
 
-  // Refused rather than ignored everywhere but `run`: `ticket <n>` takes its
-  // one Ticket whatever the count, and `init` and `stop` start nothing, so a
-  // count given to any of them is a mistake the human should hear about.
+  // Refused rather than ignored everywhere but `run`: `init`, `stop` and
+  // `remove` start nothing, so a count given to any of them is a mistake the
+  // human should hear about.
   if (values.lanes !== undefined && command !== "run") {
     return refused("`--lanes` is for `run` only, which has a Frontier to share out.");
   }
@@ -82,37 +84,61 @@ export function readCommandLine(argv: string[]): CommandLine {
   if (command === "init" || command === "stop") return { kind: command };
   if (command === "remove") return { kind: "remove", yes: values.yes === true };
 
-  if (command === "ticket") {
-    const ticket = Number.parseInt(rest[0] ?? "", 10);
-    if (!Number.isInteger(ticket) || ticket <= 0) {
-      return refused("`ticket` needs an issue number.");
-    }
-    return { kind: "work", work: { command: "ticket", ticket } };
+  const tickets = ticketNumbers(rest);
+  if (typeof tickets === "string") {
+    return refused(
+      `\`run\` takes Ticket numbers, each a whole number of one or more, not \`${tickets}\`.`,
+    );
   }
 
-  if (values.lanes === undefined) return { kind: "work", work: { command: "run" } };
-  const lanes = laneCount(values.lanes);
-  if (lanes === undefined) {
+  const lanes = values.lanes === undefined ? undefined : wholeNumber(values.lanes);
+  if (values.lanes !== undefined && lanes === undefined) {
     return refused(`\`--lanes\` needs a whole number of one or more, not \`${values.lanes}\`.`);
   }
-  return { kind: "work", work: { command: "run", lanes } };
+  return {
+    kind: "work",
+    work: {
+      command: "run",
+      ...(lanes === undefined ? {} : { lanes }),
+      ...(tickets.length === 0 ? {} : { tickets }),
+    },
+  };
 }
 
 /** The commands this CLI takes, in the order the usage lists them. */
-const COMMANDS = ["init", "run", "ticket", "stop", "remove"] as const;
+const COMMANDS = ["init", "run", "stop", "remove"] as const;
 
 function isCommand(given: string | undefined): given is (typeof COMMANDS)[number] {
   return (COMMANDS as readonly (string | undefined)[]).includes(given);
 }
 
 /**
- * The count `--lanes` was given, or nothing where it is not a whole number of
- * one or more: the same Lane counts the config file takes.
+ * The Tickets the numbers after `run` name, ascending and each once, or the
+ * first argument that is not one.
+ *
+ * Ascending because a Run takes the Frontier lowest number first and a
+ * narrowed Run is no different: the numbers say which Tickets, and blockers say
+ * which goes before which. `#12` is read as `12`, since that is how a human
+ * copies a Ticket's number off GitHub.
  */
-function laneCount(given: string): number | undefined {
+function ticketNumbers(given: string[]): number[] | string {
+  const tickets = new Set<number>();
+  for (const argument of given) {
+    const ticket = wholeNumber(argument.startsWith("#") ? argument.slice(1) : argument);
+    if (ticket === undefined) return argument;
+    tickets.add(ticket);
+  }
+  return [...tickets].sort((first, second) => first - second);
+}
+
+/**
+ * `given` as a whole number of one or more, or nothing where it is not one:
+ * what a Lane count and a Ticket number both have to be.
+ */
+function wholeNumber(given: string): number | undefined {
   if (!/^\d+$/.test(given)) return undefined;
-  const lanes = Number(given);
-  return Number.isSafeInteger(lanes) && lanes > 0 ? lanes : undefined;
+  const number = Number(given);
+  return Number.isSafeInteger(number) && number > 0 ? number : undefined;
 }
 
 function refused(complaint: string): CommandLine {

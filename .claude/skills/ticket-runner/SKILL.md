@@ -1,6 +1,6 @@
 ---
 name: ticket-runner
-description: Operate ticket-runner on this repository from a Claude Code cloud session — ready the Host, start a Run or one Ticket in the background, report what it prints, pass on a Stop, and release a Run lock a vanished Host left behind. Use when the human asks to run the pipeline ("run it"), to work one Ticket, to stop the Run, or to release its lock. Never from a Stage.
+description: Operate ticket-runner on this repository from a Claude Code cloud session — ready the Host, start a Run in the background, narrowed to the Tickets the human names when they name any, report what it prints, pass on a Stop, and release a Run lock a vanished Host left behind. Use when the human asks to run the pipeline ("run it"), to work particular Tickets, to stop the Run, or to release its lock. Never from a Stage.
 ---
 
 # Operating ticket-runner
@@ -46,8 +46,8 @@ Tell the human in one line which of these you installed, this repository's depen
 Start what the human asked for as a background command, so the session stays free to answer them while it runs:
 
 - `ticket-runner run` to work through every Ticket that is ready.
-- `ticket-runner ticket <n>` when the human names one Ticket.
-- `ticket-runner run --lanes <count>` when the human asks for a number of Tickets at once. Pass it only when they do; otherwise the repository's own config decides. `ticket` takes no count.
+- `ticket-runner run <n>...` when the human names Tickets, one number each. The Run takes only those, lowest number first whatever order they were named in, and leaves every other Ticket alone.
+- `ticket-runner run --lanes <count>` when the human asks for a number of Tickets at once, with or without numbers. Pass it only when they do; otherwise the repository's own config decides.
 
 Start one at a time. While a Run of yours is running, start no other.
 
@@ -55,11 +55,11 @@ Start one at a time. While a Run of yours is running, start no other.
 
 Report what the Run prints as it prints it, in a form a phone screen reads: one short line per Ticket that ended, saying which Ticket and whether it merged, was handed off, was released or was skipped, and why when the Run gives a reason. Pass on a refusal as it is worded: it names what to do.
 
-When the Run ends, report its summary and what its exit code means: `0` nothing was handed off, `1` at least one Ticket was handed off to a human, `2` nothing was taken at all, because the Run was refused or `ticket <n>` named an issue a guard refused.
+When the Run ends, report its summary and what its exit code means: `1` at least one Ticket was handed off to a human, `2` nothing was taken at all, because the Run was refused or because it was given Ticket numbers and took none of them, every one skipped or blocked, and `0` otherwise.
 
 ## Stop
 
-When the human asks for a Stop, send the Run SIGTERM by running `ticket-runner stop`, which signals the Run this Host holds the lock for. Report what it prints, then keep reporting the Run: a Stop finishes the Tickets the Run already holds and takes no more, so the Run ends by itself with its summary. A `ticket` ends with its one Ticket whatever happens, so `stop` sends it nothing and says so; tell the human that it is finishing that Ticket. Never end a Run any other way. SIGINT or SIGKILL ends it in the middle of a Ticket.
+When the human asks for a Stop, send the Run SIGTERM by running `ticket-runner stop`, which signals the Run this Host holds the lock for. Report what it prints, then keep reporting the Run: a Stop finishes the Tickets the Run already holds and takes no more, so the Run ends by itself with its summary, whether or not it was given Ticket numbers. Never end a Run any other way. SIGINT or SIGKILL ends it in the middle of a Ticket.
 
 ## Release a lock another Host left
 

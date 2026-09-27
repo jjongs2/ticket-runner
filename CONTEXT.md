@@ -47,7 +47,7 @@ The machine a Run executes on: a workstation that outlives the Run, or a cloud V
 _Avoid_: cloud session (a session is a Stage), machine, environment, runner, checkout
 
 **Operator**:
-The Claude session a human opens on a cloud Host to run a Run for them, and to watch and steer it from the app. It readies the Host with whatever the Host's own setup did not already put there — the pipeline, the plugin the Stages drive, the `gh` the Tracker calls, and the Target's own dependencies in its main checkout, which every worktree's Checks fall back on — then starts the Run, or a `ticket` for one named Ticket, reports what it prints, passes on a Stop, and releases a Run lock a vanished Host left behind when the human asks; everything else a human wants of a Ticket still goes through the board. While its Run holds the Target it leaves the checkout and the worktrees alone. Never a Stage, and never itself the Run.
+The Claude session a human opens on a cloud Host to run a Run for them, and to watch and steer it from the app. It readies the Host with whatever the Host's own setup did not already put there — the pipeline, the plugin the Stages drive, the `gh` the Tracker calls, and the Target's own dependencies in its main checkout, which every worktree's Checks fall back on — then starts the Run, narrowed to the Tickets the human names when they name any, reports what it prints, passes on a Stop, and releases a Run lock a vanished Host left behind when the human asks; everything else a human wants of a Ticket still goes through the board. While its Run holds the Target it leaves the checkout and the worktrees alone. Never a Stage, and never itself the Run.
 _Avoid_: cloud session, outer session, driver, supervisor, orchestrator
 
 **Base branch**:
@@ -55,7 +55,7 @@ The branch of the Target a Run works against: what it branches a Ticket from, re
 _Avoid_: default branch, trunk, main, integration branch
 
 **Run**:
-One invocation of the pipeline command. Drains the Frontier through its Lanes. Ends when no Lane is busy and the Frontier is empty or every Ticket left on it is blocked, or, once a Ticket has been released, when the last busy Lane comes back.
+One invocation of the pipeline command. Drains the Frontier through its Lanes; a Run given Ticket numbers takes only those, from the Stranded Tickets and the Frontier alike, and leaves every other Ticket as it found it. Ends when no Lane is busy and the Frontier is empty or every Ticket left on it is blocked, or, once a Ticket has been released, when the last busy Lane comes back.
 _Avoid_: session, batch, loop
 
 **Lane**:
@@ -67,7 +67,7 @@ The stretch of a Ticket from bringing the Base branch up to the remote's and reb
 _Avoid_: merge queue, tail, critical section, merge lane
 
 **Run lock**:
-What stops two Runs, or a Run and a `ticket`, sharing one Target, whichever Host each is on. Target-wide and held for the whole Run, where a Claim is per-Ticket. It lives on the Target's GitHub repository, off the board but where a human can see who holds it, and records the Host that holds it, so a Run on that same Host can tell a dead holder from a live one and take the lock over; a lock left by a Run on another Host is never presumed dead, and stays until a human releases it, through an Operator or on GitHub itself. Taking and releasing it removes nothing: it always says either who holds it or that nobody does, and taking it succeeds only from the state the taker last saw.
+What stops two Runs sharing one Target, whichever Host each is on. Target-wide and held for the whole Run, where a Claim is per-Ticket. It lives on the Target's GitHub repository, off the board but where a human can see who holds it, and records the Host that holds it, so a Run on that same Host can tell a dead holder from a live one and take the lock over; a lock left by a Run on another Host is never presumed dead, and stays until a human releases it, through an Operator or on GitHub itself. Taking and releasing it removes nothing: it always says either who holds it or that nobody does, and taking it succeeds only from the state the taker last saw.
 _Avoid_: mutex, pidfile, lease
 
 **Target readiness**:
@@ -131,7 +131,7 @@ What a Ticket keeps on the Target's remote, off the board, for as long as there 
 _Avoid_: checkpoint, journal, resume file
 
 **Stranded Ticket**:
-A Ticket whose State file is still there while the Ticket still carries this Target's Claim — the Run that claimed it was killed and released nothing. No Frontier can offer one, because it is claimed, so a Run sweeps for them before it computes a Frontier at all and resumes every one from its branch, on whichever Host the sweeping Run is, a free Lane taking one before anything the Frontier holds.
+A Ticket whose State file is still there while the Ticket still carries this Target's Claim — the Run that claimed it was killed and released nothing. No Frontier can offer one, because it is claimed, so a Run sweeps for them before it computes a Frontier at all and resumes every one, or, in a Run given Ticket numbers, every one of those, from its branch, on whichever Host the sweeping Run is, a free Lane taking one before anything the Frontier holds.
 _Avoid_: orphan, zombie, abandoned Ticket, crashed Ticket, dead Ticket
 
 **Note**:

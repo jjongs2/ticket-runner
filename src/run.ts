@@ -1,9 +1,10 @@
 import { branchName } from "./branch.js";
 import { selectFrontier } from "./frontier.js";
+import { type Refusal, isGuardReason, skipReason } from "./guards.js";
 import type { RoutedNote } from "./notes.js";
 import { type Pipeline, type TicketOutcome, processTicket } from "./orchestrator.js";
 import { StopSignal, stopLine } from "./stop.js";
-import { strandedTickets } from "./stranded.js";
+import { holdsClaim, strandedTickets } from "./stranded.js";
 
 /**
  * What a Run has to show for itself: every Ticket it took, in the order they
@@ -30,7 +31,10 @@ export interface RunResult {
 export type RunStop =
   | {
       reason: "frontier";
-      /** Candidates still held back by an open blocker when the Run ended. */
+      /**
+       * Candidates still held back by an open blocker when the Run ended: of
+       * a narrowed Run, only the ones it was given, whatever blocks them.
+       */
       blocked: number[];
     }
   | { reason: "rate-limited" }
@@ -73,12 +77,20 @@ export type RunStop =
  * wear is what keeps them off it — so this sweep is the only thing that ever
  * picks them up again, and a free Lane takes one before it takes anything the
  * Frontier is offering.
+ *
+ * A Run given `tickets` is that Run narrowed to them, and nothing else about it
+ * changes: the sweep and every refill see only those Tickets, and every other
+ * one, stranded or on the Frontier, is left as it was for the next Run. One of
+ * them the Run never met — nobody's to take, or no issue at all — is reported
+ * as skipped once the Lanes are back, so none of them drops out of the summary.
  */
 export async function processRun(
   pipeline: Pipeline,
   stopping: StopSignal = new StopSignal(),
+  tickets?: readonly number[],
 ): Promise<RunResult> {
   const { tracker, config } = pipeline;
+  const given = tickets === undefined ? undefined : new Set(tickets);
 
   const outcomes: TicketOutcome[] = [];
   // Every Ticket this Run has taken. A Ticket normally leaves the candidate
@@ -122,6 +134,7 @@ export async function processRun(
     tracker,
     workspace: pipeline.workspace,
     inProgress: config.labels.inProgress,
+    ...(given === undefined ? {} : { only: given }),
     ...(pipeline.log === undefined ? {} : { log: pipeline.log }),
   });
 
@@ -168,8 +181,9 @@ export async function processRun(
     // stranded Tickets spends no call on a Frontier it could not take from.
     if (!laneFree()) return;
 
+    const candidates = await tracker.listCandidates(config.labels.readyForAgent);
     const selection = selectFrontier(
-      await tracker.listCandidates(config.labels.readyForAgent),
+      given === undefined ? candidates : candidates.filter(({ number }) => given.has(number)),
     );
     blocked = selection.blocked.map((candidate) => candidate.number);
     // Asked again after the listing, because a Lane that came back while it was
@@ -204,7 +218,66 @@ export async function processRun(
   }
 
   if (listing !== undefined) throw listing;
-  return { outcomes, stop: runStop ?? { reason: "frontier", blocked } };
+  const stop = runStop ?? { reason: "frontier", blocked };
+  if (given !== undefined) {
+    const held = stop.reason === "frontier" ? stop.blocked : [];
+    for (const ticket of given) {
+      if (taken.has(ticket) || held.includes(ticket)) continue;
+      const skipped = await neverMet(pipeline, ticket);
+      if (skipped !== undefined) outcomes.push(skipped);
+    }
+  }
+  return { outcomes, stop };
+}
+
+/**
+ * A Ticket a narrowed Run was given and never met, as the row that says why.
+ *
+ * Neither source offered it, so it is nobody's to take — somebody else holds
+ * it, it was never offered or has closed — or it is no issue at all. It is
+ * asked about only now, when the Run is over, and passed over in silence: a
+ * warning is for a Planning defect, and a Ticket a guard could have refused was
+ * on the Frontier, where the guard already had its say.
+ *
+ * Nothing comes back for one the Run could still have taken, which a Stop or a
+ * Release kept it from, or for one the tracker would not answer about: the Run
+ * has no reason to give for either, and the last line says why it stopped.
+ */
+async function neverMet(pipeline: Pipeline, ticket: number): Promise<TicketOutcome | undefined> {
+  let skipped: { reason: Refusal; title?: string } | undefined;
+  try {
+    skipped = await refusal(pipeline, ticket);
+  } catch (error) {
+    pipeline.log?.(`#${ticket} was never met, and reading it failed: ${(error as Error).message}`);
+    return undefined;
+  }
+  if (skipped === undefined) return undefined;
+  pipeline.log?.(`#${ticket} skipped · ${skipped.reason}`);
+  return { outcome: "skipped", ticket, ...skipped };
+}
+
+/** Why `ticket` is nobody's to take, or nothing where it is somebody's. */
+async function refusal(
+  pipeline: Pipeline,
+  ticket: number,
+): Promise<{ reason: Refusal; title?: string } | undefined> {
+  const { tracker, workspace, config } = pipeline;
+
+  const kind = await tracker.numberKind(ticket);
+  if (kind === "nothing") return { reason: "no-issue" };
+  if (kind === "pull-request") return { reason: "pull-request" };
+
+  const issue = await tracker.getIssue(ticket);
+  // A closed issue is offered to nobody, whatever labels it kept.
+  if (issue.closed) return { reason: "not-ready", title: issue.title };
+  // Read as the Run's own guards read it, so a Stranded Ticket the Run never
+  // got to is not reported as somebody else's.
+  const stranded =
+    (await workspace.readState(ticket)) !== undefined &&
+    holdsClaim(issue, await tracker.currentUser(), config.labels.inProgress);
+  const reason = skipReason(issue, config.labels.readyForAgent, stranded);
+  if (reason === undefined || isGuardReason(reason)) return undefined;
+  return { reason, title: issue.title };
 }
 
 /**

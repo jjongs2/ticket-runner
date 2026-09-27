@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { UNCHECKED_BOX } from "./acceptance-criteria.js";
+import type { RunStop } from "./run.js";
 import {
   HANDOFF_MARKER,
   HANDOFF_TAKEN_LINE,
@@ -32,6 +33,9 @@ const verdict = parseVerdict({
 
 /** The Version the Run ran, which its summary is headed with. */
 const VERSION = "0.4.0+331d79c";
+
+/** Why most summaries here end: nothing left on the Frontier. */
+const FRONTIER_EMPTY: RunStop = { reason: "frontier", blocked: [] };
 
 describe("pullRequestBody", () => {
   it("starts with Closes #<n> on its own line so the merge closes the Ticket", () => {
@@ -567,12 +571,25 @@ describe("runSummary", () => {
     expect(summary).toContain("  nothing to do");
   });
 
-  it("claims nothing about the Frontier when one Ticket was named", () => {
-    const summary = runSummary({ version: VERSION, runId: "r1", durationMs: 0, outcomes: [merged] });
+  it("says why each Ticket a narrowed Run was given and never took was skipped", () => {
+    const summary = runSummary({
+      version: VERSION,
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [
+        merged,
+        { outcome: "skipped", ticket: 57, reason: "pull-request" },
+        { outcome: "skipped", ticket: 99, reason: "no-issue" },
+      ],
+      stop: { reason: "frontier", blocked: [13] },
+    });
 
-    expect(summary.trimEnd().split("\n").at(-1)).toBe(
+    expect(summary.split("\n").slice(2, 6)).toEqual([
       "  merged   #3 Run: drain the Frontier (PR #12)",
-    );
+      "  skipped  #57 pull-request",
+      "  skipped  #99 no-issue",
+      "  skipped  #13 blocked",
+    ]);
   });
 });
 
@@ -743,6 +760,7 @@ describe("Notes in a Run summary", () => {
       runId: "r1",
       durationMs: 0,
       outcomes: [{ ...merged, notes: [note] }, handed],
+      stop: FRONTIER_EMPTY,
     });
 
     expect(summary.split("\n").slice(2, 5)).toEqual([
@@ -758,6 +776,7 @@ describe("Notes in a Run summary", () => {
       runId: "r1",
       durationMs: 0,
       outcomes: [{ ...merged, notes: [{ ...note, stage: "verify" as const }] }],
+      stop: FRONTIER_EMPTY,
     });
 
     expect(summary).toContain(
@@ -773,6 +792,7 @@ describe("Notes in a Run summary", () => {
       outcomes: [
         { ...merged, notes: [{ ...note, issue: 31, opened: true, summary: "no cleanup" }] },
       ],
+      stop: FRONTIER_EMPTY,
     });
 
     expect(summary).toContain("  noted    #31 new · from #3 implement · no cleanup");
@@ -785,6 +805,7 @@ describe("Notes in a Run summary", () => {
       runId: "r1",
       durationMs: 0,
       outcomes: [{ ...merged, notes: [{ ...note, summary: long }] }],
+      stop: FRONTIER_EMPTY,
     });
 
     const row = summary.split("\n").find((line) => line.includes("noted")) as string;
@@ -794,7 +815,7 @@ describe("Notes in a Run summary", () => {
   });
 
   it("says nothing extra for a Ticket whose Stages found nothing", () => {
-    const summary = runSummary({ version: VERSION, runId: "r1", durationMs: 0, outcomes: [merged] });
+    const summary = runSummary({ version: VERSION, runId: "r1", durationMs: 0, outcomes: [merged], stop: FRONTIER_EMPTY });
 
     expect(summary).not.toContain("noted");
   });

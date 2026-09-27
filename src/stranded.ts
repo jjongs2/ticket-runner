@@ -39,6 +39,11 @@ export interface StrandedSweep {
   workspace: Workspace;
   /** The `in-progress` label, as this repo configured it. */
   inProgress: string;
+  /**
+   * The Tickets a narrowed Run was given. The State of every other Ticket is
+   * not read, asked about or removed: it is the next unnarrowed Run's.
+   */
+  only?: ReadonlySet<number>;
   log?: (line: string) => void;
 }
 
@@ -65,7 +70,9 @@ export async function strandedTickets(sweep: StrandedSweep): Promise<StrandedTic
   const { tracker, workspace, inProgress } = sweep;
   const log = sweep.log ?? (() => {});
 
-  const files = await workspace.readAllStates();
+  const files = (await workspace.readAllStates()).filter(
+    (file) => sweep.only === undefined || sweep.only.has(file.readable ? file.state.ticket : file.ticket),
+  );
   // Said before anything is asked of the tracker, because it is the one finding
   // here that needs nothing of it: the file is all the evidence there is.
   for (const file of files) if (!file.readable) log(unreadableLine(file));

@@ -58,10 +58,31 @@ the Run that took it.
 `skipped` names why a candidate was passed over: `blocked` for one an open
 blocker held back all Run, and otherwise the guard reason that kept it from
 being claimed — `spec`, `no-criteria` or `body-only-blockers` for Planning a
-guard rejected, `claimed` or `not-ready` for an issue that is nobody's to take,
-which is usually one `ticket <n>` named by hand. A stranded Ticket is not one of
-those: it wears this checkout's own Claim, so it is resumed rather than `skipped`
-as `claimed`.
+guard rejected, `claimed` or `not-ready` for an issue that is nobody's to take.
+A stranded Ticket is not one of those: it wears this checkout's own Claim, so it
+is resumed rather than `skipped` as `claimed`.
+
+A Run given Ticket numbers, `ticket-runner run 12 13 57 99`, has a row for every
+one of them. The ones it took end like any other; each one it did not take is
+`skipped` with its reason, after the rows of the Tickets it took:
+
+ticket-runner <version> run <runId> · <duration>
+
+  merged   #12 Run: drain the Frontier (PR #14)
+  skipped  #57 pull-request
+  skipped  #99 no-issue
+  skipped  #13 blocked
+
+Frontier blocked.
+
+`claimed` is an issue somebody else holds, `not-ready` one not labelled
+`ready-for-agent`, a closed one included, `no-issue` a number with no issue
+behind it, and `pull-request` a pull request's number. None of them is commented
+on. A guard's reason is the guard's, with its warning comment posted once, as on
+any Run. `blocked` is a named Ticket an open blocker still held back when the
+Run ended, whatever that blocker is; one another named Ticket blocked is taken
+once that Ticket merges. The Tickets
+it was not given have no row at all: the Run left them as it found them.
 
 `noted` is a Note a Stage made, and follows the row of the Ticket whose Stage
 made it. Its number is where the Note went, not where it came from: `comment`
@@ -109,7 +130,6 @@ say a candidate was held back all Run. A Stop that reaches a Run a Release had
 already stopped leaves the last line `Rate limited.`, because that is what
 stopped it; the Stop only asked for what was already happening.
 
-`ticket <n>` prints the same header and its one row, and stops there: it drains
-no Frontier, so it says nothing about one — a Stop included. It takes one Ticket
-whatever happens, so a Stop asks it for nothing it was not already doing, and
-the line it logs when the Stop arrives is the whole of what it says about one.
+A Run given Ticket numbers that a Stop or a Release ended has no row either for
+a named Ticket it could still have taken: the last line says why it did not.
+Each one nobody could take still has its `skipped` row.

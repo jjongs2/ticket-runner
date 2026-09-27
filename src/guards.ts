@@ -19,11 +19,12 @@ import type { Issue } from "./ports/tracker.js";
 export type SkipReason = Refusal | GuardReason;
 
 /**
- * An issue that is nobody's to take: already claimed, or never offered. A Run
- * filters both out before it gets here, so these are what `ticket <n>` hits
- * when it names an issue by hand.
+ * A number that is nobody's to take: an issue already claimed or never
+ * offered, or a number with no issue behind it at all — nothing GitHub has, or
+ * a pull request. A Run's Frontier holds none of them, so they are what a Run
+ * narrowed to Tickets a human named reports about the ones it never met.
  */
-export type Refusal = "claimed" | "not-ready";
+export type Refusal = "claimed" | "not-ready" | "no-issue" | "pull-request";
 
 /** A Planning defect, which is worth exactly one warning comment. */
 export type GuardReason = "spec" | "no-criteria" | "body-only-blockers";

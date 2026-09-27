@@ -463,12 +463,8 @@ export interface RunSummary {
    * log this summary is the bottom of (ADR-0007).
    */
   newer?: string;
-  /**
-   * Why the Run stopped, and with it whatever it can still say about the
-   * Frontier. Only a Run has a Frontier, so `ticket <n>` leaves this out and
-   * the summary says nothing about what else was pickable.
-   */
-  stop?: RunStop;
+  /** Why the Run stopped, and with it whatever it can still say about the Frontier. */
+  stop: RunStop;
 }
 
 /** Every summary row is `<verb> #<n> <detail>`, so the numbers line up. */
@@ -502,7 +498,7 @@ export function runSummary({
     "",
     ...(rows.length === 0 ? ["  nothing to do"] : rows),
     "",
-    ...(stop === undefined ? [] : [lastLine(stop)]),
+    lastLine(stop),
     "",
   ].join("\n");
 }
