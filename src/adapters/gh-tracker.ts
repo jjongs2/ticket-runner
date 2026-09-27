@@ -8,6 +8,7 @@ import type {
   IssueComment,
   IssueRef,
   LabelSpec,
+  OpenPullRequest,
   PullRequestRef,
   SquashCommit,
   Tracker,
@@ -262,6 +263,20 @@ export class GhTracker implements Tracker {
   }
 
   /**
+   * GitHub answers a label it does not have with a 404, which is the one
+   * failure taken as an answer: whatever the reason, the label is not there.
+   */
+  async deleteLabel(name: string): Promise<boolean> {
+    const result = await this.rest(
+      "DELETE",
+      `repos/{owner}/{repo}/labels/${encodeURIComponent(name)}`,
+      [],
+      { tolerate: /HTTP 404/ },
+    );
+    return result.exitCode === 0;
+  }
+
+  /**
    * Turn squash merging on, naming that one field and no other.
    *
    * The repository's own PATCH endpoint takes each merge method separately, so
@@ -435,6 +450,14 @@ export class GhTracker implements Tracker {
       throw new Error(`could not read a pull request number from gh output: ${stdout}`);
     }
     return { number: created.number, url: created.html_url };
+  }
+
+  async openPullRequests(): Promise<OpenPullRequest[]> {
+    const pulls = await this.list<{ number: number; head: { ref: string } }>(
+      "repos/{owner}/{repo}/pulls",
+      ["-f", "state=open"],
+    );
+    return pulls.map((pull) => ({ number: pull.number, head: pull.head.ref }));
   }
 
   async convertPullRequestToDraft(number: number): Promise<void> {

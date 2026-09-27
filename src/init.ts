@@ -16,8 +16,7 @@ import {
 import type { Authentication, Tracker } from "./ports/tracker.js";
 import {
   CLAUDE_FILENAME,
-  GH_INSTALL,
-  GH_NOT_INSTALLED,
+  GH_FAILURE,
   hasClaudePointer,
   missingIgnoreLines,
   readTargetFile,
@@ -177,7 +176,7 @@ function writeTargetFiles(repoRoot: string, version: string): string[] {
  * Read off the conventions document's mark, which is the only thing in a
  * Target that says which pipeline wrote it, so it answers for the skill too.
  */
-function newerSetUp(repoRoot: string, version: string): NewerSetUp | undefined {
+export function newerSetUp(repoRoot: string, version: string): NewerSetUp | undefined {
   const mark = conventionsMark(readTargetFile(join(repoRoot, CONVENTIONS_PATH)));
   const own = versionNumber(version);
   return mark !== undefined && own !== undefined && isHigher(mark, own)
@@ -186,7 +185,7 @@ function newerSetUp(repoRoot: string, version: string): NewerSetUp | undefined {
 }
 
 /** Which newer Version set a Target up, and which one found it. */
-interface NewerSetUp {
+export interface NewerSetUp {
   mark: string;
   own: string;
 }
@@ -320,18 +319,6 @@ function separator(existing: string): string {
   if (existing === "") return "";
   return existing.endsWith("\n") ? "\n" : "\n\n";
 }
-
-/**
- * What is wrong with a `gh` that cannot speak to GitHub, as both groups say it,
- * and what the human does about it: only a `gh` that runs can be logged in.
- */
-const GH_FAILURE: Record<
-  Exclude<Authentication, "authenticated">,
-  { failure: string; remedy: string }
-> = {
-  unauthenticated: { failure: "`gh` is not authenticated", remedy: "run `gh auth login`" },
-  "not-installed": { failure: GH_NOT_INSTALLED, remedy: GH_INSTALL },
-};
 
 /** The three things `init` does on GitHub, and the one thing that stops them all. */
 async function updateGitHub(

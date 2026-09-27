@@ -71,7 +71,7 @@ What stops two Runs, or a Run and a `ticket`, sharing one Target, whichever Host
 _Avoid_: mutex, pidfile, lease
 
 **Target readiness**:
-What `ticket-runner init` must have left in a Target before a Run may start: the two gitignored directories, the conventions document stamped with a Version, a `CLAUDE.md` pointing at it, the Operator's skill, the six triage labels, and a repository that deletes a pull request's branch when it merges. Before the GitHub items it asks for a `gh` the Host can run, the one thing on the list `init` only reports: a refusal over it names the install first. The same on every Host, so a Target a local Run accepts is one an Operator can run from the app too. Asked for presence, never content. A Run that finds one missing refuses the Target and names `init`, rather than putting it there itself.
+What `ticket-runner init` must have left in a Target before a Run may start: the two gitignored directories, the conventions document stamped with a Version, a `CLAUDE.md` pointing at it, the Operator's skill, the six triage labels, and a repository that deletes a pull request's branch when it merges. Before the GitHub items it asks for a `gh` the Host can run, the one thing on the list `init` only reports: a refusal over it names the install first. The same on every Host, so a Target a local Run accepts is one an Operator can run from the app too. Asked for presence, never content. A Run that finds one missing refuses the Target and names `init`, rather than putting it there itself. `ticket-runner remove` takes it out again, with what Runs left behind.
 _Avoid_: preflight, setup check, validation, guard (a Guard rejects a Candidate, readiness rejects the Target)
 
 **Stage**:

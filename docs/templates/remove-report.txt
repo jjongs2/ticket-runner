@@ -1,0 +1,186 @@
+ticket-runner <version> remove · <repo root>
+
+Removed:
+  ✓ docs/agents/pipeline-conventions.md
+  ✓ .claude/skills/ticket-runner/SKILL.md
+  ✓ CLAUDE.md: the section pointing at docs/agents/pipeline-conventions.md
+  ✓ .ticket-runner/
+  ✓ .worktrees/ticket-12, and its branch agent/12-some-title
+  ✓ agent/7-other-title, a local branch
+  ✓ .worktrees/, left empty
+  ✓ .gitignore: `.worktrees/` and `.ticket-runner/`, with the comments `init` wrote them under
+  ✓ docs/agents/, left empty
+  ✓ ticket-runner.json
+
+GitHub:
+  ✓ the `in-progress` label, from every issue that wore it
+  ✓ the `ticket-runner/state` branch
+  ✓ the `ticket-runner/lock` branch
+
+Left for you:
+  label `needs-triage`: Planning uses it too — `gh label delete needs-triage` removes it
+  label `needs-info`: Planning uses it too — `gh label delete needs-info` removes it
+  label `ready-for-agent`: Planning uses it too — `gh label delete ready-for-agent` removes it
+  label `ready-for-human`: Planning uses it too — `gh label delete ready-for-human` removes it
+  label `wontfix`: Planning uses it too — `gh label delete wontfix` removes it
+  merge settings: squash merging and deleting a pull request's branch when it merges are left as they are, since this repository may have had them before `init` — `gh repo edit --enable-squash-merge=false` or `gh repo edit --delete-branch-on-merge=false` turns one off
+  branch `agent/12-some-title` on GitHub: pull request #40 is open on it
+  branch `agent/9-another-title` on GitHub: no pull request is open on it
+  issue #88: the standing Notes issue, left open with the Notes on it
+  #12, #15: no Run can resume them any more, because their State files, and any hand-off transcripts kept beside them, went with `ticket-runner/state`
+  comments on issues: the progress, hand-off and Note comments Runs wrote are left as they are, since they are addressed to humans
+  nothing was committed: review the changes with `git status` and commit them yourself
+
+Done: the pipeline has gone from this Target.
+
+On stdout, and exit code 0. The first line names the Version doing the removing
+(ADR-0007), in the shape `init-report.txt` gives its own.
+
+Three groups, always in this order and always all three, however little each has
+to say; an empty one says `  nothing to remove`.
+
+`Removed:` is what went from the Target's working tree, one line per item, each
+marked `✓` or `✗`. The config file, the conventions document and the Operator's
+skill go whatever they say, because they are the pipeline's own text. The
+`CLAUDE.md` section and each `.gitignore` entry go only where they are still
+exactly the text `init` writes, and a `CLAUDE.md` or `.gitignore` left holding
+nothing else goes with them:
+
+  ✓ CLAUDE.md: deleted, because the section `init` wrote was all it held
+  ✓ .gitignore: deleted, because the entries `init` wrote were all it held
+
+`.ticket-runner/` goes whole. Each `ticket-<n>` worktree goes with the branch it
+has checked out, and every other local `agent/` branch after them. `.worktrees/`
+goes only when that leaves it empty, and its `.gitignore` entry only then too.
+A directory another removal left empty goes, named `left empty`; one that was
+empty before, or still holds anything, stays. The config file goes after every
+other removal, the ones in `GitHub:` included, and before only the lock branch:
+it is the only place a renamed label is named, so where a removal failed it
+stays, and the next run looks for the label and the Stranded Tickets under the
+names it gives.
+
+`GitHub:` is the in-progress label, by the name the config gives it, which
+GitHub takes off every issue wearing it, closed ones included; then the
+`ticket-runner/state` branch; and last of all the `ticket-runner/lock` branch,
+which this command held the whole time so no Run started while it worked.
+
+A removal that fails is marked `✗`, with git's or GitHub's reason, and the rest
+carry on:
+
+  ✗ docs/agents/pipeline-conventions.md: EACCES: permission denied, unlink '<path>'
+
+The lock branch is then released rather than deleted, in the line that takes its
+place in `GitHub:` and again in the last group, and the command exits 1:
+
+  ✓ the Run lock, released to free
+
+Running it again is a first run over what is left.
+
+`Left for you:` is what the pipeline cannot prove it put there, or leaves on
+purpose, each line with what to do about it:
+
+- the five triage labels other than in-progress that the Target has, which
+  Planning uses too, each with the command that deletes it
+- the two merge settings `init` switches on, which the repository may have had
+  before it
+- each `agent/` branch on GitHub, and the pull request open on it, if any: they
+  are a Ticket's work
+- the standing Notes issue, by number, which is addressed to a human
+- the Tickets whose State files went with the state branch, which no Run can
+  resume any more, and the hand-off transcripts that went with them. They are
+  read before the branch is deleted, and a branch whose Tickets cannot be read
+  is kept and marked `✗`, so none of them goes unnamed
+- the comments Runs wrote on issues, which are addressed to humans
+- whatever of the pipeline's stays because it no longer matches `init`'s text,
+  or shares a directory with something else:
+
+  CLAUDE.md: the section pointing at docs/agents/pipeline-conventions.md is not the text `init` writes, so it stays
+  .gitignore: `.worktrees/` stays, because it is not under the comment `init` writes it with
+  .worktrees/: holds scratch besides the pipeline's worktrees, so it stays, and so does its `.gitignore` entry
+  ticket-runner.json: kept, because a removal above failed and it names the labels the next `ticket-runner remove` looks for — that run deletes it with the rest
+  ticket-runner/lock: released rather than deleted, because a removal above failed — `ticket-runner remove` again deletes it with the rest
+
+- a reminder that nothing was committed, whenever the working tree changed:
+  like `init`, `remove` leaves the change for the human to review and commit
+
+A line GitHub could not be asked for says so, and changes no exit code:
+
+  branches on GitHub: could not be listed — <reason>
+
+The last line is the exit code in words: `Done: the pipeline has gone from this
+Target.` for 0, and `Not done: <n> removals failed — run `ticket-runner remove`
+again to remove what is left.` for 1. A Target with nothing to remove and no lock
+branch takes no lock and ends `Nothing to remove: ticket-runner has not set this
+Target up.`, with exit code 0.
+
+On a terminal, without `-y` or `--yes`, the command asks before it removes
+anything, once the refusals below have passed and it holds the Run lock. The
+opening line comes first, then what it is about to remove and the question. A
+`CLAUDE.md` that holds nothing but the section is listed as
+`CLAUDE.md, because the section `init` wrote is all it holds`.
+
+
+
+ticket-runner <version> remove · <repo root>
+
+About to remove:
+  docs/agents/pipeline-conventions.md
+  .claude/skills/ticket-runner/SKILL.md
+  CLAUDE.md: the section pointing at docs/agents/pipeline-conventions.md
+  .ticket-runner/
+  .worktrees/ticket-12, and its branch agent/12-some-title
+  agent/7-other-title, a local branch
+  .gitignore: the entries `init` wrote
+  any directory this leaves empty
+  the `in-progress` label
+  the `ticket-runner/state` branch
+  ticket-runner.json
+  the `ticket-runner/lock` branch
+
+Remove all of this? Nothing will be committed. [y/N]
+
+`y` or `yes`, in any case, goes on to the report above. Anything else releases the
+lock and ends on stderr, exit code 2:
+
+Nothing was removed. Run `ticket-runner remove` again when you want it gone.
+
+Every refusal is one message on stderr, exit code 2, nothing changed, in this
+order, and each says what to do next:
+
+1. A shell carrying the Stage mark, before anything is read, as `init` refuses it.
+2. A cloud Host, which can delete no branch (ADR-0008):
+
+Refusing to remove on a cloud Host: it can delete no branch on the remote, so the Run lock and State branches would stay. Run `ticket-runner remove` on a workstation instead.
+
+3. A `gh` that cannot speak to GitHub, in the words `init` uses:
+
+Refusing to remove: `gh` is not authenticated — run `gh auth login`, then `ticket-runner remove` again.
+Refusing to remove: `gh` is not installed — install the GitHub CLI from https://cli.github.com, then `ticket-runner remove` again.
+
+4. A conventions document a newer Version stamped:
+
+Refusing to remove: 0.6.0 set this Target up and this is 0.5.2, so it may have left things this Version does not know to remove. Upgrade with `npm install -g "github:jjongs2/ticket-runner#semver:*"`, then run `ticket-runner remove` again.
+
+5. Neither a terminal nor `--yes`:
+
+Refusing to remove: there is no terminal to ask whether to go ahead. Run `ticket-runner remove --yes` to remove without asking.
+
+6. A Run lock anybody holds, named as `stop` names it, and never taken over:
+
+Refusing to remove: `ticket-runner run` (run <runId>, pid <pid>) holds the Run lock on this Host, started <startedAt>. Wait for it to finish, or ask it to with `ticket-runner stop`, then run `ticket-runner remove` again.
+Refusing to remove: `ticket-runner run` (run <runId>, pid <pid>) holds the Run lock, but its process on this Host has gone. `remove` takes over no lock: start `ticket-runner run` to take it over and finish what it held, or commit a `lock.json` that reads `{ "held": false }` to the `ticket-runner/lock` branch, then run `ticket-runner remove` again.
+Refusing to remove: `ticket-runner run` (run <runId>) holds the Run lock from <the workstation `<hostname>` | the cloud Host of session `<session>`>, started <startedAt>. Wait for it to finish or, if it is gone, commit a `lock.json` that reads `{ "held": false }` to the `ticket-runner/lock` branch, then run `ticket-runner remove` again.
+
+Then the command takes the Run lock itself, recording its own command line. The
+last two refusals release it to free before they exit:
+
+7. A Stranded Ticket, an open issue wearing the in-progress label:
+
+Refusing to remove: #12 and #15 still carry the `in-progress` label, so they are Stranded Tickets a Run was killed holding. Finish them with `ticket-runner run`, or relabel them, then run `ticket-runner remove` again.
+
+8. A `ticket-<n>` worktree holding work no commit on GitHub carries:
+
+Refusing to remove: these worktrees hold work GitHub does not have, which removing them would lose:
+  .worktrees/ticket-12: uncommitted changes
+  .worktrees/ticket-15: commits its branch on the remote does not have
+Push what is worth keeping, and take out a worktree nothing in is wanted with `git worktree remove --force <path>`, then run `ticket-runner remove` again.

@@ -160,9 +160,11 @@ export type LockOutcome = { outcome: "taken" } | ({ outcome: "held" } & HeldLock
 /**
  * What an attempt to take the lock found. `abandoned` is a lock a Run on this
  * same Host held and whose process has gone, and is the one a Run may take
- * over; a holder on another Host is never abandoned, only `held`.
+ * over; a holder on another Host is never abandoned, only `held`. It names the
+ * holder that has gone, for a command that takes nothing over to say whose it
+ * was.
  */
-export type LockTake = LockOutcome | { outcome: "abandoned" };
+export type LockTake = LockOutcome | { outcome: "abandoned"; holder: LockHolder };
 
 /**
  * Where a handed-off Ticket's transcripts were kept on the remote: a branch, and
@@ -177,6 +179,23 @@ export interface KeptTranscripts {
 export interface WorktreeRef {
   path: string;
   branch: string;
+}
+
+/**
+ * One of a Target's `ticket-<n>` worktrees as `ticket-runner remove` finds it,
+ * and whether removing it would lose work GitHub does not have.
+ */
+export interface TicketWorktree {
+  path: string;
+  /** The branch it has checked out, and nothing for a detached one. */
+  branch?: string;
+  /** Tracked files changed, or untracked files git does not ignore. */
+  uncommitted: boolean;
+  /**
+   * Commits its branch on the remote does not have, or, where the remote has
+   * no such branch, commits no branch on the remote has.
+   */
+  unpushed: boolean;
 }
 
 /**
@@ -202,8 +221,28 @@ export interface Workspace {
    * out at `path`. The checkout's own `base` is not moved.
    */
   createWorktree(worktree: WorktreeRef, base: string): Promise<void>;
-  /** Remove the worktree and delete its branch. */
-  removeWorktree(worktree: WorktreeRef): Promise<void>;
+  /**
+   * Remove the worktree and delete its branch; a detached worktree, which has
+   * none, is only removed.
+   */
+  removeWorktree(worktree: { path: string; branch?: string }): Promise<void>;
+  /**
+   * Every `ticket-<n>` worktree of this repo under the Target's `.worktrees/`,
+   * whatever Ticket or Run made it, with what each holds that GitHub lacks.
+   *
+   * Asked by `ticket-runner remove` alone, which refuses to take out a
+   * worktree holding work nothing else has.
+   */
+  ticketWorktrees(): Promise<TicketWorktree[]>;
+  /** The local branches whose names start with `prefix`, in no particular order. */
+  listBranches(prefix: string): Promise<string[]>;
+  /** The same, of the branches the remote has. */
+  listRemoteBranches(prefix: string): Promise<string[]>;
+  /**
+   * Delete a local branch, whatever it carries. A branch still checked out in a
+   * worktree git has not forgotten is refused, with git's reason.
+   */
+  deleteBranch(branch: string): Promise<void>;
   /**
    * Whether `path` is still a worktree of this repo, checked out on `branch`.
    *

@@ -291,7 +291,7 @@ export class StandingNotes {
  * Lowest number first, so two marked issues a human left open resolve to the
  * same one every time rather than to whichever the tracker listed first.
  */
-async function findStandingNotes({
+export async function findStandingNotes({
   tracker,
   needsTriage,
 }: StandingNotesLookup): Promise<number | undefined> {

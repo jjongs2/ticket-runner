@@ -8,6 +8,8 @@
  */
 
 import { type Host, sameHost } from "../host.js";
+import { LOCK_BRANCH } from "../lock.js";
+import { STATE_BRANCH } from "../resume.js";
 import type {
   AgentPreflight,
   AgentRunner,
@@ -25,6 +27,7 @@ import type {
   IssueComment,
   IssueRef,
   LabelSpec,
+  OpenPullRequest,
   PullRequestRef,
   SquashCommit,
   Tracker,
@@ -42,6 +45,7 @@ import type {
   RebaseState,
   StateFile,
   TicketState,
+  TicketWorktree,
   Workspace,
   WorktreeFromRemote,
 } from "../ports/workspace.js";
@@ -174,6 +178,20 @@ export class FakeTracker implements Tracker {
     return true;
   }
 
+  /** What {@link deleteLabel} fails with, when set: a GitHub that refuses the delete. */
+  deleteLabelFailure: Error | undefined;
+
+  /** Taken off every issue with it, closed ones included, as GitHub does. */
+  async deleteLabel(name: string): Promise<boolean> {
+    this.calls.push(`deleteLabel:${name}`);
+    if (this.deleteLabelFailure !== undefined) throw this.deleteLabelFailure;
+    if (!this.labels.delete(name)) return false;
+    for (const issue of this.issues.values()) {
+      issue.labels = issue.labels.filter((label) => label !== name);
+    }
+    return true;
+  }
+
   async enableSquashMerge(): Promise<void> {
     this.calls.push("enableSquashMerge");
     this.squashMergeEnabled = true;
@@ -279,6 +297,13 @@ export class FakeTracker implements Tracker {
     this.calls.push(`createPullRequest:${number}:${pr.draft ? "draft" : "ready"}`);
     this.pullRequests.push({ ...pr, number, merged: false });
     return { number, url: `https://github.com/acme/repo/pull/${number}` };
+  }
+
+  // Not in `calls`: a read, which only decides what a report names.
+  async openPullRequests(): Promise<OpenPullRequest[]> {
+    return this.pullRequests
+      .filter((pr) => !pr.merged)
+      .map((pr) => ({ number: pr.number, head: pr.head }));
   }
 
   async convertPullRequestToDraft(number: number): Promise<void> {
@@ -520,12 +545,28 @@ export class FakeWorkspace implements Workspace {
 
   set lock(lock: FakeLock | undefined) {
     this.remoteLock.current = lock;
+    if (lock !== undefined) this.remoteLock.branch = true;
   }
 
-  /** Where {@link lock} is kept, which {@link anotherHost} shares like the rest of the remote. */
-  private remoteLock: { current?: FakeLock | undefined } = {};
+  /**
+   * Where {@link lock} is kept, which {@link anotherHost} shares like the rest
+   * of the remote, and whether its branch exists: once taken, a lock stays on
+   * its branch, free, until the branch is deleted.
+   */
+  private remoteLock: { current?: FakeLock | undefined; branch?: boolean } = {};
   /** The Host this Workspace runs on, which a lock's holder is compared with. */
   host: Host = THIS_HOST;
+  /**
+   * The worktrees holding changes no commit carries, and those holding commits
+   * the remote lacks, by path, as {@link ticketWorktrees} reports them.
+   */
+  uncommittedIn = new Set<string>();
+  unpushedIn = new Set<string>();
+  /**
+   * What the next call of a name fails with, keyed as `calls` records it —
+   * `deleteRemoteBranch:ticket-runner/state` — for a removal that fails.
+   */
+  failing = new Map<string, Error>();
 
   /**
    * The same Target seen from another Host: the remote — its branches, every
@@ -621,12 +662,47 @@ export class FakeWorkspace implements Workspace {
     return "made";
   }
 
-  async removeWorktree({ path, branch }: WorktreeRef): Promise<void> {
-    this.calls.push(`removeWorktree:${branch}`);
+  async removeWorktree({ path, branch }: { path: string; branch?: string }): Promise<void> {
+    this.called(`removeWorktree:${branch ?? path}`);
     this.worktrees.delete(path);
+    if (branch !== undefined) this.branches.delete(branch);
+  }
+
+  /** The `ticket-<n>` worktrees among {@link worktrees}, in path order. */
+  async ticketWorktrees(): Promise<TicketWorktree[]> {
+    this.calls.push("ticketWorktrees");
+    return [...this.worktrees.entries()]
+      .filter(([path]) => /\/\.worktrees\/ticket-\d+$/.test(path))
+      .sort(([first], [second]) => first.localeCompare(second))
+      .map(([path, branch]) => ({
+        path,
+        branch,
+        uncommitted: this.uncommittedIn.has(path),
+        unpushed: this.unpushedIn.has(path),
+      }));
+  }
+
+  async listBranches(prefix: string): Promise<string[]> {
+    return [...this.branches].filter((branch) => branch.startsWith(prefix)).sort();
+  }
+
+  async listRemoteBranches(prefix: string): Promise<string[]> {
+    return [...this.remoteBranches].filter((branch) => branch.startsWith(prefix)).sort();
+  }
+
+  async deleteBranch(branch: string): Promise<void> {
+    this.called(`deleteBranch:${branch}`);
     this.branches.delete(branch);
   }
 
+  /** Record a call, and fail it where a test said it would. */
+  private called(call: string): void {
+    this.calls.push(call);
+    const failure = this.failing.get(call);
+    if (failure === undefined) return;
+    this.failing.delete(call);
+    throw failure;
+  }
   async commitSubjects(branch: string, base: string): Promise<string[]> {
     this.calls.push(`commitSubjects:${branch}`);
     this.basesGiven.push(base);
@@ -688,13 +764,25 @@ export class FakeWorkspace implements Workspace {
     this.remoteBranches.add(branch);
   }
 
-  // Not in `calls`: a read, which only decides what a hand-off comment says.
+  /**
+   * Not in `calls`: a read, which only decides what a hand-off comment says.
+   * The state branch is there while it holds anything, and the lock branch
+   * from the first take of the lock, as the git-backed Workspace keeps them.
+   */
   async hasRemoteBranch(branch: string): Promise<boolean> {
+    if (branch === STATE_BRANCH) return this.states.size > 0 || this.transcripts.size > 0;
+    if (branch === LOCK_BRANCH) return this.remoteLock.branch === true;
     return this.remoteBranches.has(branch);
   }
 
+  /** The state and lock branches go with everything on them. */
   async deleteRemoteBranch(branch: string): Promise<void> {
-    this.calls.push(`deleteRemoteBranch:${branch}`);
+    this.called(`deleteRemoteBranch:${branch}`);
+    if (branch === STATE_BRANCH) {
+      this.states.clear();
+      this.transcripts.clear();
+    }
+    if (branch === LOCK_BRANCH) this.remoteLock = { branch: false };
     this.remoteBranches.delete(branch);
   }
 
@@ -738,9 +826,10 @@ export class FakeWorkspace implements Workspace {
 
   async takeRunLock(claim: LockClaim): Promise<LockTake> {
     this.calls.push("takeRunLock");
+    this.remoteLock.branch = true;
     const held = this.heldLock();
     if (held !== undefined) return { outcome: "held", ...held };
-    if (this.lock !== undefined) return { outcome: "abandoned" };
+    if (this.lock !== undefined) return { outcome: "abandoned", holder: this.lock.holder };
     this.lock = { holder: { host: this.host, ...claim }, running: true };
     return { outcome: "taken" };
   }

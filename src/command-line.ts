@@ -27,10 +27,12 @@ Usage:
   ticket-runner run           Work through every issue that is ready.
   ticket-runner ticket <n>    Work through issue <n> and nothing else.
   ticket-runner stop          Tell the run in progress to take no more.
+  ticket-runner remove        Take the pipeline out of this repository.
 
 Options:
   --lanes <n>                  With \`run\`: work on up to <n> issues at once,
                                whatever \`lanes\` in ticket-runner.json says.
+  -y, --yes                    With \`remove\`: go ahead without asking.
   -h, --help                   Show this message.
   -v, --version                Show which version this pipeline is.`;
 
@@ -47,6 +49,7 @@ export type CommandLine =
   | { kind: "refused"; message: string }
   | { kind: "init" }
   | { kind: "stop" }
+  | { kind: "remove"; yes: boolean }
   | { kind: "work"; work: Work };
 
 /** Read the arguments after the command's own name. */
@@ -61,9 +64,7 @@ export function readCommandLine(argv: string[]): CommandLine {
   }
 
   const [command, ...rest] = positionals;
-  if (command !== "ticket" && command !== "run" && command !== "init" && command !== "stop") {
-    return refused(`Unknown command \`${command}\`.`);
-  }
+  if (!isCommand(command)) return refused(`Unknown command \`${command}\`.`);
 
   // Refused rather than ignored everywhere but `run`: `ticket <n>` takes its
   // one Ticket whatever the count, and `init` and `stop` start nothing, so a
@@ -72,7 +73,14 @@ export function readCommandLine(argv: string[]): CommandLine {
     return refused("`--lanes` is for `run` only, which has a Frontier to share out.");
   }
 
+  // The same for `--yes` everywhere but `remove`, the one command that asks
+  // before it acts: given to any other, it answers a question nobody asks.
+  if (values.yes === true && command !== "remove") {
+    return refused("`--yes` is for `remove` only, the one command that asks before it acts.");
+  }
+
   if (command === "init" || command === "stop") return { kind: command };
+  if (command === "remove") return { kind: "remove", yes: values.yes === true };
 
   if (command === "ticket") {
     const ticket = Number.parseInt(rest[0] ?? "", 10);
@@ -88,6 +96,13 @@ export function readCommandLine(argv: string[]): CommandLine {
     return refused(`\`--lanes\` needs a whole number of one or more, not \`${values.lanes}\`.`);
   }
   return { kind: "work", work: { command: "run", lanes } };
+}
+
+/** The commands this CLI takes, in the order the usage lists them. */
+const COMMANDS = ["init", "run", "ticket", "stop", "remove"] as const;
+
+function isCommand(given: string | undefined): given is (typeof COMMANDS)[number] {
+  return (COMMANDS as readonly (string | undefined)[]).includes(given);
 }
 
 /**
@@ -107,7 +122,7 @@ function refused(complaint: string): CommandLine {
 /** What `parseArgs` makes of the arguments: the options, and the rest. */
 interface ParsedArgs {
   positionals: string[];
-  values: { help?: boolean; version?: boolean; lanes?: string };
+  values: { help?: boolean; version?: boolean; lanes?: string; yes?: boolean };
 }
 
 /**
@@ -128,6 +143,7 @@ function parseCommandLine(argv: string[]): ParsedArgs | string {
         help: { type: "boolean", short: "h" },
         version: { type: "boolean", short: "v" },
         lanes: { type: "string" },
+        yes: { type: "boolean", short: "y" },
       },
       allowPositionals: true,
     });

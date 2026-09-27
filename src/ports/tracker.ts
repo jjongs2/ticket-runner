@@ -104,6 +104,12 @@ export interface CreateIssue {
   labels: string[];
 }
 
+/** An open pull request, and the branch it would merge. */
+export interface OpenPullRequest {
+  number: number;
+  head: string;
+}
+
 export interface IssueRef {
   number: number;
   url: string;
@@ -210,6 +216,14 @@ export interface Tracker {
    */
   createLabel(label: LabelSpec): Promise<boolean>;
   /**
+   * Delete a label, which GitHub takes off every issue wearing it, open or
+   * closed, and say whether this call is what deleted it.
+   *
+   * A label the Target does not have answers `false` rather than throwing:
+   * `ticket-runner remove` run twice finds it gone the second time.
+   */
+  deleteLabel(name: string): Promise<boolean>;
+  /**
    * Allow squash merging on the Target, and change no other merge setting.
    *
    * The pipeline merges no other way, so a Target with squash merging off
@@ -256,6 +270,12 @@ export interface Tracker {
    */
   updateIssueBody(number: number, body: string): Promise<void>;
   createPullRequest(pr: CreatePullRequest): Promise<PullRequestRef>;
+  /**
+   * Every open pull request on the Target, with its head branch, so what
+   * `ticket-runner remove` leaves on an `agent/` branch can be named by the
+   * pull request a human would go and look at.
+   */
+  openPullRequests(): Promise<OpenPullRequest[]>;
   convertPullRequestToDraft(number: number): Promise<void>;
   /**
    * Take an open pull request back out of draft.
