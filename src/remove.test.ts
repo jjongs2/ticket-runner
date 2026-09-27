@@ -221,7 +221,6 @@ describe("taking the pipeline out of a Target it set up", () => {
     expect(code).toBe(0);
     expect(snapshot()).toEqual({});
     expect(group(out, "Removed")).toEqual([
-      "✓ ticket-runner.json",
       "✓ docs/agents/pipeline-conventions.md",
       "✓ .claude/skills/ticket-runner/SKILL.md",
       "✓ CLAUDE.md: deleted, because the section `init` wrote was all it held",
@@ -231,6 +230,7 @@ describe("taking the pipeline out of a Target it set up", () => {
       "✓ .claude/skills/ticket-runner/, left empty",
       "✓ .claude/skills/, left empty",
       "✓ .claude/, left empty",
+      "✓ ticket-runner.json",
     ]);
   });
 
@@ -373,7 +373,48 @@ describe("a removal that fails", () => {
     );
     expect(workspace.lock).toBeUndefined();
     expect(await workspace.hasRemoteBranch(LOCK_BRANCH)).toBe(true);
+    expect(Object.keys(snapshot())).toEqual(["ticket-runner.json"]);
+  });
+
+  it("keeps the config file, which names the labels, for the next run", async () => {
+    await init();
+    write("ticket-runner.json", '{ "labels": { "inProgress": "wip" } }\n');
+    tracker.labels.add("wip");
+    tracker.deleteLabelFailure = new Error("HTTP 502");
+
+    const first = await remove();
+
+    expect(first.code).toBe(1);
+    expect(group(first.out, "GitHub")).toContain("✗ the `wip` label, from every issue that wore it: HTTP 502");
+    expect(group(first.out, "Removed")).not.toContain("✓ ticket-runner.json");
+    expect(group(first.out, "Left for you")).toContain(
+      "ticket-runner.json: kept, because a removal above failed and it names the labels the next `ticket-runner remove` looks for — that run deletes it with the rest",
+    );
+    expect(read("ticket-runner.json")).toBe('{ "labels": { "inProgress": "wip" } }\n');
+
+    tracker.deleteLabelFailure = undefined;
+    const second = await remove();
+
+    expect(second.code).toBe(0);
+    expect(group(second.out, "Removed")).toEqual(["✓ ticket-runner.json"]);
+    expect(tracker.labels.has("wip")).toBe(false);
     expect(snapshot()).toEqual({});
+    expect(await workspace.hasRemoteBranch(LOCK_BRANCH)).toBe(false);
+  });
+
+  it("looks for Stranded Tickets under the label the kept config file names", async () => {
+    await init();
+    write("ticket-runner.json", '{ "labels": { "inProgress": "wip" } }\n');
+    tracker.labels.add("wip");
+    tracker.deleteLabelFailure = new Error("HTTP 502");
+    await remove();
+    tracker.deleteLabelFailure = undefined;
+    tracker.addIssue({ number: 15, labels: ["wip"] });
+
+    const { code, err } = await remove();
+
+    expect(code).toBe(2);
+    expect(err).toContain("#15 still carries the `wip` label");
   });
 
   it("is finished by running remove again", async () => {
@@ -385,7 +426,7 @@ describe("a removal that fails", () => {
     const { code, out } = await remove();
 
     expect(code).toBe(0);
-    expect(group(out, "Removed")).toEqual(["nothing to remove"]);
+    expect(group(out, "Removed")).toEqual(["✓ ticket-runner.json"]);
     expect(group(out, "GitHub")).toEqual([
       `✓ the \`${STATE_BRANCH}\` branch`,
       `✓ the \`${LOCK_BRANCH}\` branch`,
@@ -488,7 +529,6 @@ describe("asking first", () => {
     expect(asked).toEqual(["Remove all of this? Nothing will be committed. [y/N] "]);
     expect(holder).toMatchObject({ command: "ticket-runner remove", runId: "remove-run" });
     expect(group(out, "About to remove")).toEqual([
-      "ticket-runner.json",
       "docs/agents/pipeline-conventions.md",
       ".claude/skills/ticket-runner/SKILL.md",
       "CLAUDE.md, because the section `init` wrote is all it holds",
@@ -499,6 +539,7 @@ describe("asking first", () => {
       "any directory this leaves empty",
       "the `in-progress` label",
       `the \`${STATE_BRANCH}\` branch`,
+      "ticket-runner.json",
       `the \`${LOCK_BRANCH}\` branch`,
     ]);
   });

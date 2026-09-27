@@ -1,7 +1,6 @@
 ticket-runner <version> remove · <repo root>
 
 Removed:
-  ✓ ticket-runner.json
   ✓ docs/agents/pipeline-conventions.md
   ✓ .claude/skills/ticket-runner/SKILL.md
   ✓ CLAUDE.md: the section pointing at docs/agents/pipeline-conventions.md
@@ -11,6 +10,7 @@ Removed:
   ✓ .worktrees/, left empty
   ✓ .gitignore: `.worktrees/` and `.ticket-runner/`, with the comments `init` wrote them under
   ✓ docs/agents/, left empty
+  ✓ ticket-runner.json
 
 GitHub:
   ✓ the `in-progress` label, from every issue that wore it
@@ -53,7 +53,11 @@ nothing else goes with them:
 has checked out, and every other local `agent/` branch after them. `.worktrees/`
 goes only when that leaves it empty, and its `.gitignore` entry only then too.
 A directory another removal left empty goes, named `left empty`; one that was
-empty before, or still holds anything, stays.
+empty before, or still holds anything, stays. The config file goes after every
+other removal, the ones in `GitHub:` included, and before only the lock branch:
+it is the only place a renamed label is named, so where a removal failed it
+stays, and the next run looks for the label and the Stranded Tickets under the
+names it gives.
 
 `GitHub:` is the in-progress label, by the name the config gives it, which
 GitHub takes off every issue wearing it, closed ones included; then the
@@ -93,6 +97,7 @@ purpose, each line with what to do about it:
   CLAUDE.md: the section pointing at docs/agents/pipeline-conventions.md is not the text `init` writes, so it stays
   .gitignore: `.worktrees/` stays, because it is not under the comment `init` writes it with
   .worktrees/: holds scratch besides the pipeline's worktrees, so it stays, and so does its `.gitignore` entry
+  ticket-runner.json: kept, because a removal above failed and it names the labels the next `ticket-runner remove` looks for — that run deletes it with the rest
   ticket-runner/lock: released rather than deleted, because a removal above failed — `ticket-runner remove` again deletes it with the rest
 
 - a reminder that nothing was committed, whenever the working tree changed:
@@ -119,7 +124,6 @@ opening line comes first, then what it is about to remove and the question. A
 ticket-runner <version> remove · <repo root>
 
 About to remove:
-  ticket-runner.json
   docs/agents/pipeline-conventions.md
   .claude/skills/ticket-runner/SKILL.md
   CLAUDE.md: the section pointing at docs/agents/pipeline-conventions.md
@@ -130,6 +134,7 @@ About to remove:
   any directory this leaves empty
   the `in-progress` label
   the `ticket-runner/state` branch
+  ticket-runner.json
   the `ticket-runner/lock` branch
 
 Remove all of this? Nothing will be committed. [y/N]

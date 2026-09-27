@@ -376,7 +376,7 @@ function nothingFound(found: Found): boolean {
 /** What the question lists, in the order the removal goes. */
 function planned(repoRoot: string, found: Found, config: Config): string[] {
   return [
-    ...found.files,
+    ...found.files.filter((file) => file !== CONFIG_FILENAME),
     ...(found.claude === "whole"
       ? [`${CLAUDE_FILENAME}, because the section \`init\` wrote is all it holds`]
       : []),
@@ -388,6 +388,7 @@ function planned(repoRoot: string, found: Found, config: Config): string[] {
     "any directory this leaves empty",
     ...(found.label ? [`the \`${config.labels.inProgress}\` label`] : []),
     ...(found.stateBranch ? [`the \`${STATE_BRANCH}\` branch`] : []),
+    ...(found.files.includes(CONFIG_FILENAME) ? [CONFIG_FILENAME] : []),
     `the \`${LOCK_BRANCH}\` branch`,
   ];
 }
@@ -439,7 +440,7 @@ async function removeFound(options: RemoveOptions, found: Found): Promise<Remova
   };
   const emptied = new Set<string>();
 
-  for (const path of found.files) {
+  for (const path of found.files.filter((file) => file !== CONFIG_FILENAME)) {
     const gone = await attempt(removal.removed, path, () => rmSync(join(repoRoot, path)));
     if (gone) emptied.add(dirname(path));
   }
@@ -507,6 +508,21 @@ async function removeFound(options: RemoveOptions, found: Found): Promise<Remova
       await workspace.deleteRemoteBranch(STATE_BRANCH);
       removal.states = states.map((file) => (file.readable ? file.state.ticket : file.ticket));
     });
+  }
+
+  // Last before the lock, because it is the only place a label the human
+  // renamed is named: where a removal above failed, it stays, so the next
+  // `remove` looks for the in-progress label and the Stranded Tickets under
+  // the names it gives rather than the defaults.
+  if (found.files.includes(CONFIG_FILENAME)) {
+    if (removal.failed === 0) {
+      await attempt(removal.removed, CONFIG_FILENAME, () => rmSync(join(repoRoot, CONFIG_FILENAME)));
+    } else {
+      removal.left.push(
+        `${CONFIG_FILENAME}: kept, because a removal above failed and it names the labels the` +
+          " next `ticket-runner remove` looks for — that run deletes it with the rest",
+      );
+    }
   }
 
   const deleted =
