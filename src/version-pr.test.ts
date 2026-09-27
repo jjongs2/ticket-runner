@@ -98,10 +98,11 @@ describe("the notes a Version published", () => {
       expect(versionNotes(CHANGELOG, number)).toContain("### After upgrading");
     }
     // The body GitHub published for that Version, to the character. It was cut
-    // before the rename to ticket-runner, so it names the pipeline by its former
-    // name, read here from its first link definition.
+    // before the rename to ticket-runner, so its words name the pipeline by its
+    // former name, read here from the command its After upgrading line gives,
+    // while its links point at the repository under the name it has now.
     const notes = versionNotes(CHANGELOG, "0.2.0") ?? "";
-    const former = /github\.com\/jjongs2\/([\w-]+)\/pull\//.exec(notes)?.[1] ?? "";
+    const former = /Run `([\w-]+) init`/.exec(notes)?.[1] ?? "";
     expect(former).not.toBe("");
     expect(notes.replaceAll(former, "<name>")).toBe(`### Any Target
 
@@ -113,9 +114,9 @@ describe("the notes a Version published", () => {
 
 - Run \`<name> init\` once in every Target; a Run now refuses one without it.
 
-[#70]: https://github.com/jjongs2/<name>/pull/70
-[#71]: https://github.com/jjongs2/<name>/pull/71
-[#72]: https://github.com/jjongs2/<name>/pull/72`);
+[#70]: https://github.com/jjongs2/ticket-runner/pull/70
+[#71]: https://github.com/jjongs2/ticket-runner/pull/71
+[#72]: https://github.com/jjongs2/ticket-runner/pull/72`);
   });
 });
 

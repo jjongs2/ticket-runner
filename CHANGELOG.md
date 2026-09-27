@@ -27,14 +27,14 @@ published as the body of that Version's GitHub Release (ADR-0007). The shape is
 
 - Run `agent-pipeline init` again in every Target: the Operator's skill's `gh` wording and its dependency-install line both changed.
 
-[#181]: https://github.com/jjongs2/agent-pipeline/pull/181
-[#182]: https://github.com/jjongs2/agent-pipeline/pull/182
-[#183]: https://github.com/jjongs2/agent-pipeline/pull/183
-[#184]: https://github.com/jjongs2/agent-pipeline/pull/184
-[#185]: https://github.com/jjongs2/agent-pipeline/pull/185
-[#190]: https://github.com/jjongs2/agent-pipeline/pull/190
-[#191]: https://github.com/jjongs2/agent-pipeline/pull/191
-[#192]: https://github.com/jjongs2/agent-pipeline/pull/192
+[#181]: https://github.com/jjongs2/ticket-runner/pull/181
+[#182]: https://github.com/jjongs2/ticket-runner/pull/182
+[#183]: https://github.com/jjongs2/ticket-runner/pull/183
+[#184]: https://github.com/jjongs2/ticket-runner/pull/184
+[#185]: https://github.com/jjongs2/ticket-runner/pull/185
+[#190]: https://github.com/jjongs2/ticket-runner/pull/190
+[#191]: https://github.com/jjongs2/ticket-runner/pull/191
+[#192]: https://github.com/jjongs2/ticket-runner/pull/192
 
 ## 0.5.1 (2026-09-25)
 
@@ -46,7 +46,7 @@ published as the body of that Version's GitHub Release (ADR-0007). The shape is
 
 - Run `agent-pipeline init` again in every Target, so a cloud Host installs this Version rather than the one stamped before.
 
-[#177]: https://github.com/jjongs2/agent-pipeline/pull/177
+[#177]: https://github.com/jjongs2/ticket-runner/pull/177
 
 ## 0.5.0 (2026-09-25)
 
@@ -65,17 +65,17 @@ published as the body of that Version's GitHub Release (ADR-0007). The shape is
 
 - Run `agent-pipeline init` again in every Target; readiness now refuses one missing branch deletion, a Version stamp, or the Operator's skill.
 
-[#145]: https://github.com/jjongs2/agent-pipeline/pull/145
-[#158]: https://github.com/jjongs2/agent-pipeline/pull/158
-[#159]: https://github.com/jjongs2/agent-pipeline/pull/159
-[#160]: https://github.com/jjongs2/agent-pipeline/pull/160
-[#161]: https://github.com/jjongs2/agent-pipeline/pull/161
-[#162]: https://github.com/jjongs2/agent-pipeline/pull/162
-[#163]: https://github.com/jjongs2/agent-pipeline/pull/163
-[#164]: https://github.com/jjongs2/agent-pipeline/pull/164
-[#166]: https://github.com/jjongs2/agent-pipeline/pull/166
-[#170]: https://github.com/jjongs2/agent-pipeline/pull/170
-[#172]: https://github.com/jjongs2/agent-pipeline/pull/172
+[#145]: https://github.com/jjongs2/ticket-runner/pull/145
+[#158]: https://github.com/jjongs2/ticket-runner/pull/158
+[#159]: https://github.com/jjongs2/ticket-runner/pull/159
+[#160]: https://github.com/jjongs2/ticket-runner/pull/160
+[#161]: https://github.com/jjongs2/ticket-runner/pull/161
+[#162]: https://github.com/jjongs2/ticket-runner/pull/162
+[#163]: https://github.com/jjongs2/ticket-runner/pull/163
+[#164]: https://github.com/jjongs2/ticket-runner/pull/164
+[#166]: https://github.com/jjongs2/ticket-runner/pull/166
+[#170]: https://github.com/jjongs2/ticket-runner/pull/170
+[#172]: https://github.com/jjongs2/ticket-runner/pull/172
 
 ## 0.4.5 (2026-09-23)
 
@@ -88,8 +88,8 @@ published as the body of that Version's GitHub Release (ADR-0007). The shape is
 
 - nothing
 
-[#141]: https://github.com/jjongs2/agent-pipeline/pull/141
-[#143]: https://github.com/jjongs2/agent-pipeline/pull/143
+[#141]: https://github.com/jjongs2/ticket-runner/pull/141
+[#143]: https://github.com/jjongs2/ticket-runner/pull/143
 
 ## 0.4.4 (2026-09-23)
 
@@ -106,9 +106,9 @@ published as the body of that Version's GitHub Release (ADR-0007). The shape is
 
 - Run `agent-pipeline init` again in every Target; the conventions document's State file line now covers a handed-off Ticket too.
 
-[#135]: https://github.com/jjongs2/agent-pipeline/pull/135
-[#136]: https://github.com/jjongs2/agent-pipeline/pull/136
-[#138]: https://github.com/jjongs2/agent-pipeline/pull/138
+[#135]: https://github.com/jjongs2/ticket-runner/pull/135
+[#136]: https://github.com/jjongs2/ticket-runner/pull/136
+[#138]: https://github.com/jjongs2/ticket-runner/pull/138
 
 ## 0.4.3 (2026-09-22)
 
@@ -120,7 +120,7 @@ published as the body of that Version's GitHub Release (ADR-0007). The shape is
 
 - nothing
 
-[#129]: https://github.com/jjongs2/agent-pipeline/pull/129
+[#129]: https://github.com/jjongs2/ticket-runner/pull/129
 
 ## 0.4.2 (2026-09-22)
 
@@ -137,9 +137,9 @@ published as the body of that Version's GitHub Release (ADR-0007). The shape is
 
 - nothing
 
-[#124]: https://github.com/jjongs2/agent-pipeline/pull/124
-[#125]: https://github.com/jjongs2/agent-pipeline/pull/125
-[#126]: https://github.com/jjongs2/agent-pipeline/pull/126
+[#124]: https://github.com/jjongs2/ticket-runner/pull/124
+[#125]: https://github.com/jjongs2/ticket-runner/pull/125
+[#126]: https://github.com/jjongs2/ticket-runner/pull/126
 
 ## 0.4.1 (2026-09-21)
 
@@ -159,12 +159,12 @@ published as the body of that Version's GitHub Release (ADR-0007). The shape is
 
 - Nothing is required; a Target whose Actions queue registers checks slowly can raise `ciGraceMinutes`, which defaults to 5.
 
-[#110]: https://github.com/jjongs2/agent-pipeline/pull/110
-[#112]: https://github.com/jjongs2/agent-pipeline/pull/112
-[#115]: https://github.com/jjongs2/agent-pipeline/pull/115
-[#117]: https://github.com/jjongs2/agent-pipeline/pull/117
-[#118]: https://github.com/jjongs2/agent-pipeline/pull/118
-[#120]: https://github.com/jjongs2/agent-pipeline/pull/120
+[#110]: https://github.com/jjongs2/ticket-runner/pull/110
+[#112]: https://github.com/jjongs2/ticket-runner/pull/112
+[#115]: https://github.com/jjongs2/ticket-runner/pull/115
+[#117]: https://github.com/jjongs2/ticket-runner/pull/117
+[#118]: https://github.com/jjongs2/ticket-runner/pull/118
+[#120]: https://github.com/jjongs2/ticket-runner/pull/120
 
 ## 0.4.0 (2026-09-20)
 
@@ -184,13 +184,13 @@ published as the body of that Version's GitHub Release (ADR-0007). The shape is
 - Reinstall with the new line, which follows tags: `npm install -g "github:jjongs2/agent-pipeline#semver:*"`.
 - Run `agent-pipeline init` again in every Target; the conventions document now carries the Version that wrote it, and a Run warns until it does.
 
-[#94]: https://github.com/jjongs2/agent-pipeline/pull/94
-[#95]: https://github.com/jjongs2/agent-pipeline/pull/95
-[#100]: https://github.com/jjongs2/agent-pipeline/pull/100
-[#102]: https://github.com/jjongs2/agent-pipeline/pull/102
-[#104]: https://github.com/jjongs2/agent-pipeline/pull/104
-[#106]: https://github.com/jjongs2/agent-pipeline/pull/106
-[#107]: https://github.com/jjongs2/agent-pipeline/pull/107
+[#94]: https://github.com/jjongs2/ticket-runner/pull/94
+[#95]: https://github.com/jjongs2/ticket-runner/pull/95
+[#100]: https://github.com/jjongs2/ticket-runner/pull/100
+[#102]: https://github.com/jjongs2/ticket-runner/pull/102
+[#104]: https://github.com/jjongs2/ticket-runner/pull/104
+[#106]: https://github.com/jjongs2/ticket-runner/pull/106
+[#107]: https://github.com/jjongs2/ticket-runner/pull/107
 
 ## 0.3.1 (2026-09-20)
 
@@ -207,11 +207,11 @@ published as the body of that Version's GitHub Release (ADR-0007). The shape is
 
 - nothing
 
-[#85]: https://github.com/jjongs2/agent-pipeline/pull/85
-[#87]: https://github.com/jjongs2/agent-pipeline/pull/87
-[#88]: https://github.com/jjongs2/agent-pipeline/pull/88
-[#91]: https://github.com/jjongs2/agent-pipeline/pull/91
-[#93]: https://github.com/jjongs2/agent-pipeline/pull/93
+[#85]: https://github.com/jjongs2/ticket-runner/pull/85
+[#87]: https://github.com/jjongs2/ticket-runner/pull/87
+[#88]: https://github.com/jjongs2/ticket-runner/pull/88
+[#91]: https://github.com/jjongs2/ticket-runner/pull/91
+[#93]: https://github.com/jjongs2/ticket-runner/pull/93
 
 ## 0.3.0 (2026-09-19)
 
@@ -226,10 +226,10 @@ published as the body of that Version's GitHub Release (ADR-0007). The shape is
 
 - Run `agent-pipeline init` again in every Target; the conventions document gained the Checks-in-parallel line. Keep `lanes` at one where Checks share a port or database.
 
-[#77]: https://github.com/jjongs2/agent-pipeline/pull/77
-[#81]: https://github.com/jjongs2/agent-pipeline/pull/81
-[#82]: https://github.com/jjongs2/agent-pipeline/pull/82
-[#83]: https://github.com/jjongs2/agent-pipeline/pull/83
+[#77]: https://github.com/jjongs2/ticket-runner/pull/77
+[#81]: https://github.com/jjongs2/ticket-runner/pull/81
+[#82]: https://github.com/jjongs2/ticket-runner/pull/82
+[#83]: https://github.com/jjongs2/ticket-runner/pull/83
 
 ## 0.2.0 (2026-09-18)
 
@@ -243,9 +243,9 @@ published as the body of that Version's GitHub Release (ADR-0007). The shape is
 
 - Run `agent-pipeline init` once in every Target; a Run now refuses one without it.
 
-[#70]: https://github.com/jjongs2/agent-pipeline/pull/70
-[#71]: https://github.com/jjongs2/agent-pipeline/pull/71
-[#72]: https://github.com/jjongs2/agent-pipeline/pull/72
+[#70]: https://github.com/jjongs2/ticket-runner/pull/70
+[#71]: https://github.com/jjongs2/ticket-runner/pull/71
+[#72]: https://github.com/jjongs2/ticket-runner/pull/72
 
 ## 0.1.1 (2026-09-18)
 
@@ -270,19 +270,19 @@ published as the body of that Version's GitHub Release (ADR-0007). The shape is
 
 - nothing
 
-[#41]: https://github.com/jjongs2/agent-pipeline/pull/41
-[#42]: https://github.com/jjongs2/agent-pipeline/pull/42
-[#43]: https://github.com/jjongs2/agent-pipeline/pull/43
-[#45]: https://github.com/jjongs2/agent-pipeline/pull/45
-[#46]: https://github.com/jjongs2/agent-pipeline/pull/46
-[#48]: https://github.com/jjongs2/agent-pipeline/pull/48
-[#49]: https://github.com/jjongs2/agent-pipeline/pull/49
-[#51]: https://github.com/jjongs2/agent-pipeline/pull/51
-[#54]: https://github.com/jjongs2/agent-pipeline/pull/54
-[#56]: https://github.com/jjongs2/agent-pipeline/pull/56
-[#58]: https://github.com/jjongs2/agent-pipeline/pull/58
-[#64]: https://github.com/jjongs2/agent-pipeline/pull/64
-[#67]: https://github.com/jjongs2/agent-pipeline/pull/67
+[#41]: https://github.com/jjongs2/ticket-runner/pull/41
+[#42]: https://github.com/jjongs2/ticket-runner/pull/42
+[#43]: https://github.com/jjongs2/ticket-runner/pull/43
+[#45]: https://github.com/jjongs2/ticket-runner/pull/45
+[#46]: https://github.com/jjongs2/ticket-runner/pull/46
+[#48]: https://github.com/jjongs2/ticket-runner/pull/48
+[#49]: https://github.com/jjongs2/ticket-runner/pull/49
+[#51]: https://github.com/jjongs2/ticket-runner/pull/51
+[#54]: https://github.com/jjongs2/ticket-runner/pull/54
+[#56]: https://github.com/jjongs2/ticket-runner/pull/56
+[#58]: https://github.com/jjongs2/ticket-runner/pull/58
+[#64]: https://github.com/jjongs2/ticket-runner/pull/64
+[#67]: https://github.com/jjongs2/ticket-runner/pull/67
 
 ## 0.1.0 (2026-09-17)
 
@@ -311,17 +311,17 @@ published as the body of that Version's GitHub Release (ADR-0007). The shape is
 
 - First Version. A Target needs the triage labels, `.worktrees/` and `.agent-pipeline/` gitignored, and Tickets with `- [ ]` criteria, native `blocked by` edges and `ready-for-agent`.
 
-[#9]: https://github.com/jjongs2/agent-pipeline/pull/9
-[#14]: https://github.com/jjongs2/agent-pipeline/pull/14
-[#16]: https://github.com/jjongs2/agent-pipeline/pull/16
-[#18]: https://github.com/jjongs2/agent-pipeline/pull/18
-[#20]: https://github.com/jjongs2/agent-pipeline/pull/20
-[#22]: https://github.com/jjongs2/agent-pipeline/pull/22
-[#24]: https://github.com/jjongs2/agent-pipeline/pull/24
-[#25]: https://github.com/jjongs2/agent-pipeline/pull/25
-[#27]: https://github.com/jjongs2/agent-pipeline/pull/27
-[#28]: https://github.com/jjongs2/agent-pipeline/pull/28
-[#30]: https://github.com/jjongs2/agent-pipeline/pull/30
-[#34]: https://github.com/jjongs2/agent-pipeline/pull/34
-[#36]: https://github.com/jjongs2/agent-pipeline/pull/36
-[#39]: https://github.com/jjongs2/agent-pipeline/pull/39
+[#9]: https://github.com/jjongs2/ticket-runner/pull/9
+[#14]: https://github.com/jjongs2/ticket-runner/pull/14
+[#16]: https://github.com/jjongs2/ticket-runner/pull/16
+[#18]: https://github.com/jjongs2/ticket-runner/pull/18
+[#20]: https://github.com/jjongs2/ticket-runner/pull/20
+[#22]: https://github.com/jjongs2/ticket-runner/pull/22
+[#24]: https://github.com/jjongs2/ticket-runner/pull/24
+[#25]: https://github.com/jjongs2/ticket-runner/pull/25
+[#27]: https://github.com/jjongs2/ticket-runner/pull/27
+[#28]: https://github.com/jjongs2/ticket-runner/pull/28
+[#30]: https://github.com/jjongs2/ticket-runner/pull/30
+[#34]: https://github.com/jjongs2/ticket-runner/pull/34
+[#36]: https://github.com/jjongs2/ticket-runner/pull/36
+[#39]: https://github.com/jjongs2/ticket-runner/pull/39
