@@ -146,7 +146,7 @@ export async function requestStop({
   // that the answer says which Run is running, not just that nothing happened.
   if (namesOneTicket(holder.command)) {
     error(
-      `${describe(holder)} holds the Run lock, and a Run given one Ticket ends with it anyway.` +
+      `${describeHolder(holder)} holds the Run lock, and a Run given one Ticket ends with it anyway.` +
         " Nothing was sent.",
     );
     return 2;
@@ -157,12 +157,12 @@ export async function requestStop({
   } catch (failure) {
     // The Run can end between the liveness check and the signal, and one
     // started by another user cannot be signalled from this shell at all.
-    error(`Could not ask ${describe(holder)} to stop: ${reason(failure)}`);
+    error(`Could not ask ${describeHolder(holder)} to stop: ${reason(failure)}`);
     return 2;
   }
 
   log(
-    `${describe(holder)} will stop once the Tickets it holds are finished. It claims no more.`,
+    `${describeHolder(holder)} will stop once the Tickets it holds are finished. It claims no more.`,
   );
   log(
     "Ctrl+C in that Run's own terminal stops it at once instead, at the cost of killing the" +
@@ -171,8 +171,11 @@ export async function requestStop({
   return 0;
 }
 
-/** Which Run, in the three things the lock knows about it. */
-function describe(holder: LockHolder): string {
+/**
+ * Which Run, in the three things the lock knows about it: how `stop` names a
+ * holder on this Host, and `remove` too.
+ */
+export function describeHolder(holder: LockHolder): string {
   return `\`${holder.command}\` (run ${holder.runId}, pid ${holder.pid})`;
 }
 

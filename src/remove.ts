@@ -9,7 +9,7 @@ import { FREE_LOCK, LOCK_BRANCH, LOCK_FILE } from "./lock.js";
 import { findStandingNotes } from "./notes.js";
 import { OPERATOR_SKILL_PATH } from "./operator-skill.js";
 import type { Tracker } from "./ports/tracker.js";
-import type { LockHolder, LockTake, TicketWorktree, Workspace } from "./ports/workspace.js";
+import type { LockTake, TicketWorktree, Workspace } from "./ports/workspace.js";
 import {
   CLAUDE_FILENAME,
   GH_FAILURE,
@@ -22,6 +22,7 @@ import {
 } from "./readiness.js";
 import { STATE_BRANCH } from "./resume.js";
 import { nestedRunRefusal } from "./stage-guard.js";
+import { describeHolder } from "./stop.js";
 
 /**
  * `ticket-runner remove`: take the pipeline out of a Target, so a human who
@@ -226,13 +227,11 @@ export async function removeTarget(options: RemoveOptions): Promise<number> {
   logGroup(
     log,
     "Left for you",
-    [
-      ...outcome.left,
-      ...(await leftForYou(options, {
-        removed: outcome.removed.some((line) => line.startsWith(PASS)),
-        states: outcome.states,
-      })),
-    ],
+    await leftForYou(options, {
+      removed: outcome.removed.some((line) => line.startsWith(PASS)),
+      states: outcome.states,
+      stays: outcome.left,
+    }),
   );
 
   log("");
@@ -286,7 +285,8 @@ async function heldWorkRefusal({
       ];
       return `  ${shown(repoRoot, worktree.path)}: ${held.join(", and ")}`;
     }),
-    "Commit and push it, or discard it, then run `ticket-runner remove` again.",
+    "Push what is worth keeping, and take out a worktree nothing in is wanted with" +
+      " `git worktree remove --force <path>`, then run `ticket-runner remove` again.",
   ].join("\n");
 }
 
@@ -303,7 +303,7 @@ function lockRefusal(taken: Exclude<LockTake, { outcome: "taken" }>): string {
     ` ${again}`;
   if (taken.outcome === "abandoned") {
     return (
-      `Refusing to remove: ${described(holder)} holds the Run lock, but its process on this` +
+      `Refusing to remove: ${describeHolder(holder)} holds the Run lock, but its process on this` +
       " Host has gone. `remove` takes over no lock: start `ticket-runner run` to take it over" +
       ` and finish what it held, or ${release}`
     );
@@ -316,14 +316,9 @@ function lockRefusal(taken: Exclude<LockTake, { outcome: "taken" }>): string {
     );
   }
   return (
-    `Refusing to remove: ${described(holder)} holds the Run lock on this Host, started` +
+    `Refusing to remove: ${describeHolder(holder)} holds the Run lock on this Host, started` +
     ` ${holder.startedAt}. Wait for it to finish, or ask it to with \`ticket-runner stop\`, ${again}`
   );
-}
-
-/** A holder on this Host, in the three things the lock knows about it. */
-function described(holder: LockHolder): string {
-  return `\`${holder.command}\` (run ${holder.runId}, pid ${holder.pid})`;
 }
 
 /** Everything of the pipeline's the Target still has. */
@@ -504,14 +499,14 @@ async function removeFound(options: RemoveOptions, found: Found): Promise<Remova
     );
   }
   if (found.stateBranch) {
-    // Read before the branch goes, because it is the only place they are named.
-    const states = await workspace.readAllStates().catch(() => []);
-    const gone = await attempt(removal.github, `the \`${STATE_BRANCH}\` branch`, () =>
-      workspace.deleteRemoteBranch(STATE_BRANCH),
-    );
-    if (gone) {
+    // Read before the branch goes, because it is the only place they are
+    // named: a branch whose Tickets could not be read is kept, so the report
+    // never loses one a Run could have resumed.
+    await attempt(removal.github, `the \`${STATE_BRANCH}\` branch`, async () => {
+      const states = await workspace.readAllStates();
+      await workspace.deleteRemoteBranch(STATE_BRANCH);
       removal.states = states.map((file) => (file.readable ? file.state.ticket : file.ticket));
-    }
+    });
   }
 
   const deleted =
@@ -592,7 +587,16 @@ function prunable(repoRoot: string, emptied: Set<string>): string[] {
  */
 async function leftForYou(
   { repoRoot, config, tracker, workspace }: RemoveOptions,
-  { removed, states = [] }: { removed: boolean; states?: number[] },
+  {
+    removed,
+    states = [],
+    stays = [],
+  }: {
+    removed: boolean;
+    states?: number[];
+    /** What the removal kept of what it set out to remove, and why. */
+    stays?: string[];
+  },
 ): Promise<string[]> {
   const lines: string[] = [];
   const asking = async (what: string, ask: () => Promise<string[]>): Promise<void> => {
@@ -644,6 +648,11 @@ async function leftForYou(
     );
   }
 
+  lines.push(
+    "comments on issues: the progress, hand-off and Note comments Runs wrote are left as they" +
+      " are, since they are addressed to humans",
+  );
+
   const claude = readTargetFile(join(repoRoot, CLAUDE_FILENAME));
   if (claudeFound(claude) === "edited") {
     lines.push(
@@ -662,6 +671,7 @@ async function leftForYou(
     }
   }
 
+  lines.push(...stays);
   if (removed) {
     lines.push(
       "nothing was committed: review the changes with `git status` and commit them yourself",

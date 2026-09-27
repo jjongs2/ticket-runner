@@ -277,6 +277,7 @@ describe("what remove leaves for the human", () => {
       "branch `agent/9-another-title` on GitHub: no pull request is open on it",
       "issue #88: the standing Notes issue, left open with the Notes on it",
       `#12: no Run can resume it any more, because its State file, and any hand-off transcripts kept beside it, went with \`${STATE_BRANCH}\``,
+      "comments on issues: the progress, hand-off and Note comments Runs wrote are left as they are, since they are addressed to humans",
       "nothing was committed: review the changes with `git status` and commit them yourself",
     ]);
     expect(tracker.squashMergeEnabled).toBe(true);
@@ -405,6 +406,32 @@ describe("a removal that fails", () => {
       "✓ the Run lock, released to free",
     ]);
     expect(workspace.lock).toBeUndefined();
+  });
+
+  it("keeps the state branch when the Tickets on it cannot be read, so none goes unnamed", async () => {
+    await init();
+    await aRunWorkedHere();
+    workspace.readAllStates = async () => {
+      throw new Error("fetch failed");
+    };
+
+    const { code, out } = await remove();
+
+    expect(code).toBe(1);
+    expect(group(out, "GitHub")).toContain(`✗ the \`${STATE_BRANCH}\` branch: fetch failed`);
+    expect(workspace.state(12)).toBeDefined();
+  });
+
+  it("names what it kept after the Planning labels and the work on GitHub, as the template orders them", async () => {
+    await init();
+    await aRunWorkedHere();
+    write(".worktrees/scratch/notes.txt", "mine\n");
+
+    const left = group((await remove()).out, "Left for you");
+
+    expect(left.at(-2)).toBe(
+      ".worktrees/: holds scratch besides the pipeline's worktrees, so it stays, and so does its `.gitignore` entry",
+    );
   });
 });
 
@@ -707,7 +734,7 @@ describe("refusing before anything changes", () => {
       [
         "Refusing to remove: these worktrees hold work GitHub does not have, which removing them would lose:",
         "  .worktrees/ticket-12: uncommitted changes, and commits its branch on the remote does not have",
-        "Commit and push it, or discard it, then run `ticket-runner remove` again.",
+        "Push what is worth keeping, and take out a worktree nothing in is wanted with `git worktree remove --force <path>`, then run `ticket-runner remove` again.",
       ].join("\n"),
     );
   });

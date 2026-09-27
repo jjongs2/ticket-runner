@@ -28,6 +28,7 @@ Left for you:
   branch `agent/9-another-title` on GitHub: no pull request is open on it
   issue #88: the standing Notes issue, left open with the Notes on it
   #12, #15: no Run can resume them any more, because their State files, and any hand-off transcripts kept beside them, went with `ticket-runner/state`
+  comments on issues: the progress, hand-off and Note comments Runs wrote are left as they are, since they are addressed to humans
   nothing was committed: review the changes with `git status` and commit them yourself
 
 Done: the pipeline has gone from this Target.
@@ -82,7 +83,10 @@ purpose, each line with what to do about it:
   are a Ticket's work
 - the standing Notes issue, by number, which is addressed to a human
 - the Tickets whose State files went with the state branch, which no Run can
-  resume any more, and the hand-off transcripts that went with them
+  resume any more, and the hand-off transcripts that went with them. They are
+  read before the branch is deleted, and a branch whose Tickets cannot be read
+  is kept and marked `✗`, so none of them goes unnamed
+- the comments Runs wrote on issues, which are addressed to humans
 - whatever of the pipeline's stays because it no longer matches `init`'s text,
   or shares a directory with something else:
 
@@ -174,4 +178,4 @@ Refusing to remove: #12 and #15 still carry the `in-progress` label, so they are
 Refusing to remove: these worktrees hold work GitHub does not have, which removing them would lose:
   .worktrees/ticket-12: uncommitted changes
   .worktrees/ticket-15: commits its branch on the remote does not have
-Commit and push it, or discard it, then run `ticket-runner remove` again.
+Push what is worth keeping, and take out a worktree nothing in is wanted with `git worktree remove --force <path>`, then run `ticket-runner remove` again.
