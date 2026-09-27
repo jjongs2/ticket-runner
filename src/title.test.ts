@@ -29,6 +29,15 @@ describe("parseTitle", () => {
     expect(parseTitle({ title: "docs: say so" })).toBe("docs: say so");
   });
 
+  it("reads the title beside Notes the Notes parser would reject", () => {
+    expect(parseTitle({ title: "feat: title the branch", notes: "not a list" })).toBe(
+      "feat: title the branch",
+    );
+    expect(parseTitle({ title: "feat: title the branch", notes: [{ ticket: "x" }] })).toBe(
+      "feat: title the branch",
+    );
+  });
+
   it("takes off surrounding space and a trailing Ticket reference", () => {
     expect(parseTitle({ title: "  fix: mend it (#203)\n" })).toBe("fix: mend it");
   });

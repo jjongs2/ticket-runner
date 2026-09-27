@@ -402,6 +402,18 @@ describe("the pull request title and the squash commit", () => {
     expect(pr.squashCommit?.subject).toBe("feat: name the pipeline ticket-runner (#100)");
   });
 
+  it("keeps the title when the Notes beside it are malformed", async () => {
+    runner.queue(
+      "implement",
+      stageResult({ result: { title: "feat(cli): do the whole thing", notes: "none" } }),
+    );
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged", notes: [] });
+    expect(tracker.pullRequest(100).title).toBe("feat(cli): do the whole thing");
+  });
+
   it("keeps the implement Stage's title when the fix Stage answers none that counts", async () => {
     runner.queue("implement", titled("feat(cli): do the whole thing"));
     runner.queue("verify", stageResult({ result: UNMET_VERDICT }));

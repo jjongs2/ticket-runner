@@ -1,5 +1,3 @@
-import { NOTES_LIST_SCHEMA } from "./note-schema.js";
-
 /**
  * What a pipeline pull request is titled, which is also the subject of the
  * squash commit that lands on the base branch.
@@ -11,6 +9,15 @@ import { NOTES_LIST_SCHEMA } from "./note-schema.js";
  * work could not retitle a branch whose first commit was already pushed without
  * rewriting it.
  */
+
+import { NOTES_LIST_SCHEMA } from "./note-schema.js";
+
+/**
+ * What a title is asked to be, in the words both the schema and the prompts of
+ * the code Stages use: one declaration, so the two cannot drift apart.
+ */
+export const BRANCH_TITLE =
+  "one line summarising the whole branch as it stands when you finish, the work of any Stage before you included";
 
 /** Any `<type>(<scope>): <summary>`; the repo's own types and scopes are CONTRIBUTING.md's business. */
 const CONVENTIONAL_SUBJECT = /^[a-z]+(\([a-z0-9._-]+\))?: \S/;
@@ -32,8 +39,7 @@ export const CODE_STAGE_JSON_SCHEMA = {
   properties: {
     title: {
       type: "string",
-      description:
-        "One line summarising the whole branch as it stands when you finish, the work of any Stage before you included: `<type>(<scope>): <summary>`, without the `(#<n>)`. It titles the pull request and the squash commit that lands.",
+      description: `Write ${BRANCH_TITLE}: \`<type>(<scope>): <summary>\`, without the \`(#<n>)\`. It titles the pull request and the squash commit that lands.`,
     },
     notes: NOTES_LIST_SCHEMA,
   },
@@ -48,7 +54,7 @@ export const CODE_STAGE_JSON_SCHEMA = {
  * A trailing `(#<n>)` is taken off rather than held against it, as it is off a
  * commit subject, since the squash commit appends the pull request's own.
  */
-function conventional(candidate: string): string | undefined {
+function asTitle(candidate: string): string | undefined {
   const title = candidate.trim().replace(TICKET_REFERENCE, "");
   if (title.includes("\n")) return undefined;
   return CONVENTIONAL_SUBJECT.test(title) ? title : undefined;
@@ -64,7 +70,7 @@ function conventional(candidate: string): string | undefined {
 export function parseTitle(result: unknown): string | undefined {
   if (typeof result !== "object" || result === null) return undefined;
   const raw = (result as { title?: unknown }).title;
-  return typeof raw === "string" ? conventional(raw) : undefined;
+  return typeof raw === "string" ? asTitle(raw) : undefined;
 }
 
 /**
@@ -84,7 +90,7 @@ export function pullRequestTitle(
   ticketTitle: string,
 ): string {
   for (const candidate of [stageTitle, commits[0]]) {
-    const title = candidate === undefined ? undefined : conventional(candidate);
+    const title = candidate === undefined ? undefined : asTitle(candidate);
     if (title !== undefined) return title;
   }
   return ticketTitle;

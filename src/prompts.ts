@@ -7,6 +7,7 @@
 import { CONVENTIONS_PATH } from "./conventions.js";
 import type { FailureKind } from "./lifecycle.js";
 import { STAGE_ENV_VAR } from "./stage-guard.js";
+import { BRANCH_TITLE } from "./title.js";
 
 /**
  * Appended to every Stage prompt, the fix Stage included. The mechanical guard
@@ -37,7 +38,7 @@ const FINISH_GUIDANCE = `- Never end your turn while uncommitted work waits on a
  * was already pushed without rewriting it.
  */
 const titleGuidance = (base: string) =>
-  `- Answer a \`title\` beside your Notes: one line summarising the whole branch as it stands when you finish, the work of any Stage before you included, in the \`<type>(<scope>): <summary>\` shape \`${CONVENTIONS_PATH}\` states and without the \`(#<n>)\`. It titles the pull request and the squash commit on \`${base}\`, so each commit subject describes only its own commit.`;
+  `- Answer a \`title\` beside your Notes: ${BRANCH_TITLE}, in the \`<type>(<scope>): <summary>\` shape \`${CONVENTIONS_PATH}\` states and without the \`(#<n>)\`. It titles the pull request and the squash commit on \`${base}\`, so each commit subject describes only its own commit.`;
 
 /**
  * Guidance appended to every implement Stage, working around known defects of
