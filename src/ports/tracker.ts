@@ -311,6 +311,14 @@ export interface Tracker {
    * failed while the squash commit carried the one that passed.
    */
   updatePullRequestBody(number: number, body: string): Promise<void>;
+  /**
+   * Replace the title of an open pull request.
+   *
+   * The title is the subject of the squash commit, and a fix Stage may answer a
+   * new one for a pull request an earlier pass already opened; without this the
+   * pull request would keep the old title while a different subject landed.
+   */
+  updatePullRequestTitle(number: number, title: string): Promise<void>;
   waitForCi(number: number, timeoutMs: number): Promise<CiOutcome>;
   squashMerge(number: number, commit: SquashCommit): Promise<void>;
 }

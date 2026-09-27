@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NOTES_JSON_SCHEMA, StandingNotes, parseNotes, routeNotes } from "./notes.js";
+import { StandingNotes, parseNotes, routeNotes } from "./notes.js";
 import { NOTES_ISSUE_MARKER, NOTES_ISSUE_TITLE } from "./templates.js";
 import { FakeTracker } from "./testing/fakes.js";
 

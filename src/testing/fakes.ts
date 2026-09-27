@@ -328,6 +328,11 @@ export class FakeTracker implements Tracker {
     this.pullRequest(number).body = body;
   }
 
+  async updatePullRequestTitle(number: number, title: string): Promise<void> {
+    this.calls.push(`updatePullRequestTitle:${number}`);
+    this.pullRequest(number).title = title;
+  }
+
   /** Queue the outcome of the next CI wait, overriding {@link ci} once. */
   queueCi(outcome: CiOutcome): this {
     this.ciQueue.push(outcome);

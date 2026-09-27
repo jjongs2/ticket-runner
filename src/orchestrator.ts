@@ -7,7 +7,6 @@ import type { HostKind } from "./host.js";
 import type { Landing, LandingTurn } from "./landing.js";
 import type { FailureKind, FailurePoint } from "./lifecycle.js";
 import {
-  NOTES_JSON_SCHEMA,
   type NotingStage,
   type RoutedNote,
   type StandingNotes,
@@ -46,6 +45,7 @@ import {
   pullRequestBody,
   squashCommit,
 } from "./templates.js";
+import { CODE_STAGE_JSON_SCHEMA, parseTitle, pullRequestTitle } from "./title.js";
 import {
   type Verdict,
   VERDICT_JSON_SCHEMA,
@@ -281,6 +281,7 @@ async function takeTicket(
     state: resume?.state ?? "claimed",
     fixUsed: resume?.fixUsed ?? false,
     ...(resume?.pullRequest === undefined ? {} : { pullRequest: resume.pullRequest }),
+    ...(resume?.title === undefined ? {} : { title: resume.title }),
   });
 
   // The claim is the first write on the board: it shows what the pipeline holds
@@ -372,7 +373,7 @@ async function takeTicket(
     }
     if (resume === undefined || resume.state === "claimed") {
       point = "implement";
-      await implement(pipeline, issue, worktree, branch, logDir, progress, notes);
+      await implement(pipeline, issue, worktree, branch, logDir, progress, notes, record);
       // The branch now carries work no later Run should pay for again.
       await record.advance({ state: "implemented" });
     }
@@ -430,7 +431,9 @@ async function takeTicket(
         // the base branch.
         commits = await workspace.commitSubjects(branch, baseBranch);
         coAuthors = await workspace.coAuthors(branch, baseBranch);
-        title = pullRequestTitle(commits, issue.title);
+        // The latest title a Stage answered, in this Run or the one it resumes,
+        // before anything read off the commits.
+        title = pullRequestTitle(record.title, commits, issue.title);
         pullRequest = await publishPullRequest(
           pipeline,
           { issue, branch, worktree, verdict, title },
@@ -462,6 +465,7 @@ async function takeTicket(
           { kind: failure.kind, summary: failure.summary, evidence: failure.evidence },
           progress,
           notes,
+          record,
         );
         // Recorded once the Stage has come back, not when the budget was
         // committed: a fix Stage the rate limit stopped before it ran spends
@@ -692,7 +696,7 @@ function howItWasTaken(resume: TicketState | undefined, stranded: boolean): stri
 type Reached = Omit<TicketState, "runId" | "updatedAt">;
 
 /** What one write moves that on by. */
-type Advance = Partial<Pick<Reached, "state" | "fixUsed" | "pullRequest">>;
+type Advance = Partial<Pick<Reached, "state" | "fixUsed" | "pullRequest" | "title">>;
 
 /**
  * The State file a Ticket keeps, and the one place a Ticket writes it.
@@ -733,6 +737,11 @@ class ResumeRecord {
     const record = new ResumeRecord(pipeline, reached);
     await pipeline.workspace.writeState(record.file());
     return record;
+  }
+
+  /** The latest title a Stage answered for the branch, in this Run or an earlier one. */
+  get title(): string | undefined {
+    return this.reached.title;
   }
 
   /**
@@ -904,6 +913,18 @@ async function collectNotes(
   );
 }
 
+/**
+ * Record the title a code Stage answered for the whole branch, when it answered
+ * one that counts, so it names the pull request and outlives this Run.
+ *
+ * One that does not count costs the title alone, as a malformed Note costs that
+ * Note: the one before it, or the first commit subject, is used instead.
+ */
+async function recordTitle(result: StageResult, record: ResumeRecord): Promise<void> {
+  const title = parseTitle(result.result);
+  if (title !== undefined) await record.advance({ title });
+}
+
 /** What the Run's standing Notes issue is found — and opened — with. */
 function standingNotesLookup(pipeline: Pipeline): StandingNotesLookup {
   return {
@@ -964,6 +985,7 @@ async function implement(
   logDir: string,
   progress: Progress,
   notes: RoutedNote[],
+  record: ResumeRecord,
 ): Promise<void> {
   const stage = pipeline.config.stages.implement;
   const result = await runStage(pipeline, "implement", {
@@ -975,12 +997,14 @@ async function implement(
     ),
     cwd: worktree,
     logDir,
-    jsonSchema: NOTES_JSON_SCHEMA,
-    // The Notes are a side channel, not the Stage's product: a session that
-    // emitted none has implemented the Ticket exactly as it always did.
+    jsonSchema: CODE_STAGE_JSON_SCHEMA,
+    // The title and the Notes are side channels, not the Stage's product: a
+    // session that emitted neither has implemented the Ticket exactly as it
+    // always did.
     resultRequired: false,
   });
   await collectNotes(pipeline, issue.number, "implement", result, notes);
+  await recordTitle(result, record);
 
   // Pushed whatever became of the Stage, like its Notes: a session that
   // committed and then ran into the rate limit still committed, and the Host
@@ -1161,6 +1185,7 @@ async function fix(
   failure: FixFailure,
   progress: Progress,
   notes: RoutedNote[],
+  record: ResumeRecord,
 ): Promise<void> {
   const stage = pipeline.config.stages.fix;
   pipeline.log?.(`#${issue.number} fixing · ${failure.summary}`);
@@ -1180,10 +1205,11 @@ async function fix(
     ),
     cwd: worktree,
     logDir,
-    jsonSchema: NOTES_JSON_SCHEMA,
+    jsonSchema: CODE_STAGE_JSON_SCHEMA,
     resultRequired: false,
   });
   await collectNotes(pipeline, issue.number, "fix", result, notes);
+  await recordTitle(result, record);
 
   // Pushed whatever became of the Stage, as the implement Stage's work is.
   const grew = (await commitCount(pipeline, branch)) > commitsBefore;
@@ -1327,8 +1353,9 @@ interface PullRequestSubject {
  * Push the branch, then open the pull request or bring the open one up to date.
  *
  * A second pass comes back to a pull request that already exists: the push is
- * what GitHub re-runs its checks on, and the body is rewritten so the Verdict a
- * human reads there is the one that will reach the base branch.
+ * what GitHub re-runs its checks on, and the title and body are rewritten so
+ * the subject and the Verdict a human reads there are the ones that will reach
+ * the base branch.
  *
  * One that already exists is also taken out of draft, because a Ticket resumed
  * after a hand-off comes back to the pull request the hand-off drafted and a
@@ -1350,6 +1377,9 @@ async function publishPullRequest(
   });
 
   if (existing !== undefined) {
+    // Retitled as well, so a title a fix Stage answered after the pull request
+    // opened is the one it shows, as it is the subject that lands.
+    await pipeline.tracker.updatePullRequestTitle(existing, title);
     await pipeline.tracker.updatePullRequestBody(existing, body);
     await pipeline.tracker.markPullRequestReady(existing);
     return existing;
@@ -1686,26 +1716,6 @@ async function branchOnRemote(pipeline: Pipeline, ticket: number, branch: string
     pipeline.log?.(`#${ticket} could not ask the remote for ${branch}: ${(error as Error).message}`);
     return false;
   }
-}
-
-/** Any `<type>(<scope>): <summary>`; the repo's own types and scopes are CONTRIBUTING.md's business. */
-const CONVENTIONAL_SUBJECT = /^[a-z]+(\([a-z0-9._-]+\))?: \S/;
-
-/** The `(#<n>)` a branch commit carries, which the squash commit's `Closes #<n>` replaces. */
-const TICKET_REFERENCE = /\s*\(#\d+\)$/;
-
-/**
- * The pull request title, which is also the subject of the squash commit.
- *
- * The implement Stage is told its first commit must summarise the whole Ticket
- * in the commit convention, so that subject is the one line written about the
- * branch as a whole. A subject that ignored the convention is not worth putting
- * on the base branch, and neither is a Ticket the Stage left no commits on: the
- * Ticket title says at least as much.
- */
-function pullRequestTitle(commits: string[], ticketTitle: string): string {
-  const first = (commits[0] ?? "").replace(TICKET_REFERENCE, "");
-  return CONVENTIONAL_SUBJECT.test(first) ? first : ticketTitle;
 }
 
 /**

@@ -99,6 +99,9 @@ const UNMET_VERDICT = verdictResult([
   { text: "it works", status: "unmet", evidence: "npm test is red" },
 ]);
 
+/** What a code Stage answers: a title for the whole branch, and no Notes. */
+const titled = (title: string) => stageResult({ result: { title, notes: [] } });
+
 /**
  * The comments a human is notified about. The progress comment is not one of
  * them after its first Stage, which is the whole point of editing it in place.
@@ -355,6 +358,75 @@ describe("the pull request title and the squash commit", () => {
 
     expect(pr.title).toBe("fix(cli): stop double-counting");
     expect(pr.squashCommit?.subject).toBe("fix(cli): stop double-counting (#100)");
+  });
+
+  it("takes the title the implement Stage answered over the first commit subject", async () => {
+    runner.queue("implement", titled("feat(cli): do the whole thing"));
+
+    await run();
+    const pr = tracker.pullRequest(100);
+
+    expect(pr.title).toBe("feat(cli): do the whole thing");
+    expect(pr.squashCommit?.subject).toBe("feat(cli): do the whole thing (#100)");
+  });
+
+  it("takes the fix Stage's title over the implement Stage's once a gate failed", async () => {
+    runner.queue("implement", titled("chore: license the pipeline under MIT"));
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
+    runner.queue("verify", stageResult({ result: PASSING_VERDICT }));
+    runner.queue("fix", titled("feat: name the pipeline ticket-runner"));
+
+    const outcome = await run();
+    const pr = tracker.pullRequest(100);
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(pr.title).toBe("feat: name the pipeline ticket-runner");
+    expect(pr.squashCommit?.subject).toBe("feat: name the pipeline ticket-runner (#100)");
+  });
+
+  it("retitles a pull request already open when the fix Stage's title arrives", async () => {
+    runner.queue("implement", titled("chore: license the pipeline under MIT"));
+    runner.queue("fix", titled("feat: name the pipeline ticket-runner"));
+    tracker.queueCi({ state: "failed", summary: "checks/build failed", excerpt: "" });
+
+    const outcome = await run();
+    const pr = tracker.pullRequest(100);
+
+    expect(outcome).toMatchObject({ outcome: "merged", pullRequest: 100 });
+    expect(tracker.pullRequests).toHaveLength(1);
+    expect(tracker.calls.indexOf("updatePullRequestTitle:100")).toBeGreaterThan(-1);
+    expect(tracker.calls.indexOf("updatePullRequestTitle:100")).toBeLessThan(
+      tracker.calls.findIndex((call) => call.startsWith("squashMerge:100")),
+    );
+    expect(pr.title).toBe("feat: name the pipeline ticket-runner");
+    expect(pr.squashCommit?.subject).toBe("feat: name the pipeline ticket-runner (#100)");
+  });
+
+  it("keeps the implement Stage's title when the fix Stage answers none that counts", async () => {
+    runner.queue("implement", titled("feat(cli): do the whole thing"));
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
+    runner.queue("verify", stageResult({ result: PASSING_VERDICT }));
+    runner.queue("fix", titled("Mended the thing"));
+
+    await run();
+
+    expect(tracker.pullRequest(100).title).toBe("feat(cli): do the whole thing");
+  });
+
+  it.each([
+    ["a missing", { notes: [{ summary: "the help drifts" }] }],
+    ["a blank", { title: " ", notes: [{ summary: "the help drifts" }] }],
+    ["a non-conventional", { title: "Did the thing", notes: [{ summary: "the help drifts" }] }],
+  ])("falls back to the first commit subject over %s title, and still posts the Notes", async (_, result) => {
+    runner.queue("implement", stageResult({ result }));
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(tracker.pullRequest(100).title).toBe("feat(cli): do the thing");
+    expect(tracker.comments.map(({ body }) => body)).toContainEqual(
+      expect.stringContaining("**the help drifts**"),
+    );
   });
 
   it("carries the branch's co-authors into the squash commit", async () => {
@@ -1974,6 +2046,27 @@ describe("the State file a claimed Ticket keeps", () => {
     expect(atClaim).toMatchObject({ state: "claimed", branch: BRANCH });
   });
 
+  it("records the title the implement Stage answered, for a Run that resumes after it", async () => {
+    runner.queue("implement", titled("feat(cli): do the whole thing"));
+    const seen = stateAtEachStage();
+
+    await run();
+
+    expect(seen.find(({ stage }) => stage === "verify")?.state).toMatchObject({
+      title: "feat(cli): do the whole thing",
+    });
+  });
+
+  it("keeps the recorded title through a hand-off", async () => {
+    runner.queue("implement", titled("feat(cli): do the whole thing"));
+    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off" });
+    expect(workspace.state(TICKET)).toMatchObject({ title: "feat(cli): do the whole thing" });
+  });
+
   it("says implemented once the implement Stage has come back with commits", async () => {
     const seen = stateAtEachStage();
 
@@ -2335,6 +2428,34 @@ describe("resuming a released Ticket", () => {
     expect(outcome).toMatchObject({ outcome: "merged", pullRequest: 100 });
     expect(tracker.pullRequests).toHaveLength(1);
     expect(tracker.calls).toContain("updatePullRequestBody:100");
+  });
+
+  it("titles the pull request with the title the State file recorded", async () => {
+    released({ title: "feat: name the pipeline ticket-runner" });
+
+    await run();
+    const pr = tracker.pullRequest(100);
+
+    expect(runner.stages()).toEqual(["verify"]);
+    expect(pr.title).toBe("feat: name the pipeline ticket-runner");
+    expect(pr.squashCommit?.subject).toBe("feat: name the pipeline ticket-runner (#100)");
+  });
+
+  it("retitles the pull request the earlier Run opened with the recorded title", async () => {
+    tracker.pullRequests.push({
+      number: 100,
+      base: "main",
+      head: BRANCH,
+      title: "chore: license the pipeline under MIT",
+      body: `Closes #${TICKET}`,
+      draft: false,
+      merged: false,
+    });
+    released({ pullRequest: 100, title: "feat: name the pipeline ticket-runner" });
+
+    await run();
+
+    expect(tracker.pullRequest(100).title).toBe("feat: name the pipeline ticket-runner");
   });
 
   it("clears the State file once the resumed Ticket merges", async () => {

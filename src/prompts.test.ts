@@ -56,8 +56,6 @@ describe("implementPrompt", () => {
 
     expect(prompt).toMatch(/confirm the ticket title/i);
     expect(prompt).toMatch(/commit .*before .*code-review/i);
-    expect(prompt).toMatch(/first commit's subject becomes the pull request title/i);
-    expect(prompt).toMatch(/summarise the whole Ticket/i);
     expect(prompt).toMatch(/nested review agents|additional review agents/i);
     expect(prompt).toMatch(/do not open pull requests/i);
     expect(prompt).toMatch(/do not close/i);
@@ -400,9 +398,45 @@ describe("the Notes channel", () => {
   });
 });
 
+describe("the title of the branch", () => {
+  const prompts = () => [
+    implementPrompt(url, BASE, ""),
+    fixPrompt(url, FAILED_CHECK, BASE, ""),
+  ];
+
+  it("is what both code Stages are asked to answer, for the whole branch", () => {
+    for (const prompt of prompts()) {
+      expect(prompt).toContain("Answer a `title` beside your Notes");
+      expect(prompt).toContain("summarising the whole branch as it stands when you finish");
+      expect(prompt).toContain("`<type>(<scope>): <summary>`");
+      expect(prompt).toContain("without the `(#<n>)`");
+      expect(prompt).toContain("It titles the pull request and the squash commit on `main`");
+    }
+  });
+
+  it("is no longer read off the first commit", () => {
+    for (const prompt of prompts()) {
+      expect(prompt).not.toMatch(/first commit/i);
+      expect(prompt).not.toMatch(/subject becomes the pull request title/i);
+    }
+  });
+
+  it("is asked of neither the verify nor the conflict Stage", () => {
+    expect(verifyPrompt(url, "")).not.toContain("`title`");
+    expect(conflictPrompt(url, CONFLICT, BASE, "")).not.toContain("`title`");
+  });
+});
+
 describe("the resolved base branch", () => {
   it("is what the implement Stage is told its subject lands on", () => {
     const prompt = implementPrompt(url, "release", "");
+
+    expect(prompt).toContain("the squash commit on `release`");
+    expect(prompt).not.toContain("`main`");
+  });
+
+  it("is what the fix Stage is told its title lands on", () => {
+    const prompt = fixPrompt(url, FAILED_CHECK, "release", "");
 
     expect(prompt).toContain("the squash commit on `release`");
     expect(prompt).not.toContain("`main`");

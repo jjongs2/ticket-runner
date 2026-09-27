@@ -493,6 +493,10 @@ export class GhTracker implements Tracker {
     await this.rest("PATCH", `repos/{owner}/{repo}/pulls/${number}`, [`body=${body}`]);
   }
 
+  async updatePullRequestTitle(number: number, title: string): Promise<void> {
+    await this.rest("PATCH", `repos/{owner}/{repo}/pulls/${number}`, [`title=${title}`]);
+  }
+
   /**
    * Poll the PR's CI until it settles or the timeout runs out. A PR with no
    * checks is reported as such, never as a pass.
