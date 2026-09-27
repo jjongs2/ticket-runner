@@ -2,6 +2,7 @@
   "name": "agent-pipeline",
   "version": "0.5.2",
   "description": "Drives the mattpocock-skills chain unattended: humans plan, the pipeline executes.",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jjongs2/agent-pipeline.git"
