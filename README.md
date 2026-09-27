@@ -409,11 +409,11 @@ from the stranded Tickets below. The Lanes busy then finish what they hold exact
 would have, to merge, hand-off or Release, and the Run ends when the last of them comes
 back; one with no Lane busy ends at once. Nothing is written to the board because of it, no
 label and no comment, and the exit code is the outcomes' as usual: 1 if a Ticket was handed
-off, 0 otherwise. Its summary ends with `Stopped at 22:07 · finishing #4 #9.` A second
+off, 2 if the Run was given Ticket numbers and took none of them, 0 otherwise. Its summary ends with `Stopped at 22:07 · finishing #4 #9.` A second
 SIGTERM is ignored rather than escalated to a kill, and a Stop cannot be taken back: the
 lock is held until the Lanes are back, and a new Run is the way to carry on. A Run given
 Ticket numbers hears it the same way, and takes none of the named Tickets it had not
-started.
+started; stopped before it took any of them, it exits 2.
 
 So a stopped Run strands nothing: every Ticket it held ran to an end of its own. A killed
 one strands all of them. Ctrl-C stays a kill on purpose — the Stages are spawned in the

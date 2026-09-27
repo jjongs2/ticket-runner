@@ -760,6 +760,22 @@ describe("a Run a human stopped", () => {
     expect(out.trimEnd().split("\n").at(-1)).toMatch(/^Stopped at \d\d:\d\d · finishing #4\.$/);
   });
 
+  it("exits 2 when a narrowed Run is stopped before it took any of its Tickets", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    const signals = new EventEmitter();
+    const listCandidates = tracker.listCandidates.bind(tracker);
+    tracker.listCandidates = async (label) => {
+      signals.emit("SIGTERM");
+      return listCandidates(label);
+    };
+
+    const { code, out } = await start({ command: "run", tickets: [4, 5] }, signals);
+
+    expect(tracker.calls).not.toContain("assign:4:pipeline-user");
+    expect(out.trimEnd().split("\n").at(-1)).toMatch(/^Stopped at \d\d:\d\d · nothing to finish\.$/);
+    expect(code).toBe(2);
+  });
+
   it("stops listening once the Run is over, so the process can exit", async () => {
     tracker.addIssue({ number: 4 });
     const signals = new EventEmitter();
