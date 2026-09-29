@@ -103,7 +103,7 @@ adapter를 만드는 곳은 CLI 하나뿐입니다. `start.ts`부터 아래는 �
 
 | 모듈 | 한 줄 |
 |---|---|
-| [`init.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/init.ts) | `ticket-runner init`: 파일을 쓰고, GitHub를 설정하고, 나merge를 보고 |
+| [`init.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/init.ts) | `ticket-runner init`: 파일을 쓰고, GitHub를 설정하고, 나머지를 보고 |
 | [`readiness.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/readiness.ts) | Target readiness. `init`이 갖추고 `run`이 확인 |
 | [`conventions.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/conventions.ts) | conventions 문서의 본문과 Version 표시 |
 | [`operator-skill.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/operator-skill.ts) | `init`이 Target에 써 넣는 Operator의 skill |

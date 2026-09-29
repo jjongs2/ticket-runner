@@ -59,7 +59,7 @@ Lane들은 각자의 worktree에서 Check를 동시에 돌립니다. Check가 �
 
 `ticket-runner run 12 13 14`는 모든 면에서 같은 Run입니다(Lane, Landing, Run lock, Release, Stop 모두). 다만 Stranded Ticket에서든 Frontier에서든 #12, #13, #14만 가져갑니다. 다른 Ticket은 Stranded Ticket까지 포함해 있던 그대로 둡니다.
 
-- 번호는 어떤 Ticket인지를 말할 뿐 순서를 정하지 않습니다. Stranded Ticket이 먼저, 나merge는 낮은 번호부터입니다.
+- 번호는 어떤 Ticket인지를 말할 뿐 순서를 정하지 않습니다. Stranded Ticket이 먼저, 나머지는 낮은 번호부터입니다.
 - `#12`는 `12`로 읽고, 같은 번호를 두 번 줘도 한 번만 가져갑니다.
 - 1 이상의 정수가 아닌 것은 lock을 잡기 전에 종료 코드 `2`로 거절합니다.
 - blocker는 그대로 유효합니다. 지정한 Ticket이 지정한 다른 Ticket에 막혀 있으면, 그 Ticket이 같은 Run에서 merge된 뒤에 가져갑니다.

@@ -10,7 +10,7 @@ Run은 무인으로 돌기 때문에, 빠진 게 있다면 Ticket 도중이 아�
 | 단계 | 명령 | 하는 일 | 출처 |
 |---|---|---|---|
 | 설치 | `npm install -g ticket-runner` | 머신에 `ticket-runner` 명령을 설치 | [`package.json`](https://github.com/jjongs2/ticket-runner/blob/main/package.json) |
-| Target 준비 | `ticket-runner init` | 파이프라인 파일을 쓰고, GitHub를 설정하고, 나merge를 알려 줌 | [`init.ts` · `initTarget`](https://github.com/jjongs2/ticket-runner/blob/main/src/init.ts) |
+| Target 준비 | `ticket-runner init` | 파이프라인 파일을 쓰고, GitHub를 설정하고, 나머지를 알려 줌 | [`init.ts` · `initTarget`](https://github.com/jjongs2/ticket-runner/blob/main/src/init.ts) |
 | 작업 시작 | `ticket-runner run` | 준비되지 않은 Target은 거절. [실행하기](./running.md) 참고 | [`readiness.ts` · `readinessRefusal`](https://github.com/jjongs2/ticket-runner/blob/main/src/readiness.ts) |
 | 걷어 내기 | `ticket-runner remove` | `init`이 쓴 것과 Run이 남긴 것을 제거 | [`remove.ts` · `removeTarget`](https://github.com/jjongs2/ticket-runner/blob/main/src/remove.ts) |
 | 삭제 | `npm uninstall -g ticket-runner` | 머신에서 명령을 삭제 | — |
@@ -201,7 +201,7 @@ flowchart TD
 | 맨 마지막에 `ticket-runner.json`. 앞의 제거가 모두 성공했을 때만 | — |
 | 맨 마지막에 `ticket-runner/lock` branch. 실패한 제거가 있으면 지우지 않고 lock만 풂 | — |
 
-실패한 제거는 보고하고 나merge는 계속 진행합니다. `remove`를 다시 실행하면 남은 것을 대상으로 처음부터 다시 하는 셈인데, 그래서 설정 파일을 끝까지 남겨 둡니다. 다음 `remove`가 찾을 라벨 이름이 거기 있기 때문입니다.
+실패한 제거는 보고하고 나머지는 계속 진행합니다. `remove`를 다시 실행하면 남은 것을 대상으로 처음부터 다시 하는 셈인데, 그래서 설정 파일을 끝까지 남겨 둡니다. 다음 `remove`가 찾을 라벨 이름이 거기 있기 때문입니다.
 
 | 종료 코드 | 뜻 |
 |---|---|
