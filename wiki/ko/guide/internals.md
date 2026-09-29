@@ -163,7 +163,7 @@ claude --print <prompt> --output-format stream-json --verbose \
 - `GitWorkspace` 테스트는 worktree, rebase, lease, state와 lock branch를 진짜로 돌립니다.
 - 나머지 두 adapter에는 `testing/executions.ts`가 프로세스가 돌려줬을 `Execution`을 만들어 줍니다.
 
-그래서 파이프라인 자신의 기록까지 포함해 모든 바깥 효과가 port를 거칩니다. State와 lock도 remote에 대한 효과이니 `Workspace`의 메서드이고, fake가 이를 다룹니다([ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-is-a-local-file.md)의 마지막 amendment).
+그래서 파이프라인 자신의 기록까지 포함해 모든 바깥 효과가 port를 거칩니다. State와 lock도 remote에 대한 효과이니 `Workspace`의 메서드이고, fake가 이를 다룹니다([ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md)의 마지막 amendment).
 
 ## Version {#versions}
 
@@ -253,7 +253,7 @@ A newer Version is out: 0.6.0, and this is 0.5.2 — upgrade with `npm install -
 - **이유**: 진실의 원천이 둘이면, 낡은 본문이 몰래 일을 막거나 풀 수 있습니다.
 - **비용**: 사람이 고유 관계를 만들어야 합니다. 본문에만 적힌 blocker는 경고와 함께 건너뜁니다.
 
-### [ADR-0004: Resume state is a local file, not a tracker comment](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-is-a-local-file.md) {#adr-0004}
+### [ADR-0004: Resume state lives on the Target's remote, not in a tracker comment](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md) {#adr-0004}
 
 - **결정**: 이어받기 상태는 보드 밖의 State file로 두고, 지금은 Target의 remote에 있습니다. Hand-off도 이를 남깁니다.
 - **이유**: 보드는 사람을 위한 곳입니다. cloud Host는 버려지니 상태가 Host보다 오래 살아야 합니다. 라벨 한 번 바꿔서 이어받을 수 있어야 합니다.

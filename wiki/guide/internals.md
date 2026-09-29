@@ -163,7 +163,7 @@ No test spawns `gh` or `claude`. Each layer is tested at the seam that suits it.
 - The `GitWorkspace` tests run worktrees, rebases, leases and the state and lock branches for real.
 - For the other two adapters, `testing/executions.ts` builds the `Execution` a process would have returned.
 
-This is why every external effect goes through a port, the pipeline's own bookkeeping included: State and the lock are effects on the remote, so they are `Workspace` methods and the fakes cover them ([ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-is-a-local-file.md), last amendment).
+This is why every external effect goes through a port, the pipeline's own bookkeeping included: State and the lock are effects on the remote, so they are `Workspace` methods and the fakes cover them ([ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md), last amendment).
 
 ## Versions
 
@@ -253,7 +253,7 @@ The full records are in [`docs/adr/`](https://github.com/jjongs2/ticket-runner/t
 - **Why**: Two sources of truth would let a stale body silently block or unblock work.
 - **Cost**: Humans must create the native edges; blockers named only in a body are skipped with a warning.
 
-### [ADR-0004: Resume state is a local file, not a tracker comment](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-is-a-local-file.md) {#adr-0004}
+### [ADR-0004: Resume state lives on the Target's remote, not in a tracker comment](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md) {#adr-0004}
 
 - **Decision**: Resume state is a State file kept off the board, now on the Target's remote. A Hand-off keeps it too.
 - **Why**: The board is for humans. A cloud Host is discarded, so the state must outlive it. A relabel should resume a Ticket.

@@ -111,7 +111,7 @@ Ticket을 파이프라인에 돌려주려면 라벨을 `ready-for-human`에서 `
 
 라벨을 바꾸기 전까지 State file은 가만히 있습니다. 어떤 Frontier도 `ready-for-human` Ticket을 내놓지 않고, sweep은 아무 말 없이 지나가며, 번호를 지정한 Run은 `not-ready`로 건너뜁니다. issue가 닫히면 sweep이 파일을 지우니, 손으로 마무리한 Ticket은 아무것도 남기지 않습니다.
 
-Hand-off가 State를 남기는 이유가 있습니다. 예전에 Run이 rate limit을 평범한 실패로 잘못 읽어서 손에 닿은 Ticket을 모조리 Hand-off한 적이 있습니다. 그때는 Ticket마다 사람이 branch를 하나씩 지워야 했습니다. State를 남기면 라벨 한 번 바꾸는 것으로 끝납니다([ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-is-a-local-file.md)의 두 번째 amendment).
+Hand-off가 State를 남기는 이유가 있습니다. 예전에 Run이 rate limit을 평범한 실패로 잘못 읽어서 손에 닿은 Ticket을 모조리 Hand-off한 적이 있습니다. 그때는 Ticket마다 사람이 branch를 하나씩 지워야 했습니다. State를 남기면 라벨 한 번 바꾸는 것으로 끝납니다([ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md)의 두 번째 amendment).
 
 ## rate limit에 걸렸을 때의 Release {#release-on-a-rate-limit}
 
@@ -245,7 +245,7 @@ Ticket이 어디까지 갔는지 기록이 없으면, Release되거나 stranded�
 
 ### `ticket-runner/state` branch {#the-ticket-runner-state-branch}
 
-checkout 하나에 둔 State file은 그 머신에서만 이어받을 수 있습니다. cloud Run이 Release했거나, stranded로 남겼거나, Hand-off한 Ticket은 VM과 함께 사라지고, workstation의 Run은 그런 Ticket이 있는 줄도 모릅니다. 그래서 State는 Target의 remote에 둡니다. 어느 Host의 Run이든 다른 Host가 남긴 Ticket을 이어받을 수 있도록요([ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-is-a-local-file.md)의 마지막 amendment). issue에 두지 않는 이유는 보드가 사람을 위한 곳이기 때문입니다. 기계용 기록이 거기 있으면 소음이 되고, 라벨 옆에 진실의 원천이 하나 더 생깁니다.
+checkout 하나에 둔 State file은 그 머신에서만 이어받을 수 있습니다. cloud Run이 Release했거나, stranded로 남겼거나, Hand-off한 Ticket은 VM과 함께 사라지고, workstation의 Run은 그런 Ticket이 있는 줄도 모릅니다. 그래서 State는 Target의 remote에 둡니다. 어느 Host의 Run이든 다른 Host가 남긴 Ticket을 이어받을 수 있도록요([ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md)의 마지막 amendment). issue에 두지 않는 이유는 보드가 사람을 위한 곳이기 때문입니다. 기계용 기록이 거기 있으면 소음이 되고, 라벨 옆에 진실의 원천이 하나 더 생깁니다.
 
 - 바뀔 때마다 branch를 부모 없는 snapshot commit 하나로 다시 씁니다. 그 이력은 아무도 읽지 않고, Stage마다 자라는 branch는 Target도 같이 키우게 됩니다.
 - push에는 읽어 온 tip에 대한 `--force-with-lease`를 씁니다. 그래서 다른 쪽이 먼저 올린 더 새 snapshot을 덮어쓰지 않고, 다시 읽어서 변경을 얹습니다. 최대 세 번 시도합니다.
@@ -346,4 +346,4 @@ push는 `--force-with-lease`를 쓰니, rebase가 branch를 다시 쓸 수는 �
 - [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts): `rateLimited`
 - [`src/run-log.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run-log.ts): `transcriptFiles`
 - [`docs/templates/handoff-comment.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/handoff-comment.md), [`docs/templates/draft-pr-body.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/draft-pr-body.md), [`docs/templates/stop-report.txt`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/stop-report.txt)
-- [ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-is-a-local-file.md), [ADR-0006](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md), [ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)
+- [ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md), [ADR-0006](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md), [ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)
