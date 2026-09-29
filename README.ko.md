@@ -1,5 +1,8 @@
 # ticket-runner
 
+[![npm](https://img.shields.io/npm/v/ticket-runner)](https://www.npmjs.com/package/ticket-runner)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/jjongs2/ticket-runner/blob/main/LICENSE)
+
 [English](https://github.com/jjongs2/ticket-runner/blob/main/README.md)
 
 `ticket-runner`는 [`mattpocock-skills`](https://github.com/mattpocock/skills) 체인에서 사람이 지켜보지
