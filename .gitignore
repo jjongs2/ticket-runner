@@ -5,3 +5,7 @@ node_modules
 
 # Run logs, transcripts and state.
 .ticket-runner/
+
+# The wiki's build output and VitePress cache.
+wiki/.vitepress/dist/
+wiki/.vitepress/cache/
