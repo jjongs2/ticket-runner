@@ -1,5 +1,8 @@
 # ticket-runner
 
+[![npm](https://img.shields.io/npm/v/ticket-runner)](https://www.npmjs.com/package/ticket-runner)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/jjongs2/ticket-runner/blob/main/LICENSE)
+
 [한국어](https://github.com/jjongs2/ticket-runner/blob/main/README.ko.md)
 
 `ticket-runner` runs the unattended half of the
