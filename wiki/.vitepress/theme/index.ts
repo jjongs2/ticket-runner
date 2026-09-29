@@ -48,13 +48,17 @@ function openDiagram(el: HTMLElement) {
     if (!dragging) return;
     moved = true; x = e.clientX - startX; y = e.clientY - startY; apply();
   });
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener("keydown", onKey);
+  };
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === "Escape") close();
+  };
   overlay.addEventListener("pointerup", () => {
     dragging = false;
-    if (!moved) overlay.remove();
+    if (!moved) close();
   });
-  const onKey = (e: KeyboardEvent) => {
-    if (e.key === "Escape") { overlay.remove(); document.removeEventListener("keydown", onKey); }
-  };
   document.addEventListener("keydown", onKey);
 }
 
