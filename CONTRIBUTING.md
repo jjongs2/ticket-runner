@@ -51,6 +51,12 @@ Write issue titles in the glossary's words and keep them short. Describe behavio
 - `.github/PULL_REQUEST_TEMPLATE.md` is what GitHub applies to hand-written PRs.
 - `docs/templates/` holds the exact shapes the pipeline writes: progress and hand-off comments, guard warnings, [Note comments](docs/templates/note-comment.md) and the [standing issue Notes are gathered on](docs/templates/notes-issue.md), PR bodies, the Run summary, and the [Operator's skill](docs/templates/operator-skill.md) `init` writes into a Target, the one shape the package carries as a file rather than embedding. It also holds the one shape no code writes, the [Version notes](docs/templates/version-notes.md) a Version PR carries. Change a shape there before changing the code that writes it.
 
+## README
+
+- `README.md` is for someone who has never seen the pipeline and is deciding in a few minutes whether it fits. Anything deeper goes in the wiki, and the README links the page by its full URL.
+- `README.ko.md` translates it into Korean, saying the same things in the same order. `README.md` is the source: a change lands there first and is carried into `README.ko.md` in the same pull request.
+- Every link in either is a full URL, because the npm page shows `README.md` alone and cannot follow a relative one.
+
 ## Wiki
 
 - `wiki/` is the project wiki, a VitePress site that `.github/workflows/wiki.yml` builds on every pull request touching it and deploys to GitHub Pages from `main`. It explains the pipeline in more depth than the README, for someone who does not read the source.
