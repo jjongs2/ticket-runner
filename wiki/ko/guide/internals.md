@@ -13,7 +13,7 @@ pipeline이 바깥에서 건드리는 것은 셋입니다. GitHub, Claude, git. 
 
 | Port | 떼어 내는 효과 | Adapter | 테스트용 fake | Source |
 |---|---|---|---|---|
-| `Tracker` | GitHub: issue, 라벨, 댓글, pull request, CI, 머지 | `GhTracker`, `gh api` 사용 | `FakeTracker` | [`ports/tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/ports/tracker.ts) |
+| `Tracker` | GitHub: issue, 라벨, 댓글, pull request, CI, merge | `GhTracker`, `gh api` 사용 | `FakeTracker` | [`ports/tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/ports/tracker.ts) |
 | `AgentRunner` | Claude: Stage 세션 하나 | `ClaudeAgentRunner`, Stage마다 `claude -p` 자식 프로세스 하나 | `FakeAgentRunner` | [`ports/agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/ports/agent-runner.ts) |
 | `Workspace` | git: worktree, branch, Check, rebase, push, 그리고 remote의 State와 Run lock | `GitWorkspace` | `FakeWorkspace` | [`ports/workspace.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/ports/workspace.ts) |
 
@@ -65,14 +65,14 @@ adapter를 만드는 곳은 CLI 하나뿐입니다. `start.ts`부터 아래는 �
 | [`command-line.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/command-line.ts) | 아무것도 보기 전에 인자를 해석하고, usage 문구를 가짐 |
 | [`stage-guard.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stage-guard.ts) | Stage의 셸 안에서는 모든 명령을 거절(Stage mark) |
 | [`start.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts) | 거절, Run lock, Stop 수신, 요약과 exit code |
-| [`startup.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts) | 머지를 막을 관문이 없는 Run을 거절하고, 꺼 둔 관문을 경고 |
+| [`startup.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts) | merge를 막을 관문이 없는 Run을 거절하고, 꺼 둔 관문을 경고 |
 
 **Run과 Ticket**
 
 | 모듈 | 한 줄 |
 |---|---|
 | [`run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts) | Stranded Ticket, 그다음 Frontier로 Lane을 채움. Release나 Stop이면 claim을 멈춤 |
-| [`orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts) | Ticket 하나를 guard부터 머지, Hand-off, Release까지. Fix budget 포함 |
+| [`orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts) | Ticket 하나를 guard부터 merge, Hand-off, Release까지. Fix budget 포함 |
 | [`frontier.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts) | 후보를 Frontier와 막힌 것으로 나눔 |
 | [`guards.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/guards.ts) | 후보를 건너뛰는 이유: Guard와 거절 |
 | [`landing.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/landing.ts) | Landing: rebase부터 pull까지 한 번에 한 Lane, 도착 순서대로 |
@@ -94,7 +94,7 @@ adapter를 만드는 곳은 CLI 하나뿐입니다. `start.ts`부터 아래는 �
 | [`verdict.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/verdict.ts) | Verdict schema와 통과 여부 |
 | [`title.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/title.ts) | pull request 제목: Stage의 답, 그다음 commit, 그다음 Ticket |
 | [`note-schema.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/note-schema.ts), [`notes.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/notes.ts) | Note: Stage가 적는 방식과 보내지는 곳 |
-| [`acceptance-criteria.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/acceptance-criteria.ts), [`criteria.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/criteria.ts) | criterion의 모양, 머지 뒤 `met`인 것에 체크 |
+| [`acceptance-criteria.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/acceptance-criteria.ts), [`criteria.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/criteria.ts) | criterion의 모양, merge 뒤 `met`인 것에 체크 |
 | [`progress.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/progress.ts) | Ticket마다 하나인 Progress comment를 제자리에서 고침 |
 | [`templates.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts) | GitHub에 쓰는 모든 모양과 Run 요약. 원본은 `docs/templates/` |
 | [`run-log.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run-log.ts) | `.ticket-runner/runs/<runId>/`와, Hand-off가 그중 무엇을 남기는지 |
@@ -103,7 +103,7 @@ adapter를 만드는 곳은 CLI 하나뿐입니다. `start.ts`부터 아래는 �
 
 | 모듈 | 한 줄 |
 |---|---|
-| [`init.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/init.ts) | `ticket-runner init`: 파일을 쓰고, GitHub를 설정하고, 나머지를 보고 |
+| [`init.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/init.ts) | `ticket-runner init`: 파일을 쓰고, GitHub를 설정하고, 나merge를 보고 |
 | [`readiness.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/readiness.ts) | Target readiness. `init`이 갖추고 `run`이 확인 |
 | [`conventions.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/conventions.ts) | conventions 문서의 본문과 Version 표시 |
 | [`operator-skill.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/operator-skill.ts) | `init`이 Target에 써 넣는 Operator의 skill |
@@ -145,16 +145,16 @@ flowchart LR
     SK["/cut-a-version이 Version PR 초안을 만듦"] --> PR["version/‹number› · chore: version ‹number›"]
     PR --> CK{"version-pr.yml 검사"}
     CK -- 거절 --> PR
-    CK -- 통과 --> MG["사람이 리뷰하고 머지"]
+    CK -- 통과 --> MG["사람이 리뷰하고 merge"]
     MG --> TG["version-tag.yml: v‹number› tag"]
     TG --> RL["GitHub Release, 본문은 CHANGELOG 섹션"]
 ```
 <!-- Sources: src/version-pr.ts, scripts/version.ts, .github/workflows/version-pr.yml, .github/workflows/version-tag.yml -->
 
 - **번호.** 지난 Version 뒤로 Spec이 하나라도 닫혔으면 minor를, 그 밖에는 작은 기능까지 포함해 모두 patch를 올립니다. 질문은 오직 "Spec이 닫혔나"뿐입니다. 언제 끊을지는 사람이 정합니다. Planning의 결정이니까요.
-- **Version PR.** `package.json`과 lock file의 번호를 올리고, `CHANGELOG.md`에 그 Version의 섹션을 더하고, `npx tsx scripts/version.ts mark`로 이 저장소의 conventions 문서에 새 표시를 합니다. 초안은 [`/cut-a-version`](https://github.com/jjongs2/ticket-runner/blob/main/.claude/skills/cut-a-version/SKILL.md) skill이 만들고, 머지는 하지 않습니다.
+- **Version PR.** `package.json`과 lock file의 번호를 올리고, `CHANGELOG.md`에 그 Version의 섹션을 더하고, `npx tsx scripts/version.ts mark`로 이 저장소의 conventions 문서에 새 표시를 합니다. 초안은 [`/cut-a-version`](https://github.com/jjongs2/ticket-runner/blob/main/.claude/skills/cut-a-version/SKILL.md) skill이 만들고, merge는 하지 않습니다.
 - **검사**([`version-pr.ts` · `versionPrRefusals`](https://github.com/jjongs2/ticket-runner/blob/main/src/version-pr.ts))는 이유를 한꺼번에 모두 알려 줍니다. 번호가 모든 tag보다 높지 않을 때, lock file이 다른 번호일 때, 섹션이 없을 때, 섹션에 `### After upgrading` 제목이 없을 때입니다. 번호를 건드리지 않은 pull request는 그대로 통과합니다.
-- **tag workflow**는 머지 commit에 tag를 달고, 그 섹션을 GitHub Release로 올립니다. 섹션이 없으면 GitHub이 만든 notes를 씁니다. 빠진 쪽만 채우니, 반쯤 끊긴 Version도 다시 돌리면 온전해집니다.
+- **tag workflow**는 merge commit에 tag를 달고, 그 섹션을 GitHub Release로 올립니다. 섹션이 없으면 GitHub이 만든 notes를 씁니다. 빠진 쪽만 채우니, 반쯤 끊긴 Version도 다시 돌리면 온전해집니다.
 
 release-please와 Changesets는 둘 다 채택하지 않았습니다. 앞의 것은 해마다 만료되는 token, 저장소 설정, 그리고 `feat`/`fix`만 Version을 끊는다는 규칙이 필요했습니다. 뒤의 것은 모든 Stage의 일에 changeset 파일 쓰기를 얹었을 것입니다.
 
@@ -202,13 +202,13 @@ A newer Version is out: 0.6.0, and this is 0.5.2 — upgrade with `npm install -
 
 | ADR | 결정 | 이유 | 감수한 비용 |
 |---|---|---|---|
-| [0001](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0001-humans-plan-the-pipeline-executes.md) | 계획은 사람이, 무인으로 도는 것은 Execution뿐 | grilling 질문에 잘못 답하면 걸러 줄 관문 없이 Spec, Ticket, 머지된 코드로 굳어 버림 | Planning의 품질은 사람 몫. pipeline은 알려진 결함만 막음 |
+| [0001](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0001-humans-plan-the-pipeline-executes.md) | 계획은 사람이, 무인으로 도는 것은 Execution뿐 | grilling 질문에 잘못 답하면 걸러 줄 관문 없이 Spec, Ticket, merge된 코드로 굳어 버림 | Planning의 품질은 사람 몫. pipeline은 알려진 결함만 막음 |
 | [0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md) | Stage마다 `claude -p` 자식 프로세스 하나 | 사용자 호출 전용 `/plugin:skill`을 펼쳐 주는 건 headless 모드뿐. 프로세스로 나누면 Stage별 한도, `--json-schema`, 다시 돌려 볼 명령줄도 얻음 | Stage마다 1–2초 시작 비용. 문맥을 나누지 않으니 Stage는 Ticket과 branch를 읽음 |
 | [0003](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0003-github-native-relations-only.md) | GitHub 고유의 blocker와 sub-issue만 인정 | 진실의 원천이 둘이면 낡은 본문이 몰래 일을 막거나 풀 수 있음 | 사람이 고유 관계를 만들어야 함. 본문에만 있는 blocker는 경고와 함께 건너뜀 |
 | [0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-is-a-local-file.md) | 이어받기 상태는 보드 밖의 State file로, 지금은 Target의 remote에 둠. Hand-off도 남김 | 보드는 사람을 위한 곳. cloud Host는 사라지니 상태가 Host보다 오래 살아야 함. 라벨 한 번 바꿔서 이어받을 수 있어야 함 | 예전 로컬 State는 옮겨 주지 않음. state branch는 `Workspace`를 거침 |
-| [0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md) | Landing은 merge queue가 아니라 직렬 구간 | CI를 두 번 치르지 않고도 CI가 채점한 그대로 머지됨 | 느린 CI나 Conflict Stage 하나가 다른 모든 Lane의 Landing을 붙잡음. GitHub merge queue는 저장소별 설정을 늘림 |
+| [0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md) | Landing은 merge queue가 아니라 직렬 구간 | CI를 두 번 치르지 않고도 CI가 채점한 그대로 merge됨 | 느린 CI나 Conflict Stage 하나가 다른 모든 Lane의 Landing을 붙잡음. GitHub merge queue는 저장소별 설정을 늘림 |
 | [0006](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md) | Stop은 SIGTERM뿐, Ctrl+C는 kill로 둠. 보낼 수 있는 건 Run의 Host뿐 | 신호는 바로 닿고 치울 것을 남기지 않음. Stage가 Run의 process group을 같이 씀 | Stop은 되돌릴 수 없음. 다른 Host의 Run은 여기서 멈출 수 없음 |
-| [0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md) | Version은 사람이 Version PR을 머지해서 끊고, 설치는 tag를 따름 | 언제 끊을지는 Planning의 결정. 같은 번호의 두 머신이 같은 코드를 돌려야 번호가 쓸모 있는 표시가 됨 | Version notes는 agent의 도움을 받아 손으로 씀 |
+| [0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md) | Version은 사람이 Version PR을 merge해서 끊고, 설치는 tag를 따름 | 언제 끊을지는 Planning의 결정. 같은 번호의 두 머신이 같은 코드를 돌려야 번호가 쓸모 있는 표시가 됨 | Version notes는 agent의 도움을 받아 손으로 씀 |
 | [0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md) | cloud Host는 Operator가 있는 Claude Code cloud 세션, Run lock은 GitHub에 | Actions 시간 비용이 없고 앱에서 조종 가능. 모든 Host가 lock을 봐야 함 | REST만 씀. remote에 둔 어떤 것도 ref 삭제에 기대면 안 됨. 사라진 Host의 lock은 사람이 풀어야 함 |
 
 ## pipeline 자체를 고치려면 {#working-on-the-pipeline-itself}
@@ -238,7 +238,7 @@ Stage는 pipeline을 실행할 수 없습니다. Stage의 셸에는 `TICKET_RUNN
 ## 관련 페이지 {#related-pages}
 
 - [멈추고 이어 하기](./stopping-and-resuming.md): `GitWorkspace`가 맡는 state branch와 Run lock
-- [Ticket 하나가 머지되기까지](./ticket-to-merge.md): `orchestrator.ts`가 이끄는 lifecycle
+- [Ticket 하나가 merge되기까지](./ticket-to-merge.md): `orchestrator.ts`가 이끄는 lifecycle
 - [실행하기](./running.md): `cli.ts`가 나눠 주는 명령들과 `-v`
 - [설치](./installation.md): Version 설치, `init`, `remove`
 

@@ -5,7 +5,7 @@ description: Run 시작하기, Lane 주기, 지정한 Ticket으로 좁히기, �
 
 # 실행하기
 
-[Run](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)은 명령 하나 걸어 두고 자리를 떠도 되게 하려고 있습니다. 준비된 Ticket을 모두 가져가 하나하나 머지나 사람에게까지 데려가고, 가져갈 게 더 없으면 알아서 끝납니다. 나중에 궁금할 만한 것은 요약과 보드, 그리고 디스크에 남긴 transcript에 다 있습니다.
+[Run](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)은 명령 하나 걸어 두고 자리를 떠도 되게 하려고 있습니다. 준비된 Ticket을 모두 가져가 하나하나 merge나 사람에게까지 데려가고, 가져갈 게 더 없으면 알아서 끝납니다. 나중에 궁금할 만한 것은 요약과 보드, 그리고 디스크에 남긴 transcript에 다 있습니다.
 
 | 명령 | 하는 일 | 종료 코드 | 출처 |
 |---|---|---|---|
@@ -26,7 +26,7 @@ description: Run 시작하기, Lane 주기, 지정한 Ticket으로 좁히기, �
 
 ```mermaid
 flowchart TD
-  A["Run lock 잡기"] --> B["State 브랜치에서<br>Stranded Ticket 훑기"]
+  A["Run lock 잡기"] --> B["State branch에서<br>Stranded Ticket 훑기"]
   B --> C{"빈 Lane이 있나?"}
   C -- 예 --> D{"남은 Stranded Ticket이 있나?"}
   D -- 예 --> E["빈 Lane에서 재개"] --> C
@@ -42,12 +42,12 @@ flowchart TD
 ```
 <!-- Sources: src/run.ts, src/start.ts, src/stranded.ts, src/frontier.ts -->
 
-- **Frontier는 Lane을 채울 때마다 다시 조회합니다.** 한 번 찍어 둔 목록을 쓰지 않습니다. 그래서 blocker를 닫는 머지가 일어나면, 그것 때문에 기다리던 Ticket이 같은 Run에 들어옵니다.
+- **Frontier는 Lane을 채울 때마다 다시 조회합니다.** 한 번 찍어 둔 목록을 쓰지 않습니다. 그래서 blocker를 닫는 merge가 일어나면, 그것 때문에 기다리던 Ticket이 같은 Run에 들어옵니다.
 - **실패한 Ticket은 Hand-off되고** 그 Lane은 다음 Ticket을 가져갑니다. 나쁜 Ticket 하나 때문에 밤 전체를 잃지는 않습니다.
 - **Release가 일어나면 채우기를 멈춥니다.** rate limit에 걸린 Ticket은 Release되고, 같은 한도가 다음 Stage도 막을 테니 Run은 더 claim하지 않습니다. 아직 바쁜 Lane은 쥔 것을 마저 끝냅니다.
 - **Run이 끝나는 때**는 바쁜 Lane이 없고 가져갈 것도 남지 않았을 때입니다. Frontier가 비었거나, 남은 것이 모두 막혀 있을 때죠.
 
-Lane 안에서 Ticket 하나에 일어나는 일은 [Ticket 하나가 머지되기까지](./ticket-to-merge.md)에 있습니다. Stranded Ticket과 Release는 [멈추고 이어 하기](./stopping-and-resuming.md)에 있습니다.
+Lane 안에서 Ticket 하나에 일어나는 일은 [Ticket 하나가 merge되기까지](./ticket-to-merge.md)에 있습니다. Stranded Ticket과 Release는 [멈추고 이어 하기](./stopping-and-resuming.md)에 있습니다.
 
 ### `--lanes` {#lanes}
 
@@ -59,10 +59,10 @@ Lane들은 각자의 worktree에서 Check를 동시에 돌립니다. Check가 �
 
 `ticket-runner run 12 13 14`는 모든 면에서 같은 Run입니다(Lane, Landing, Run lock, Release, Stop 모두). 다만 Stranded Ticket에서든 Frontier에서든 #12, #13, #14만 가져갑니다. 다른 Ticket은 Stranded Ticket까지 포함해 있던 그대로 둡니다.
 
-- 번호는 어떤 Ticket인지를 말할 뿐 순서를 정하지 않습니다. Stranded Ticket이 먼저, 나머지는 낮은 번호부터입니다.
+- 번호는 어떤 Ticket인지를 말할 뿐 순서를 정하지 않습니다. Stranded Ticket이 먼저, 나merge는 낮은 번호부터입니다.
 - `#12`는 `12`로 읽고, 같은 번호를 두 번 줘도 한 번만 가져갑니다.
 - 1 이상의 정수가 아닌 것은 lock을 잡기 전에 종료 코드 `2`로 거절합니다.
-- blocker는 그대로 유효합니다. 지정한 Ticket이 지정한 다른 Ticket에 막혀 있으면, 그 Ticket이 같은 Run에서 머지된 뒤에 가져갑니다.
+- blocker는 그대로 유효합니다. 지정한 Ticket이 지정한 다른 Ticket에 막혀 있으면, 그 Ticket이 같은 Run에서 merge된 뒤에 가져갑니다.
 
 지정했는데 Run이 가져가지 않은 Ticket에는 이유를 적은 `skipped` 줄이 붙습니다. 이슈에 코멘트까지 다는 것은 Guard의 이유뿐입니다.
 
@@ -83,7 +83,7 @@ Stop이나 Release 때문에 Run이 손대지 못한 지정 Ticket에는 줄이 
 ticket-runner stop
 ```
 
-Stop은 Run에게 Lane이 쥐고 있는 Ticket만 머지나 Hand-off까지 마치고 더는 가져가지 말라고 하는 요청입니다. `stop`은 GitHub에서 Run lock을 읽어 거기 적힌 프로세스에 SIGTERM을 보내고, 어느 Run에게 요청했는지 알려 줍니다.
+Stop은 Run에게 Lane이 쥐고 있는 Ticket만 merge나 Hand-off까지 마치고 더는 가져가지 말라고 하는 요청입니다. `stop`은 GitHub에서 Run lock을 읽어 거기 적힌 프로세스에 SIGTERM을 보내고, 어느 Run에게 요청했는지 알려 줍니다.
 
 ```text
 `ticket-runner run` (run 2026-09-17T09-00-00-000, pid 4321) will stop once the Tickets it holds are finished. It claims no more.
@@ -136,7 +136,7 @@ Frontier blocked.
 
 | 줄 | 뜻 |
 |---|---|
-| `merged` | 머지됨. pull request 번호가 붙음 |
+| `merged` | merge됨. pull request 번호가 붙음 |
 | `handed` | 사람에게 Hand-off됨. 멈춘 Stage와 이유가 붙음 |
 | `released` | rate limit 때문에 해당 Stage에서 Release됨. 누구도 할 일이 없음 |
 | `skipped` | 이유와 함께 넘어감([Guard](./planning.md#guards), 또는 위의 표) |
@@ -175,7 +175,7 @@ Stage가 한 일은 모두 Target의 gitignore된 `.ticket-runner/` 아래 디�
 | `<n>/<stage>.transcript.jsonl` | 세션의 stream-json 이벤트 |
 | `<n>/retry/` | fix Stage와, 그 덕에 한 번 더 도는 시도. 실패한 시도의 파일은 옆에 그대로 남음 |
 
-명령줄은 Stage가 시작되기 전에, 출력은 나오는 대로 쓰니, Stage 도중에 kill된 Run도 거기까지 한 것은 남깁니다. Hand-off된 Ticket은 Stage들의 명령줄과 transcript, 그리고 `version.txt`를 Target의 원격에도 남깁니다. `ticket-runner/state` 브랜치의 `ticket-<n>/<runId>/` 아래입니다. 그걸 쓴 Host는 사람이 들여다볼 즈음이면 없을 수도 있기 때문입니다. Hand-off 코멘트가 그 디렉터리를 알려 줍니다([멈추고 이어 하기](./stopping-and-resuming.md)).
+명령줄은 Stage가 시작되기 전에, 출력은 나오는 대로 쓰니, Stage 도중에 kill된 Run도 거기까지 한 것은 남깁니다. Hand-off된 Ticket은 Stage들의 명령줄과 transcript, 그리고 `version.txt`를 Target의 원격에도 남깁니다. `ticket-runner/state` branch의 `ticket-<n>/<runId>/` 아래입니다. 그걸 쓴 Host는 사람이 들여다볼 즈음이면 없을 수도 있기 때문입니다. Hand-off 코멘트가 그 디렉터리를 알려 줍니다([멈추고 이어 하기](./stopping-and-resuming.md)).
 
 출처: [`run-log.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run-log.ts), [`adapters/claude-agent-runner.ts` · `startStageLog`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts).
 
@@ -202,16 +202,16 @@ Run이 Ticket을 끝낼 때마다 보고하고, 끝나면 요약과 종료 코�
 
 클라우드 Host는 몇 가지가 워크스테이션과 다르고, 파이프라인은 그것을 감안합니다.
 
-- **원격에서 아무것도 지울 수 없습니다.** 그래서 `init`이 머지 때 pull request 브랜치를 지우는 설정을 켜고, `remove`는 클라우드 Host에서 실행을 거절합니다.
+- **원격에서 아무것도 지울 수 없습니다.** 그래서 `init`이 merge 때 pull request branch를 지우는 설정을 켜고, `remove`는 클라우드 Host에서 실행을 거절합니다.
 - **이슈 본문, 코멘트, pull request 본문마다 "Generated by Claude Code" 줄이 붙습니다.** 프록시가 덧붙이는 것이라 끌 수 없습니다. squash commit은 파이프라인이 직접 작성하니 base branch에는 들어가지 않습니다.
 - **회수된 VM은 kill입니다.** Stranded Ticket을 남기고, 다음 Run이 어느 Host에서든 재개합니다. 남은 lock은 다른 Host가 죽었다고 단정하지 않으니 사람이 풀어야 합니다. Operator를 통해서든 GitHub에서든요.
-- **transcript는 VM과 함께 사라집니다.** Hand-off된 Ticket의 것만 State 브랜치에 남습니다.
+- **transcript는 VM과 함께 사라집니다.** Hand-off된 Ticket의 것만 State branch에 남습니다.
 
 ## 관련 페이지 {#related-pages}
 
 - [일 계획하기](./planning.md): Ticket이 Frontier에 오르려면.
 - [설정](./configuration.md): Run이 쓰는 `lanes`, Check, Stage 한도.
-- [Ticket 하나가 머지되기까지](./ticket-to-merge.md): Lane이 Ticket 하나로 하는 일.
+- [Ticket 하나가 merge되기까지](./ticket-to-merge.md): Lane이 Ticket 하나로 하는 일.
 - [멈추고 이어 하기](./stopping-and-resuming.md): Stop과 kill, Release, Stranded Ticket, Run lock.
 - [설치와 제거](./installation.md): 시작하기 전에 Run이 거절하는 것.
 

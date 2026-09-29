@@ -22,7 +22,7 @@ const sections: Section[] = [
     en: "How it works",
     ko: "동작 방식",
     pages: [
-      { link: "/guide/ticket-to-merge", en: "From Ticket to merge", ko: "Ticket 하나가 머지되기까지" },
+      { link: "/guide/ticket-to-merge", en: "From Ticket to merge", ko: "Ticket 하나가 merge되기까지" },
       { link: "/guide/stopping-and-resuming", en: "Stopping and resuming", ko: "멈추고 이어 하기" },
       { link: "/guide/internals", en: "Internals", ko: "내부 구조" },
     ],
@@ -79,7 +79,7 @@ export default withMermaid(
         label: "한국어",
         lang: "ko",
         link: "/ko/",
-        description: "ticket-runner가 아무도 지켜보지 않는 사이 Ticket 하나를 보드에서 머지까지 가져가는 방법.",
+        description: "ticket-runner가 아무도 지켜보지 않는 사이 Ticket 하나를 보드에서 merge까지 가져가는 방법.",
         themeConfig: {
           nav: [
             { text: "가이드", link: "/ko/guide/installation" },

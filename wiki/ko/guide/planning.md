@@ -5,7 +5,7 @@ description: GitHub 이슈가 파이프라인이 가져가는 Ticket이 되려�
 
 # 일 계획하기
 
-파이프라인은 계획하지 않습니다. 무엇을 만들지 정하는 데는 판단이 필요하고, 계획하면서 잘못 세운 가정은 Spec과 Ticket, 머지된 코드로 굳어져 버려 중간에 잡아낼 관문이 남지 않습니다. 그래서 계획은 사람 몫으로 두고, 파이프라인은 계획이 넘겨준 것만 받아 갑니다([ADR-0001](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0001-humans-plan-the-pipeline-executes.md)). 넘겨받은 것을 믿고 일하는 만큼, 이슈에서 읽는 것은 몇 가지뿐이고 그것도 엄격하게 읽습니다. 그중 하나라도 어긋난 이슈는 짐작하지 않고 거절합니다.
+파이프라인은 계획하지 않습니다. 무엇을 만들지 정하는 데는 판단이 필요하고, 계획하면서 잘못 세운 가정은 Spec과 Ticket, merge된 코드로 굳어져 버려 중간에 잡아낼 관문이 남지 않습니다. 그래서 계획은 사람 몫으로 두고, 파이프라인은 계획이 넘겨준 것만 받아 갑니다([ADR-0001](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0001-humans-plan-the-pipeline-executes.md)). 넘겨받은 것을 믿고 일하는 만큼, 이슈에서 읽는 것은 몇 가지뿐이고 그것도 엄격하게 읽습니다. 그중 하나라도 어긋난 이슈는 짐작하지 않고 거절합니다.
 
 | Ticket에 필요한 것 | 이유 | 읽는 곳 | 출처 |
 |---|---|---|---|
@@ -48,7 +48,7 @@ The command must refuse bad input.              ← 아님: 산문
 1. [ ] a numbered item                          ← 아님: 불릿이 없음
 ```
 
-기준은 이슈 본문에 있어도 되고 어느 코멘트에 있어도 됩니다. `triage`가 브리프를 코멘트로 올리기 때문입니다. verify Stage는 기준마다 `met`, `unmet`, `unverifiable` 중 하나로 채점합니다. Ticket이 머지되면 `met`인 기준은 적힌 자리에서 체크되고, `unverifiable`인 기준은 증거를 모은 사람이 없으니 체크하지 않은 채 둡니다. 채점 과정은 [Ticket 하나가 머지되기까지](./ticket-to-merge.md)에서 다룹니다.
+기준은 이슈 본문에 있어도 되고 어느 코멘트에 있어도 됩니다. `triage`가 브리프를 코멘트로 올리기 때문입니다. verify Stage는 기준마다 `met`, `unmet`, `unverifiable` 중 하나로 채점합니다. Ticket이 merge되면 `met`인 기준은 적힌 자리에서 체크되고, `unverifiable`인 기준은 증거를 모은 사람이 없으니 체크하지 않은 채 둡니다. 채점 과정은 [Ticket 하나가 merge되기까지](./ticket-to-merge.md)에서 다룹니다.
 
 기준은 세션이 코드를 돌려 보거나 읽어서 확인할 수 있게 쓰세요. 사람의 눈이 필요한 기준(스크린샷, 느낌)은 `unverifiable`로 돌아옵니다.
 
@@ -61,7 +61,7 @@ gh issue edit 23 --add-blocked-by 14,15      # 기존 이슈에 연결 추가
 gh issue edit 23 --remove-blocked-by 15      # 하나 떼기
 ```
 
-blocker 중 하나라도 열려 있으면 Ticket은 기다립니다. 같은 Run의 다른 Lane이 아직 작업 중인 blocker도 열려 있는 것이고, 두 Ticket이 서로 방해하지 않게 하는 장치는 이것뿐입니다. 어떤 Ticket끼리 나란히 돌려도 되는지를 따로 판단하는 것은 없습니다. blocker가 머지되는 순간, 그것 때문에 기다리던 Ticket은 같은 Run 안에서 가져갈 수 있게 됩니다.
+blocker 중 하나라도 열려 있으면 Ticket은 기다립니다. 같은 Run의 다른 Lane이 아직 작업 중인 blocker도 열려 있는 것이고, 두 Ticket이 서로 방해하지 않게 하는 장치는 이것뿐입니다. 어떤 Ticket끼리 나란히 돌려도 되는지를 따로 판단하는 것은 없습니다. blocker가 merge되는 순간, 그것 때문에 기다리던 Ticket은 같은 Run 안에서 가져갈 수 있게 됩니다.
 
 본문의 `Blocked by` 섹션은 사람이 읽을 사본으로 두어도 괜찮습니다. 다만 거기 적힌 이슈마다 네이티브 연결도 있어야 합니다. 연결이 없는 이슈를 적어 두면 `body-only-blockers` Guard가 Ticket을 거절합니다. Guard는 그 섹션만 읽으니, 본문의 다른 곳에 있는 이슈 참조는 그냥 산문입니다.
 
@@ -81,7 +81,7 @@ blocker 중 하나라도 열려 있으면 Ticket은 기다립니다. 같은 Run�
 | `needs-triage` | 사람. 파이프라인은 상설 Notes 이슈에 | 그 라벨로 Notes 이슈를 여는 것 말고는 없음 |
 | `needs-info` | 사람 | 없음 |
 | `ready-for-agent` | 계획, Release, Ticket을 돌려주는 사람 | 후보로 가져감. Claim할 때 뗌 |
-| `in-progress` | Run만, Claim할 때 | Run이 쥐고 있는 Ticket 표시. 머지, Hand-off, Release 때 뗌 |
+| `in-progress` | Run만, Claim할 때 | Run이 쥐고 있는 Ticket 표시. merge, Hand-off, Release 때 뗌 |
 | `ready-for-human` | Hand-off | 사람이 라벨을 바꿀 때까지 건드리지 않음 |
 | `wontfix` | 사람 | 없음 |
 
@@ -121,7 +121,7 @@ Guard는 [Stranded Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CO
 ## 관련 페이지 {#related-pages}
 
 - [실행하기](./running.md): Run이 비우는 Frontier, 그리고 지정한 Ticket으로 좁힌 Run.
-- [Ticket 하나가 머지되기까지](./ticket-to-merge.md): Ticket을 claim한 다음 일어나는 일과 verify가 기준을 채점하는 방식.
+- [Ticket 하나가 merge되기까지](./ticket-to-merge.md): Ticket을 claim한 다음 일어나는 일과 verify가 기준을 채점하는 방식.
 - [설정](./configuration.md): 라벨 이름 바꾸기.
 - [설치와 제거](./installation.md): `init`이 라벨과 conventions 문서를 만듦.
 

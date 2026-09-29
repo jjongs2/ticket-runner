@@ -3,7 +3,7 @@
 [English](https://github.com/jjongs2/ticket-runner/blob/main/README.md)
 
 계획은 사람이 GitHub에서 세우고, `ticket-runner`는 준비된 이슈를 하나씩 맡아 아무도 지켜보지 않는
-사이 머지된 pull request까지 가져갑니다.
+사이 merge된 pull request까지 가져갑니다.
 
 > [!NOTE]
 > 개인 도구를 있는 그대로 공개한 것입니다. 지원은 약속하지 않습니다. 이슈나 pull request에 답이 없을
@@ -17,7 +17,7 @@ Acceptance Criteria 체크리스트를 답니다. 직접 써도 되고, 플러�
 `/to-tickets`, `/triage`를 써도 됩니다. **Execution**은 파이프라인 몫입니다. `ready-for-agent` 라벨이
 붙었고 blocker가 모두 닫힌 이슈마다 다음을 합니다.
 
-1. 이슈를 맡고, 그 이슈의 브랜치와 git worktree를 만듭니다
+1. 이슈를 맡고, 그 이슈의 branch와 git worktree를 만듭니다
 2. headless `claude -p` 세션을 띄워 구현합니다
 3. 테스트와 typecheck를 직접 돌립니다
 4. 새 세션을 하나 더 띄워, Acceptance Criteria가 충족되지 *않았음*을 증명해 보게 합니다
@@ -38,7 +38,7 @@ rate limit에 걸려 멈춘 세션은 아무것도 잃지 않습니다. 이슈�
 - 돌리는 머신에 Node 22 이상, `git`, 인증된 [`gh`](https://cli.github.com/), 그리고
   `mattpocock-skills` 플러그인을 설치한 `claude`가 있습니다
 
-파이프라인은 묻지 않고 base branch에 머지합니다. 그걸 원하는 저장소에 쓰세요.
+파이프라인은 묻지 않고 base branch에 merge합니다. 그걸 원하는 저장소에 쓰세요.
 
 ## 써 보기
 
@@ -49,9 +49,9 @@ npx ticket-runner init   # Target을 준비하고, 아직 빠진 것을 알려 �
 npx ticket-runner run    # 준비된 이슈를 모두 처리합니다
 ```
 
-`init`은 검토하고 커밋할 파일 몇 개를 씁니다. `.gitignore` 줄, conventions 문서, `CLAUDE.md`의 한
-섹션, Claude skill 하나입니다. 또 triage 라벨을 만들고, squash merge와 머지 시 브랜치 삭제를 켭니다.
-커밋은 하지 않습니다.
+`init`은 검토하고 commit할 파일 몇 개를 씁니다. `.gitignore` 줄, conventions 문서, `CLAUDE.md`의 한
+섹션, Claude skill 하나입니다. 또 triage 라벨을 만들고, squash merge와 merge 시 branch 삭제를 켭니다.
+commit은 하지 않습니다.
 
 계속 쓰려면 전역으로 설치하세요.
 
@@ -79,7 +79,7 @@ ticket-runner remove           # Target에서: init이 쓴 것과 Run이 남긴 
 npm uninstall -g ticket-runner # 전역 설치
 ```
 
-`remove`는 먼저 묻고(`--yes`를 주면 묻지 않습니다), 커밋은 하지 않습니다. 열린 pull request나 댓글을
+`remove`는 먼저 묻고(`--yes`를 주면 묻지 않습니다), commit은 하지 않습니다. 열린 pull request나 댓글을
 단 이슈처럼 일부러 남겨 둔 것은 보고에 적어 줍니다. `npx`는 캐시 말고는 아무것도 남기지 않습니다.
 
 ## 더 알아보기
@@ -90,7 +90,7 @@ npm uninstall -g ticket-runner # 전역 설치
 - [일 계획하기](https://jjongs2.github.io/ticket-runner/ko/guide/planning)
 - [실행하기](https://jjongs2.github.io/ticket-runner/ko/guide/running)
 - [설정](https://jjongs2.github.io/ticket-runner/ko/guide/configuration)
-- [Ticket 하나가 머지되기까지](https://jjongs2.github.io/ticket-runner/ko/guide/ticket-to-merge)
+- [Ticket 하나가 merge되기까지](https://jjongs2.github.io/ticket-runner/ko/guide/ticket-to-merge)
 - [멈추고 이어 하기](https://jjongs2.github.io/ticket-runner/ko/guide/stopping-and-resuming)
 - [내부 구조](https://jjongs2.github.io/ticket-runner/ko/guide/internals)
 

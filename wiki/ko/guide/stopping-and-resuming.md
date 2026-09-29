@@ -13,7 +13,7 @@ Run은 아무도 지켜보지 않는 사이에 돌아가니, 일이 틀어졌을
 
 | 끝맺음 | 원인 | 끝난 뒤의 보드 | 작업과 State | Run은 |
 |---|---|---|---|---|
-| 머지 | 모든 관문을 초록으로 통과 | issue 닫힘 | branch 삭제, State file 제거 | Lane을 다시 채움 |
+| merge | 모든 관문을 초록으로 통과 | issue 닫힘 | branch 삭제, State file 제거 | Lane을 다시 채움 |
 | [Hand-off](#hand-off) | Fix budget으로 감당할 수 없는 실패 | `ready-for-human`, 담당자 해제, 댓글, draft pull request | branch, worktree, State file, transcript 유지 | Lane을 다시 채움 |
 | [Release](#release-on-a-rate-limit) | Stage가 구독 rate limit에 걸림 | `ready-for-agent`, 담당자 해제, 댓글 없음 | branch, worktree, State file 유지 | 더는 claim하지 않고, 바쁜 Lane만 마무리 |
 | [Stop](#stop-and-kill) | SIGTERM (`ticket-runner stop`이 보냄) | 아무것도 바뀌지 않음 | 아무것도 바뀌지 않음 | 더는 claim하지 않고, 바쁜 Lane만 마무리 |
@@ -41,7 +41,7 @@ stateDiagram-v2
 
 ## Hand-off {#hand-off}
 
-[Hand-off](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)는 Ticket을 사람에게 넘기는 일입니다. 머지도 Release도 아닌 끝맺음은 모두 이렇게 끝납니다. Fix budget을 쓴 뒤의 두 번째 실패, 시간을 넘긴 Stage, 끝나지 않은 CI, setup에서 앞을 막은 branch 같은 경우입니다. 이 가운데 누군가의 결함이 아닌 경우도 있습니다.
+[Hand-off](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)는 Ticket을 사람에게 넘기는 일입니다. merge도 Release도 아닌 끝맺음은 모두 이렇게 끝납니다. Fix budget을 쓴 뒤의 두 번째 실패, 시간을 넘긴 Stage, 끝나지 않은 CI, setup에서 앞을 막은 branch 같은 경우입니다. 이 가운데 누군가의 결함이 아닌 경우도 있습니다.
 
 [`orchestrator.ts` · `handOff`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts)가 이 순서로 처리합니다.
 
@@ -88,10 +88,10 @@ stateDiagram-v2
 
 | 무엇 | 어디 | 언제까지 |
 |---|---|---|
-| Ticket의 commit | remote의 `agent/<n>-<slug>` branch. commit하는 Stage가 끝날 때마다 push | 머지되며 삭제될 때까지 |
-| State file | `ticket-runner/state`의 `ticket-<n>.json` | 작업이 머지되거나, 더는 pipeline이 이어받을 몫이 아니게 될 때까지([아래 참고](#the-state-file)) |
+| Ticket의 commit | remote의 `agent/<n>-<slug>` branch. commit하는 Stage가 끝날 때마다 push | merge되며 삭제될 때까지 |
+| State file | `ticket-runner/state`의 `ticket-<n>.json` | 작업이 merge되거나, 더는 pipeline이 이어받을 몫이 아니게 될 때까지([아래 참고](#the-state-file)) |
 | Hand-off된 Stage의 transcript | `ticket-runner/state`의 `ticket-<n>/<runId>/` | State file이 사라질 때까지 |
-| Worktree | 작업한 Host의 `.worktrees/ticket-<n>` | 머지되거나 사람이 지울 때까지. 다음 Run이 remote에서 다시 만듦 |
+| Worktree | 작업한 Host의 `.worktrees/ticket-<n>` | merge되거나 사람이 지울 때까지. 다음 Run이 remote에서 다시 만듦 |
 | 모든 Stage의 전체 로그(stdout, stderr 포함) | 그 Host의 `.ticket-runner/runs/<runId>/<n>/` | 사람이 지울 때까지 |
 
 Run이 돌고 있지 않을 때는 `.worktrees/`와 `.ticket-runner/`를 언제 지워도 괜찮습니다. Run에 필요한 것은 모두 remote에 있습니다.
@@ -145,7 +145,7 @@ Run을 일찍 끝내는 방법은 두 가지이고, 남기는 것은 정반대�
 | | Stop | Kill |
 |---|---|---|
 | 보내는 방법 | SIGTERM: Run이 도는 Host에서 `ticket-runner stop`, cloud Host라면 Operator | Run의 터미널에서 Ctrl+C, SIGKILL, 메모리 부족, 사라진 Host |
-| Lane | 들고 있던 Ticket을 머지, Hand-off, Release까지 마무리 | Run과 함께 끝남. Ctrl+C는 Stage에도 닿지만, Run의 pid에만 보낸 신호는 Stage를 아무도 읽지 않는 채로 남겨 둠 |
+| Lane | 들고 있던 Ticket을 merge, Hand-off, Release까지 마무리 | Run과 함께 끝남. Ctrl+C는 Stage에도 닿지만, Run의 pid에만 보낸 신호는 Stage를 아무도 읽지 않는 채로 남겨 둠 |
 | 새 Ticket | Frontier에서도 Stranded Ticket에서도 가져가지 않음 | 없음 |
 | 남는 것 | stranded된 것 없음 | 바빴던 Lane마다 [Stranded Ticket](#stranded-tickets-and-the-sweep) 하나, 그리고 같은 Host의 다음 Run만 스스로 넘겨받는 Run lock |
 | 이 때문에 보드에 쓰는 것 | 없음 | 없음 (Claim이 그대로 남을 뿐) |
@@ -233,7 +233,7 @@ process id는 어디에도 기록하지 않습니다. [Run lock](#the-run-lock)�
 | pull request가 열림 | `pullRequest` |
 | fix Stage가 돌아옴 | `fixUsed: true` |
 | Release, Hand-off | 위에서 말한 대로 갱신 |
-| 머지, sweep이 닫힌 issue를 봄, branch가 여기 worktree에도 remote에도 없음, 앞을 막은 branch로 인한 Hand-off | 삭제 |
+| merge, sweep이 닫힌 issue를 봄, branch가 여기 worktree에도 remote에도 없음, 앞을 막은 branch로 인한 Hand-off | 삭제 |
 
 첫 번째를 뺀 쓰기는 실패해도 로그만 남깁니다. 그러면 remote에는 같은 Ticket의 조금 이전 상태가 남는데, 더 앞에서부터 이어 가면 Stage 하나를 더 치를 뿐 틀린 결과가 되지는 않습니다.
 
@@ -322,7 +322,7 @@ push는 `--force-with-lease`를 쓰니, rebase가 branch를 다시 쓸 수는 �
 
 ## 관련 페이지 {#related-pages}
 
-- [Ticket 하나가 머지되기까지](./ticket-to-merge.md): 이 끝맺음들이 끊고 들어가는 lifecycle, Fix budget, Landing
+- [Ticket 하나가 merge되기까지](./ticket-to-merge.md): 이 끝맺음들이 끊고 들어가는 lifecycle, Fix budget, Landing
 - [실행하기](./running.md): `run`, `stop`, 번호를 지정한 Run, 요약과 exit code, cloud Host의 Operator
 - [설정](./configuration.md): Stage가 "끝나지 않았다"를 정하는 Stage 한도와 timeout
 - [내부 구조](./internals.md): State와 lock을 맡는 `Workspace` port, 그리고 이 페이지 뒤의 ADR
