@@ -10,6 +10,25 @@ Humans plan, the pipeline executes.
 
 Planning a feature takes judgement, so it stays with humans: they write the issues on GitHub, give each one checkbox [Acceptance Criteria](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md), link its blockers, and label it `ready-for-agent`. Carrying an issue from there to a merge is repetitive, so the pipeline does it unattended. For each [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) it has a headless Claude Code session implement the work, runs the repository's own tests, has a second session try to prove the criteria are not met, opens a pull request, waits for CI and squash-merges. Whatever it cannot finish goes back to a human with a draft pull request and a comment.
 
+## Why it exists
+
+After Planning, every Ticket still needs an attended session: open it, paste the Ticket, wait, review, commit, merge, close, then go and find the next unblocked Ticket. Ten Tickets are ten sessions. The [Frontier](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md), the Tickets nothing blocks any more, never moves by itself, because nothing closes Tickets. The pipeline ends your part when Planning ends: one command drains the Frontier and leaves merged code behind.
+
+## When it fits, and when it does not
+
+It fits when:
+
+- Planning has produced agent-sized Tickets, with checkbox criteria and native blockers.
+- The repository has CI, and a test or typecheck command the pipeline can run itself.
+- You want the work merged while you are away: overnight, or started from the Claude app.
+
+It does not fit when:
+
+- **The work needs a human's judgement midway.** A Run asks nobody anything; a Ticket it cannot finish reaches a human only as a Hand-off.
+- **No checkbox can grade the criteria.** The verify Stage grades only `- [ ]` lines, and a Verdict of nothing but `unverifiable` fails: it is no evidence to merge on.
+- **Nothing may merge without a person's review.** A pull request is squash-merged as soon as its CI passes; nobody approves it first.
+- **The repository has no CI or tests.** A Run refuses to start without a Check and hands off a pull request with no CI checks, unless [`gates`](./guide/configuration.md#gates) is switched off, and then it merges unchecked code.
+
 ## Quick Start
 
 You need Node 22 or newer, `git`, an authenticated [`gh`](https://cli.github.com/), and `claude` with the `mattpocock-skills` plugin, version 1.2.3. [Installation](./guide/installation.md) has the full list.

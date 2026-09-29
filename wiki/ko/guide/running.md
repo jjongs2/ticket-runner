@@ -7,14 +7,16 @@ description: Run 시작하기, Lane 주기, 지정한 Ticket으로 좁히기, �
 
 [Run](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)은 명령 하나 걸어 두고 자리를 떠도 되게 하려고 있습니다. 준비된 Ticket을 모두 가져가 하나하나 merge나 사람에게까지 데려가고, 가져갈 게 더 없으면 알아서 끝납니다. 나중에 궁금할 만한 것은 요약과 보드, 그리고 디스크에 남긴 transcript에 다 있습니다.
 
-| 명령 | 하는 일 | 종료 코드 | 출처 |
-|---|---|---|---|
-| `ticket-runner run` | Frontier를 비움 | `0` · `1` Hand-off 있음 · `2` 가져간 것 없음 | [`start.ts` · `startRun`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts) |
-| `ticket-runner run 3 7` | 같은 Run을 #3과 #7로 좁힘 | 위와 같음 | [`run.ts` · `processRun`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts) |
-| `ticket-runner run --lanes 2` | 같은 Run을 Ticket 두 개씩 동시에 | 위와 같음 | [`command-line.ts` · `readCommandLine`](https://github.com/jjongs2/ticket-runner/blob/main/src/command-line.ts) |
-| `ticket-runner stop` | 이 Target의 Run에게 쥔 것만 마치고 더 가져가지 말라고 요청 | `0` 보냄 · `2` 보낼 상대 없음 | [`stop.ts` · `requestStop`](https://github.com/jjongs2/ticket-runner/blob/main/src/stop.ts) |
-| `ticket-runner -v` | 이 사본의 Version을 출력 | `0` | [`adapters/version.ts` · `pipelineVersion`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts) |
-| `ticket-runner -h` | 사용법을 출력 | `0` (명령 없이 실행하면 `2`) | [`command-line.ts` · `USAGE`](https://github.com/jjongs2/ticket-runner/blob/main/src/command-line.ts) |
+| 명령 | 하는 일 | 종료 코드 |
+|---|---|---|
+| `ticket-runner run` | Frontier를 비움 | `0` · `1` Hand-off 있음 · `2` 가져간 것 없음 |
+| `ticket-runner run 3 7` | 같은 Run을 #3과 #7로 좁힘 | 위와 같음 |
+| `ticket-runner run --lanes 2` | 같은 Run을 Ticket 두 개씩 동시에 | 위와 같음 |
+| `ticket-runner stop` | 이 Target의 Run에게 쥔 것만 마치고 더 가져가지 말라고 요청 | `0` 보냄 · `2` 보낼 상대 없음 |
+| `ticket-runner -v` | 이 사본의 Version을 출력 | `0` |
+| `ticket-runner -h` | 사용법을 출력 | `0` (명령 없이 실행하면 `2`) |
+
+출처: [`start.ts` · `startRun`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts), [`run.ts` · `processRun`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts), [`command-line.ts` · `readCommandLine`, `USAGE`](https://github.com/jjongs2/ticket-runner/blob/main/src/command-line.ts), [`stop.ts` · `requestStop`](https://github.com/jjongs2/ticket-runner/blob/main/src/stop.ts), [`adapters/version.ts` · `pipelineVersion`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts).
 
 `init`과 `remove`는 [설치와 제거](./installation.md)에 있습니다. 모르는 명령이나 옵션, 잘못된 인자는 사용법과 함께 종료 코드 `2`로 거절합니다.
 
@@ -50,6 +52,8 @@ flowchart TD
 Lane 안에서 Ticket 하나에 일어나는 일은 [Ticket 하나가 merge되기까지](./ticket-to-merge.md)에 있습니다. Stranded Ticket과 Release는 [멈추고 이어 하기](./stopping-and-resuming.md)에 있습니다.
 
 ### `--lanes` {#lanes}
+
+Lane이 하나면 Run은 Frontier에서 Ticket을 하나씩 가져갑니다. Ticket 하나에 드는 시간은 대부분 implement와 verify Stage인데, 최대 1시간 20분 동안 도는 이 세션들은 Frontier의 다른 Ticket과 부딪힐 일이 없습니다. 그런데도 차례로 줄을 서니, 서로 무관한 Ticket 여섯 개는 하나일 때의 여섯 배가 걸립니다. Frontier의 Ticket끼리는 서로 막지 않으니 Lane을 늘리면 여러 개를 한꺼번에 가져갈 수 있고, rebase부터 merge까지의 [Landing](./ticket-to-merge.md#the-landing)만 한 번에 Lane 하나씩 지나갑니다.
 
 `--lanes <n>`은 이번 Run에만 Lane `n`개를 주고, `ticket-runner.json`의 [`lanes`](./configuration.md#lanes)보다 우선합니다. 머신 하나가 Ticket을 몇 개까지 동시에 감당할지는 저장소가 아니라 그 머신이 정할 일이라, 이 값만은 명령줄에서 덮어씁니다. Ticket 번호 앞에 둬도 뒤에 둬도 되고, 지정한 Ticket 수보다 큰 값도 거절하지 않습니다.
 
@@ -140,7 +144,7 @@ Frontier blocked.
 | `handed` | 사람에게 Hand-off됨. 멈춘 Stage와 이유가 붙음 |
 | `released` | rate limit 때문에 해당 Stage에서 Release됨. 누구도 할 일이 없음 |
 | `skipped` | 이유와 함께 넘어감([Guard](./planning.md#guards), 또는 위의 표) |
-| `noted` | 바로 윗줄의 Ticket이 남긴 [Note](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md). 번호는 Note가 간 곳. 기존 이슈에 달렸으면 `comment`, 상설 Notes 이슈를 새로 열었으면 `new` |
+| `noted` | 바로 윗줄이 남긴 [Note](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)와 간 곳. 기존 이슈면 `comment`, 상설 Notes 이슈면 `new` |
 
 | 마지막 줄 | Run이 끝난 이유 |
 |---|---|
@@ -153,13 +157,13 @@ Stop이나 Release로 끝난 Run은 Frontier 끝까지 가 보지 못했으니 `
 
 ## 종료 코드 {#exit-codes}
 
-| 코드 | `run` | `init` | `stop` | `remove` |
-|---|---|---|---|---|
-| `0` | Hand-off된 것이 없음. Release도 가져간 것으로 치고, 번호 없이 시작해 모두 건너뛴 Run도 `0` | 알려 준 항목이 모두 통과 | Stop을 보냄 | 모두 사라졌거나 지울 것이 없음 |
-| `1` | Hand-off된 Ticket이 하나 이상 | 사람이 고칠 항목이 있음 | — | 제거가 실패함 |
-| `2` | 아무것도 가져가지 않음: Run이 거절됐거나, 번호를 받았는데 하나도 가져가지 않음 | 거절 | 보낼 상대가 없음 | 아무것도 바꾸기 전에 거절 |
+| 코드 | `run` |
+|---|---|
+| `0` | Hand-off된 것이 없음. Release도 가져간 것으로 치고, 번호 없이 시작해 모두 건너뛴 Run도 마찬가지 |
+| `1` | Hand-off된 Ticket이 하나 이상 |
+| `2` | 아무것도 가져가지 않음: Run이 거절됐거나, 번호를 받았는데 하나도 가져가지 않음 |
 
-멈춘 Run도 평소처럼 결과에 따른 코드로 끝납니다. `-v`와 `-h`는 `0`, 거절된 명령줄은 모두 `2`입니다. 출처: [`cli.ts` · `main`](https://github.com/jjongs2/ticket-runner/blob/main/src/cli.ts).
+멈춘 Run도 평소처럼 결과에 따른 코드로 끝납니다. `stop`은 Stop을 보냈으면 `0`, 보낼 상대가 없으면 `2`로 끝납니다. `-v`와 `-h`는 `0`, 거절된 명령줄은 모두 `2`입니다. `init`과 `remove`의 종료 코드는 [설치와 제거](./installation.md)에 있습니다. 출처: [`cli.ts` · `main`](https://github.com/jjongs2/ticket-runner/blob/main/src/cli.ts).
 
 ## 로그와 transcript {#logs-and-transcripts}
 
@@ -181,7 +185,7 @@ Stage가 한 일은 모두 Target의 gitignore된 `.ticket-runner/` 아래 디�
 
 ## Claude 앱에서 실행하기 {#from-the-claude-app}
 
-Run을 돌리는 데 워크스테이션을 켜 둘 필요는 없습니다. Claude 앱에서 Target으로 Claude Code 클라우드 세션을 열고 "run it"이라고 말하면 됩니다. 그 세션의 Claude가 [Operator](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)입니다. 클라우드 세션은 저장소 말고는 아무것도 가져오지 않으니, Operator는 `init`이 Target에 써 둔 스킬 `.claude/skills/ticket-runner/SKILL.md`를 따릅니다([ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)).
+워크스테이션에서는 Run이 그 머신이 켜져 있는 동안만 돕니다. 머신이 잠들거나, 재부팅되거나, 꺼지면 다시 돌아올 때까지 Frontier가 줄지 않고, Run을 들여다보거나 멈추는 것도 시작한 터미널에서만 할 수 있습니다. Claude 앱에서 시작한 Run에는 이런 제약이 없습니다. 앱에서 Target으로 Claude Code 클라우드 세션을 열고 "run it"이라고 말하면 됩니다. 그 세션의 Claude가 [Operator](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)입니다. 클라우드 세션은 저장소 말고는 아무것도 가져오지 않으니, Operator는 `init`이 Target에 써 둔 스킬 `.claude/skills/ticket-runner/SKILL.md`를 따릅니다([ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)).
 
 | 이렇게 말하면 | Operator는 |
 |---|---|

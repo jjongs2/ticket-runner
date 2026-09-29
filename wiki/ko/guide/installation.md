@@ -5,15 +5,17 @@ description: 머신과 저장소에 필요한 것, ticket-runner 설치, init이
 
 # 설치와 제거
 
-Run은 무인으로 돌기 때문에, 빠진 게 있다면 Ticket 도중이 아니라 시작하기 전에 잡아내야 합니다. 그래서 준비를 셋으로 나눴습니다. `init`은 파이프라인이 직접 쓸 수 있는 것은 제자리에 두고, 사람만 고칠 수 있는 것은 알려 줍니다. `run`은 같은 목록을 확인해서 하나라도 빠진 [Target](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)(명령을 실행한 저장소)은 아무것도 고치지 않고 거절합니다. `remove`는 `init`이 한 일과 Run이 남긴 것을 모두 되돌리니, 내 저장소에 파이프라인을 시험해 봐도 안전합니다.
+Run은 무인으로 돌기 때문에, 빠진 게 있다면 Ticket 도중이 아니라 시작하기 전에 잡아내야 합니다. 준비 단계가 없다면 저장소에 무엇이 있어야 하는지(무시할 디렉터리, triage 라벨, squash merge, Stage가 읽는 규칙)를 소스를 읽어 가며 알아내거나, Run이 도중에 즉석으로 만들어 넣어야 합니다. 그래서 준비를 셋으로 나눴습니다. `init`은 파이프라인이 직접 쓸 수 있는 것은 제자리에 두고, 사람만 고칠 수 있는 것은 알려 줍니다. `run`은 같은 목록을 확인해서 하나라도 빠진 [Target](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)(명령을 실행한 저장소)은 아무것도 고치지 않고 거절합니다. `remove`는 `init`이 한 일과 Run이 남긴 것을 모두 되돌리니, 내 저장소에 파이프라인을 시험해 봐도 안전합니다.
 
-| 단계 | 명령 | 하는 일 | 출처 |
-|---|---|---|---|
-| 설치 | `npm install -g ticket-runner` | 머신에 `ticket-runner` 명령을 설치 | [`package.json`](https://github.com/jjongs2/ticket-runner/blob/main/package.json) |
-| Target 준비 | `ticket-runner init` | 파이프라인 파일을 쓰고, GitHub를 설정하고, 나머지를 알려 줌 | [`init.ts` · `initTarget`](https://github.com/jjongs2/ticket-runner/blob/main/src/init.ts) |
-| 작업 시작 | `ticket-runner run` | 준비되지 않은 Target은 거절. [실행하기](./running.md) 참고 | [`readiness.ts` · `readinessRefusal`](https://github.com/jjongs2/ticket-runner/blob/main/src/readiness.ts) |
-| 걷어 내기 | `ticket-runner remove` | `init`이 쓴 것과 Run이 남긴 것을 제거 | [`remove.ts` · `removeTarget`](https://github.com/jjongs2/ticket-runner/blob/main/src/remove.ts) |
-| 삭제 | `npm uninstall -g ticket-runner` | 머신에서 명령을 삭제 | — |
+| 단계 | 명령 | 하는 일 |
+|---|---|---|
+| 설치 | `npm install -g ticket-runner` | 머신에 `ticket-runner` 명령을 설치 |
+| Target 준비 | `ticket-runner init` | 파이프라인 파일을 쓰고, GitHub를 설정하고, 나머지를 알려 줌 |
+| 작업 시작 | `ticket-runner run` | 준비되지 않은 Target은 거절. [실행하기](./running.md) 참고 |
+| 걷어 내기 | `ticket-runner remove` | `init`이 쓴 것과 Run이 남긴 것을 제거 |
+| 삭제 | `npm uninstall -g ticket-runner` | 머신에서 명령을 삭제 |
+
+출처: [`package.json`](https://github.com/jjongs2/ticket-runner/blob/main/package.json), [`init.ts` · `initTarget`](https://github.com/jjongs2/ticket-runner/blob/main/src/init.ts), [`readiness.ts` · `readinessRefusal`](https://github.com/jjongs2/ticket-runner/blob/main/src/readiness.ts), [`remove.ts` · `removeTarget`](https://github.com/jjongs2/ticket-runner/blob/main/src/remove.ts).
 
 ## 요구 사항 {#requirements}
 
@@ -88,10 +90,10 @@ ticket-runner init
 
 | 항목 | 위치 | 다음 `init`에서는 |
 |---|---|---|
-| 주석을 하나씩 단 무시 줄 두 개 | `.gitignore`: `.worktrees/`, `.ticket-runner/` | 어떤 표기로든(`.worktrees`, `/.worktrees/`) 이미 무시하고 있지 않을 때만 추가 |
+| 무시 줄 두 개 | `.gitignore`: `.worktrees/`, `.ticket-runner/` | 어떤 표기로든 이미 무시하고 있으면 추가하지 않음 |
 | 빈 설정 파일 | `{}`만 담긴 `ticket-runner.json` | 한번 생기면 건드리지 않음 |
-| 쓴 Version이 찍힌 conventions 문서 | `docs/agents/pipeline-conventions.md` | 내용이 다르면 다시 씀 |
-| 그 문서를 가리키는 섹션 | `CLAUDE.md`, 없으면 새로 만듦 | `CLAUDE.md`가 이미 문서 경로를 언급하지 않을 때만 추가 |
+| Version이 찍힌 conventions 문서 | `docs/agents/pipeline-conventions.md` | 내용이 다르면 다시 씀 |
+| 그 문서를 가리키는 섹션 | `CLAUDE.md`, 없으면 새로 만듦 | `CLAUDE.md`가 이미 문서를 가리키면 추가하지 않음 |
 | Operator의 스킬 | `.claude/skills/ticket-runner/SKILL.md` | 내용이 다르면 다시 씀 |
 
 사람이 관리하는 파일(`.gitignore`, `CLAUDE.md`)에는 줄이 더해지기만 합니다. conventions 문서와 스킬은 파이프라인의 글이라, 거기서 고친 내용은 다음 `init`에서 사라집니다. 예외가 하나 있습니다. 문서 첫 줄에는 숨은 `<!-- ticket-runner:version <number> -->` 표시가 있는데, 이 표시가 지금 실행 중인 것보다 *새* Version을 가리키면 `init`은 문서와 스킬을 그대로 두고 업그레이드하라고만 알립니다. 다시 쓰면 Target을 과거로 되돌리는 셈이기 때문입니다.
@@ -100,9 +102,9 @@ ticket-runner init
 
 | 설정 | `init`이 하는 일 |
 |---|---|
-| triage 라벨 여섯 개(`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`, `in-progress`) | 없는 것만 [`labels`](./configuration.md#labels)가 정한 이름으로 만들고, 있는 것은 건드리지 않음 |
+| triage 라벨 여섯 개(`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`, `in-progress`) | 없는 것만 [`labels`](./configuration.md#labels)가 정한 이름으로 만들고, 나머지는 그대로 둠 |
 | squash merge | 켬. 다른 merge 방식은 건드리지 않음 |
-| merge될 때 pull request branch 삭제 | 켬. 클라우드 Host는 branch를 직접 지울 수 없어서, merge된 branch는 이 설정으로 사라짐([ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)) |
+| merge될 때 pull request branch 삭제 | 켬. 클라우드 Host는 branch를 직접 지울 수 없기 때문([ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)) |
 
 `gh`가 인증되어 있지 않으면 GitHub에서는 아무것도 하지 않고, 보고서에 그렇게 적습니다.
 
@@ -208,17 +210,27 @@ flowchart TD
 
 ### 사라지는 것과 남는 것 {#what-goes-and-what-stays}
 
-| 제거함 | 남겨 둠, 그리고 이유 |
-|---|---|
-| `docs/agents/pipeline-conventions.md`, Operator의 스킬, 그 결과 비게 된 디렉터리 | `in-progress`를 뺀 triage 라벨 다섯 개: 계획에서도 씀. 보고서가 라벨마다 `gh label delete` 명령을 알려 줌 |
-| `init`이 쓴 `CLAUDE.md` 섹션. 그 섹션뿐인 파일이면 파일째 | 문구를 고친 `CLAUDE.md` 섹션: 이제 사람의 것일 수 있음 |
-| `init`이 쓴 주석 아래 그대로 있는 `.gitignore` 줄. 그 줄뿐인 파일이면 파일째 | 사람이 단 주석 아래 있는 무시 줄 |
-| `.ticket-runner/`(Run 로그와 transcript) | squash merge와 merge 시 branch 삭제 설정: `init` 전부터 켜져 있었을 수 있음 |
-| `.worktrees/ticket-<n>` worktree와 그 branch, 다른 로컬 `agent/` branch, 비게 된 `.worktrees/` | 다른 것이 들어 있는 `.worktrees/`, 그리고 그 무시 줄 |
-| `in-progress` 라벨, 달고 있던 모든 이슈에서 | GitHub의 `agent/` branch와 거기 열린 pull request |
-| `ticket-runner/state` branch. 이제 재개할 수 없게 된 Ticket을 보고서가 모두 알려 줌 | 상설 Notes 이슈, 그리고 Run이 쓴 모든 코멘트: 사람에게 쓴 글이라서 |
-| 맨 마지막에 `ticket-runner.json`. 앞의 제거가 모두 성공했을 때만 | — |
-| 맨 마지막에 `ticket-runner/lock` branch. 실패한 제거가 있으면 지우지 않고 lock만 풂 | — |
+제거하는 것:
+
+- `docs/agents/pipeline-conventions.md`, Operator의 스킬, 그 결과 비게 된 디렉터리.
+- `init`이 쓴 `CLAUDE.md` 섹션. 그 섹션뿐인 파일이면 파일째 지웁니다.
+- `init`이 쓴 주석 아래 그대로 있는 `.gitignore` 줄. 그 줄뿐인 파일이면 파일째 지웁니다.
+- `.ticket-runner/`: Run 로그와 transcript.
+- `.worktrees/ticket-<n>` worktree와 그 branch, 다른 로컬 `agent/` branch, 비게 된 `.worktrees/`.
+- `in-progress` 라벨. 달고 있던 모든 이슈에서 뗍니다.
+- `ticket-runner/state` branch. 이제 재개할 수 없게 된 Ticket을 보고서가 모두 알려 줍니다.
+- `ticket-runner.json`. 맨 마지막에, 앞의 제거가 모두 성공했을 때만 지웁니다.
+- `ticket-runner/lock` branch. 맨 마지막에 지우고, 실패한 제거가 있으면 지우지 않고 lock만 풉니다.
+
+남겨 두는 것:
+
+- `in-progress`를 뺀 triage 라벨 다섯 개. 계획에서도 쓰기 때문입니다. 보고서가 라벨마다 `gh label delete` 명령을 알려 줍니다.
+- 문구를 고친 `CLAUDE.md` 섹션. 이제 사람의 것일 수 있어서입니다.
+- 사람이 단 주석 아래 있는 무시 줄.
+- 다른 것이 들어 있는 `.worktrees/`, 그리고 그 무시 줄.
+- squash merge와 merge 시 branch 삭제 설정. `init` 전부터 켜져 있었을 수 있습니다.
+- GitHub의 `agent/` branch와 거기 열린 pull request.
+- 상설 Notes 이슈, 그리고 Run이 쓴 모든 코멘트. 사람에게 쓴 글이라서입니다.
 
 실패한 제거는 보고하고 나머지는 계속 진행합니다. `remove`를 다시 실행하면 남은 것을 대상으로 처음부터 다시 하는 셈인데, 그래서 설정 파일을 끝까지 남겨 둡니다. 다음 `remove`가 찾을 라벨 이름이 거기 있기 때문입니다.
 

@@ -11,13 +11,15 @@ This page covers what each ending leaves behind, and how the pipeline gets back 
 
 ## At a glance
 
-| Ending | Caused by | The board afterwards | Work and State | The Run |
-|---|---|---|---|---|
-| Merge | a green pass through every gate | issue closed | branch deleted, State file removed | refills the Lane |
-| [Hand-off](#hand-off) | a failure the Fix budget cannot cover | `ready-for-human`, unassigned, a comment, a draft pull request | branch, worktree, State file and transcripts kept | refills the Lane |
-| [Release](#release-on-a-rate-limit) | a Stage hit the subscription rate limit | `ready-for-agent`, unassigned, nothing commented | branch, worktree and State file kept | claims nothing more; busy Lanes finish |
-| [Stop](#stop-and-kill) | SIGTERM, sent by `ticket-runner stop` | nothing changes | nothing changes | claims nothing more; busy Lanes finish |
-| [Kill](#stop-and-kill) | Ctrl+C, SIGKILL, out of memory, a Host that vanished | the Claim stays on | branch as of its last push, State file kept | gone |
+| Ending | Caused by | Leaves behind |
+|---|---|---|
+| Merge | a green pass through every gate | a closed issue; branch and State file gone |
+| [Hand-off](#hand-off) | a failure the Fix budget cannot cover | `ready-for-human`, a comment, a draft pull request; work and State kept |
+| [Release](#release-on-a-rate-limit) | the subscription rate limit | `ready-for-agent`, no comment; work and State kept |
+| [Stop](#stop-and-kill) | `ticket-runner stop` (SIGTERM) | nothing new |
+| [Kill](#stop-and-kill) | Ctrl+C, SIGKILL, a vanished Host | the Claim; work as last pushed, and State |
+
+After a merge or a Hand-off the Run refills the Lane. After a Release or a Stop it claims nothing more, and the busy Lanes finish what they hold. A kill ends it on the spot.
 
 Each Ticket that is still unfinished then comes back by one road. The board decides which:
 
@@ -73,14 +75,14 @@ The comment follows [`docs/templates/handoff-comment.md`](https://github.com/jjo
 
 A Hand-off at `setup` pushes nothing: there is either nothing to push, or what is in the way may be a human's work or another Host's.
 
-| Case | Worktree named | Draft pull request | State file |
-|---|---|---|---|
-| Taken from the top, failed before its worktree was created | none | none: nothing to push | **removed**: nothing was branched |
-| Taken from the top, but a local branch of that name already exists | the worktree it is checked out in, if any | none | **removed**: no Stage of this Run worked there |
-| Resumed, but this Host's copy of the branch has parted from the remote one | the worktree, if the branch is checked out | none opened; one already open goes to draft | kept: both copies are the pipeline's |
-| Any failure after the worktree was ready | this Run's worktree | opened, or an open one put back to draft | kept |
+| Case | Draft pull request | State file |
+|---|---|---|
+| Taken from the top, failed before its worktree existed | none: nothing to push | **removed**: nothing was branched |
+| Taken from the top, a local branch of that name exists | none | **removed**: no Stage of this Run worked there |
+| Resumed, this Host's branch has parted from the remote's | none opened; an open one goes to draft | kept: both copies are the pipeline's |
+| Any failure after the worktree was ready | opened, or an open one back to draft | kept |
 
-The failure line says what to do, for example `delete it with git branch -D <branch> if the work on it is abandoned, or finish it by hand, then relabel the Ticket ready-for-agent`. The State file goes only where no Stage of this Run worked on the branch. Keeping it over a branch in the way would let a later Run resume into a human's work and run an implement Stage over it.
+The comment names a worktree wherever there is one: this Run's, or the one the branch in the way is checked out in. The failure line says what to do, for example `delete it with git branch -D <branch> if the work on it is abandoned, or finish it by hand, then relabel the Ticket ready-for-agent`. The State file goes only where no Stage of this Run worked on the branch. Keeping it over a branch in the way would let a later Run resume into a human's work and run an implement Stage over it.
 
 ### What stays where
 
@@ -88,13 +90,13 @@ The Host a Ticket was worked on may be gone by the time a human looks, for examp
 
 | What | Where | Lasts until |
 |---|---|---|
-| The Ticket's commits | branch `agent/<n>-<slug>` on the remote, pushed after every Stage that commits | the merge deletes it |
-| State file | `ticket-<n>.json` on `ticket-runner/state` | the work merges or stops being the pipeline's to resume ([see below](#the-state-file)) |
+| The Ticket's commits | branch `agent/<n>-<slug>` on the remote | the merge deletes it |
+| State file | `ticket-<n>.json` on `ticket-runner/state` | the work merges or leaves the pipeline ([below](#the-state-file)) |
 | Handed-off Stages' transcripts | `ticket-<n>/<runId>/` on `ticket-runner/state` | the State file goes |
-| Worktree | `.worktrees/ticket-<n>` on the Host that ran it | the merge, or a human deletes it; the next Run remakes it from the remote |
+| Worktree | `.worktrees/ticket-<n>` on that Host | the merge, or a human deletes it |
 | Every Stage's full log (stdout, stderr too) | `.ticket-runner/runs/<runId>/<n>/` on that Host | a human deletes it |
 
-`.worktrees/` and `.ticket-runner/` are safe to delete whenever no Run is running. Everything a Run needs is on the remote.
+Every Stage that commits pushes the branch. `.worktrees/` and `.ticket-runner/` are safe to delete whenever no Run is running: everything a Run needs is on the remote, and the next Run remakes a worktree from it.
 
 ## Handing a Ticket back
 
@@ -102,12 +104,10 @@ To hand a Ticket back, move its label from `ready-for-human` to `ready-for-agent
 
 A few things differ from the Run that handed it off:
 
-| What | On the way back |
-|---|---|
-| Fix budget | fresh. The Ticket went through a human's hands, and whatever they did is what the new budget is for. The old comment still says the budget was spent, because it was. |
-| Draft pull request | taken out of draft before CI is awaited. A draft often runs no workflows, so the wait would read "no checks". One that will not come out of draft, such as a pull request a human closed, is a Hand-off at `pr`: closing it said the work should not go on. |
-| Hand-off comments | each is marked `_Taken again by a later Run; this hand-off is history._` under its marker, which notifies nobody |
-| Progress comment | a new one. The comment the human read is left exactly as they read it. |
+- **Fix budget**: fresh. The Ticket went through a human's hands, and whatever they did is what the new budget is for. The old comment still says the budget was spent, because it was.
+- **Draft pull request**: taken out of draft before CI is awaited, since a draft often runs no workflows and the wait would read "no checks". One that will not come out of draft, such as a pull request a human closed, is a Hand-off at `pr`: closing it said the work should not go on.
+- **Hand-off comments**: each is marked `_Taken again by a later Run; this hand-off is history._` under its marker, which notifies nobody.
+- **Progress comment**: a new one. The comment the human read is left exactly as they read it.
 
 Until the relabel, the State file is inert. No Frontier offers a `ready-for-human` Ticket, the sweep passes over it without a word, and a Run given its number skips it as `not-ready`. Once the issue closes, the sweep removes the file, so a Ticket finished by hand leaves nothing behind.
 
@@ -115,7 +115,7 @@ Why a Hand-off keeps the State at all: the Run once misread the rate limit as an
 
 ## Release on a rate limit
 
-A Stage that hits the subscription rate limit has failed at nothing. Handing the Ticket off would spend its Fix budget on a fix Stage the same limit would stop. So the Ticket is [released](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) instead.
+A Stage that hits the subscription rate limit has failed at nothing. Handing the Ticket off would make a human relabel a Ticket nothing was wrong with, and a fix Stage would only meet the same limit. So the Ticket is [released](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) instead: it goes back on the board, and the next Run resumes it from the last Stage it finished, with its Fix budget as it was.
 
 [`claude-agent-runner.ts` · `rateLimited`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts) decides this, and only for a session that failed. Any one of three signs is enough:
 
@@ -144,16 +144,18 @@ A Run can end early in two ways, and they leave opposite things behind ([ADR-000
 
 | | Stop | Kill |
 |---|---|---|
-| Sent by | SIGTERM: `ticket-runner stop` on the Run's Host, or the Operator on a cloud Host | Ctrl+C in the Run's terminal, SIGKILL, out of memory, a Host that vanished |
-| The Lanes | finish what they hold, to merge, Hand-off or Release | end with the Run. Ctrl+C reaches the Stages too; a signal sent to the Run's pid alone leaves them running with nobody to read them |
+| Sent by | SIGTERM, from `ticket-runner stop` or the Operator | Ctrl+C, SIGKILL, out of memory, a vanished Host |
+| Busy Lanes | finish, to merge, Hand-off or Release | end with the Run |
 | New Tickets | none, from the Frontier or the Stranded Tickets | none |
-| Left behind | nothing stranded | a [Stranded Ticket](#stranded-tickets-and-the-sweep) per busy Lane, and the Run lock, which only a later Run on the same Host takes over by itself |
-| Written to the board because of it | nothing | nothing (the Claims simply stay) |
-| Exit code | the outcomes' as usual | none |
+| Left behind | nothing stranded | a [Stranded Ticket](#stranded-tickets-and-the-sweep) per busy Lane, and the Run lock |
+| Written to the board | nothing | nothing; the Claims simply stay |
+| Exit code | the outcomes', as usual | none |
+
+`ticket-runner stop` works only on the Run's own Host; on a cloud Host the Operator sends the signal. A lock a kill left behind is taken over by the next Run on the same Host by itself; from another Host it waits for a human ([The Run lock](#the-run-lock)).
 
 On a Stop the Run logs one line naming what its Lanes hold, `#4 #9 left to finish · stopped`. The summary ends `Stopped at 22:07 · finishing #4 #9.`, with the time in UTC like the run id. A second SIGTERM is ignored rather than turned into a kill. A Stop cannot be taken back: the lock stays held until the Lanes are back, and starting a new Run is how to carry on. A narrowed Run stopped before it took any of its Tickets exits `2`.
 
-Ctrl+C stays a kill on purpose. The Stages run in the Run's own process group, so the terminal sends SIGINT to every `claude` session as well as to the Run. Making Ctrl+C graceful would mean detaching the Stages into their own group, which reopens a kill path that took two bugs to get right.
+Ctrl+C stays a kill on purpose. The Stages run in the Run's own process group, so the terminal sends SIGINT to every `claude` session as well as to the Run. A signal sent to the Run's pid alone leaves the Stages running with nobody to read them. Making Ctrl+C graceful would mean detaching the Stages into their own group, which reopens a kill path that took two bugs to get right.
 
 ### `ticket-runner stop`
 
@@ -187,7 +189,9 @@ A [Stranded Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.m
 | has closed | removes the State file and any kept transcripts |
 | is assigned to someone else | logs `#<n> is resumable, but <user> holds it now` and leaves it |
 | the tracker cannot be asked about it | logs it and leaves it. A Run never resumes, or forgets, a Ticket on a guess. |
-| the State file cannot be read | logs `#<n> has a State file this Version cannot use, written by <version>`, and leaves the file and the Claim alone. A newer pipeline probably wrote it. |
+| the State file cannot be read | logs `#<n> has a State file this Version cannot use, written by <version>`; leaves the file and the Claim alone |
+
+An unreadable State file was probably written by a newer pipeline.
 
 Stranded Tickets fill free Lanes first, lowest number first, before anything the Frontier offers. While they fill every Lane, the Frontier is not asked for at all. With more than one Lane, a stranded Ticket and a Frontier Ticket can run side by side. A Run given Ticket numbers sweeps only those, and leaves every other stranded Ticket for the next unnarrowed Run.
 
@@ -196,6 +200,8 @@ Nothing records a process id. Only one Run holds the [Run lock](#the-run-lock) a
 A kill still costs more than a Stop. Whatever the Stage had not yet committed and pushed is lost. A worktree left in the middle of a rebase is aborted back to the branch tip before the Checks grade it.
 
 ## The State file
+
+Without a record of how far a Ticket got, a released or stranded Ticket would start over when it came back: its implement Stage paid for again, and a spent Fix budget fresh again. The State file is that record.
 
 [`resume.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/resume.ts) defines the file. The [`Workspace`](https://github.com/jjongs2/ticket-runner/blob/main/src/ports/workspace.ts) port reads and writes it. It is JSON a human can read without the pipeline:
 
@@ -239,7 +245,7 @@ Every write but the first is logged and nothing more when it fails. The remote t
 
 ### The `ticket-runner/state` branch
 
-The State lives on the Target's remote so a Run on any Host can resume a Ticket another Host left ([ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-is-a-local-file.md), last amendment). It is kept off the issue because the board is written for humans, and a machine record there would be noise and a second source of truth beside the labels.
+A State file kept in one checkout can be resumed only on that machine. A Ticket a cloud Run released, left stranded or handed off would be lost with the VM, and a Run on a workstation would never know of it. So the State lives on the Target's remote, where a Run on any Host can resume a Ticket another Host left ([ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-is-a-local-file.md), last amendment). It is kept off the issue because the board is written for humans, and a machine record there would be noise and a second source of truth beside the labels.
 
 - Each change rewrites the branch as one snapshot commit with no parent. Nothing reads its history, and a branch that grew with every Stage would grow the Target with it.
 - The push uses `--force-with-lease` on the tip it read, so another writer's newer snapshot is never overwritten. It is read again and the edit reapplied, up to three tries.
@@ -252,7 +258,7 @@ A Target upgraded from a pipeline that kept State files under `.ticket-runner/st
 
 ## The Run lock
 
-Two Runs sharing a Target would fight over its Base branch, its Frontier and its worktrees. So one Run at a time holds a Target, whichever Host it is on. The lock lives on the Target's GitHub repository, where every Host and every human can see it ([ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md), [`lock.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lock.ts)).
+Two Runs sharing a Target would fight over its Base branch, its Frontier and its worktrees. So one Run at a time holds a Target, whichever Host it is on. A lock only one machine's processes can see would not keep out a Run on another Host, so the lock lives on the Target's GitHub repository, where every Host and every human can see it ([ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md), [`lock.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lock.ts)).
 
 It is `lock.json` at the tip of the `ticket-runner/lock` branch. That branch always exists once a Run has started. The file names the holder: `host` (kind, id, name), `pid`, `command`, `runId`, `startedAt`, and the process's start time as the OS reports it. Otherwise it reads `{ "held": false }`. The commit message says the same thing in words, for example ``Held by run 2026-09-17T09-00-00-000 on the workstation `desk`: ticket-runner run`` or `Free`.
 

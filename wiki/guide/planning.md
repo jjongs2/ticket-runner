@@ -7,13 +7,15 @@ description: What makes a GitHub issue a Ticket the pipeline will take — Specs
 
 The pipeline does not plan. Deciding what to build takes judgement, and a wrong assumption made while planning hardens into a Spec, Tickets and merged code with no gate left to catch it. So Planning stays with humans, and the pipeline only takes what Planning hands it ([ADR-0001](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0001-humans-plan-the-pipeline-executes.md)). Because it trusts what it is handed, it reads only a few things off an issue, reads them strictly, and refuses an issue that gets one of them wrong rather than guess.
 
-| A Ticket needs | Why | Read from | Source |
-|---|---|---|---|
-| The `ready-for-agent` label | It is how a Run finds the Ticket | The issue's labels | [`frontier.ts` · `selectFrontier`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts) |
-| No assignee | Anyone assigned has claimed it | The issue's assignees | [`frontier.ts` · `selectFrontier`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts) |
-| Acceptance Criteria | They are the only thing the verify Stage grades | `- [ ]` lines in the body or any comment | [`acceptance-criteria.ts` · `UNCHECKED_BOX`](https://github.com/jjongs2/ticket-runner/blob/main/src/acceptance-criteria.ts) |
-| Blockers as native `blocked by` links, all closed | They decide which Tickets may run and in what order | GitHub's issue dependencies | [`gh-tracker.ts` · `listCandidates`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts) |
-| No sub-issues | An issue with sub-issues is a Spec, not a Ticket | GitHub's sub-issues | [`guards.ts` · `skipReason`](https://github.com/jjongs2/ticket-runner/blob/main/src/guards.ts) |
+| A Ticket needs | Why |
+|---|---|
+| The `ready-for-agent` label | It is how a Run finds the Ticket |
+| No assignee | Anyone assigned has claimed it |
+| Acceptance Criteria: `- [ ]` lines in the body or any comment | They are the only thing the verify Stage grades |
+| Blockers as native `blocked by` links, all closed | They decide which Tickets may run, and in what order |
+| No native sub-issues | An issue with sub-issues is a Spec, not a Ticket |
+
+Source: [`frontier.ts` · `selectFrontier`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts), [`acceptance-criteria.ts` · `UNCHECKED_BOX`](https://github.com/jjongs2/ticket-runner/blob/main/src/acceptance-criteria.ts), [`gh-tracker.ts` · `listCandidates`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts), [`guards.ts` · `skipReason`](https://github.com/jjongs2/ticket-runner/blob/main/src/guards.ts).
 
 The same list, written for the agents that plan, is the conventions document `init` puts in every Target: [`docs/agents/pipeline-conventions.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/agents/pipeline-conventions.md).
 
@@ -54,7 +56,7 @@ Write criteria that a session can check by running or reading code. A criterion 
 
 ## Blockers
 
-Only GitHub's native `blocked by` links count ([ADR-0003](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0003-github-native-relations-only.md)). Reading the body as well would give the pipeline two sources of truth, and a stale body could silently block or unblock work. One source also keeps the order auditable in GitHub's own UI.
+Only GitHub's native `blocked by` links count ([ADR-0003](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0003-github-native-relations-only.md)), so what a Run takes is what GitHub's own UI shows as unblocked. Reading the body as well would give the pipeline two sources of truth, and a stale body could silently block or unblock work.
 
 ```bash
 gh issue edit 23 --add-blocked-by 14,15      # add links to an existing issue
@@ -89,7 +91,7 @@ To keep the pipeline off a Ticket, take `ready-for-agent` off it, or assign some
 
 ## Guards
 
-A [Guard](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) rejects a candidate before it is claimed, because Planning left it in a known unusable state. Each Guard produces a Ticket the pipeline would otherwise take and then fail on, so passing it over and saying why is cheaper.
+Planning goes wrong in a few known ways. `to-spec` can leave its Spec labelled `ready-for-agent`, an issue can arrive with no checkbox criteria, and `to-tickets` sometimes writes `Blocked by: #n` into the body without creating the native link. Taken as they are, these would have the pipeline implement a whole Spec as one giant Ticket, work on something verify cannot grade, or start a Ticket before its prerequisites exist. A [Guard](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) passes such a candidate over before it is claimed and says once why, so you fix the Planning output and run again.
 
 ```mermaid
 flowchart TD

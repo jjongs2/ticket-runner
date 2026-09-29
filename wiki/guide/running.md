@@ -7,14 +7,16 @@ description: Starting a Run, giving it Lanes, narrowing it to named Tickets, sto
 
 A [Run](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) exists so you can start one command and walk away. It takes every Ticket that is ready, carries each to a merge or to a human, and ends on its own when nothing it may take is left. Everything you might want to know afterwards is in its summary, on the board, and in the transcripts it leaves on disk.
 
-| Command | What it does | Exit codes | Source |
-|---|---|---|---|
-| `ticket-runner run` | Drains the Frontier | `0` · `1` a Hand-off · `2` nothing taken | [`start.ts` · `startRun`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts) |
-| `ticket-runner run 3 7` | The same Run, narrowed to #3 and #7 | as above | [`run.ts` · `processRun`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts) |
-| `ticket-runner run --lanes 2` | The same Run, two Tickets at once | as above | [`command-line.ts` · `readCommandLine`](https://github.com/jjongs2/ticket-runner/blob/main/src/command-line.ts) |
-| `ticket-runner stop` | Asks the Run in this Target to finish what it holds and take no more | `0` sent · `2` nobody to send it to | [`stop.ts` · `requestStop`](https://github.com/jjongs2/ticket-runner/blob/main/src/stop.ts) |
-| `ticket-runner -v` | Prints which Version this is | `0` | [`adapters/version.ts` · `pipelineVersion`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts) |
-| `ticket-runner -h` | Prints the usage | `0` (`2` when no command is given) | [`command-line.ts` · `USAGE`](https://github.com/jjongs2/ticket-runner/blob/main/src/command-line.ts) |
+| Command | What it does | Exit codes |
+|---|---|---|
+| `ticket-runner run` | Drains the Frontier | `0` · `1` a Hand-off · `2` nothing taken |
+| `ticket-runner run 3 7` | The same Run, narrowed to #3 and #7 | as above |
+| `ticket-runner run --lanes 2` | The same Run, two Tickets at once | as above |
+| `ticket-runner stop` | Asks the Run in this Target to finish what it holds and take no more | `0` sent · `2` nobody to send it to |
+| `ticket-runner -v` | Prints which Version this is | `0` |
+| `ticket-runner -h` | Prints the usage | `0` (`2` when no command is given) |
+
+Source: [`start.ts` · `startRun`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts), [`run.ts` · `processRun`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts), [`command-line.ts` · `readCommandLine`, `USAGE`](https://github.com/jjongs2/ticket-runner/blob/main/src/command-line.ts), [`stop.ts` · `requestStop`](https://github.com/jjongs2/ticket-runner/blob/main/src/stop.ts), [`adapters/version.ts` · `pipelineVersion`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts).
 
 `init` and `remove` are on [Install and remove](./installation.md). An unknown command or option, or a bad argument, is refused with the usage and exit code `2`.
 
@@ -50,6 +52,8 @@ flowchart TD
 What happens to each Ticket inside a Lane is on [From Ticket to merge](./ticket-to-merge.md). Stranded Tickets and Releases are on [Stopping and resuming](./stopping-and-resuming.md).
 
 ### `--lanes`
+
+With one Lane a Run takes the Frontier one Ticket at a time. Most of a Ticket's time is its implement and verify Stages, up to an hour and twenty minutes of sessions that no other Ticket on the Frontier would collide with, so six independent Tickets take six times as long as one. Tickets on the Frontier do not block one another, so more Lanes can take several at once; only the [Landing](./ticket-to-merge.md#the-landing), from the rebase to the merge, takes one Lane at a time.
 
 `--lanes <n>` gives this one Run `n` Lanes, over whatever [`lanes`](./configuration.md#lanes) in `ticket-runner.json` says. How many Tickets a machine can carry at once is that machine's business, not the repository's, so the override lives on the command line. It may go before or after Ticket numbers, and a count above the number of Tickets named is not refused.
 
@@ -140,7 +144,7 @@ A newer-Version line, when there is one, comes above the header ([Install and re
 | `handed` | Handed off to a human: the Stage it stopped at, and why |
 | `released` | Released by the rate limit, at the named Stage. Nobody has to do anything |
 | `skipped` | Passed over, with the reason ([Guards](./planning.md#guards), or the table above) |
-| `noted` | A [Note](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) the row above it made. The number is where the Note went: `comment` on an existing issue, or `new` for the standing Notes issue it opened |
+| `noted` | A [Note](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) the row above made, and where it went: `comment` on an existing issue, or `new` for the standing Notes issue |
 
 | Last line | Why the Run ended |
 |---|---|
@@ -153,13 +157,13 @@ A Run a Stop or a Release ended prints no `blocked` rows, since it never reached
 
 ## Exit codes
 
-| Code | `run` | `init` | `stop` | `remove` |
-|---|---|---|---|---|
-| `0` | Nothing was handed off. A Release counts as taken, and a Run given no numbers that skipped everything still exits `0` | Every reported item passed | The Stop was sent | Everything gone, or nothing to remove |
-| `1` | At least one Ticket was handed off | An item is yours to fix | — | A removal failed |
-| `2` | Nothing was taken: the Run was refused, or it was given numbers and took none of them | Refused | Nobody to send it to | Refused before anything changed |
+| Code | `run` |
+|---|---|
+| `0` | Nothing was handed off. A Release counts as taken, and so does a Run given no numbers that skipped everything |
+| `1` | At least one Ticket was handed off |
+| `2` | Nothing was taken: the Run was refused, or it was given numbers and took none of them |
 
-A stopped Run exits with its outcomes' code as usual. `-v` and `-h` exit `0`; any refused command line exits `2`. Source: [`cli.ts` · `main`](https://github.com/jjongs2/ticket-runner/blob/main/src/cli.ts).
+A stopped Run exits with its outcomes' code as usual. `stop` exits `0` when the Stop was sent and `2` when there was nobody to send it to. `-v` and `-h` exit `0`; any refused command line exits `2`. The codes of `init` and `remove` are on [Install and remove](./installation.md). Source: [`cli.ts` · `main`](https://github.com/jjongs2/ticket-runner/blob/main/src/cli.ts).
 
 ## Logs and transcripts
 
@@ -181,7 +185,7 @@ Sources: [`run-log.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/r
 
 ## From the Claude app
 
-A Run does not need your workstation switched on. Open a Claude Code cloud session on the Target from the Claude app and say "run it". The session's own Claude is the [Operator](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md): it follows the skill `init` wrote into the Target, `.claude/skills/ticket-runner/SKILL.md`, because a cloud session carries nothing over but the repository ([ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)).
+On a workstation, a Run lasts only while the machine stays on: one that sleeps, reboots or is switched off stops the Frontier draining until you are back, and the Run can be watched or stopped only from the terminal that started it. A Run started from the Claude app has neither limit: open a Claude Code cloud session on the Target from the app and say "run it". The session's own Claude is the [Operator](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md): it follows the skill `init` wrote into the Target, `.claude/skills/ticket-runner/SKILL.md`, because a cloud session carries nothing over but the repository ([ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)).
 
 | You say | The Operator |
 |---|---|

@@ -7,13 +7,15 @@ description: GitHub 이슈가 파이프라인이 가져가는 Ticket이 되려�
 
 파이프라인은 계획하지 않습니다. 무엇을 만들지 정하는 데는 판단이 필요하고, 계획하면서 잘못 세운 가정은 Spec과 Ticket, merge된 코드로 굳어져 버려 중간에 잡아낼 관문이 남지 않습니다. 그래서 계획은 사람 몫으로 두고, 파이프라인은 계획이 넘겨준 것만 받아 갑니다([ADR-0001](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0001-humans-plan-the-pipeline-executes.md)). 넘겨받은 것을 믿고 일하는 만큼, 이슈에서 읽는 것은 몇 가지뿐이고 그것도 엄격하게 읽습니다. 그중 하나라도 어긋난 이슈는 짐작하지 않고 거절합니다.
 
-| Ticket에 필요한 것 | 이유 | 읽는 곳 | 출처 |
-|---|---|---|---|
-| `ready-for-agent` 라벨 | Run이 Ticket을 찾는 방법 | 이슈의 라벨 | [`frontier.ts` · `selectFrontier`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts) |
-| 담당자 없음 | 누군가 지정되어 있으면 이미 claim한 것 | 이슈의 담당자 | [`frontier.ts` · `selectFrontier`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts) |
-| Acceptance Criteria | verify Stage가 채점하는 유일한 대상 | 본문이나 코멘트의 `- [ ]` 줄 | [`acceptance-criteria.ts` · `UNCHECKED_BOX`](https://github.com/jjongs2/ticket-runner/blob/main/src/acceptance-criteria.ts) |
-| 네이티브 `blocked by` 연결로 적은 blocker, 모두 닫힘 | 어떤 Ticket을 어떤 순서로 돌릴지 정함 | GitHub의 이슈 의존 관계 | [`gh-tracker.ts` · `listCandidates`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts) |
-| sub-issue 없음 | sub-issue가 있는 이슈는 Ticket이 아니라 Spec | GitHub의 sub-issue | [`guards.ts` · `skipReason`](https://github.com/jjongs2/ticket-runner/blob/main/src/guards.ts) |
+| Ticket에 필요한 것 | 이유 |
+|---|---|
+| `ready-for-agent` 라벨 | Run이 Ticket을 찾는 방법 |
+| 담당자 없음 | 누군가 지정되어 있으면 이미 claim한 것 |
+| Acceptance Criteria: 본문이나 코멘트의 `- [ ]` 줄 | verify Stage가 채점하는 유일한 대상 |
+| 네이티브 `blocked by` 연결로 적은 blocker, 모두 닫힘 | 어떤 Ticket을 어떤 순서로 돌릴지 정함 |
+| 네이티브 sub-issue 없음 | sub-issue가 있는 이슈는 Ticket이 아니라 Spec |
+
+출처: [`frontier.ts` · `selectFrontier`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts), [`acceptance-criteria.ts` · `UNCHECKED_BOX`](https://github.com/jjongs2/ticket-runner/blob/main/src/acceptance-criteria.ts), [`gh-tracker.ts` · `listCandidates`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts), [`guards.ts` · `skipReason`](https://github.com/jjongs2/ticket-runner/blob/main/src/guards.ts).
 
 계획을 맡는 에이전트를 위해 같은 목록을 적어 둔 문서가, `init`이 모든 Target에 넣어 두는 conventions 문서 [`docs/agents/pipeline-conventions.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/agents/pipeline-conventions.md)입니다.
 
@@ -54,7 +56,7 @@ The command must refuse bad input.              ← 아님: 산문
 
 ## Blocker {#blockers}
 
-GitHub의 네이티브 `blocked by` 연결만 셉니다([ADR-0003](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0003-github-native-relations-only.md)). 본문까지 읽으면 진실의 출처가 둘이 되고, 오래된 본문이 조용히 일을 막거나 풀어 버릴 수 있습니다. 출처를 하나로 두면 순서를 GitHub 화면에서 그대로 확인할 수도 있습니다.
+GitHub의 네이티브 `blocked by` 연결만 셉니다([ADR-0003](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0003-github-native-relations-only.md)). 그래서 Run이 가져가는 것은 GitHub 화면에서 막힘이 풀렸다고 보이는 것과 같습니다. 본문까지 읽으면 진실의 출처가 둘이 되고, 오래된 본문이 조용히 일을 막거나 풀어 버릴 수 있습니다.
 
 ```bash
 gh issue edit 23 --add-blocked-by 14,15      # 기존 이슈에 연결 추가
@@ -89,7 +91,7 @@ blocker 중 하나라도 열려 있으면 Ticket은 기다립니다. 같은 Run�
 
 ## Guard {#guards}
 
-[Guard](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)는 계획이 알려진 방식으로 쓸 수 없게 남긴 후보를 claim하기 전에 거릅니다. 어느 Guard든, 걸러 내지 않으면 파이프라인이 가져갔다가 결국 실패할 Ticket을 잡아냅니다. 그러니 넘기면서 이유를 알려 주는 편이 싸게 먹힙니다.
+계획은 몇 가지 알려진 방식으로 어긋납니다. `to-spec`이 Spec에 `ready-for-agent` 라벨을 남겨 두기도 하고, 체크박스 기준 없이 들어온 이슈도 있고, `to-tickets`가 네이티브 연결은 만들지 않고 본문에 `Blocked by: #n`만 적어 두기도 합니다. 이대로 가져가면 파이프라인은 Spec 전체를 거대한 Ticket 하나로 구현하거나, verify가 채점할 수 없는 일을 하거나, 선행 작업이 끝나기도 전에 Ticket을 시작하게 됩니다. [Guard](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)는 이런 후보를 claim하기 전에 넘기고, 왜 넘겼는지 한 번 알려 줍니다. 계획 결과를 고친 뒤 다시 돌리면 됩니다.
 
 ```mermaid
 flowchart TD

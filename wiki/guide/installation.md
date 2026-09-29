@@ -5,15 +5,17 @@ description: What a machine and a repository need, how to install ticket-runner,
 
 # Install and remove
 
-A Run works unattended, so anything missing has to be caught before it starts, not halfway through a Ticket. The setup is split three ways for that reason. `init` puts in place what the pipeline can write itself and reports what only you can fix. `run` checks the same list and refuses a [Target](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) (the repository you start it in) that is missing any of it, without repairing anything. `remove` undoes both `init` and whatever Runs left behind, so trying the pipeline on a repository of your own is safe.
+A Run works unattended, so anything missing has to be caught before it starts, not halfway through a Ticket. Without a setup step, you would learn what a repository needs (ignored directories, triage labels, squash merging, the conventions a Stage reads) by reading the source, or a Run would put it there on the fly. The setup is split three ways instead. `init` puts in place what the pipeline can write itself and reports what only you can fix. `run` checks the same list and refuses a [Target](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) (the repository you start it in) that is missing any of it, without repairing anything. `remove` undoes both `init` and whatever Runs left behind, so trying the pipeline on a repository of your own is safe.
 
-| Step | Command | What it does | Source |
-|---|---|---|---|
-| Install | `npm install -g ticket-runner` | Puts the `ticket-runner` command on the machine | [`package.json`](https://github.com/jjongs2/ticket-runner/blob/main/package.json) |
-| Set a Target up | `ticket-runner init` | Writes the pipeline's files, sets up GitHub, reports the rest | [`init.ts` · `initTarget`](https://github.com/jjongs2/ticket-runner/blob/main/src/init.ts) |
-| Start work | `ticket-runner run` | Refuses a Target that is not set up; see [Running](./running.md) | [`readiness.ts` · `readinessRefusal`](https://github.com/jjongs2/ticket-runner/blob/main/src/readiness.ts) |
-| Take it out | `ticket-runner remove` | Removes what `init` wrote and what Runs left | [`remove.ts` · `removeTarget`](https://github.com/jjongs2/ticket-runner/blob/main/src/remove.ts) |
-| Uninstall | `npm uninstall -g ticket-runner` | Removes the command from the machine | — |
+| Step | Command | What it does |
+|---|---|---|
+| Install | `npm install -g ticket-runner` | Puts the `ticket-runner` command on the machine |
+| Set a Target up | `ticket-runner init` | Writes the pipeline's files, sets up GitHub, reports the rest |
+| Start work | `ticket-runner run` | Refuses a Target that is not set up; see [Running](./running.md) |
+| Take it out | `ticket-runner remove` | Removes what `init` wrote and what Runs left |
+| Uninstall | `npm uninstall -g ticket-runner` | Removes the command from the machine |
+
+Source: [`package.json`](https://github.com/jjongs2/ticket-runner/blob/main/package.json), [`init.ts` · `initTarget`](https://github.com/jjongs2/ticket-runner/blob/main/src/init.ts), [`readiness.ts` · `readinessRefusal`](https://github.com/jjongs2/ticket-runner/blob/main/src/readiness.ts), [`remove.ts` · `removeTarget`](https://github.com/jjongs2/ticket-runner/blob/main/src/remove.ts).
 
 ## Requirements
 
@@ -88,10 +90,10 @@ Running it twice is running it once: every write first asks whether the Target a
 
 | Item | Where | On a later `init` |
 |---|---|---|
-| Two ignore lines, each under a comment | `.gitignore`: `.worktrees/` and `.ticket-runner/` | Added only if not already ignored, in any spelling (`.worktrees`, `/.worktrees/`) |
+| Two ignore lines | `.gitignore`: `.worktrees/`, `.ticket-runner/` | Added unless already ignored, in any spelling |
 | An empty config file | `ticket-runner.json`, containing `{}` | Never touched once it exists |
-| The conventions document, stamped with the Version that wrote it | `docs/agents/pipeline-conventions.md` | Rewritten when its text differs |
-| A section pointing at that document | `CLAUDE.md`, created if missing | Added only when `CLAUDE.md` does not already mention the document's path |
+| The conventions document, stamped with its Version | `docs/agents/pipeline-conventions.md` | Rewritten when its text differs |
+| A section pointing at that document | `CLAUDE.md`, created if missing | Added unless `CLAUDE.md` already names the document |
 | The Operator's skill | `.claude/skills/ticket-runner/SKILL.md` | Rewritten when its text differs |
 
 Files you own (`.gitignore`, `CLAUDE.md`) only ever gain lines. The conventions document and the skill are the pipeline's own text, so an edit there does not survive the next `init`. There is one exception. The document's first line carries a hidden `<!-- ticket-runner:version <number> -->` mark. When that mark names a *newer* Version than the one running, `init` leaves the document and the skill exactly as they are and says to upgrade instead, because rewriting them would take the Target backwards.
@@ -100,9 +102,9 @@ Files you own (`.gitignore`, `CLAUDE.md`) only ever gain lines. The conventions 
 
 | Setting | What `init` does |
 |---|---|
-| The six triage labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`, `in-progress`) | Creates whichever are missing, under the names [`labels`](./configuration.md#labels) gives; existing ones are left untouched |
+| The six triage labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`, `in-progress`) | Creates the missing ones, named as [`labels`](./configuration.md#labels) says; leaves the rest |
 | Squash merging | Turns it on; no other merge method is touched |
-| Deleting a pull request's branch when it merges | Switches it on. A cloud Host cannot delete a branch itself, so this is how a merged branch goes there ([ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)) |
+| Deleting a pull request's branch when it merges | Switches it on, since a cloud Host cannot delete a branch itself ([ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)) |
 
 When `gh` is not authenticated, nothing on GitHub is done and the report says so.
 
@@ -208,17 +210,27 @@ Every refusal names what to do next. The lock is refused whoever holds it, even 
 
 ### What goes and what stays
 
-| Removed | Left, and why |
-|---|---|
-| `docs/agents/pipeline-conventions.md`, the Operator's skill, and any directory that leaves empty | The five triage labels other than `in-progress`: Planning uses them too. The report gives the `gh label delete` line for each |
-| The `CLAUDE.md` section `init` wrote, or the whole file when that section is all it holds | A `CLAUDE.md` section you reworded: it may be yours now |
-| `.gitignore` lines still under the comment `init` wrote, or the whole file when they are all it holds | An ignore line under a comment of your own |
-| `.ticket-runner/` (Run logs and transcripts) | Squash merging and branch deletion on merge: the repository may have had them before `init` |
-| Every `.worktrees/ticket-<n>` worktree and its branch, other local `agent/` branches, and `.worktrees/` once empty | `.worktrees/` when it holds anything else, and its ignore line with it |
-| The `in-progress` label, from every issue that wore it | `agent/` branches on GitHub, and any pull requests open on them |
-| The `ticket-runner/state` branch; the report names every Ticket that can no longer be resumed | The standing Notes issue, and every comment a Run wrote: they are addressed to humans |
-| `ticket-runner.json`, last, and only if every removal above worked | — |
-| The `ticket-runner/lock` branch, last; released rather than deleted if a removal failed | — |
+Removed:
+
+- `docs/agents/pipeline-conventions.md`, the Operator's skill, and any directory that leaves empty.
+- The `CLAUDE.md` section `init` wrote, or the whole file when that section is all it holds.
+- `.gitignore` lines still under the comment `init` wrote, or the whole file when they are all it holds.
+- `.ticket-runner/`: Run logs and transcripts.
+- Every `.worktrees/ticket-<n>` worktree and its branch, other local `agent/` branches, and `.worktrees/` once empty.
+- The `in-progress` label, from every issue that wore it.
+- The `ticket-runner/state` branch. The report names every Ticket that can no longer be resumed.
+- `ticket-runner.json`, last, and only if every removal above worked.
+- The `ticket-runner/lock` branch, last. It is released rather than deleted if a removal failed.
+
+Left:
+
+- The five triage labels other than `in-progress`: Planning uses them too. The report gives the `gh label delete` line for each.
+- A `CLAUDE.md` section you reworded: it may be yours now.
+- An ignore line under a comment of your own.
+- `.worktrees/` when it holds anything else, and its ignore line with it.
+- Squash merging and branch deletion on merge: the repository may have had them before `init`.
+- `agent/` branches on GitHub, and any pull requests open on them.
+- The standing Notes issue, and every comment a Run wrote: they are addressed to humans.
 
 A removal that fails is reported and the rest carry on. Running `remove` again is a first run over what is left, which is why the config file stays until the end: it names the labels the next `remove` looks for.
 
