@@ -21,6 +21,23 @@
 .vp-doc table {
   display: table;
   width: 100%;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.vp-doc th,
+.vp-doc td {
+  padding: 8px 12px;
+}
+/* A first column that is only a name (a field, a command) never breaks; prose there still wraps. */
+.vp-doc td:first-child:has(> code:only-child),
+.vp-doc td:first-child:has(> a:only-child) {
+  white-space: nowrap;
+}
+.vp-doc tr:nth-child(2n) {
+  background-color: transparent;
+}
+.vp-doc tbody tr:hover {
+  background-color: var(--vp-c-bg-soft);
 }
 
 /* Mermaid: the theme variables colour most of a diagram; these catch what they miss. */

@@ -9,19 +9,19 @@ Target은 설정 없이도 돌아가야 하므로 모든 필드는 선택이고,
 
 파일은 Target 루트의 `ticket-runner.json`입니다. `JSON.parse`로 읽는 평범한 JSON이라 주석을 넣을 수 없습니다.
 
-| 필드 | 타입 | 기본값 | 바꾸는 것 | 출처 |
-|---|---|---|---|---|
-| [`baseBranch`](#basebranch) | 문자열 | GitHub의 기본 branch | Ticket을 따 오고, rebase하고, merge하는 branch | [`base-branch.ts` · `resolveBaseBranch`](https://github.com/jjongs2/ticket-runner/blob/main/src/base-branch.ts) |
-| [`lanes`](#lanes) | 1 이상의 정수 | `1` | Run이 동시에 쥐는 Ticket 수 | [`run.ts` · `processRun`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts) |
-| [`checks`](#checks) | 문자열 배열 | `package.json`에 정의된 것 중 `npm test`와 `npm run typecheck` | 파이프라인이 Ticket을 거르려고 직접 돌리는 명령 | [`config.ts` · `inferChecks`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts) |
-| [`checkTimeoutMinutes`](#checks) | 0보다 큰 수 | `15` | Check 명령 하나당 wall-clock 한도 | [`orchestrator.ts` · `runChecks`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts) |
-| [`gates.checks`](#gates) | 불리언 | `true` | Check가 하나도 없어도 Run을 시작할지 | [`startup.ts` · `startupMessages`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts) |
-| [`gates.ci`](#gates) | 불리언 | `true` | CI check가 없는 pull request를 merge할지 | [`orchestrator.ts` · `requireGreenCi`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts) |
-| [`stages`](#stages) | 객체 | 아래 참고 | Stage별 모델, effort, 한도, 추가 지시 | [`config.ts` · `STAGE_DEFAULTS`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts) |
-| [`permissionMode`](#permissionmode) | `"auto"`, `"acceptEdits"`, `"bypassPermissions"` | `"auto"` | 모든 Stage 세션이 묻지 않고 할 수 있는 일 | [`adapters/claude-agent-runner.ts` · `buildArgs`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts) |
-| [`ciTimeoutMinutes`](#ci) | 0보다 큰 수 | `30` | pull request의 CI를 기다리는 시간 | [`orchestrator.ts` · `requireGreenCi`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts) |
-| [`ciGraceMinutes`](#ci) | 0보다 큰 수 | `5` | "아직 등록된 check 없음"을 대기 중으로 봐 주는 시간 | [`adapters/gh-tracker.ts` · `waitForCi`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts) |
-| [`labels`](#labels) | 문자열 객체 | 기본 이름 여섯 개 | 파이프라인이 읽고 쓰는 라벨 이름 | [`config.ts` · `LABEL_DEFAULTS`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts) |
+| 필드 | 기본값 | 바꾸는 것 |
+|---|---|---|
+| [`baseBranch`](#basebranch) | GitHub의 기본 branch | Ticket을 따 오고, rebase하고, merge하는 branch |
+| [`lanes`](#lanes) | `1` | Run이 동시에 쥐는 Ticket 수 |
+| [`checks`](#checks) | `package.json`에서 추론 | 파이프라인이 Ticket을 거르려고 직접 돌리는 명령 |
+| [`checkTimeoutMinutes`](#checks) | `15` | Check 명령 하나당 wall-clock 한도 |
+| [`gates.checks`](#gates) | `true` | Check가 하나도 없어도 Run을 시작할지 |
+| [`gates.ci`](#gates) | `true` | CI check가 없는 pull request를 merge할지 |
+| [`stages`](#stages) | 아래 참고 | Stage별 모델, effort, 한도, 추가 지시 |
+| [`permissionMode`](#permissionmode) | `"auto"` | 모든 Stage 세션이 묻지 않고 할 수 있는 일 |
+| [`ciTimeoutMinutes`](#ci) | `30` | pull request의 CI를 기다리는 시간 |
+| [`ciGraceMinutes`](#ci) | `5` | "아직 등록된 check 없음"을 대기 중으로 봐 주는 시간 |
+| [`labels`](#labels) | 기본 이름 여섯 개 | 파이프라인이 읽고 쓰는 라벨 이름 |
 
 여러 필드를 설정한 예:
 
@@ -52,13 +52,20 @@ Invalid ticket-runner.json: stages: Unrecognized key: "implment". Refused by tic
 
 ## `baseBranch` {#basebranch}
 
+- `baseBranch`: 문자열 ([`base-branch.ts` · `resolveBaseBranch`](https://github.com/jjongs2/ticket-runner/blob/main/src/base-branch.ts))
+
 [Base branch](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)는 Run이 Ticket마다 branch를 따 오고, rebase하고, pull request가 향하고, merge 뒤에 메인 체크아웃을 pull하는 branch입니다. 이 필드가 없으면 GitHub가 저장소의 기본 branch라고 부르는 것을 쓰니, `master`를 쓰는 Target도 따로 설정할 필요가 없습니다. Run이 시작할 때 한 번 정합니다.
 
 ## `lanes` {#lanes}
 
+- `lanes`: 1 이상의 정수 ([`run.ts` · `processRun`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts))
+
 Run이 동시에 쥐는 Ticket 수입니다. [Lane](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) 하나에 Ticket 하나. `run --lanes <n>`이 한 Run에 한해 덮어씁니다. Lane들은 각자의 worktree에서 동시에 Check를 돌리니, Check가 포트나 데이터베이스처럼 함께 써야 하는 것을 필요로 하는 Target은 `1`로 두세요. Landing(rebase부터 merge까지)에는 한 번에 Lane 하나만 들어가므로, Lane을 늘리면 implement와 verify가 빨라질 뿐 merge가 빨라지지는 않습니다([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)).
 
 ## `checks` {#checks}
+
+- `checks`: 문자열 배열 ([`config.ts` · `inferChecks`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts))
+- `checkTimeoutMinutes`: 0보다 큰 수 ([`orchestrator.ts` · `runChecks`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts))
 
 [Check](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)는 파이프라인이 직접 돌리는 결정적인 명령이지, 에이전트의 의견이 아닙니다. 각 명령은 Ticket의 worktree에서 셸을 통해 돌고, implement Stage 뒤, fix Stage 뒤, rebase 충돌을 해결한 뒤에 실행됩니다. 0이 아닌 코드로 끝나면 게이트를 통과하지 못하고, Ticket은 [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)을 씁니다.
 
@@ -67,6 +74,9 @@ Run이 동시에 쥐는 Ticket 수입니다. [Lane](https://github.com/jjongs2/t
 `checkTimeoutMinutes`는 모든 명령에 하나로 적용되는 한도이고, 명령마다 이 시간을 통째로 받습니다. 한도에서 kill된 명령은 실패한 Check이고 다른 실패처럼 Fix budget을 씁니다. 멈춰 버리는 테스트 스위트는 branch 자기 코드의 결함이기 때문입니다. fix Stage에는 Check가 실패한 게 아니라 멈췄다는 사실이 전달됩니다.
 
 ## `gates` {#gates}
+
+- `gates.checks`: 불리언 ([`startup.ts` · `startupMessages`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts))
+- `gates.ci`: 불리언 ([`orchestrator.ts` · `requireGreenCi`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts))
 
 | 설정 | 켜져 있을 때(기본) | `false`일 때 |
 |---|---|---|
@@ -82,6 +92,8 @@ No Check commands are configured and none could be inferred from package.json. A
 ```
 
 ## `stages` {#stages}
+
+- `stages`: 객체 ([`config.ts` · `STAGE_DEFAULTS`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts))
 
 Stage 하나는 `claude -p` 세션 하나입니다. `stages`는 Stage마다 객체를 받고, 안의 키는 모두 선택입니다.
 
@@ -104,15 +116,22 @@ Stage 하나는 `claude -p` 세션 하나입니다. `stages`는 Stage마다 객�
 
 ## `permissionMode` {#permissionmode}
 
+- `permissionMode`: `"auto"`, `"acceptEdits"`, `"bypassPermissions"` ([`adapters/claude-agent-runner.ts` · `buildArgs`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts))
+
 모든 Stage에 `--permission-mode`로 넘깁니다. 모든 Stage는 `--permission-prompts none`으로도 돕니다. 지켜보는 사람이 없으니, 물어봐야 할 일은 묻는 대신 거부됩니다. 고를 수 있는 모드는 무인으로 일할 수 있는 것들뿐입니다. `plan`이나 물어보는 모드로는 아무 일도 하지 않는 Stage가 될 게 뻔하니까요.
 
 ## CI {#ci}
+
+- `ciTimeoutMinutes`: 0보다 큰 수 ([`orchestrator.ts` · `requireGreenCi`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts))
+- `ciGraceMinutes`: 0보다 큰 수 ([`adapters/gh-tracker.ts` · `waitForCi`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts))
 
 Landing이 pull request를 연 뒤, Run은 최대 `ciTimeoutMinutes` 동안 check를 기다립니다. 시간 안에 끝나지 않는 CI는 Fix budget을 쓰지 않는 Hand-off입니다. 남의 인프라 문제이지, fix Stage가 고칠 수 있는 결함이 아니기 때문입니다.
 
 `ciGraceMinutes`는 GitHub가 check run을 등록하기 전의 틈을 메웁니다. 이 틈이 3분을 넘긴 적도 있습니다. 이 시간이 지나기 전까지는 check가 아직 없는 pull request를 "없음"이 아니라 대기 중으로 봅니다. `ciTimeoutMinutes`보다 길어지지는 않습니다. Actions 대기열이 느린 Target이라면 늘리세요. CI 워크플로가 없는 Target은 merge할 때마다 이 시간을 한 번씩 기다리고, Landing에는 한 번에 Lane 하나만 들어가니 그동안 다른 Lane의 merge도 함께 기다립니다.
 
 ## `labels` {#labels}
+
+- `labels`: 문자열 객체 ([`config.ts` · `LABEL_DEFAULTS`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts))
 
 Target이 이미 다른 라벨 이름을 쓰고 있다면 triage 어휘의 이름을 바꾸세요. 준 키만 바뀝니다.
 

@@ -9,19 +9,19 @@ A Target should work with no settings at all, so every field is optional and `in
 
 The file is `ticket-runner.json` at the Target's root. It is plain JSON, read with `JSON.parse`, so it cannot hold comments.
 
-| Field | Type | Default | What it changes | Source |
-|---|---|---|---|---|
-| [`baseBranch`](#basebranch) | string | GitHub's default branch | The branch Tickets are branched from, rebased onto and merged into | [`base-branch.ts` · `resolveBaseBranch`](https://github.com/jjongs2/ticket-runner/blob/main/src/base-branch.ts) |
-| [`lanes`](#lanes) | whole number ≥ 1 | `1` | How many Tickets a Run holds at once | [`run.ts` · `processRun`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts) |
-| [`checks`](#checks) | array of strings | `npm test` and `npm run typecheck`, whichever `package.json` defines | The commands the pipeline runs itself to gate a Ticket | [`config.ts` · `inferChecks`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts) |
-| [`checkTimeoutMinutes`](#checks) | number > 0 | `15` | Wall-clock limit for each Check command | [`orchestrator.ts` · `runChecks`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts) |
-| [`gates.checks`](#gates) | boolean | `true` | Whether a Run may start with no Check at all | [`startup.ts` · `startupMessages`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts) |
-| [`gates.ci`](#gates) | boolean | `true` | Whether a pull request with no CI checks may merge | [`orchestrator.ts` · `requireGreenCi`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts) |
-| [`stages`](#stages) | object | see below | Model, effort, limits and extra instructions per Stage | [`config.ts` · `STAGE_DEFAULTS`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts) |
-| [`permissionMode`](#permissionmode) | `"auto"`, `"acceptEdits"` or `"bypassPermissions"` | `"auto"` | What every Stage session may do without asking | [`adapters/claude-agent-runner.ts` · `buildArgs`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts) |
-| [`ciTimeoutMinutes`](#ci) | number > 0 | `30` | How long a Run waits for a pull request's CI | [`orchestrator.ts` · `requireGreenCi`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts) |
-| [`ciGraceMinutes`](#ci) | number > 0 | `5` | How long "no checks registered yet" still counts as pending | [`adapters/gh-tracker.ts` · `waitForCi`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts) |
-| [`labels`](#labels) | object of strings | the six default names | The label names the pipeline reads and writes | [`config.ts` · `LABEL_DEFAULTS`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts) |
+| Field | Default | What it changes |
+|---|---|---|
+| [`baseBranch`](#basebranch) | GitHub's default branch | The branch Tickets are branched from, rebased onto and merged into |
+| [`lanes`](#lanes) | `1` | How many Tickets a Run holds at once |
+| [`checks`](#checks) | inferred from `package.json` | The commands the pipeline runs itself to gate a Ticket |
+| [`checkTimeoutMinutes`](#checks) | `15` | Wall-clock limit for each Check command |
+| [`gates.checks`](#gates) | `true` | Whether a Run may start with no Check at all |
+| [`gates.ci`](#gates) | `true` | Whether a pull request with no CI checks may merge |
+| [`stages`](#stages) | see below | Model, effort, limits and extra instructions per Stage |
+| [`permissionMode`](#permissionmode) | `"auto"` | What every Stage session may do without asking |
+| [`ciTimeoutMinutes`](#ci) | `30` | How long a Run waits for a pull request's CI |
+| [`ciGraceMinutes`](#ci) | `5` | How long "no checks registered yet" still counts as pending |
+| [`labels`](#labels) | the six default names | The label names the pipeline reads and writes |
 
 A file that sets several of them:
 
@@ -52,13 +52,20 @@ The second sentence is added only for an unknown key. On a machine with a stale 
 
 ## `baseBranch`
 
+- `baseBranch`: string ([`base-branch.ts` · `resolveBaseBranch`](https://github.com/jjongs2/ticket-runner/blob/main/src/base-branch.ts))
+
 The [Base branch](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) is what a Run branches each Ticket from, rebases it onto, targets its pull request at, and pulls the main checkout to after a merge. Without this field it is whatever GitHub calls the repository's default branch, so a Target on `master` needs no setting. It is resolved once at the start of a Run.
 
 ## `lanes`
 
+- `lanes`: whole number ≥ 1 ([`run.ts` · `processRun`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts))
+
 How many Tickets a Run holds at once, one per [Lane](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md). `run --lanes <n>` overrides it for one Run. Lanes run their Checks at the same time, each in its own worktree, so a Target whose Checks need a port, a database or anything else they would share keeps this at `1`. Only one Lane at a time is in the Landing (rebase to merge), so more Lanes speed up implement and verify, not merging ([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)).
 
 ## `checks`
+
+- `checks`: array of strings ([`config.ts` · `inferChecks`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts))
+- `checkTimeoutMinutes`: number > 0 ([`orchestrator.ts` · `runChecks`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts))
 
 A [Check](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) is a deterministic command the pipeline runs itself, never an agent's opinion. Each one runs through the shell in the Ticket's worktree, after the implement Stage, after a fix Stage and after a resolved rebase conflict. A non-zero exit fails the gate, and the Ticket spends its [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md).
 
@@ -67,6 +74,9 @@ Without this field the pipeline infers `npm test` and `npm run typecheck` from w
 `checkTimeoutMinutes` is one limit for every command, and each command gets the whole of it. A command killed at the limit is a failed Check and spends the Fix budget like any other, because a suite that hangs is a defect in the branch's own code. The fix Stage is told that the Check hung rather than failed.
 
 ## `gates`
+
+- `gates.checks`: boolean ([`startup.ts` · `startupMessages`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts))
+- `gates.ci`: boolean ([`orchestrator.ts` · `requireGreenCi`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts))
 
 | Setting | When on (the default) | When `false` |
 |---|---|---|
@@ -82,6 +92,8 @@ No Check commands are configured and none could be inferred from package.json. A
 ```
 
 ## `stages`
+
+- `stages`: object ([`config.ts` · `STAGE_DEFAULTS`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts))
 
 Each Stage is one `claude -p` session. `stages` takes an object per Stage, and every key in it is optional:
 
@@ -104,15 +116,22 @@ The model and effort are always passed, never left to the machine's own defaults
 
 ## `permissionMode`
 
+- `permissionMode`: `"auto"`, `"acceptEdits"` or `"bypassPermissions"` ([`adapters/claude-agent-runner.ts` · `buildArgs`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts))
+
 Passed to every Stage as `--permission-mode`. Every Stage also runs with `--permission-prompts none`: nobody is watching, so anything that would prompt is denied instead. The modes on offer are the ones that can do work unattended; `plan` and the prompting modes would guarantee a Stage that does nothing.
 
 ## CI
+
+- `ciTimeoutMinutes`: number > 0 ([`orchestrator.ts` · `requireGreenCi`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts))
+- `ciGraceMinutes`: number > 0 ([`adapters/gh-tracker.ts` · `waitForCi`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts))
 
 After the Landing opens a pull request, the Run waits up to `ciTimeoutMinutes` for its checks. CI that does not finish in time is a Hand-off that spends no Fix budget: it is somebody else's infrastructure, not a defect a fix Stage could mend.
 
 `ciGraceMinutes` covers the gap before GitHub registers a check run, which has taken over three minutes. Until it passes, a pull request with no checks yet counts as pending rather than as having none. It never outlasts `ciTimeoutMinutes`. Raise it on a Target whose Actions queue slowly. A Target with no CI workflow waits it out once per merge, and since only one Lane is in the Landing at a time, that wait holds the other Lanes' merges too.
 
 ## `labels`
+
+- `labels`: object of strings ([`config.ts` · `LABEL_DEFAULTS`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts))
 
 Rename the triage vocabulary when the Target already uses other label strings. Only the keys you give change.
 
