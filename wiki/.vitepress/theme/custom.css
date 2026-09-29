@@ -28,11 +28,6 @@
 .vp-doc td {
   padding: 8px 12px;
 }
-/* A first column that is only a name (a field, a command) never breaks; prose there still wraps. */
-.vp-doc td:first-child:has(> code:only-child),
-.vp-doc td:first-child:has(> a:only-child) {
-  white-space: nowrap;
-}
 .vp-doc tr:nth-child(2n) {
   background-color: transparent;
 }
@@ -68,6 +63,13 @@
   background-color: #161b22 !important;
   fill: #161b22 !important;
   color: #e6edf3 !important;
+}
+/* Mermaid sizes a label's box at its own line height; the page's taller one would clip the text. */
+.vp-doc .mermaid foreignObject div,
+.vp-doc .mermaid foreignObject span,
+.vp-doc .mermaid foreignObject p {
+  line-height: 1.5 !important;
+  margin: 0;
 }
 .mermaid text,
 .mermaid .label,
