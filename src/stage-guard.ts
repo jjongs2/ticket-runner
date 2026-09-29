@@ -1,5 +1,5 @@
 /**
- * The Stage boundary: a Stage session may not run the pipeline it is building.
+ * The Stage boundary: a Stage session may not run the pipeline that started it.
  *
  * Every Stage the AgentRunner starts carries the Stage mark, an environment
  * variable the child inherits, and the CLI refuses to do anything while it is
