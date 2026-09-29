@@ -39,7 +39,8 @@ export interface StalenessQuestion {
  *
  * What has been published as a GitHub Release is the question rather than the
  * highest tag, because a tag a workflow has not finished publishing is not a
- * Version anybody can install yet.
+ * Version anybody can install yet. The tag workflow makes the GitHub Release
+ * only once npm has the Version, so the answer names one the upgrade finds.
  */
 export async function newerVersionLine({
   tracker,
@@ -53,7 +54,7 @@ export async function newerVersionLine({
   const published = latest === undefined ? undefined : tagNumber(latest);
   if (published === undefined || !isHigher(published, own)) return undefined;
 
-  return `A newer Version is out: ${published}, and this is ${own} — upgrade with \`npm install -g "github:${repository}#semver:*"\`.`;
+  return `A newer Version is out: ${published}, and this is ${own} — upgrade with \`npm install -g ticket-runner\`.`;
 }
 
 /**

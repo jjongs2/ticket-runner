@@ -16,7 +16,7 @@ Install only what this Host does not already have. What the cloud environment's 
 1. The pipeline. If `ticket-runner --version` answers, use that copy. Otherwise read the Version on the first line of `docs/agents/pipeline-conventions.md`, the `<number>` in `<!-- ticket-runner:version <number> -->`, and install that Version:
 
    ```bash
-   npm install -g "github:jjongs2/ticket-runner#v<number>"
+   npm install -g ticket-runner@<number>
    ```
 
    If the first line carries no Version, install nothing and tell the human to run `ticket-runner init` on this repository from a workstation.

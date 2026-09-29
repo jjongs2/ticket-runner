@@ -119,7 +119,6 @@ async function remove(
     yes?: boolean;
     interactive?: boolean;
     answer?: string;
-    repository?: string;
   } = {},
 ) {
   const out: string[] = [];
@@ -128,7 +127,6 @@ async function remove(
   const code = await removeTarget({
     repoRoot,
     version: VERSION,
-    ...(overrides.repository === undefined ? {} : { repository: overrides.repository }),
     config: loadConfig(repoRoot, VERSION),
     tracker,
     workspace,
@@ -680,11 +678,11 @@ describe("refusing before anything changes", () => {
   it("refuses a Target a newer Version set up, and names the upgrade", async () => {
     const err = await unchanged(
       () => write(CONVENTIONS_PATH, conventionsDoc("0.6.0")),
-      () => remove({ repository: "jjongs2/ticket-runner" }),
+      () => remove(),
     );
 
     expect(err).toBe(
-      'Refusing to remove: 0.6.0 set this Target up and this is 0.5.2, so it may have left things this Version does not know to remove. Upgrade with `npm install -g "github:jjongs2/ticket-runner#semver:*"`, then run `ticket-runner remove` again.',
+      "Refusing to remove: 0.6.0 set this Target up and this is 0.5.2, so it may have left things this Version does not know to remove. Upgrade with `npm install -g ticket-runner`, then run `ticket-runner remove` again.",
     );
   });
 

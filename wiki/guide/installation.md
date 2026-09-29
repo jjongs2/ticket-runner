@@ -49,10 +49,10 @@ Installing straight from GitHub's Version tags works too. The range asks for the
 npm install -g "github:jjongs2/ticket-runner#semver:*"
 ```
 
-`init` and `run` both look up the newest Version published as a GitHub Release. When it is above the number this copy reports, they print one line, and refuse nothing:
+`init` and `run` both look up the newest Version published as a GitHub Release, which a Version gets only once npm has it. When it is above the number this copy reports, they print one line, and refuse nothing:
 
 ```text
-A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g "github:jjongs2/ticket-runner#semver:*"`.
+A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g ticket-runner`.
 ```
 
 Nothing is printed when this copy is the latest or ahead of it, or when GitHub could not be asked at all (no network, no `gh`). A development checkout is compared by number only.

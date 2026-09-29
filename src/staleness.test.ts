@@ -35,7 +35,8 @@ describe("a newer Version being out", () => {
 
     expect(line).toContain("0.5.0");
     expect(line).toContain("0.4.0");
-    expect(line).toContain(`npm install -g "github:${REPOSITORY}#semver:*"`);
+    expect(line).toContain("upgrade with `npm install -g ticket-runner`");
+    expect(line).not.toContain(REPOSITORY);
     expect(line?.split("\n")).toHaveLength(1);
   });
 

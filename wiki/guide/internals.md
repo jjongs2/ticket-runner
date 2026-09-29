@@ -170,7 +170,7 @@ This is why every external effect goes through a port, the pipeline's own bookke
 
 Without Versions, two installs could report the same number and run code weeks apart, so a bug read off a transcript could not be tied to a commit, and a stale install showed only when a Target behaved like last week's pipeline. Nothing the pipeline left in a Target said which pipeline wrote it either, so two machines on different installs rewrote the same conventions document back and forth.
 
-A [Version](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) is a number that `main` carries as a tag `v<x.y.z>`, with a GitHub Release. An installed copy reports it. Machines install a Version, never `main`, so two machines that report `0.5.2` run the same code ([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
+A [Version](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) is a number that `main` carries as a tag `v<x.y.z>`, published to npm and with a GitHub Release. An installed copy reports it. Machines install a Version, never `main`, so two machines that report `0.5.2` run the same code ([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
 
 ### How one is cut
 
@@ -181,14 +181,15 @@ flowchart LR
     CK -- refused --> PR
     CK -- passes --> MG["human reviews and merges"]
     MG --> TG["version-tag.yml: tag v‹number›"]
-    TG --> RL["GitHub Release, body = the CHANGELOG section"]
+    TG --> NP["npm: ticket-runner@‹number›, from the tag"]
+    NP --> RL["GitHub Release, body = the CHANGELOG section"]
 ```
 <!-- Sources: src/version-pr.ts, scripts/version.ts, .github/workflows/version-pr.yml, .github/workflows/version-tag.yml -->
 
 - **The number.** It goes up by a minor when a Spec has closed since the last Version, and by a patch for everything else, a small feature included. The only question is whether a Spec closed. A human decides when to cut, because that is a Planning decision.
 - **The Version PR.** It raises `package.json` and the lock file, adds the Version's section to `CHANGELOG.md`, and re-marks this repository's own conventions document with `npx tsx scripts/version.ts mark`. The [`/cut-a-version`](https://github.com/jjongs2/ticket-runner/blob/main/.claude/skills/cut-a-version/SKILL.md) skill drafts it; it never merges.
 - **The check** lists every reason at once: the number is not above every tag, the lock file disagrees, the section is missing, or the section has no `### After upgrading` heading. A pull request that leaves the number alone passes untouched.
-- **The tag workflow** tags the merge commit and publishes the section as the Release, or GitHub's generated notes if the section is missing. It finishes whichever half is missing, so a re-run heals a half-cut Version.
+- **The tag workflow** tags the merge commit, publishes the tagged commit to npm by trusted publishing, with no npm token anywhere, and then publishes the section as the Release, or GitHub's generated notes if the section is missing. It makes whichever of the three is missing, so a re-run heals a half-cut Version.
 
 release-please and Changesets were both turned down. The first needed a yearly-expiring token, a repository setting and a rule that only `feat`/`fix` cut a Version. The second would have put a changeset file into every Stage's job.
 
@@ -220,17 +221,17 @@ The conventions document's mark, `<!-- ticket-runner:version <number> -->`, has 
 
 ### The newer-Version check
 
-A Run and `init` each look up the highest published Version of the pipeline's own repository. They read it from `package.json`'s `repository` field, so a fork asks about itself. The lookup reads GitHub Releases, skipping drafts and prereleases, because a tag whose Release is not out yet is not installable. Only numbers are compared, so a checkout running past the latest Version is not stale.
+A Run and `init` each look up the highest published Version of the pipeline's own repository. They read it from `package.json`'s `repository` field, so a fork asks about itself. The lookup reads GitHub Releases, skipping drafts and prereleases, because the tag workflow makes a Release only once npm has the Version, so a Release names one the upgrade can install. Only numbers are compared, so a checkout running past the latest Version is not stale.
 
 When a newer one is out, [`staleness.ts` · `newerVersionLine`](https://github.com/jjongs2/ticket-runner/blob/main/src/staleness.ts) prints one line, at the top of the Run log and again at the head of the summary:
 
 ```
-A newer Version is out: 0.6.0, and this is 0.5.2 — upgrade with `npm install -g "github:jjongs2/ticket-runner#semver:*"`.
+A newer Version is out: 0.6.0, and this is 0.5.2 — upgrade with `npm install -g ticket-runner`.
 ```
 
 A lookup that cannot be made (no network, no `gh`, a repository nobody can see) prints nothing. Nothing is ever refused over it.
 
-Install and upgrade with `npm install -g ticket-runner`, or try it through `npx` without one ([Try it without installing](./installation.md#try-it-without-installing)). The GitHub tag range the message names, `npm install -g "github:jjongs2/ticket-runner#semver:*"`, also installs the highest Version tag. See [Installation](./installation.md).
+Install and upgrade with `npm install -g ticket-runner`, or try it through `npx` without one ([Try it without installing](./installation.md#try-it-without-installing)). The GitHub tag range, `npm install -g "github:jjongs2/ticket-runner#semver:*"`, also installs the highest Version tag. See [Installation](./installation.md).
 
 ## The ADRs in brief
 
@@ -274,7 +275,7 @@ The full records are in [`docs/adr/`](https://github.com/jjongs2/ticket-runner/t
 
 ### [ADR-0007: A Version is cut by a human, and installs follow tags](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md) {#adr-0007}
 
-- **Decision**: A human cuts a Version by merging a Version PR; installs follow tags.
+- **Decision**: A human cuts a Version by merging a Version PR; the tag workflow publishes it to npm, and installs come from there. The GitHub tag range keeps working.
 - **Why**: When to cut is a Planning decision. A number is only a useful stamp if two machines with it run the same code.
 - **Cost**: Version notes are written by hand, with an agent's help.
 

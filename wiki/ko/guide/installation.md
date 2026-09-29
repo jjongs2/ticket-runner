@@ -49,10 +49,10 @@ GitHub의 Version 태그에서 바로 설치해도 됩니다. 이 범위는 `mai
 npm install -g "github:jjongs2/ticket-runner#semver:*"
 ```
 
-`init`과 `run`은 GitHub Release로 공개된 가장 새로운 Version을 찾아봅니다. 그게 지금 사본이 보고하는 번호보다 높으면 한 줄을 출력할 뿐, 아무것도 거절하지 않습니다.
+`init`과 `run`은 GitHub Release로 공개된 가장 새로운 Version을 찾아봅니다. GitHub Release는 npm에 올라간 Version에만 생깁니다. 그게 지금 사본이 보고하는 번호보다 높으면 한 줄을 출력할 뿐, 아무것도 거절하지 않습니다.
 
 ```text
-A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g "github:jjongs2/ticket-runner#semver:*"`.
+A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g ticket-runner`.
 ```
 
 지금 사본이 최신이거나 더 앞서 있을 때, 또는 GitHub에 물어볼 수조차 없을 때(네트워크나 `gh`가 없을 때)는 아무것도 출력하지 않습니다. 개발용 체크아웃은 번호로만 비교합니다.
