@@ -95,7 +95,3 @@ The [project wiki](https://jjongs2.github.io/ticket-runner/) explains the pipeli
 The vocabulary is defined in [`CONTEXT.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md), the decisions in
 [`docs/adr/`](https://github.com/jjongs2/ticket-runner/tree/main/docs/adr), and the conventions for working on the pipeline itself in
 [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md).
-
-## License
-
-[MIT](https://github.com/jjongs2/ticket-runner/blob/main/LICENSE)

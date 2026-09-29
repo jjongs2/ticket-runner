@@ -94,7 +94,3 @@ npm uninstall -g ticket-runner # 전역 설치
 [`docs/adr/`](https://github.com/jjongs2/ticket-runner/tree/main/docs/adr)에, 파이프라인 자체를 고칠
 때의 규칙은 [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md)에
 있습니다. 모두 영어입니다.
-
-## 라이선스
-
-[MIT](https://github.com/jjongs2/ticket-runner/blob/main/LICENSE)
