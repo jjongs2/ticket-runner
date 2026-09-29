@@ -10,10 +10,6 @@ description: 계획은 사람이 GitHub에서 세우고, 각 Ticket을 merge까�
 
 기능을 계획하는 일에는 판단이 필요하니 사람 몫으로 남겨 둡니다. 사람은 GitHub에 이슈를 쓰고, 이슈마다 체크박스로 된 [Acceptance Criteria](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)를 달고, 막는 이슈를 연결한 뒤 `ready-for-agent` 라벨을 붙입니다. 그다음부터 merge까지는 되풀이되는 일이라 파이프라인이 무인으로 처리합니다. [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)마다 헤드리스 Claude Code 세션에 구현을 맡기고, 저장소의 테스트를 직접 돌리고, 두 번째 세션에게 기준이 충족되지 않았음을 증명해 보라고 시킨 다음, pull request를 열고 CI를 기다려 squash-merge합니다. 끝내지 못한 일은 draft pull request와 코멘트를 남겨 사람에게 돌려줍니다.
 
-::: warning 있는 그대로 공개합니다
-ticket-runner는 개인 도구이며, MIT 라이선스로 있는 그대로 공개합니다. 지원이나 수정, Version 사이의 호환을 약속하지 않습니다. 소중한 저장소에 쓰기 전에 코드를 먼저 읽어 보세요.
-:::
-
 ## 빠르게 시작하기 {#quick-start}
 
 Node 22 이상, `git`, 인증된 [`gh`](https://cli.github.com/), 그리고 `mattpocock-skills` 플러그인 1.2.3 버전이 설치된 `claude`가 필요합니다. 전체 목록은 [설치](./guide/installation.md)에 있습니다.

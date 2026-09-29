@@ -5,11 +5,6 @@
 Humans plan on GitHub; `ticket-runner` carries each ready issue to a merged pull request while
 nobody watches.
 
-> [!NOTE]
-> This is a personal tool, published as it is. There is no promise of support: issues and pull
-> requests may go unanswered, and any Version may change how it works. Its Stages drive the
-> [`mattpocock-skills`](https://github.com/mattpocock/skills) plugin, version **1.2.3**.
-
 ## What it does
 
 The work is split in two. **Planning** is yours: you shape a feature into small GitHub issues,
@@ -37,7 +32,8 @@ It fits a repository where:
 - a CI workflow runs on pull requests, and there is a test or typecheck command the pipeline can
   run itself
 - the machine running it has Node 22 or newer, `git`, an authenticated
-  [`gh`](https://cli.github.com/), and `claude` with the `mattpocock-skills` plugin
+  [`gh`](https://cli.github.com/), and `claude` with the
+  [`mattpocock-skills`](https://github.com/mattpocock/skills) plugin, version 1.2.3
 
 It merges to your base branch without asking. It is for repositories where that is what you want.
 

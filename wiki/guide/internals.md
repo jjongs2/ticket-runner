@@ -213,7 +213,7 @@ The full records are in [`docs/adr/`](https://github.com/jjongs2/ticket-runner/t
 
 ## Working on the pipeline itself
 
-The pipeline is a personal tool published as it is, with no promise of support. To change it anyway, run it from a checkout. `bin/ticket-runner.js` loads the TypeScript through `tsx`, so there is no build step:
+To change the pipeline, run it from a checkout. `bin/ticket-runner.js` loads the TypeScript through `tsx`, so there is no build step:
 
 ```bash
 git clone https://github.com/jjongs2/ticket-runner && cd ticket-runner

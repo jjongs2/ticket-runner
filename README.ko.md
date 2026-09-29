@@ -5,11 +5,6 @@
 계획은 사람이 GitHub에서 세우고, `ticket-runner`는 준비된 이슈를 하나씩 맡아 아무도 지켜보지 않는
 사이 merge된 pull request까지 가져갑니다.
 
-> [!NOTE]
-> 개인 도구를 있는 그대로 공개한 것입니다. 지원은 약속하지 않습니다. 이슈나 pull request에 답이 없을
-> 수 있고, 어떤 Version에서든 동작이 바뀔 수 있습니다. Stage는
-> [`mattpocock-skills`](https://github.com/mattpocock/skills) 플러그인 **1.2.3** 버전을 씁니다.
-
 ## 하는 일
 
 일은 둘로 나뉩니다. **Planning**은 사람 몫입니다. 기능 하나를 작은 GitHub 이슈 여러 개로 나누고, 이슈마다
@@ -36,7 +31,8 @@ rate limit에 걸려 멈춘 세션은 아무것도 잃지 않습니다. 이슈�
   Criteria를 달고, blocker는 GitHub의 네이티브 `blocked by` 연결로 표시합니다
 - pull request에서 도는 CI 워크플로가 있고, 파이프라인이 직접 돌릴 테스트나 typecheck 명령이 있습니다
 - 돌리는 머신에 Node 22 이상, `git`, 인증된 [`gh`](https://cli.github.com/), 그리고
-  `mattpocock-skills` 플러그인을 설치한 `claude`가 있습니다
+  [`mattpocock-skills`](https://github.com/mattpocock/skills) 플러그인 1.2.3 버전을 설치한 `claude`가
+  있습니다
 
 파이프라인은 묻지 않고 base branch에 merge합니다. 그걸 원하는 저장소에 쓰세요.
 

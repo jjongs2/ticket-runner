@@ -213,7 +213,7 @@ A newer Version is out: 0.6.0, and this is 0.5.2 — upgrade with `npm install -
 
 ## pipeline 자체를 고치려면 {#working-on-the-pipeline-itself}
 
-pipeline은 개인용 도구를 있는 그대로 공개한 것이고, 지원은 약속하지 않습니다. 그래도 고쳐 보고 싶다면 checkout에서 돌리면 됩니다. `bin/ticket-runner.js`가 `tsx`로 TypeScript를 바로 읽으니 빌드 단계가 없습니다.
+파이프라인을 고치려면 checkout에서 돌리면 됩니다. `bin/ticket-runner.js`가 `tsx`로 TypeScript를 바로 읽으니 빌드 단계가 없습니다.
 
 ```bash
 git clone https://github.com/jjongs2/ticket-runner && cd ticket-runner

@@ -10,10 +10,6 @@ Humans plan, the pipeline executes.
 
 Planning a feature takes judgement, so it stays with humans: they write the issues on GitHub, give each one checkbox [Acceptance Criteria](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md), link its blockers, and label it `ready-for-agent`. Carrying an issue from there to a merge is repetitive, so the pipeline does it unattended. For each [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) it has a headless Claude Code session implement the work, runs the repository's own tests, has a second session try to prove the criteria are not met, opens a pull request, waits for CI and squash-merges. Whatever it cannot finish goes back to a human with a draft pull request and a comment.
 
-::: warning Published as it is
-ticket-runner is a personal tool, published under the MIT licence as it is. There is no promise of support, fixes or compatibility between Versions. Read the code before you trust it with a repository you care about.
-:::
-
 ## Quick Start
 
 You need Node 22 or newer, `git`, an authenticated [`gh`](https://cli.github.com/), and `claude` with the `mattpocock-skills` plugin, version 1.2.3. [Installation](./guide/installation.md) has the full list.
