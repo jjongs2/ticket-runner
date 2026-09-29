@@ -1,6 +1,6 @@
 ---
 title: 일 계획하기
-description: GitHub 이슈가 파이프라인이 가져가는 Ticket이 되려면 — Spec과 Ticket, Acceptance Criteria, 네이티브 blocker, 라벨, 그리고 계획이 쓸 수 없게 남긴 것을 거르는 Guard.
+description: GitHub 이슈가 파이프라인이 가져가는 Ticket이 되는 조건. Spec과 Ticket, Acceptance Criteria, 네이티브 blocker, 라벨, 그리고 계획이 쓸 수 없게 남긴 것을 거르는 Guard.
 ---
 
 # 일 계획하기

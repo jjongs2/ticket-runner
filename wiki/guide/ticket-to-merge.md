@@ -1,13 +1,13 @@
 ---
 title: From Ticket to merge
-description: The path one Ticket takes through a Run — the Claim, the Stages, the Checks, the Verdict, the Fix budget, the Landing — and what the board is told on the way.
+description: The path one Ticket takes through a Run, from the Claim through the Stages, the Checks, the Verdict and the Fix budget to the Landing, and what the board is told on the way.
 ---
 
 # From Ticket to merge
 
 Nobody watches a Run, so nothing may merge on a single session's word. Every [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) goes through the same gates in the same order: deterministic Checks, a second session that tries to prove the work wrong, and CI. A failure a fresh session could mend buys exactly one fix Stage; anything else goes to a human. The Tickets of a Run are implemented side by side, but they land one at a time, so what CI graded is what reaches the Base branch.
 
-This page follows one Ticket from its Claim to its merge. What happens when it stops short — a Hand-off, a Release, a Stop, a Run that never came back — is on [Stopping and resuming](./stopping-and-resuming.md).
+This page follows one Ticket from its Claim to its merge. What happens when it stops short, whether by a Hand-off, a Release, a Stop or a Run that never came back, is on [Stopping and resuming](./stopping-and-resuming.md).
 
 | Step | What happens | Who decides |
 |---|---|---|

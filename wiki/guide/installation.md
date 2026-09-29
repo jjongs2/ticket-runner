@@ -22,10 +22,10 @@ Source: [`package.json`](https://github.com/jjongs2/ticket-runner/blob/main/pack
 | Requirement | Why | Checked by |
 |---|---|---|
 | Node 22 or newer | The package's `engines` field | npm, at install |
-| `git` | Every Ticket gets its own worktree and branch | — |
+| `git` | Every Ticket gets its own worktree and branch | – |
 | [`gh`](https://cli.github.com/), authenticated for the Target | Every GitHub call goes through `gh api` | `init` reports it; `run` refuses a Host without `gh` |
 | `claude`, with the `mattpocock-skills` plugin, version 1.2.3 | Each Stage is a `claude -p` session driving the plugin's skills ([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)) | `init` reports both |
-| A GitHub repository with Tickets planned for it | The board is where Tickets come from; see [Planning](./planning.md) | — |
+| A GitHub repository with Tickets planned for it | The board is where Tickets come from; see [Planning](./planning.md) | – |
 | A CI workflow in `.github/workflows` | A pull request with no checks is never merged, unless [`gates.ci`](./configuration.md#gates) is off | `init` reports it |
 | A Check the pipeline can run itself | `test` and `typecheck` scripts in `package.json`, or commands in [`checks`](./configuration.md#checks) | `init` reports it; `run` refuses without one |
 

@@ -22,10 +22,10 @@ Run은 무인으로 돌기 때문에, 빠진 게 있다면 Ticket 도중이 아�
 | 요구 사항 | 이유 | 확인하는 곳 |
 |---|---|---|
 | Node 22 이상 | 패키지의 `engines` 필드 | 설치할 때 npm |
-| `git` | Ticket마다 worktree와 branch를 따로 만듦 | — |
+| `git` | Ticket마다 worktree와 branch를 따로 만듦 | – |
 | Target에 인증된 [`gh`](https://cli.github.com/) | GitHub 호출은 모두 `gh api`로 감 | `init`이 알려 주고, `gh`가 없는 Host에서는 `run`이 거절 |
 | `mattpocock-skills` 플러그인 1.2.3 버전이 설치된 `claude` | Stage 하나하나가 이 플러그인의 스킬을 부리는 `claude -p` 세션 ([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)) | 둘 다 `init`이 알려 줌 |
-| Ticket이 계획되어 있는 GitHub 저장소 | Ticket은 보드에서 옴. [계획](./planning.md) 참고 | — |
+| Ticket이 계획되어 있는 GitHub 저장소 | Ticket은 보드에서 옴. [계획](./planning.md) 참고 | – |
 | `.github/workflows`의 CI 워크플로 | check가 하나도 없는 pull request는 merge되지 않음. [`gates.ci`](./configuration.md#gates)를 끄면 예외 | `init`이 알려 줌 |
 | 파이프라인이 직접 돌릴 Check | `package.json`의 `test`, `typecheck` 스크립트, 또는 [`checks`](./configuration.md#checks)에 적은 명령 | `init`이 알려 주고, 없으면 `run`이 거절 |
 

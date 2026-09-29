@@ -8,8 +8,8 @@ nobody watches.
 ## What it does
 
 The work is split in two. **Planning** is yours: you shape a feature into small GitHub issues,
-each with a checklist of Acceptance Criteria — by hand, or with the plugin's `/grilling`,
-`/to-spec`, `/to-tickets` and `/triage`. **Execution** is the pipeline's. For every issue labelled
+each with a checklist of Acceptance Criteria. You can write them by hand, or with the plugin's
+`/grilling`, `/to-spec`, `/to-tickets` and `/triage`. **Execution** is the pipeline's. For every issue labelled
 `ready-for-agent` whose blockers have closed, it:
 
 1. claims the issue and creates a branch and a git worktree for it
@@ -46,9 +46,9 @@ npx ticket-runner init   # set the Target up and report what is still missing
 npx ticket-runner run    # work through every ready issue
 ```
 
-`init` writes a few files for you to review and commit — `.gitignore` lines, a conventions
-document, a section in `CLAUDE.md`, a Claude skill — creates the triage labels, and turns on
-squash merging and branch deletion on merge. It commits nothing.
+`init` writes a few files for you to review and commit: `.gitignore` lines, a conventions
+document, a section in `CLAUDE.md` and a Claude skill. It also creates the triage labels and
+turns on squash merging and branch deletion on merge. It commits nothing.
 
 To keep it, install it globally:
 

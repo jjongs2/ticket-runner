@@ -1,13 +1,13 @@
 ---
 title: Ticket 하나가 merge되기까지
-description: Ticket 하나가 Run 안에서 거치는 길 — Claim, Stage, Check, Verdict, Fix budget, Landing — 과 그동안 보드에 남기는 기록을 정리했습니다.
+description: Ticket 하나가 Run 안에서 Claim부터 Stage, Check, Verdict, Fix budget을 거쳐 Landing까지 가는 길과, 그동안 보드에 남기는 기록을 정리했습니다.
 ---
 
 # Ticket 하나가 merge되기까지
 
 Run은 아무도 지켜보지 않으니, 세션 하나의 말만 믿고 merge할 수는 없습니다. 그래서 모든 [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)은 같은 관문을 같은 순서로 지납니다. 결정적인 Check, 작업이 틀렸음을 증명하려 드는 두 번째 세션, 그리고 CI입니다. 새 세션이 고칠 수 있는 실패라면 fix Stage를 딱 한 번 얻고, 그 밖의 실패는 사람에게 넘어갑니다. 한 Run의 Ticket들은 나란히 구현되지만 merge는 하나씩 하므로, CI가 채점한 코드가 그대로 Base branch에 들어갑니다.
 
-이 페이지는 Ticket 하나를 Claim부터 merge까지 따라갑니다. 중간에 멈추는 경우 — Hand-off, Release, Stop, 돌아오지 못한 Run — 는 [멈추고 이어 하기](./stopping-and-resuming.md)에서 다룹니다.
+이 페이지는 Ticket 하나를 Claim부터 merge까지 따라갑니다. Hand-off, Release, Stop, 돌아오지 못한 Run처럼 중간에 멈추는 경우는 [멈추고 이어 하기](./stopping-and-resuming.md)에서 다룹니다.
 
 | 단계 | 하는 일 | 판단 주체 |
 |---|---|---|

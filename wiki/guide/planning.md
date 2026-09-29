@@ -1,6 +1,6 @@
 ---
 title: Planning the work
-description: What makes a GitHub issue a Ticket the pipeline will take — Specs and Tickets, Acceptance Criteria, native blockers, the labels, and the Guards that refuse what Planning left unusable.
+description: "What makes a GitHub issue a Ticket the pipeline will take: Specs and Tickets, Acceptance Criteria, native blockers, the labels, and the Guards that refuse what Planning left unusable."
 ---
 
 # Planning the work
