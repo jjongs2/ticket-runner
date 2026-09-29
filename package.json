@@ -17,6 +17,8 @@
   "files": [
     "bin",
     "src",
+    "!src/**/*.test.ts",
+    "!src/testing",
     "docs/templates/operator-skill.md"
   ],
   "scripts": {
