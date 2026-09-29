@@ -15,8 +15,6 @@ Run은 무인으로 돌기 때문에, 빠진 게 있다면 Ticket 도중이 아�
 | 걷어 내기 | `ticket-runner remove` | `init`이 쓴 것과 Run이 남긴 것을 제거 |
 | 삭제 | `npm uninstall -g ticket-runner` | 머신에서 명령을 삭제 |
 
-출처: [`package.json`](https://github.com/jjongs2/ticket-runner/blob/main/package.json), [`init.ts` · `initTarget`](https://github.com/jjongs2/ticket-runner/blob/main/src/init.ts), [`readiness.ts` · `readinessRefusal`](https://github.com/jjongs2/ticket-runner/blob/main/src/readiness.ts), [`remove.ts` · `removeTarget`](https://github.com/jjongs2/ticket-runner/blob/main/src/remove.ts).
-
 ## 요구 사항 {#requirements}
 
 | 요구 사항 | 이유 | 확인하는 곳 |
@@ -57,7 +55,7 @@ npm install -g "github:jjongs2/ticket-runner#semver:*"
 A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g "github:jjongs2/ticket-runner#semver:*"`.
 ```
 
-지금 사본이 최신이거나 더 앞서 있을 때, 또는 GitHub에 물어볼 수조차 없을 때(네트워크나 `gh`가 없을 때)는 아무것도 출력하지 않습니다. 개발용 체크아웃은 번호로만 비교합니다. 출처: [`staleness.ts` · `newerVersionLine`](https://github.com/jjongs2/ticket-runner/blob/main/src/staleness.ts).
+지금 사본이 최신이거나 더 앞서 있을 때, 또는 GitHub에 물어볼 수조차 없을 때(네트워크나 `gh`가 없을 때)는 아무것도 출력하지 않습니다. 개발용 체크아웃은 번호로만 비교합니다.
 
 ### 설치 없이 써 보기 {#try-it-without-installing}
 
@@ -173,8 +171,6 @@ readiness 다음에 거절이 두 가지 더 있습니다.
 
 - **체크아웃에 남은 State 파일.** 초기 파이프라인은 Ticket의 재개 상태를 `.ticket-runner/state/`에 뒀는데, 지금은 Target의 원격에 두고, 옮겨 주는 것은 없습니다. 이 디렉터리에 State 파일이 남아 있으면 Run은 해당 Ticket을 나열하며 거절합니다. 그 파일을 쓴 Version으로 Ticket을 마무리하거나 사람에게 넘긴 다음, 디렉터리를 지우세요.
 - **Check 없음.** [Checks 게이트](./configuration.md#gates)가 켜져 있는데 설정하거나 추론할 수 있는 Check 명령이 없으면, 검사하지 않은 코드를 merge하느니 Run을 거절합니다.
-
-출처: [`readiness.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/readiness.ts), [`start.ts` · `startRun`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts), [`startup.ts` · `startupMessages`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts).
 
 ## `remove`로 걷어 내기 {#take-it-out-with-remove}
 

@@ -16,8 +16,6 @@ A [Run](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) exists so
 | `ticket-runner -v` | Prints which Version this is | `0` |
 | `ticket-runner -h` | Prints the usage | `0` (`2` when no command is given) |
 
-Source: [`start.ts` · `startRun`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts), [`run.ts` · `processRun`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts), [`command-line.ts` · `readCommandLine`, `USAGE`](https://github.com/jjongs2/ticket-runner/blob/main/src/command-line.ts), [`stop.ts` · `requestStop`](https://github.com/jjongs2/ticket-runner/blob/main/src/stop.ts), [`adapters/version.ts` · `pipelineVersion`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts).
-
 `init` and `remove` are on [Install and remove](./installation.md). An unknown command or option, or a bad argument, is refused with the usage and exit code `2`.
 
 ## `run`
@@ -163,7 +161,7 @@ A Run a Stop or a Release ended prints no `blocked` rows, since it never reached
 | `1` | At least one Ticket was handed off |
 | `2` | Nothing was taken: the Run was refused, or it was given numbers and took none of them |
 
-A stopped Run exits with its outcomes' code as usual. `stop` exits `0` when the Stop was sent and `2` when there was nobody to send it to. `-v` and `-h` exit `0`; any refused command line exits `2`. The codes of `init` and `remove` are on [Install and remove](./installation.md). Source: [`cli.ts` · `main`](https://github.com/jjongs2/ticket-runner/blob/main/src/cli.ts).
+A stopped Run exits with its outcomes' code as usual. `stop` exits `0` when the Stop was sent and `2` when there was nobody to send it to. `-v` and `-h` exit `0`; any refused command line exits `2`. The codes of `init` and `remove` are on [Install and remove](./installation.md).
 
 ## Logs and transcripts
 
@@ -180,8 +178,6 @@ Everything a Stage did goes to disk, under the Target's gitignored `.ticket-runn
 | `<n>/retry/` | The fix Stage and the pass it bought, so the failing pass's files survive beside them |
 
 The command line is written before the Stage starts and output as it arrives, so a Run killed mid-Stage still leaves what it had reached. A Ticket that is handed off also keeps its Stages' command lines and transcripts, with `version.txt`, on the Target's remote, under `ticket-<n>/<runId>/` on the `ticket-runner/state` branch, because the Host that wrote them may be gone by the time a human looks. The hand-off comment names that directory ([Stopping and resuming](./stopping-and-resuming.md)).
-
-Sources: [`run-log.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run-log.ts), [`adapters/claude-agent-runner.ts` · `startStageLog`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts).
 
 ## From the Claude app
 

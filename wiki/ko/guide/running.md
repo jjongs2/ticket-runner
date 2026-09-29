@@ -16,8 +16,6 @@ description: Run 시작하기, Lane 주기, 지정한 Ticket으로 좁히기, �
 | `ticket-runner -v` | 이 사본의 Version을 출력 | `0` |
 | `ticket-runner -h` | 사용법을 출력 | `0` (명령 없이 실행하면 `2`) |
 
-출처: [`start.ts` · `startRun`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts), [`run.ts` · `processRun`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts), [`command-line.ts` · `readCommandLine`, `USAGE`](https://github.com/jjongs2/ticket-runner/blob/main/src/command-line.ts), [`stop.ts` · `requestStop`](https://github.com/jjongs2/ticket-runner/blob/main/src/stop.ts), [`adapters/version.ts` · `pipelineVersion`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts).
-
 `init`과 `remove`는 [설치와 제거](./installation.md)에 있습니다. 모르는 명령이나 옵션, 잘못된 인자는 사용법과 함께 종료 코드 `2`로 거절합니다.
 
 ## `run` {#run}
@@ -163,7 +161,7 @@ Stop이나 Release로 끝난 Run은 Frontier 끝까지 가 보지 못했으니 `
 | `1` | Hand-off된 Ticket이 하나 이상 |
 | `2` | 아무것도 가져가지 않음: Run이 거절됐거나, 번호를 받았는데 하나도 가져가지 않음 |
 
-멈춘 Run도 평소처럼 결과에 따른 코드로 끝납니다. `stop`은 Stop을 보냈으면 `0`, 보낼 상대가 없으면 `2`로 끝납니다. `-v`와 `-h`는 `0`, 거절된 명령줄은 모두 `2`입니다. `init`과 `remove`의 종료 코드는 [설치와 제거](./installation.md)에 있습니다. 출처: [`cli.ts` · `main`](https://github.com/jjongs2/ticket-runner/blob/main/src/cli.ts).
+멈춘 Run도 평소처럼 결과에 따른 코드로 끝납니다. `stop`은 Stop을 보냈으면 `0`, 보낼 상대가 없으면 `2`로 끝납니다. `-v`와 `-h`는 `0`, 거절된 명령줄은 모두 `2`입니다. `init`과 `remove`의 종료 코드는 [설치와 제거](./installation.md)에 있습니다.
 
 ## 로그와 transcript {#logs-and-transcripts}
 
@@ -180,8 +178,6 @@ Stage가 한 일은 모두 Target의 gitignore된 `.ticket-runner/` 아래 디�
 | `<n>/retry/` | fix Stage와, 그 덕에 한 번 더 도는 시도. 실패한 시도의 파일은 옆에 그대로 남음 |
 
 명령줄은 Stage가 시작되기 전에, 출력은 나오는 대로 쓰니, Stage 도중에 kill된 Run도 거기까지 한 것은 남깁니다. Hand-off된 Ticket은 Stage들의 명령줄과 transcript, 그리고 `version.txt`를 Target의 원격에도 남깁니다. `ticket-runner/state` branch의 `ticket-<n>/<runId>/` 아래입니다. 그걸 쓴 Host는 사람이 들여다볼 즈음이면 없을 수도 있기 때문입니다. Hand-off 코멘트가 그 디렉터리를 알려 줍니다([멈추고 이어 하기](./stopping-and-resuming.md)).
-
-출처: [`run-log.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run-log.ts), [`adapters/claude-agent-runner.ts` · `startStageLog`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts).
 
 ## Claude 앱에서 실행하기 {#from-the-claude-app}
 

@@ -52,20 +52,20 @@ The second sentence is added only for an unknown key. On a machine with a stale 
 
 ## `baseBranch`
 
-- `baseBranch`: string ([`base-branch.ts` · `resolveBaseBranch`](https://github.com/jjongs2/ticket-runner/blob/main/src/base-branch.ts))
+- `baseBranch`: string
 
 The [Base branch](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) is what a Run branches each Ticket from, rebases it onto, targets its pull request at, and pulls the main checkout to after a merge. Without this field it is whatever GitHub calls the repository's default branch, so a Target on `master` needs no setting. It is resolved once at the start of a Run.
 
 ## `lanes`
 
-- `lanes`: whole number ≥ 1 ([`run.ts` · `processRun`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts))
+- `lanes`: whole number ≥ 1
 
 How many Tickets a Run holds at once, one per [Lane](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md). `run --lanes <n>` overrides it for one Run. Lanes run their Checks at the same time, each in its own worktree, so a Target whose Checks need a port, a database or anything else they would share keeps this at `1`. Only one Lane at a time is in the Landing (rebase to merge), so more Lanes speed up implement and verify, not merging ([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)).
 
 ## `checks`
 
-- `checks`: array of strings ([`config.ts` · `inferChecks`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts))
-- `checkTimeoutMinutes`: number > 0 ([`orchestrator.ts` · `runChecks`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts))
+- `checks`: array of strings
+- `checkTimeoutMinutes`: number > 0
 
 A [Check](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) is a deterministic command the pipeline runs itself, never an agent's opinion. Each one runs through the shell in the Ticket's worktree, after the implement Stage, after a fix Stage and after a resolved rebase conflict. A non-zero exit fails the gate, and the Ticket spends its [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md).
 
@@ -75,8 +75,8 @@ Without this field the pipeline infers `npm test` and `npm run typecheck` from w
 
 ## `gates`
 
-- `gates.checks`: boolean ([`startup.ts` · `startupMessages`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts))
-- `gates.ci`: boolean ([`orchestrator.ts` · `requireGreenCi`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts))
+- `gates.checks`: boolean
+- `gates.ci`: boolean
 
 | Setting | When on (the default) | When `false` |
 |---|---|---|
@@ -93,7 +93,7 @@ No Check commands are configured and none could be inferred from package.json. A
 
 ## `stages`
 
-- `stages`: object ([`config.ts` · `STAGE_DEFAULTS`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts))
+- `stages`: object
 
 Each Stage is one `claude -p` session. `stages` takes an object per Stage, and every key in it is optional:
 
@@ -116,14 +116,14 @@ The model and effort are always passed, never left to the machine's own defaults
 
 ## `permissionMode`
 
-- `permissionMode`: `"auto"`, `"acceptEdits"` or `"bypassPermissions"` ([`adapters/claude-agent-runner.ts` · `buildArgs`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts))
+- `permissionMode`: `"auto"`, `"acceptEdits"` or `"bypassPermissions"`
 
 Passed to every Stage as `--permission-mode`. Every Stage also runs with `--permission-prompts none`: nobody is watching, so anything that would prompt is denied instead. The modes on offer are the ones that can do work unattended; `plan` and the prompting modes would guarantee a Stage that does nothing.
 
 ## CI
 
-- `ciTimeoutMinutes`: number > 0 ([`orchestrator.ts` · `requireGreenCi`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts))
-- `ciGraceMinutes`: number > 0 ([`adapters/gh-tracker.ts` · `waitForCi`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts))
+- `ciTimeoutMinutes`: number > 0
+- `ciGraceMinutes`: number > 0
 
 After the Landing opens a pull request, the Run waits up to `ciTimeoutMinutes` for its checks. CI that does not finish in time is a Hand-off that spends no Fix budget: it is somebody else's infrastructure, not a defect a fix Stage could mend.
 
@@ -131,7 +131,7 @@ After the Landing opens a pull request, the Run waits up to `ciTimeoutMinutes` f
 
 ## `labels`
 
-- `labels`: object of strings ([`config.ts` · `LABEL_DEFAULTS`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts))
+- `labels`: object of strings
 
 Rename the triage vocabulary when the Target already uses other label strings. Only the keys you give change.
 

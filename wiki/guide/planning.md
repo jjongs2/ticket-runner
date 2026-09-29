@@ -15,8 +15,6 @@ The pipeline does not plan. Deciding what to build takes judgement, and a wrong 
 | Blockers as native `blocked by` links, all closed | They decide which Tickets may run, and in what order |
 | No native sub-issues | An issue with sub-issues is a Spec, not a Ticket |
 
-Source: [`frontier.ts` · `selectFrontier`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts), [`acceptance-criteria.ts` · `UNCHECKED_BOX`](https://github.com/jjongs2/ticket-runner/blob/main/src/acceptance-criteria.ts), [`gh-tracker.ts` · `listCandidates`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts), [`guards.ts` · `skipReason`](https://github.com/jjongs2/ticket-runner/blob/main/src/guards.ts).
-
 The same list, written for the agents that plan, is the conventions document `init` puts in every Target: [`docs/agents/pipeline-conventions.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/agents/pipeline-conventions.md).
 
 ## Specs and Tickets

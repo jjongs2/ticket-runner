@@ -17,8 +17,6 @@ This page is for reading the source or changing it. To use the pipeline, start a
 | `AgentRunner` | Claude: one Stage session | `ClaudeAgentRunner` · `FakeAgentRunner` |
 | `Workspace` | git: worktrees, Checks, rebase, push, the State and the Run lock | `GitWorkspace` · `FakeWorkspace` |
 
-Source: [`ports/tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/ports/tracker.ts), [`ports/agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/ports/agent-runner.ts), [`ports/workspace.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/ports/workspace.ts).
-
 ```mermaid
 flowchart LR
     subgraph Entry
@@ -165,8 +163,6 @@ No test spawns `gh` or `claude`. Each layer is tested at the seam that suits it.
 - The `GitWorkspace` tests run worktrees, rebases, leases and the state and lock branches for real.
 - For the other two adapters, `testing/executions.ts` builds the `Execution` a process would have returned.
 
-Source: [`testing/fakes.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/testing/fakes.ts), [`testing/hold.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/testing/hold.ts), [`testing/settle.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/testing/settle.ts), [`testing/executions.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/testing/executions.ts).
-
 This is why every external effect goes through a port, the pipeline's own bookkeeping included: State and the lock are effects on the remote, so they are `Workspace` methods and the fakes cover them ([ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-is-a-local-file.md), last amendment).
 
 ## Versions
@@ -190,14 +186,14 @@ flowchart LR
 
 - **The number.** It goes up by a minor when a Spec has closed since the last Version, and by a patch for everything else, a small feature included. The only question is whether a Spec closed. A human decides when to cut, because that is a Planning decision.
 - **The Version PR.** It raises `package.json` and the lock file, adds the Version's section to `CHANGELOG.md`, and re-marks this repository's own conventions document with `npx tsx scripts/version.ts mark`. The [`/cut-a-version`](https://github.com/jjongs2/ticket-runner/blob/main/.claude/skills/cut-a-version/SKILL.md) skill drafts it; it never merges.
-- **The check** ([`version-pr.ts` · `versionPrRefusals`](https://github.com/jjongs2/ticket-runner/blob/main/src/version-pr.ts)) lists every reason at once: the number is not above every tag, the lock file disagrees, the section is missing, or the section has no `### After upgrading` heading. A pull request that leaves the number alone passes untouched.
+- **The check** lists every reason at once: the number is not above every tag, the lock file disagrees, the section is missing, or the section has no `### After upgrading` heading. A pull request that leaves the number alone passes untouched.
 - **The tag workflow** tags the merge commit and publishes the section as the Release, or GitHub's generated notes if the section is missing. It finishes whichever half is missing, so a re-run heals a half-cut Version.
 
 release-please and Changesets were both turned down. The first needed a yearly-expiring token, a repository setting and a rule that only `feat`/`fix` cut a Version. The second would have put a changeset file into every Stage's job.
 
 ### The stamp
 
-The Version is resolved once, in the CLI, and handed down. Every stamp one Run writes is therefore the same string ([`adapters/version.ts` · `pipelineVersion`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts)).
+The Version is resolved once, in the CLI, and handed down. Every stamp one Run writes is therefore the same string.
 
 | `-v` prints | When |
 |---|---|
@@ -219,7 +215,7 @@ The same string is stamped on:
 
 The summary's header reads `ticket-runner <version> run <runId> · <n>m`. The file is `.ticket-runner/runs/<runId>/version.txt`, and a Hand-off keeps it with the transcripts.
 
-The conventions document's mark, `<!-- ticket-runner:version <number> -->`, has a direction. An older pipeline leaves a newer document alone and asks to be upgraded. A Run behind the document warns, and a Run ahead of it names `init`. Neither ever refuses ([`staleness.ts` · `conventionsWarning`](https://github.com/jjongs2/ticket-runner/blob/main/src/staleness.ts)).
+The conventions document's mark, `<!-- ticket-runner:version <number> -->`, has a direction. An older pipeline leaves a newer document alone and asks to be upgraded. A Run behind the document warns, and a Run ahead of it names `init`. Neither ever refuses.
 
 ### The newer-Version check
 

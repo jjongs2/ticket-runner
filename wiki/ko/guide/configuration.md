@@ -52,20 +52,20 @@ Invalid ticket-runner.json: stages: Unrecognized key: "implment". Refused by tic
 
 ## `baseBranch` {#basebranch}
 
-- `baseBranch`: 문자열 ([`base-branch.ts` · `resolveBaseBranch`](https://github.com/jjongs2/ticket-runner/blob/main/src/base-branch.ts))
+- `baseBranch`: 문자열
 
 [Base branch](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)는 Run이 Ticket마다 branch를 따 오고, rebase하고, pull request가 향하고, merge 뒤에 메인 체크아웃을 pull하는 branch입니다. 이 필드가 없으면 GitHub가 저장소의 기본 branch라고 부르는 것을 쓰니, `master`를 쓰는 Target도 따로 설정할 필요가 없습니다. Run이 시작할 때 한 번 정합니다.
 
 ## `lanes` {#lanes}
 
-- `lanes`: 1 이상의 정수 ([`run.ts` · `processRun`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts))
+- `lanes`: 1 이상의 정수
 
 Run이 동시에 쥐는 Ticket 수입니다. [Lane](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) 하나에 Ticket 하나. `run --lanes <n>`이 한 Run에 한해 덮어씁니다. Lane들은 각자의 worktree에서 동시에 Check를 돌리니, Check가 포트나 데이터베이스처럼 함께 써야 하는 것을 필요로 하는 Target은 `1`로 두세요. Landing(rebase부터 merge까지)에는 한 번에 Lane 하나만 들어가므로, Lane을 늘리면 implement와 verify가 빨라질 뿐 merge가 빨라지지는 않습니다([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)).
 
 ## `checks` {#checks}
 
-- `checks`: 문자열 배열 ([`config.ts` · `inferChecks`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts))
-- `checkTimeoutMinutes`: 0보다 큰 수 ([`orchestrator.ts` · `runChecks`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts))
+- `checks`: 문자열 배열
+- `checkTimeoutMinutes`: 0보다 큰 수
 
 [Check](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)는 파이프라인이 직접 돌리는 결정적인 명령이지, 에이전트의 의견이 아닙니다. 각 명령은 Ticket의 worktree에서 셸을 통해 돌고, implement Stage 뒤, fix Stage 뒤, rebase 충돌을 해결한 뒤에 실행됩니다. 0이 아닌 코드로 끝나면 게이트를 통과하지 못하고, Ticket은 [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)을 씁니다.
 
@@ -75,8 +75,8 @@ Run이 동시에 쥐는 Ticket 수입니다. [Lane](https://github.com/jjongs2/t
 
 ## `gates` {#gates}
 
-- `gates.checks`: 불리언 ([`startup.ts` · `startupMessages`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts))
-- `gates.ci`: 불리언 ([`orchestrator.ts` · `requireGreenCi`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts))
+- `gates.checks`: 불리언
+- `gates.ci`: 불리언
 
 | 설정 | 켜져 있을 때(기본) | `false`일 때 |
 |---|---|---|
@@ -93,7 +93,7 @@ No Check commands are configured and none could be inferred from package.json. A
 
 ## `stages` {#stages}
 
-- `stages`: 객체 ([`config.ts` · `STAGE_DEFAULTS`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts))
+- `stages`: 객체
 
 Stage 하나는 `claude -p` 세션 하나입니다. `stages`는 Stage마다 객체를 받고, 안의 키는 모두 선택입니다.
 
@@ -116,14 +116,14 @@ Stage 하나는 `claude -p` 세션 하나입니다. `stages`는 Stage마다 객�
 
 ## `permissionMode` {#permissionmode}
 
-- `permissionMode`: `"auto"`, `"acceptEdits"`, `"bypassPermissions"` ([`adapters/claude-agent-runner.ts` · `buildArgs`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts))
+- `permissionMode`: `"auto"`, `"acceptEdits"`, `"bypassPermissions"`
 
 모든 Stage에 `--permission-mode`로 넘깁니다. 모든 Stage는 `--permission-prompts none`으로도 돕니다. 지켜보는 사람이 없으니, 물어봐야 할 일은 묻는 대신 거부됩니다. 고를 수 있는 모드는 무인으로 일할 수 있는 것들뿐입니다. `plan`이나 물어보는 모드로는 아무 일도 하지 않는 Stage가 될 게 뻔하니까요.
 
 ## CI {#ci}
 
-- `ciTimeoutMinutes`: 0보다 큰 수 ([`orchestrator.ts` · `requireGreenCi`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts))
-- `ciGraceMinutes`: 0보다 큰 수 ([`adapters/gh-tracker.ts` · `waitForCi`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts))
+- `ciTimeoutMinutes`: 0보다 큰 수
+- `ciGraceMinutes`: 0보다 큰 수
 
 Landing이 pull request를 연 뒤, Run은 최대 `ciTimeoutMinutes` 동안 check를 기다립니다. 시간 안에 끝나지 않는 CI는 Fix budget을 쓰지 않는 Hand-off입니다. 남의 인프라 문제이지, fix Stage가 고칠 수 있는 결함이 아니기 때문입니다.
 
@@ -131,7 +131,7 @@ Landing이 pull request를 연 뒤, Run은 최대 `ciTimeoutMinutes` 동안 chec
 
 ## `labels` {#labels}
 
-- `labels`: 문자열 객체 ([`config.ts` · `LABEL_DEFAULTS`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts))
+- `labels`: 문자열 객체
 
 Target이 이미 다른 라벨 이름을 쓰고 있다면 triage 어휘의 이름을 바꾸세요. 준 키만 바뀝니다.
 

@@ -17,8 +17,6 @@ description: 세 port와 그 adapter, src/ 모듈 지도, Version을 끊고 찍�
 | `AgentRunner` | Claude: Stage 세션 하나 | `ClaudeAgentRunner` · `FakeAgentRunner` |
 | `Workspace` | git: worktree, Check, rebase, push, State와 Run lock | `GitWorkspace` · `FakeWorkspace` |
 
-출처: [`ports/tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/ports/tracker.ts), [`ports/agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/ports/agent-runner.ts), [`ports/workspace.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/ports/workspace.ts).
-
 ```mermaid
 flowchart LR
     subgraph Entry["진입점"]
@@ -165,8 +163,6 @@ claude --print <prompt> --output-format stream-json --verbose \
 - `GitWorkspace` 테스트는 worktree, rebase, lease, state와 lock branch를 진짜로 돌립니다.
 - 나머지 두 adapter에는 `testing/executions.ts`가 프로세스가 돌려줬을 `Execution`을 만들어 줍니다.
 
-출처: [`testing/fakes.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/testing/fakes.ts), [`testing/hold.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/testing/hold.ts), [`testing/settle.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/testing/settle.ts), [`testing/executions.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/testing/executions.ts).
-
 그래서 파이프라인 자신의 기록까지 포함해 모든 바깥 효과가 port를 거칩니다. State와 lock도 remote에 대한 효과이니 `Workspace`의 메서드이고, fake가 이를 다룹니다([ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-is-a-local-file.md)의 마지막 amendment).
 
 ## Version {#versions}
@@ -190,14 +186,14 @@ flowchart LR
 
 - **번호.** 지난 Version 뒤로 Spec이 하나라도 닫혔으면 minor를, 그 밖에는 작은 기능까지 포함해 모두 patch를 올립니다. 질문은 오직 "Spec이 닫혔나"뿐입니다. 언제 끊을지는 사람이 정합니다. Planning의 결정이니까요.
 - **Version PR.** `package.json`과 lock file의 번호를 올리고, `CHANGELOG.md`에 그 Version의 섹션을 더하고, `npx tsx scripts/version.ts mark`로 이 저장소의 conventions 문서에 새 표시를 합니다. 초안은 [`/cut-a-version`](https://github.com/jjongs2/ticket-runner/blob/main/.claude/skills/cut-a-version/SKILL.md) skill이 만들고, merge는 하지 않습니다.
-- **검사**([`version-pr.ts` · `versionPrRefusals`](https://github.com/jjongs2/ticket-runner/blob/main/src/version-pr.ts))는 이유를 한꺼번에 모두 알려 줍니다. 번호가 모든 tag보다 높지 않을 때, lock file이 다른 번호일 때, 섹션이 없을 때, 섹션에 `### After upgrading` 제목이 없을 때입니다. 번호를 건드리지 않은 pull request는 그대로 통과합니다.
+- **검사**는 이유를 한꺼번에 모두 알려 줍니다. 번호가 모든 tag보다 높지 않을 때, lock file이 다른 번호일 때, 섹션이 없을 때, 섹션에 `### After upgrading` 제목이 없을 때입니다. 번호를 건드리지 않은 pull request는 그대로 통과합니다.
 - **tag workflow**는 merge commit에 tag를 달고, 그 섹션을 GitHub Release로 올립니다. 섹션이 없으면 GitHub이 만든 notes를 씁니다. 빠진 쪽만 채우니, 반쯤 끊긴 Version도 다시 돌리면 온전해집니다.
 
 release-please와 Changesets는 둘 다 채택하지 않았습니다. 앞의 것은 해마다 만료되는 token, 저장소 설정, 그리고 `feat`/`fix`만 Version을 끊는다는 규칙이 필요했습니다. 뒤의 것은 모든 Stage의 일에 changeset 파일 쓰기를 얹었을 것입니다.
 
 ### 찍히는 번호 {#the-stamp}
 
-Version은 CLI에서 한 번 정해서 아래로 넘깁니다. 그래서 한 Run이 찍는 번호는 모두 같은 문자열입니다([`adapters/version.ts` · `pipelineVersion`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts)).
+Version은 CLI에서 한 번 정해서 아래로 넘깁니다. 그래서 한 Run이 찍는 번호는 모두 같은 문자열입니다.
 
 | `-v` 출력 | 언제 |
 |---|---|
@@ -219,7 +215,7 @@ Version은 CLI에서 한 번 정해서 아래로 넘깁니다. 그래서 한 Run
 
 요약의 머리는 `ticket-runner <version> run <runId> · <n>m` 모양입니다. 파일은 `.ticket-runner/runs/<runId>/version.txt`이고, Hand-off는 이 파일을 transcript와 함께 남깁니다.
 
-conventions 문서의 표시 `<!-- ticket-runner:version <number> -->`에는 방향이 있습니다. 더 오래된 파이프라인은 더 새 문서를 건드리지 않고 업그레이드를 권합니다. 문서보다 뒤처진 Run은 경고하고, 앞선 Run은 `init`을 권합니다. 어느 쪽도 거절하지는 않습니다([`staleness.ts` · `conventionsWarning`](https://github.com/jjongs2/ticket-runner/blob/main/src/staleness.ts)).
+conventions 문서의 표시 `<!-- ticket-runner:version <number> -->`에는 방향이 있습니다. 더 오래된 파이프라인은 더 새 문서를 건드리지 않고 업그레이드를 권합니다. 문서보다 뒤처진 Run은 경고하고, 앞선 Run은 `init`을 권합니다. 어느 쪽도 거절하지는 않습니다.
 
 ### 새 Version 확인 {#the-newer-version-check}
 

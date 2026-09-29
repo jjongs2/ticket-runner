@@ -45,7 +45,7 @@ stateDiagram-v2
 
 [Hand-off](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)는 Ticket을 사람에게 넘기는 일입니다. merge도 Release도 아닌 끝맺음은 모두 이렇게 끝납니다. Fix budget을 쓴 뒤의 두 번째 실패, 시간을 넘긴 Stage, 끝나지 않은 CI, setup에서 앞을 막은 branch 같은 경우입니다. 이 가운데 누군가의 결함이 아닌 경우도 있습니다.
 
-[`orchestrator.ts` · `handOff`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts)가 이 순서로 처리합니다.
+Hand-off는 이 순서로 진행됩니다.
 
 1. pull request를 열거나 기존 것을 씁니다. 이미 열려 있는 pull request는 draft로 되돌립니다. 그렇지 않고 이 Run이 push해도 되는 worktree라면, branch를 push하고 Ticket 제목으로 draft pull request를 엽니다. 여기서 실패하면 로그만 남기고, 라벨 변경은 어떻게든 이뤄집니다.
 2. State file을 기록합니다. draft pull request 번호를 담고 Fix budget은 쓰지 않은 것으로 돌려 둡니다. 이 Run의 어떤 Stage도 작업을 남겼을 수 없는 경우라면 대신 파일을 지웁니다(아래 참고).
@@ -117,7 +117,7 @@ Hand-off가 State를 남기는 이유가 있습니다. 예전에 Run이 rate lim
 
 구독 rate limit에 걸린 Stage는 무언가를 잘못한 게 아닙니다. 이걸 Hand-off로 처리하면 아무 문제 없는 Ticket의 라벨을 사람이 다시 바꿔야 하고, fix Stage를 돌려 봐야 같은 한도에 또 걸릴 뿐입니다. 그래서 Ticket을 [Release](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)합니다. Ticket은 보드로 돌아가고, 다음 Run은 마지막으로 끝낸 Stage에서부터 Fix budget도 그대로인 채 이어 갑니다.
 
-판단은 [`claude-agent-runner.ts` · `rateLimited`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts)가 하고, 실패한 세션에 대해서만 합니다. 아래 셋 중 하나만 있어도 됩니다.
+이 판단은 실패한 세션에 대해서만 합니다. 아래 셋 중 하나만 있어도 됩니다.
 
 | 신호 | 왜 보나 |
 |---|---|
@@ -127,7 +127,7 @@ Hand-off가 State를 남기는 이유가 있습니다. 예전에 Run이 rate lim
 
 성공한 세션은 rate limit 이야기를 아무리 많이 해도 rate-limited로 보지 않습니다.
 
-Release가 하는 일([`orchestrator.ts` · `release`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts)):
+Release가 하는 일:
 
 - Progress comment에 `⏸ rate limited` 줄을 하나 남깁니다. 보고는 이게 전부입니다.
 - State file을 최신으로 맞춥니다. implement Stage가 멈췄으면 `claimed`, 그 뒤의 Stage가 멈췄으면 `implemented`입니다. Fix budget은 그대로 가져가되, 한도에 걸린 게 fix Stage 자신이면 쓴 것으로 치지 않습니다.
@@ -159,7 +159,7 @@ Ctrl+C는 일부러 kill로 남겨 두었습니다. Stage는 Run과 같은 proce
 
 ### `ticket-runner stop` {#ticket-runner-stop}
 
-[`stop.ts` · `requestStop`](https://github.com/jjongs2/ticket-runner/blob/main/src/stop.ts)은 Run lock을 읽고, 거기 적힌 프로세스에 신호를 보냅니다. config도, `gh`도, Target readiness도 필요 없습니다. 멈출 Run이 시작할 때 이미 다 통과했으니까요.
+`ticket-runner stop`은 Run lock을 읽고, 거기 적힌 프로세스에 신호를 보냅니다. config도, `gh`도, Target readiness도 필요 없습니다. 멈출 Run이 시작할 때 이미 다 통과했으니까요.
 
 ```
 $ ticket-runner stop
@@ -180,7 +180,7 @@ stop file이 없으니, `stop`을 두 번 해도 처음과 같은 내용을 출�
 
 kill된 Run은 아무것도 놓아주지 않습니다. 그 Ticket들은 Claim을 그대로 달고 있고, 작업은 마지막으로 push한 시점까지 remote에 있습니다. 그래서 State file은 Release가 아니라 Claim과 함께 씁니다. kill된 Run에게는 파일을 쓸 기회가 없으니까요.
 
-[Stranded Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)은 State file이 아직 있고, 이 파이프라인의 Claim(현재 `gh` 사용자에게 할당 + `in-progress` 라벨)도 그대로 달린 Ticket입니다. 이미 claim된 상태라 Frontier는 이런 Ticket을 내놓지 않습니다. 그래서 모든 Run은 Frontier를 보기 전에 State file부터 훑습니다([`stranded.ts` · `strandedTickets`](https://github.com/jjongs2/ticket-runner/blob/main/src/stranded.ts)).
+[Stranded Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)은 State file이 아직 있고, 이 파이프라인의 Claim(현재 `gh` 사용자에게 할당 + `in-progress` 라벨)도 그대로 달린 Ticket입니다. 이미 claim된 상태라 Frontier는 이런 Ticket을 내놓지 않습니다. 그래서 모든 Run은 Frontier를 보기 전에 State file부터 훑습니다.
 
 | State file의 Ticket | sweep이 하는 일 |
 |---|---|
@@ -203,7 +203,7 @@ process id는 어디에도 기록하지 않습니다. [Run lock](#the-run-lock)�
 
 Ticket이 어디까지 갔는지 기록이 없으면, Release되거나 stranded된 Ticket은 돌아올 때마다 처음부터 다시 시작합니다. implement Stage 비용을 또 치르고, 이미 쓴 Fix budget도 새로 채워지겠지요. State file이 바로 그 기록입니다.
 
-파일의 모양은 [`resume.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/resume.ts)가 정하고, 읽고 쓰는 일은 [`Workspace`](https://github.com/jjongs2/ticket-runner/blob/main/src/ports/workspace.ts) port가 합니다. 파이프라인 없이도 사람이 읽을 수 있는 JSON입니다.
+파이프라인 없이도 사람이 읽을 수 있는 JSON입니다.
 
 ```json
 {
@@ -258,7 +258,7 @@ State file을 `.ticket-runner/state/`에 두던 파이프라인에서 업그레�
 
 ## Run lock {#the-run-lock}
 
-두 Run이 한 Target을 나눠 쓰면 Base branch와 Frontier와 worktree를 두고 부딪칩니다. 그래서 어느 Host에서 돌든 한 Target은 한 번에 한 Run만 쥡니다. 한 머신의 프로세스만 볼 수 있는 lock으로는 다른 Host의 Run을 막을 수 없으니, lock은 모든 Host와 모든 사람이 볼 수 있는 Target의 GitHub 저장소에 둡니다([ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md), [`lock.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lock.ts)).
+두 Run이 한 Target을 나눠 쓰면 Base branch와 Frontier와 worktree를 두고 부딪칩니다. 그래서 어느 Host에서 돌든 한 Target은 한 번에 한 Run만 쥡니다. 한 머신의 프로세스만 볼 수 있는 lock으로는 다른 Host의 Run을 막을 수 없으니, lock은 모든 Host와 모든 사람이 볼 수 있는 Target의 GitHub 저장소에 둡니다([ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)).
 
 lock은 `ticket-runner/lock` branch tip의 `lock.json`입니다. 이 branch는 Run이 한 번 시작된 뒤로 늘 존재합니다. 파일에는 쥔 쪽이 적힙니다. `host`(kind, id, name), `pid`, `command`, `runId`, `startedAt`, 그리고 OS가 알려 주는 프로세스 시작 시각입니다. 아무도 쥐지 않았다면 `{ "held": false }`입니다. commit 메시지도 같은 내용을 말로 적습니다. 예를 들면 ``Held by run 2026-09-17T09-00-00-000 on the workstation `desk`: ticket-runner run``이나 `Free`입니다.
 
@@ -283,7 +283,7 @@ sequenceDiagram
 ```
 <!-- Sources: src/adapters/git-workspace.ts, src/lock.ts, src/start.ts -->
 
-누군가 쥐고 있는 lock을 Run이 어떻게 보느냐는 쥔 쪽이 어디 있느냐에 달려 있습니다([`lock.ts` · `holderStanding`](https://github.com/jjongs2/ticket-runner/blob/main/src/lock.ts)).
+누군가 쥐고 있는 lock을 Run이 어떻게 보느냐는 쥔 쪽이 어디 있느냐에 달려 있습니다.
 
 | 쥔 쪽 | 판정 | 새 Run은 |
 |---|---|---|
@@ -293,7 +293,7 @@ sequenceDiagram
 
 한 Host에서는 다른 Host의 프로세스를 볼 수 없습니다. 갱신하지 않으면 만료되는 lease 방식은 채택하지 않았습니다. 살아 있는 Run이 heartbeat 한 번 놓쳤다고 Target을 빼앗기게 되니까요. 그래서 다른 Host가 남긴 lock은 사람이 풀 때까지 그대로 있습니다. Operator에게 부탁하거나, GitHub에서 그 branch에 `{ "held": false }`인 `lock.json`을 commit하면 됩니다. 단, 돌고 있는 Run이 없을 때만 그렇게 하세요. Run 도중 cloud VM이 회수되면 딱 이 한 번의 해제가 필요합니다.
 
-Host는 바뀌지 않는 id로 구별합니다([`host.ts` · `currentHost`](https://github.com/jjongs2/ticket-runner/blob/main/src/host.ts)). workstation은 machine id를, 없으면 hostname을 씁니다. cloud Host는 session id를 씁니다. session을 알려 주지 않는 cloud Host는 무작위 id를 받으니, 그 Host의 다음 Run조차 그 lock을 남의 것으로 봅니다.
+Host는 바뀌지 않는 id로 구별합니다. workstation은 machine id를, 없으면 hostname을 씁니다. cloud Host는 session id를 씁니다. session을 알려 주지 않는 cloud Host는 무작위 id를 받으니, 그 Host의 다음 Run조차 그 lock을 남의 것으로 봅니다.
 
 Run의 거절은 lock보다 먼저 옵니다. `init`이 준비하지 않은 Target, checkout에 남은 State file, 돌릴 Check가 없는 경우 등이 그렇습니다. 어느 것도 lock을 남기지 않습니다. 끝날 때 lock을 풀지 못한 Run은 그렇다고 알리되, 자기 exit code는 그대로 지킵니다.
 
@@ -301,7 +301,7 @@ Run의 거절은 lock보다 먼저 옵니다. `init`이 준비하지 않은 Targ
 
 Ticket의 작업을 Host 사이로 옮기는 것은 remote의 branch입니다. 그래서 이어받은 Ticket은 이 Host에 있는 것이 아니라 remote branch에서 출발합니다. commit하는 Stage(implement, fix, conflict)는 Stage가 어떻게 끝났든 곧바로 branch를 push합니다. 한도에 걸려 멈춘 세션도 이미 commit했을 수 있으니까요. push가 실패하면 로그만 남깁니다.
 
-이어받기 전에, kill된 Run이 남긴 진행 중인 rebase를 abort합니다. 그다음 [`git-workspace.ts` · `worktreeFromRemote`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts)가 이 Host의 사본과 remote branch를 비교합니다.
+이어받기 전에, kill된 Run이 남긴 진행 중인 rebase를 abort합니다. 그다음 이 Host의 사본과 remote branch를 비교합니다.
 
 ```mermaid
 flowchart TD

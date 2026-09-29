@@ -15,8 +15,6 @@ A Run works unattended, so anything missing has to be caught before it starts, n
 | Take it out | `ticket-runner remove` | Removes what `init` wrote and what Runs left |
 | Uninstall | `npm uninstall -g ticket-runner` | Removes the command from the machine |
 
-Source: [`package.json`](https://github.com/jjongs2/ticket-runner/blob/main/package.json), [`init.ts` · `initTarget`](https://github.com/jjongs2/ticket-runner/blob/main/src/init.ts), [`readiness.ts` · `readinessRefusal`](https://github.com/jjongs2/ticket-runner/blob/main/src/readiness.ts), [`remove.ts` · `removeTarget`](https://github.com/jjongs2/ticket-runner/blob/main/src/remove.ts).
-
 ## Requirements
 
 | Requirement | Why | Checked by |
@@ -57,7 +55,7 @@ npm install -g "github:jjongs2/ticket-runner#semver:*"
 A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g "github:jjongs2/ticket-runner#semver:*"`.
 ```
 
-Nothing is printed when this copy is the latest or ahead of it, or when GitHub could not be asked at all (no network, no `gh`). A development checkout is compared by number only. Source: [`staleness.ts` · `newerVersionLine`](https://github.com/jjongs2/ticket-runner/blob/main/src/staleness.ts).
+Nothing is printed when this copy is the latest or ahead of it, or when GitHub could not be asked at all (no network, no `gh`). A development checkout is compared by number only.
 
 ### Try it without installing
 
@@ -173,8 +171,6 @@ Two more refusals come after readiness:
 
 - **State files in the checkout.** An early pipeline kept a Ticket's resume state under `.ticket-runner/state/`; it now lives on the Target's remote, and nothing migrates it. A Run refuses while that directory holds State files and names their Tickets. Finish those Tickets with the Version that wrote them, or hand them to a human, then delete the directory.
 - **No Check.** With the [Checks gate](./configuration.md#gates) on and no Check command configured or inferable, a Run refuses rather than merge unchecked code.
-
-Sources: [`readiness.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/readiness.ts), [`start.ts` · `startRun`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts), [`startup.ts` · `startupMessages`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts).
 
 ## Take it out with `remove`
 

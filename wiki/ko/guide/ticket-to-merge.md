@@ -20,8 +20,6 @@ Run은 아무도 지켜보지 않으니, 세션 하나의 말만 믿고 merge할
 | Landing | rebase, Conflict Stage, pull request, CI, squash merge | 한 번에 Lane 하나 |
 | merge 이후 | 충족된 기준에 체크, 정리 | 파이프라인 |
 
-출처: [`orchestrator.ts` · `processTicket`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts).
-
 ```mermaid
 flowchart TD
     G["Guard"] -->|통과| C["Claim"]
@@ -59,8 +57,6 @@ fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종�
 2. Ticket을 `gh` 사용자에게 assign하고, `in-progress`를 붙이고 `ready-for-agent`를 뗍니다. Stranded Ticket은 이미 이 Claim을 달고 있으니 다시 쓰지 않습니다.
 3. Ticket에 아직 유효한 hand-off 코멘트가 있으면, 지난 일이라는 표시 한 줄을 덧붙입니다. _Taken again by a later Run; this hand-off is history._
 
-출처: [`orchestrator.ts` · `ResumeRecord`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts), [`handoff.ts` · `markHandoffsTaken`](https://github.com/jjongs2/ticket-runner/blob/main/src/handoff.ts).
-
 ## worktree와 branch {#the-worktree-and-branch}
 
 | | 값 |
@@ -68,8 +64,6 @@ fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종�
 | branch | `agent/<n>-<slug>`: 제목을 소문자 kebab-case로 바꾸고, 40자 이내에서 단어 경계로 자름 |
 | worktree | Target 루트 아래 `.worktrees/ticket-<n>`, gitignore됨 |
 | 분기 기준 | 방금 fetch한 remote의 Base branch, upstream은 설정하지 않음 |
-
-출처: [`branch.ts` · `branchName`, `worktreePath`](https://github.com/jjongs2/ticket-runner/blob/main/src/branch.ts), [`git-workspace.ts` · `createWorktree`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts).
 
 같은 이름의 branch가 이미 있으면 절대 재사용하지 않습니다. Ticket은 `setup`에서 Hand-off되고, 코멘트에 누구의 branch인지와 치우는 명령이 적힙니다. 재개되는 Ticket은 State file에 적힌 branch에서 이어 갑니다. 자세한 내용은 [멈추고 이어 하기](./stopping-and-resuming.md)를 보세요.
 
@@ -86,9 +80,9 @@ fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종�
 | fix | `Ticket: <issue URL>`, skill 없음 | 선택 항목 `title`과 `notes` |
 | conflict | `/mattpocock-skills:resolving-merge-conflicts` | 없음 |
 
-모든 프롬프트에는 같은 self-hosting 안내(파이프라인 자신의 명령을 실행하지 말 것, Stage가 띄우지 않은 프로세스를 kill하지 말 것)가 붙고, 마지막에 설정의 Stage별 `extraPrompt`가 붙습니다. implement 프롬프트에는 무인 세션에서 skill의 약점을 피해 가는 안내가 더 붙습니다. 리뷰 전에 먼저 commit할 것, `/mattpocock-skills:code-review`를 전체 이름으로 부를 것, 리뷰 sub-agent를 foreground로 돌릴 것, worktree를 깨끗이 남길 것 등입니다. 출처: [`prompts.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/prompts.ts).
+모든 프롬프트에는 같은 self-hosting 안내(파이프라인 자신의 명령을 실행하지 말 것, Stage가 띄우지 않은 프로세스를 kill하지 말 것)가 붙고, 마지막에 설정의 Stage별 `extraPrompt`가 붙습니다. implement 프롬프트에는 무인 세션에서 skill의 약점을 피해 가는 안내가 더 붙습니다. 리뷰 전에 먼저 commit할 것, `/mattpocock-skills:code-review`를 전체 이름으로 부를 것, 리뷰 sub-agent를 foreground로 돌릴 것, worktree를 깨끗이 남길 것 등입니다.
 
-**Stage mark.** 모든 Stage의 셸에는 `TICKET_RUNNER_STAGE=<stage>`가 설정되고, 이 변수가 있으면 CLI는 시작을 거부합니다. 그래서 Stage가 실수로 Ticket을 claim하거나 중첩 Run을 띄울 수 없습니다. 다만 sandbox가 아니라 걸림줄일 뿐이라, 변수를 지운 세션은 통과합니다. 그래서 프롬프트에서도 같은 내용을 말로 한 번 더 전합니다. 출처: [`stage-guard.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stage-guard.ts).
+**Stage mark.** 모든 Stage의 셸에는 `TICKET_RUNNER_STAGE=<stage>`가 설정되고, 이 변수가 있으면 CLI는 시작을 거부합니다. 그래서 Stage가 실수로 Ticket을 claim하거나 중첩 Run을 띄울 수 없습니다. 다만 sandbox가 아니라 걸림줄일 뿐이라, 변수를 지운 세션은 통과합니다. 그래서 프롬프트에서도 같은 내용을 말로 한 번 더 전합니다.
 
 **Transcript.** Stage마다 `.ticket-runner/runs/<runId>/<n>/` 아래에 `<stage>.command`, `.stdout`, `.stderr`, `.transcript.jsonl`을 씁니다. 명령줄은 프로세스가 시작하기 전에, 출력은 도착하는 대로 쓰기 때문에 Run이 kill되어도 파일은 남습니다. fix Stage와 그 덕에 얻은 한 바퀴는 `<n>/retry/`에 쓰므로, 실패한 바퀴의 파일도 보존됩니다. 읽는 법은 [실행하기](./running.md)를 보세요.
 
@@ -101,8 +95,6 @@ fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종�
 | `rate-limited` | `⏸ rate limited` | 429, 거절된 `rate_limit_event`, 또는 한도를 언급한 메시지. Ticket을 release함 |
 | `nonzero-exit` | `❌ exited non-zero` | 그 밖에 실패한 세션 |
 | `invalid-result` | `❌ invalid result` | verify Stage가 Verdict를 아예 내놓지 않음 |
-
-출처: [`claude-agent-runner.ts` · `classify`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts).
 
 ## implement Stage {#the-implement-stage}
 
@@ -119,9 +111,9 @@ implement skill이 Ticket을 읽고, 만들고, 리뷰합니다. 세션이 끝�
 1. **commit 안 된 변경 없음.** 어떤 commit에도 없는 변경이 worktree에 있으면 실패이고, 해당 경로를 전부 알려 줍니다. 설치한 의존성 같은 gitignore 파일은 세지 않습니다.
 2. **Check 명령**을 순서대로, worktree의 셸에서, 각각 `checkTimeoutMinutes`(기본 15분) 안에 실행합니다. 처음 실패한 곳에서 멈춥니다. 한도에서 kill된 명령은 timed out으로 보고되고, 실패가 아니라 멈춰 있었다는 한 줄이 출력 뒤에 붙습니다.
 
-명령은 설정의 `checks`에서 가져오고, 없으면 `package.json`에 정의된 쪽의 `npm test`와 `npm run typecheck`를 씁니다. `gates.checks`가 켜져 있는데 명령이 하나도 없으면 Run은 시작을 거부합니다. `gates.checks`를 끄면 명령 없이도 Run을 시작할 수 있게 될 뿐이고, 코드상 설정된 명령은 여전히 실행됩니다. 출처: [`startup.ts` · `startupMessages`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts).
+명령은 설정의 `checks`에서 가져오고, 없으면 `package.json`에 정의된 쪽의 `npm test`와 `npm run typecheck`를 씁니다. `gates.checks`가 켜져 있는데 명령이 하나도 없으면 Run은 시작을 거부합니다. `gates.checks`를 끄면 명령 없이도 Run을 시작할 수 있게 될 뿐이고, 코드상 설정된 명령은 여전히 실행됩니다.
 
-두 실패 모두 Fix budget을 씁니다. Check는 branch 자신의 코드를 돌리므로, 멈춰 버리는 것도 그 코드의 결함이고, 바로 fix Stage가 할 일이기 때문입니다. 출처: [`orchestrator.ts` · `runChecks`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts).
+두 실패 모두 Fix budget을 씁니다. Check는 branch 자신의 코드를 돌리므로, 멈춰 버리는 것도 그 코드의 결함이고, 바로 fix Stage가 할 일이기 때문입니다.
 
 ## verify Stage와 Verdict {#the-verify-stage-and-its-verdict}
 
@@ -135,8 +127,6 @@ merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 �
 | `unmet`이 있음 | `❌ <u> unmet` | Fix budget을 씀. fix Stage는 충족되지 않은 기준과 그 evidence를 받음 |
 | 전부 `unverifiable` | `❌ no evidence` | Hand-off. merge할 근거가 없음 |
 | 없거나 형식이 틀림 | `❌ no Verdict` | Hand-off |
-
-출처: [`orchestrator.ts` · `verify`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts), [`verdict.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/verdict.ts).
 
 ## fix Stage와 Fix budget {#the-fix-stage-and-the-fix-budget}
 
@@ -165,8 +155,6 @@ fix Stage가 끝나면 Ticket은 Check부터 다시 시작합니다. verify Stag
 
 budget 사용 여부는 fix Stage가 돌아온 뒤 State file에 기록됩니다. rate limit으로 멈춘 fix Stage는 아무것도 쓰지 않습니다. Release는 이미 쓴 budget을 다음 Run으로 그대로 넘기고, Hand-off는 budget을 되돌려 줍니다. Ticket은 사람 손을 거쳐야만 돌아오기 때문입니다.
 
-출처: [`lifecycle.ts` · `FailureKind`](https://github.com/jjongs2/ticket-runner/blob/main/src/lifecycle.ts), [`orchestrator.ts` · `takeTicket`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts).
-
 ## Lane과 Frontier 다시 채우기 {#lanes-and-the-frontier-refill}
 
 Ticket 하나에 드는 시간은 대부분 implement와 verify 세션이고, 이 세션들이 하는 일은 다른 Ticket과 부딪히지 않습니다. 하나씩만 처리하면 서로 독립된 Ticket 여섯 개짜리 Frontier는 하나일 때보다 여섯 배 오래 걸리고, Spec을 작은 Ticket으로 잘게 나눌수록 기다림만 길어집니다. Frontier에는 애초에 서로 기대지 않는 Ticket만 있으니, Run은 여러 개를 한꺼번에 가져갑니다.
@@ -178,7 +166,7 @@ Run은 [Lane](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) 수
 
 매번 다시 계산하는 게 Ticket끼리 부딪히지 않게 하는 장치입니다. blocker를 닫은 merge가 있으면 그 덕에 풀린 Ticket이 같은 Run에 들어오고, 다른 Lane이 아직 작업 중인 Ticket은 여전히 열린 blocker로 남습니다. 어떤 Ticket끼리 함께 돌려도 안전한지 휴리스틱으로 정하지 않고, `blocked by` 관계가 정합니다. Ticket 번호를 받은 Run은 같은 규칙을 그 번호들에만 적용합니다([실행하기](./running.md)).
 
-Lane들은 서로 다른 worktree에서 동시에 Check를 돌리므로, Check가 포트나 데이터베이스를 공유하는 Target은 Lane을 하나로 두세요. Release나 Stop이 오면 더는 채우지 않고, 바쁜 Lane은 쥔 일을 마칩니다. 출처: [`run.ts` · `processRun`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts), [`frontier.ts` · `selectFrontier`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts).
+Lane들은 서로 다른 worktree에서 동시에 Check를 돌리므로, Check가 포트나 데이터베이스를 공유하는 Target은 Lane을 하나로 두세요. Release나 Stop이 오면 더는 채우지 않고, 바쁜 Lane은 쥔 일을 마칩니다.
 
 ## Landing {#the-landing}
 
@@ -204,7 +192,7 @@ sequenceDiagram
 ```
 <!-- Sources: src/landing.ts, src/orchestrator.ts -->
 
-Ticket은 fix Stage, Hand-off, Release 때도 Landing을 나가므로, 누구도 세션 하나를 기다리며 서 있지 않습니다. 출처: [`landing.ts` · `Landing`](https://github.com/jjongs2/ticket-runner/blob/main/src/landing.ts).
+Ticket은 fix Stage, Hand-off, Release 때도 Landing을 나가므로, 누구도 세션 하나를 기다리며 서 있지 않습니다.
 
 ### rebase {#rebase}
 
@@ -229,7 +217,7 @@ Ticket은 fix Stage, Hand-off, Release 때도 Landing을 나가므로, 누구도
 | 그 밖의 이유로 해결 안 됨 | `❌ unresolved`. rebase를 abort하고 Fix budget을 씀 |
 | Stage를 띄우지 못했거나 git에 물을 수 없음 | `❌ unknown`. rebase를 abort하고 Hand-off |
 
-Check를 다시 돌리는 건 해결 내용이 어떤 관문도 본 적 없는 코드이기 때문입니다. verify는 다시 하지 않습니다. 이 Stage는 기준이 다루는 동작을 바꾸지 않도록 지시받기 때문입니다. 해결하지 못한 rebase는 충돌 내용과 남은 문제를 evidence로 fix Stage에 넘깁니다. abort는 항상 실행되므로, fix Stage나 사람이 반쯤 끝난 rebase를 물려받는 일은 없습니다. 출처: [`orchestrator.ts` · `resolveConflict`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts), [`git-workspace.ts` · `rebaseState`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts).
+Check를 다시 돌리는 건 해결 내용이 어떤 관문도 본 적 없는 코드이기 때문입니다. verify는 다시 하지 않습니다. 이 Stage는 기준이 다루는 동작을 바꾸지 않도록 지시받기 때문입니다. 해결하지 못한 rebase는 충돌 내용과 남은 문제를 evidence로 fix Stage에 넘깁니다. abort는 항상 실행되므로, fix Stage나 사람이 반쯤 끝난 rebase를 물려받는 일은 없습니다.
 
 ### pull request {#pull-request}
 
@@ -241,9 +229,9 @@ rebase로 branch가 다시 쓰였으니 `--force-with-lease`로 push합니다. B
 2. branch의 첫 commit 제목.
 3. Ticket 제목 그대로.
 
-제목을 commit에서 읽지 않고 Stage에게 답으로 받는 건, commit 제목은 그 commit 하나만 설명하기 때문입니다. 그렇지 않으면 작업 대부분을 한 fix Stage도, 첫 commit이 이미 push된 branch의 제목을 바꿀 방법이 없습니다. 출처: [`title.ts` · `pullRequestTitle`](https://github.com/jjongs2/ticket-runner/blob/main/src/title.ts).
+제목을 commit에서 읽지 않고 Stage에게 답으로 받는 건, commit 제목은 그 commit 하나만 설명하기 때문입니다. 그렇지 않으면 작업 대부분을 한 fix Stage도, 첫 commit이 이미 push된 branch의 제목을 바꿀 방법이 없습니다.
 
-**본문**은 `Closes #<n>`, Verdict 집계, 접힌 기준 목록(`met`이 아닌 것은 evidence 표시), 그리고 Run을 밝히는 한 줄입니다. workstation에서는 그 줄이 `.ticket-runner/runs/<runId>/<n>/`도 가리킵니다. cloud Host의 run 디렉터리는 세션과 함께 사라지므로 거기서는 Run만 밝힙니다. 출처: [`templates.ts` · `pullRequestBody`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts).
+**본문**은 `Closes #<n>`, Verdict 집계, 접힌 기준 목록(`met`이 아닌 것은 evidence 표시), 그리고 Run을 밝히는 한 줄입니다. workstation에서는 그 줄이 `.ticket-runner/runs/<runId>/<n>/`도 가리킵니다. cloud Host의 run 디렉터리는 세션과 함께 사라지므로 거기서는 Run만 밝힙니다.
 
 ### CI 대기와 유예 시간 {#ci-wait-and-grace-period}
 
@@ -260,7 +248,7 @@ rebase로 branch가 다시 쓰였으니 `--force-with-lease`로 push합니다. B
 
 check가 실패하면 실패한 Actions job 최대 세 개의 로그 끝부분을 evidence로 fix Stage에 넘깁니다. conflicting인 pull request는 기다리지 않고 바로 Hand-off합니다. GitHub가 거기에는 check를 돌리지 않기 때문인데, 그사이 사람이 merge한 경우에만 생깁니다.
 
-**유예 시간.** pull request가 막 열린 직후에는 workflow의 check run이 생기기 전까지 GitHub가 한동안 'check 없음'이라고 답합니다. 3분 넘게 걸린 적도 있습니다. 그래서 'check 없음'은 `ciGraceMinutes`(기본 5분, CI 시간 한도보다 길어지지 않음)가 지난 뒤에야 인정합니다. CI workflow가 없는 Target은 Landing마다 이 시간을 한 번씩 치릅니다. 출처: [`gh-tracker.ts` · `waitForCi`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts).
+**유예 시간.** pull request가 막 열린 직후에는 workflow의 check run이 생기기 전까지 GitHub가 한동안 'check 없음'이라고 답합니다. 3분 넘게 걸린 적도 있습니다. 그래서 'check 없음'은 `ciGraceMinutes`(기본 5분, CI 시간 한도보다 길어지지 않음)가 지난 뒤에야 인정합니다. CI workflow가 없는 Target은 Landing마다 이 시간을 한 번씩 치릅니다.
 
 ### squash merge와 commit 메시지 {#squash-merge-and-its-commit}
 
@@ -279,7 +267,7 @@ Verdict: <k> met · <u> unmet · <v> unverifiable
 Co-authored-by: <name> <email>
 ```
 
-제목은 pull request 제목입니다. commit 제목들과 `Co-authored-by` trailer는 rebase 이후에 읽습니다. 실제로 들어가는 commit이 그것이기 때문입니다. `git log`는 HTML을 렌더링하지 않으니, 기준별 evidence는 pull request 본문에만 둡니다. 출처: [`templates.ts` · `squashCommit`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts).
+제목은 pull request 제목입니다. commit 제목들과 `Co-authored-by` trailer는 rebase 이후에 읽습니다. 실제로 들어가는 commit이 그것이기 때문입니다. `git log`는 HTML을 렌더링하지 않으니, 기준별 evidence는 pull request 본문에만 둡니다.
 
 ### merge 이후 {#after-the-merge}
 
@@ -309,9 +297,9 @@ Ticket은 이미 merge됐으니 여기서부터는 Hand-off될 수 없습니다.
 | merge | ✅ #31 | – | – |
 ```
 
-행에는 몇 단어만 적습니다. 사람이 행동해야 하는 것은 알림을 받을 가치가 있으니 따로 코멘트로 올립니다. hand-off, guard 경고, Note가 그렇습니다. 사람에게서 Ticket을 되가져오는 Run은 새 Progress comment를 시작하고, 사람이 읽은 코멘트는 그대로 둡니다. 코멘트 작성이 실패해도 Ticket에는 영향이 없습니다. 출처: [`progress.ts` · `Progress`](https://github.com/jjongs2/ticket-runner/blob/main/src/progress.ts).
+행에는 몇 단어만 적습니다. 사람이 행동해야 하는 것은 알림을 받을 가치가 있으니 따로 코멘트로 올립니다. hand-off, guard 경고, Note가 그렇습니다. 사람에게서 Ticket을 되가져오는 Run은 새 Progress comment를 시작하고, 사람이 읽은 코멘트는 그대로 둡니다. 코멘트 작성이 실패해도 Ticket에는 영향이 없습니다.
 
-**충족된 기준에 체크.** merge 뒤에는 Verdict가 `met`으로 판정한 기준마다, 그것이 적힌 곳이 본문이든 코멘트든(예: triage가 brief를 올린 코멘트) 찾아서 체크합니다(`- [ ]` → `- [x]`). 공백과 대소문자 차이만 봐줍니다. `unverifiable` 기준은 아무도 근거를 모으지 않았으니 체크하지 않습니다. Stage가 문구를 크게 바꿔 맞출 수 없는 기준도 그대로 두고, 몇 개를 맞추지 못했는지 Run 로그에 남깁니다. 출처: [`criteria.ts` · `tickMetCriteria`](https://github.com/jjongs2/ticket-runner/blob/main/src/criteria.ts).
+**충족된 기준에 체크.** merge 뒤에는 Verdict가 `met`으로 판정한 기준마다, 그것이 적힌 곳이 본문이든 코멘트든(예: triage가 brief를 올린 코멘트) 찾아서 체크합니다(`- [ ]` → `- [x]`). 공백과 대소문자 차이만 봐줍니다. `unverifiable` 기준은 아무도 근거를 모으지 않았으니 체크하지 않습니다. Stage가 문구를 크게 바꿔 맞출 수 없는 기준도 그대로 두고, 몇 개를 맞추지 못했는지 Run 로그에 남깁니다.
 
 ## Note {#notes}
 
@@ -329,8 +317,6 @@ Note에는 `summary`(필수)와 선택 항목 `evidence`, `impact`, `next`, `tic
 **standing Notes 이슈**는 Note를 코멘트로 모으는, 열린 `needs-triage` 이슈 하나입니다. 제목은 "Notes from the 파이프라인"입니다. 제목이 아니라 본문의 마커로 찾으므로, 이름을 바꿔도 두 번째 이슈가 생기지 않습니다. 필요한 첫 Note가 열고, Run의 모든 Lane이 함께 씁니다. triage가 손으로 비운 뒤 닫으면, 다음 Note가 새로 엽니다. 열려 있는 동안에는 Note를 쓰는 Stage의 프롬프트에 그 번호가 들어가, 이미 보고된 내용을 읽고 읽는 사람의 판단을 바꿀 만한 것만 더하게 합니다.
 
 Note 코멘트는 출처(`From #<origin> <stage>`)로 시작하고, 이어서 굵은 요약과 항목별 라벨이 붙은 내용이 옵니다. 줄 머리의 `- [ ]`는 escape되므로, Note가 Acceptance Criteria로 읽히는 일은 없습니다. 올리지 못한 Note는 그 Note 하나만 잃을 뿐, Ticket에는 영향을 주지 않습니다. Run 요약에는 각 Note가 그것을 만든 Ticket 아래 `noted` 행으로 나옵니다.
-
-출처: [`notes.ts` · `routeNotes`](https://github.com/jjongs2/ticket-runner/blob/main/src/notes.ts), [`templates.ts` · `noteComment`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts).
 
 ## 관련 페이지 {#related-pages}
 

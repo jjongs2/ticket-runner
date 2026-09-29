@@ -45,7 +45,7 @@ A resumed Ticket carries on from the state it had reached. It does not start ove
 
 A [Hand-off](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) gives a Ticket to a human. It is how every ending goes that is neither a merge nor a Release: a second failure after the Fix budget is spent, a Stage that timed out, CI that never finished, a branch in the way at setup. Not every one of them is somebody's defect.
 
-[`orchestrator.ts` · `handOff`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts) does this, in order:
+A Hand-off does this, in order:
 
 1. Opens a pull request, or reuses one. A pull request that is already open goes back into draft. Otherwise, when the worktree is one this Run may push from, the branch is pushed and a draft pull request opens under the Ticket's title. A failure here is logged; it never costs the relabel.
 2. Records the State file, with the draft pull request in it and the Fix budget unspent. Where no Stage of this Run could have left work, it removes the file instead (see below).
@@ -117,7 +117,7 @@ Why a Hand-off keeps the State at all: the Run once misread the rate limit as an
 
 A Stage that hits the subscription rate limit has failed at nothing. Handing the Ticket off would make a human relabel a Ticket nothing was wrong with, and a fix Stage would only meet the same limit. So the Ticket is [released](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) instead: it goes back on the board, and the next Run resumes it from the last Stage it finished, with its Fix budget as it was.
 
-[`claude-agent-runner.ts` · `rateLimited`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts) decides this, and only for a session that failed. Any one of three signs is enough:
+The pipeline decides this only for a session that failed. Any one of three signs is enough:
 
 | Sign | Why it is there |
 |---|---|
@@ -127,7 +127,7 @@ A Stage that hits the subscription rate limit has failed at nothing. Handing the
 
 A session that succeeds is never rate-limited, however often it mentions rate limits.
 
-What the Release does ([`orchestrator.ts` · `release`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts)):
+What the Release does:
 
 - writes a `⏸ rate limited` row in the Progress comment, which is the whole report
 - brings the State file up to date: `claimed` if the implement Stage was stopped, `implemented` if a later Stage was. The Fix budget stays as it was, except that a fix Stage stopped by the limit spends nothing.
@@ -159,7 +159,7 @@ Ctrl+C stays a kill on purpose. The Stages run in the Run's own process group, s
 
 ### `ticket-runner stop`
 
-[`stop.ts` · `requestStop`](https://github.com/jjongs2/ticket-runner/blob/main/src/stop.ts) reads the Run lock and signals the process it names. It needs no config, no `gh` and no Target readiness: the Run it stops passed all of those when it started.
+`ticket-runner stop` reads the Run lock and signals the process it names. It needs no config, no `gh` and no Target readiness: the Run it stops passed all of those when it started.
 
 ```
 $ ticket-runner stop
@@ -180,7 +180,7 @@ There is no stop file, so a second `stop` prints the same thing as the first.
 
 A killed Run releases nothing. Its Tickets keep their Claim, and their work stays on the remote as of the last push. That is why the State file is written as part of the Claim, not by the Release: a killed Run would never get to write it.
 
-A [Stranded Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) is one whose State file is still there while it still carries this pipeline's Claim (assigned to the current `gh` user, and labelled `in-progress`). No Frontier offers it, because it is claimed. So every Run sweeps the State files before it looks at the Frontier ([`stranded.ts` · `strandedTickets`](https://github.com/jjongs2/ticket-runner/blob/main/src/stranded.ts)):
+A [Stranded Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) is one whose State file is still there while it still carries this pipeline's Claim (assigned to the current `gh` user, and labelled `in-progress`). No Frontier offers it, because it is claimed. So every Run sweeps the State files before it looks at the Frontier:
 
 | The State file's Ticket | What the sweep does |
 |---|---|
@@ -203,7 +203,7 @@ A kill still costs more than a Stop. Whatever the Stage had not yet committed an
 
 Without a record of how far a Ticket got, a released or stranded Ticket would start over when it came back: its implement Stage paid for again, and a spent Fix budget fresh again. The State file is that record.
 
-[`resume.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/resume.ts) defines the file. The [`Workspace`](https://github.com/jjongs2/ticket-runner/blob/main/src/ports/workspace.ts) port reads and writes it. It is JSON a human can read without the pipeline:
+The file is JSON a human can read without the pipeline:
 
 ```json
 {
@@ -258,7 +258,7 @@ A Target upgraded from a pipeline that kept State files under `.ticket-runner/st
 
 ## The Run lock
 
-Two Runs sharing a Target would fight over its Base branch, its Frontier and its worktrees. So one Run at a time holds a Target, whichever Host it is on. A lock only one machine's processes can see would not keep out a Run on another Host, so the lock lives on the Target's GitHub repository, where every Host and every human can see it ([ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md), [`lock.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lock.ts)).
+Two Runs sharing a Target would fight over its Base branch, its Frontier and its worktrees. So one Run at a time holds a Target, whichever Host it is on. A lock only one machine's processes can see would not keep out a Run on another Host, so the lock lives on the Target's GitHub repository, where every Host and every human can see it ([ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)).
 
 It is `lock.json` at the tip of the `ticket-runner/lock` branch. That branch always exists once a Run has started. The file names the holder: `host` (kind, id, name), `pid`, `command`, `runId`, `startedAt`, and the process's start time as the OS reports it. Otherwise it reads `{ "held": false }`. The commit message says the same thing in words, for example ``Held by run 2026-09-17T09-00-00-000 on the workstation `desk`: ticket-runner run`` or `Free`.
 
@@ -283,7 +283,7 @@ sequenceDiagram
 ```
 <!-- Sources: src/adapters/git-workspace.ts, src/lock.ts, src/start.ts -->
 
-What a Run makes of a held lock depends on where the holder is ([`lock.ts` · `holderStanding`](https://github.com/jjongs2/ticket-runner/blob/main/src/lock.ts)):
+What a Run makes of a held lock depends on where the holder is:
 
 | Holder | Standing | The new Run |
 |---|---|---|
@@ -293,7 +293,7 @@ What a Run makes of a held lock depends on where the holder is ([`lock.ts` · `h
 
 Nothing on one Host can see another Host's processes. A lease that expires unless it is renewed was rejected: a live Run would lose its Target to one missed heartbeat. So a lock left from another Host stays until a human releases it. Ask an Operator, or commit a `lock.json` that reads `{ "held": false }` to the branch on GitHub, and only when no Run is running. A cloud VM reclaimed mid-Run costs exactly one such release.
 
-A Host is told apart by a stable id ([`host.ts` · `currentHost`](https://github.com/jjongs2/ticket-runner/blob/main/src/host.ts)). A workstation uses its machine id, or its hostname where it has none. A cloud Host uses its session id. A cloud Host that names no session gets a random id, so even its own later Runs see its lock as a stranger's.
+A Host is told apart by a stable id. A workstation uses its machine id, or its hostname where it has none. A cloud Host uses its session id. A cloud Host that names no session gets a random id, so even its own later Runs see its lock as a stranger's.
 
 A Run's refusals come before the lock: a Target `init` has not set up, State files left in the checkout, no Check to run. None of them leaves a lock behind. A Run that cannot release the lock when it ends says so, and keeps its own exit code.
 
@@ -301,7 +301,7 @@ A Run's refusals come before the lock: a Target `init` has not set up, State fil
 
 The branch on the remote carries a Ticket's work between Hosts, so a resumed Ticket starts from it rather than from whatever this Host has. Every Stage that commits (implement, fix, conflict) pushes the branch at once, whatever became of the Stage, since a session the limit stopped may already have committed. A failed push is logged and nothing more.
 
-Before resuming, a rebase that a killed Run left in progress is aborted. Then [`git-workspace.ts` · `worktreeFromRemote`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts) compares this Host's copy with the remote branch:
+Before resuming, a rebase that a killed Run left in progress is aborted. Then the pipeline compares this Host's copy with the remote branch:
 
 ```mermaid
 flowchart TD

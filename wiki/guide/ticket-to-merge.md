@@ -20,8 +20,6 @@ This page follows one Ticket from its Claim to its merge. What happens when it s
 | Landing | Rebase, Conflict Stage, pull request, CI, squash merge | one Lane at a time |
 | After the merge | Tick met criteria, clean up | the pipeline |
 
-Source: [`orchestrator.ts` · `processTicket`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts).
-
 ```mermaid
 flowchart TD
     G["Guards"] -->|pass| C["Claim"]
@@ -59,8 +57,6 @@ Then, in this order:
 2. The Ticket is assigned to the `gh` user, `in-progress` goes on and `ready-for-agent` comes off. A Stranded Ticket already wears this Claim, so it is not written again.
 3. Any hand-off comment still current on the Ticket gains a line marking it as history: _Taken again by a later Run; this hand-off is history._
 
-Source: [`orchestrator.ts` · `ResumeRecord`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts), [`handoff.ts` · `markHandoffsTaken`](https://github.com/jjongs2/ticket-runner/blob/main/src/handoff.ts).
-
 ## The worktree and branch
 
 | | Value |
@@ -68,8 +64,6 @@ Source: [`orchestrator.ts` · `ResumeRecord`](https://github.com/jjongs2/ticket-
 | Branch | `agent/<n>-<slug>`: the title in lowercase kebab-case, cut at a word boundary to 40 characters |
 | Worktree | `.worktrees/ticket-<n>` under the Target's root, gitignored |
 | Branched from | The remote's Base branch, freshly fetched, with no upstream set |
-
-Source: [`branch.ts` · `branchName`, `worktreePath`](https://github.com/jjongs2/ticket-runner/blob/main/src/branch.ts), [`git-workspace.ts` · `createWorktree`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts).
 
 A branch of that name that already exists is never reused. The Ticket is handed off at `setup`, and the comment says whose branch it is and the command that clears it. A resumed Ticket carries on in the branch its State file names instead; see [Stopping and resuming](./stopping-and-resuming.md).
 
@@ -86,9 +80,9 @@ Every Stage runs in the Ticket's worktree with `--permission-prompts none`, the 
 | fix | `Ticket: <issue URL>`, no skill | optional `title` and `notes` |
 | conflict | `/mattpocock-skills:resolving-merge-conflicts` | none |
 
-Every prompt then carries the same self-hosting guidance (never run the pipeline's own commands, never kill processes the Stage did not start), and ends with the Stage's `extraPrompt` from the config. The implement prompt adds guidance that works around the skill in an unattended session: commit before the review, invoke `/mattpocock-skills:code-review` by its full name, run the review sub-agents in the foreground, and leave the worktree clean. Source: [`prompts.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/prompts.ts).
+Every prompt then carries the same self-hosting guidance (never run the pipeline's own commands, never kill processes the Stage did not start), and ends with the Stage's `extraPrompt` from the config. The implement prompt adds guidance that works around the skill in an unattended session: commit before the review, invoke `/mattpocock-skills:code-review` by its full name, run the review sub-agents in the foreground, and leave the worktree clean.
 
-**The Stage mark.** Every Stage's shell carries `TICKET_RUNNER_STAGE=<stage>`, and the CLI refuses to start while it is set. A Stage therefore cannot claim a Ticket or start a nested Run by mistake. It is a tripwire, not a sandbox: a session that unsets the variable gets through, which is why the prompt says the same thing in words. Source: [`stage-guard.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stage-guard.ts).
+**The Stage mark.** Every Stage's shell carries `TICKET_RUNNER_STAGE=<stage>`, and the CLI refuses to start while it is set. A Stage therefore cannot claim a Ticket or start a nested Run by mistake. It is a tripwire, not a sandbox: a session that unsets the variable gets through, which is why the prompt says the same thing in words.
 
 **Transcripts.** Each Stage writes `<stage>.command`, `.stdout`, `.stderr` and `.transcript.jsonl` under `.ticket-runner/runs/<runId>/<n>/`. The command line is written before the process starts, and the output as it arrives, so a killed Run still leaves them. The fix Stage and the pass it buys write to `<n>/retry/`, so the failing pass keeps its files. See [Running](./running.md) for reading them.
 
@@ -101,8 +95,6 @@ Every prompt then carries the same self-hosting guidance (never run the pipeline
 | `rate-limited` | `⏸ rate limited` | A 429, a rejected `rate_limit_event`, or a message naming the limit. Releases the Ticket |
 | `nonzero-exit` | `❌ exited non-zero` | Any other failed session |
 | `invalid-result` | `❌ invalid result` | The verify Stage answered no Verdict at all |
-
-Source: [`claude-agent-runner.ts` · `classify`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts).
 
 ## The implement Stage
 
@@ -119,9 +111,9 @@ Two gates, run by the pipeline itself rather than by an agent:
 1. **Nothing uncommitted.** A worktree holding changes no commit carries fails, naming every path. Gitignored files, such as installed dependencies, do not count.
 2. **The Check commands**, in order, each through a shell in the worktree, each under `checkTimeoutMinutes` (default 15). The first failure stops the rest. A command killed at the limit is reported as timed out, with a line appended to its output saying it hung rather than failed.
 
-The commands come from `checks` in the config, or else `npm test` and `npm run typecheck`, whichever `package.json` defines. With `gates.checks` on and no command at all, the Run refuses to start. Turning `gates.checks` off only lets a Run start with no commands. In the code, commands that are configured still run. Source: [`startup.ts` · `startupMessages`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts).
+The commands come from `checks` in the config, or else `npm test` and `npm run typecheck`, whichever `package.json` defines. With `gates.checks` on and no command at all, the Run refuses to start. Turning `gates.checks` off only lets a Run start with no commands. In the code, commands that are configured still run.
 
-Both failures spend the Fix budget. A Check runs the branch's own code, so a hang is a defect in that code, which is what a fix Stage is for. Source: [`orchestrator.ts` · `runChecks`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts).
+Both failures spend the Fix budget. A Check runs the branch's own code, so a hang is a defect in that code, which is what a fix Stage is for.
 
 ## The verify Stage and its Verdict
 
@@ -135,8 +127,6 @@ The **Verdict** is one entry per criterion: `text`, `status` (`met`, `unmet` or 
 | Some `unmet` | `❌ <u> unmet` | Spends the Fix budget; the fix Stage gets each unmet criterion with its evidence |
 | All `unverifiable` | `❌ no evidence` | Hand-off: there is nothing to merge on |
 | Missing or malformed | `❌ no Verdict` | Hand-off |
-
-Source: [`orchestrator.ts` · `verify`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts), [`verdict.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/verdict.ts).
 
 ## The fix Stage and the Fix budget
 
@@ -165,8 +155,6 @@ After a fix Stage, the Ticket starts again at the Checks. Every gate grades the 
 
 The budget is recorded in the State file once the fix Stage comes back. A fix Stage stopped by the rate limit spends nothing. A Release carries a spent budget over to the next Run; a Hand-off gives it back, because the Ticket only returns through a human's hands.
 
-Source: [`lifecycle.ts` · `FailureKind`](https://github.com/jjongs2/ticket-runner/blob/main/src/lifecycle.ts), [`orchestrator.ts` · `takeTicket`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts).
-
 ## Lanes and the Frontier refill
 
 Most of a Ticket's time goes on its implement and verify sessions, and nothing they do collides with another Ticket's. Taken one at a time, a Frontier of six independent Tickets would take six times as long as one, and planning a Spec into small Tickets would only lengthen the wait. The Frontier already holds nothing but Tickets that do not depend on each other, so a Run takes several at once.
@@ -178,7 +166,7 @@ A Run holds as many Tickets at once as it has [Lanes](https://github.com/jjongs2
 
 Recomputing is what keeps Tickets apart. A merge that closes a blocker puts the Ticket it unblocked into the same Run, and a Ticket another Lane is still working on is still an open blocker. No heuristic decides which Tickets are safe together; the `blocked by` edges do. A Run given Ticket numbers applies the same rules to those numbers only ([Running](./running.md)).
 
-Lanes run their Checks at the same time in different worktrees, so a Target whose Checks share a port or a database keeps one Lane. A Release or a Stop stops the refills; the busy Lanes finish what they hold. Source: [`run.ts` · `processRun`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts), [`frontier.ts` · `selectFrontier`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts).
+Lanes run their Checks at the same time in different worktrees, so a Target whose Checks share a port or a database keeps one Lane. A Release or a Stop stops the refills; the busy Lanes finish what they hold.
 
 ## The Landing
 
@@ -204,7 +192,7 @@ sequenceDiagram
 ```
 <!-- Sources: src/landing.ts, src/orchestrator.ts -->
 
-A Ticket also leaves the Landing for a fix Stage, a Hand-off or a Release, so nobody waits behind a session. Source: [`landing.ts` · `Landing`](https://github.com/jjongs2/ticket-runner/blob/main/src/landing.ts).
+A Ticket also leaves the Landing for a fix Stage, a Hand-off or a Release, so nobody waits behind a session.
 
 ### Rebase
 
@@ -229,7 +217,7 @@ A conflict is not a defect in the branch: the Base branch moved on underneath it
 | Unresolved otherwise | `❌ unresolved`; abort the rebase, spend the Fix budget |
 | The Stage could not run, or git could not be asked | `❌ unknown`; abort the rebase, Hand-off |
 
-The Checks run again because the resolution is code no gate has seen. verify is not asked again: the Stage changes no behaviour the criteria cover. An unresolved rebase hands the fix Stage the conflict and what is still wrong as its evidence. The abort always happens, so a fix Stage or a human never inherits a half-finished rebase. Source: [`orchestrator.ts` · `resolveConflict`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts), [`git-workspace.ts` · `rebaseState`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts).
+The Checks run again because the resolution is code no gate has seen. verify is not asked again: the Stage changes no behaviour the criteria cover. An unresolved rebase hands the fix Stage the conflict and what is still wrong as its evidence. The abort always happens, so a fix Stage or a human never inherits a half-finished rebase.
 
 ### Pull request
 
@@ -241,9 +229,9 @@ The branch is pushed with `--force-with-lease`, since the rebase rewrote it. The
 2. The branch's first commit subject.
 3. The Ticket title, as it is.
 
-A Stage answers a title rather than having it read off a commit because a commit subject describes only its own commit: a fix Stage that did most of the work could not otherwise retitle a branch whose first commit is already pushed. Source: [`title.ts` · `pullRequestTitle`](https://github.com/jjongs2/ticket-runner/blob/main/src/title.ts).
+A Stage answers a title rather than having it read off a commit because a commit subject describes only its own commit: a fix Stage that did most of the work could not otherwise retitle a branch whose first commit is already pushed.
 
-**The body** is `Closes #<n>`, the Verdict counts, the criteria in a folded list (evidence shown for any not `met`), and a line naming the Run. On a workstation that line also points at `.ticket-runner/runs/<runId>/<n>/`; a cloud Host's run directory does not outlive its session, so there it names the Run alone. Source: [`templates.ts` · `pullRequestBody`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts).
+**The body** is `Closes #<n>`, the Verdict counts, the criteria in a folded list (evidence shown for any not `met`), and a line naming the Run. On a workstation that line also points at `.ticket-runner/runs/<runId>/<n>/`; a cloud Host's run directory does not outlive its session, so there it names the Run alone.
 
 ### CI wait and grace period
 
@@ -260,7 +248,7 @@ The pipeline polls the head commit's check runs and commit statuses every 15 sec
 
 A failed check hands the fix Stage the tail of up to three failing Actions jobs' logs. A conflicting pull request is handed off without waiting, because GitHub runs no checks on it; only a human merging meanwhile can cause it.
 
-**The grace period.** Right after a pull request opens, GitHub reports no checks for a while before the workflow's check run exists; it has taken over three minutes. So "no checks" counts only after `ciGraceMinutes` (default 5, never longer than the CI timeout). A Target with no CI workflow pays this once per Landing. Source: [`gh-tracker.ts` · `waitForCi`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts).
+**The grace period.** Right after a pull request opens, GitHub reports no checks for a while before the workflow's check run exists; it has taken over three minutes. So "no checks" counts only after `ciGraceMinutes` (default 5, never longer than the CI timeout). A Target with no CI workflow pays this once per Landing.
 
 ### Squash merge and its commit
 
@@ -279,7 +267,7 @@ Verdict: <k> met · <u> unmet · <v> unverifiable
 Co-authored-by: <name> <email>
 ```
 
-The subject is the pull request title. Commit subjects and `Co-authored-by` trailers are read after the rebase, since those are the commits that land. `git log` renders no HTML, so the per-criterion evidence stays in the pull request body. Source: [`templates.ts` · `squashCommit`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts).
+The subject is the pull request title. Commit subjects and `Co-authored-by` trailers are read after the rebase, since those are the commits that land. `git log` renders no HTML, so the per-criterion evidence stays in the pull request body.
 
 ### After the merge
 
@@ -309,9 +297,9 @@ The Ticket is merged, so nothing below can hand it off. Each step's failure is l
 | merge | ✅ #31 | – | – |
 ```
 
-Rows carry a few words only. Anything a human has to act on is its own comment, since those are worth a notification: a hand-off, a guard warning, a Note. A Run taking a Ticket back from a human starts a fresh Progress comment and leaves the one the human read untouched. A failure to write the comment never costs the Ticket. Source: [`progress.ts` · `Progress`](https://github.com/jjongs2/ticket-runner/blob/main/src/progress.ts).
+Rows carry a few words only. Anything a human has to act on is its own comment, since those are worth a notification: a hand-off, a guard warning, a Note. A Run taking a Ticket back from a human starts a fresh Progress comment and leaves the one the human read untouched. A failure to write the comment never costs the Ticket.
 
-**Ticking met criteria.** After the merge, every criterion the Verdict marked `met` is ticked (`- [ ]` → `- [x]`) wherever it is written: the body, or any comment, such as the one triage posted its brief in. Matching forgives differences in whitespace and case only. An `unverifiable` criterion stays unticked, because nobody gathered evidence for it. A criterion the Stage reworded past matching is left unticked, and the Run log says how many were not matched. Source: [`criteria.ts` · `tickMetCriteria`](https://github.com/jjongs2/ticket-runner/blob/main/src/criteria.ts).
+**Ticking met criteria.** After the merge, every criterion the Verdict marked `met` is ticked (`- [ ]` → `- [x]`) wherever it is written: the body, or any comment, such as the one triage posted its brief in. Matching forgives differences in whitespace and case only. An `unverifiable` criterion stays unticked, because nobody gathered evidence for it. A criterion the Stage reworded past matching is left unticked, and the Run log says how many were not matched.
 
 ## Notes
 
@@ -329,8 +317,6 @@ Each Note has a `summary` (required), and optional `evidence`, `impact`, `next` 
 **The standing Notes issue** is one open `needs-triage` issue, titled "Notes from the pipeline", that collects Notes as comments. It is found by a marker in its body, not by its title, so renaming it opens no second one. It is opened by the first Note that needs it and shared by every Lane of the Run. Triage empties it by hand and closes it, and the next Note opens a fresh one. When one is open, each noting Stage's prompt carries its number, so the Stage can read what is already reported and add only what would change a reader's action.
 
 Every Note comment opens with where it came from (`From #<origin> <stage>`), then the summary in bold and each part under its label. A `- [ ]` at the head of a line is escaped, so a Note is never read as Acceptance Criteria. A Note that cannot be posted costs that Note alone, never the Ticket. The Run summary lists each Note as a `noted` row under the Ticket that made it.
-
-Source: [`notes.ts` · `routeNotes`](https://github.com/jjongs2/ticket-runner/blob/main/src/notes.ts), [`templates.ts` · `noteComment`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts).
 
 ## Related pages
 
