@@ -81,4 +81,4 @@ Write issue titles in the glossary's words and keep them short. Describe behavio
 
 ## Language
 
-Repo documents, issues, commits and code comments are in English so every agent session reads one vocabulary. Conversation with the maintainer is in Korean.
+Repo documents, issues, commits and code comments are in English so every agent session reads one vocabulary. The Korean README and the wiki's Korean pages are the exception: translations of an English source, kept by the README and Wiki rules above. Conversation with the maintainer is in Korean.
