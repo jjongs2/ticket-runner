@@ -1,22 +1,4 @@
-:root {
-  /* Plex Sans KR shares Plex Sans's Latin glyphs, so English and Korean set in one text look alike. */
-  --vp-font-family-base: "IBM Plex Sans", "IBM Plex Sans KR", ui-sans-serif, system-ui, sans-serif;
-  --vp-font-family-mono: "IBM Plex Mono", "IBM Plex Sans KR", ui-monospace, monospace;
-}
-
-.dark {
-  --vp-c-bg: #0d1117;
-  --vp-c-bg-alt: #0a0d12;
-  --vp-c-bg-soft: #161b22;
-  --vp-c-bg-elv: #161b22;
-  --vp-c-divider: #30363d;
-  --vp-c-text-1: #e6edf3;
-  --vp-c-text-2: #9da7b3;
-  --vp-c-brand-1: #8b7dff;
-  --vp-c-brand-2: #6d5dfc;
-  --vp-c-brand-3: #5a4ae0;
-  --vp-c-brand-soft: rgba(109, 93, 252, 0.16);
-}
+/* Colours and fonts are CSS variables written by palette.ts. */
 
 .vp-doc table {
   display: table;
@@ -51,18 +33,18 @@
 .mermaid .node circle,
 .mermaid .node polygon,
 .mermaid .node path {
-  fill: #2d333b !important;
-  stroke: #6d5dfc !important;
+  fill: var(--wiki-node) !important;
+  stroke: var(--vp-c-brand-2) !important;
 }
 .mermaid .cluster rect {
-  fill: #161b22 !important;
-  stroke: #30363d !important;
+  fill: var(--vp-c-bg-soft) !important;
+  stroke: var(--vp-c-divider) !important;
 }
 .mermaid .edgeLabel,
 .mermaid .edgeLabel rect {
-  background-color: #161b22 !important;
-  fill: #161b22 !important;
-  color: #e6edf3 !important;
+  background-color: var(--vp-c-bg-soft) !important;
+  fill: var(--vp-c-bg-soft) !important;
+  color: var(--vp-c-text-1) !important;
 }
 /* Mermaid sizes a label's box at its own line height; the page's taller one would clip the text. */
 .vp-doc .mermaid foreignObject div,
@@ -74,13 +56,13 @@
 .mermaid text,
 .mermaid .label,
 .mermaid .nodeLabel {
-  fill: #e6edf3 !important;
-  color: #e6edf3 !important;
+  fill: var(--vp-c-text-1) !important;
+  color: var(--vp-c-text-1) !important;
 }
 .mermaid .flowchart-link,
 .mermaid .messageLine0,
 .mermaid .messageLine1 {
-  stroke: #8b949e !important;
+  stroke: var(--wiki-line) !important;
 }
 
 .diagram-zoom {

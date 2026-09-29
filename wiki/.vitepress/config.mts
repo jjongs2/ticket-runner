@@ -1,7 +1,10 @@
 import { defineConfig, type DefaultTheme } from "vitepress";
 import { withMermaid } from "vitepress-plugin-mermaid";
+import { fonts, mermaidTheme, paletteCss } from "./palette";
 
 const repo = "https://github.com/jjongs2/ticket-runner";
+const editPattern = `${repo}/edit/main/wiki/:path`;
+const glossary = `${repo}/blob/main/CONTEXT.md`;
 
 type Page = { link: string; en: string; ko: string };
 type Section = { en: string; ko: string; pages: Page[] };
@@ -48,18 +51,13 @@ export default withMermaid(
     head: [
       ["link", { rel: "preconnect", href: "https://fonts.googleapis.com" }],
       ["link", { rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: "" }],
-      [
-        "link",
-        {
-          rel: "stylesheet",
-          href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap",
-        },
-      ],
+      ["link", { rel: "stylesheet", href: fonts.stylesheet }],
+      ["style", {}, paletteCss],
     ],
     themeConfig: {
       search: { provider: "local" },
       socialLinks: [{ icon: "github", link: repo }],
-      editLink: { pattern: `${repo}/edit/main/wiki/:path` },
+      editLink: { pattern: editPattern },
     },
     locales: {
       root: {
@@ -69,7 +67,7 @@ export default withMermaid(
         themeConfig: {
           nav: [
             { text: "Guide", link: "/guide/installation" },
-            { text: "Glossary", link: `${repo}/blob/main/CONTEXT.md` },
+            { text: "Glossary", link: glossary },
           ],
           sidebar: sidebar("en"),
           outline: { level: [2, 3] },
@@ -83,13 +81,13 @@ export default withMermaid(
         themeConfig: {
           nav: [
             { text: "가이드", link: "/ko/guide/installation" },
-            { text: "용어집", link: `${repo}/blob/main/CONTEXT.md` },
+            { text: "용어집", link: glossary },
           ],
           sidebar: sidebar("ko"),
           outline: { level: [2, 3], label: "이 페이지에서" },
           docFooter: { prev: "이전", next: "다음" },
           lastUpdated: { text: "마지막 수정" },
-          editLink: { pattern: `${repo}/edit/main/wiki/:path`, text: "GitHub에서 이 페이지 고치기" },
+          editLink: { pattern: editPattern, text: "GitHub에서 이 페이지 고치기" },
           langMenuLabel: "언어",
           returnToTopLabel: "맨 위로",
           sidebarMenuLabel: "메뉴",
@@ -99,30 +97,7 @@ export default withMermaid(
     },
     mermaid: {
       theme: "dark",
-      themeVariables: {
-        primaryColor: "#2d333b",
-        primaryTextColor: "#e6edf3",
-        primaryBorderColor: "#6d5dfc",
-        lineColor: "#8b949e",
-        secondaryColor: "#2d333b",
-        tertiaryColor: "#161b22",
-        background: "#0d1117",
-        mainBkg: "#2d333b",
-        nodeBorder: "#6d5dfc",
-        clusterBkg: "#161b22",
-        clusterBorder: "#30363d",
-        titleColor: "#e6edf3",
-        edgeLabelBackground: "#161b22",
-        actorBkg: "#2d333b",
-        actorBorder: "#6d5dfc",
-        actorTextColor: "#e6edf3",
-        signalColor: "#8b949e",
-        signalTextColor: "#e6edf3",
-        noteBkgColor: "#161b22",
-        noteTextColor: "#e6edf3",
-        noteBorderColor: "#30363d",
-        fontFamily: '"IBM Plex Sans", "IBM Plex Sans KR", sans-serif',
-      },
+      themeVariables: mermaidTheme,
     },
   }),
 );
