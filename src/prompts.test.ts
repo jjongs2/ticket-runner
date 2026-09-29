@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CONVENTIONS_PATH } from "./conventions.js";
 import {
   SELF_HOSTING_GUIDANCE,
+  STAGE_BOUNDARY_GUIDANCE,
   conflictPrompt,
   fixPrompt,
   implementPrompt,
@@ -12,6 +13,10 @@ const url = "https://github.com/jjongs2/ticket-runner/issues/2";
 
 /** The base branch the Run resolved, which most of these prompts only carry. */
 const BASE = "main";
+
+/** Whether the Target is the pipeline's own repository, as the prompts are told. */
+const OTHER_TARGET = false;
+const SELF_HOSTED = true;
 
 const CONFLICT = "CONFLICT (content): Merge conflict in src/cli.ts";
 
@@ -46,13 +51,13 @@ function expectsCleanWorktreeKeepingIgnoredFiles(prompt: string): void {
 
 describe("implementPrompt", () => {
   it("begins with the skill invocation and the full issue URL", () => {
-    expect(implementPrompt(url, BASE, "").split("\n")[0]).toBe(
+    expect(implementPrompt(url, BASE, "", OTHER_TARGET).split("\n")[0]).toBe(
       `/mattpocock-skills:implement ${url}`,
     );
   });
 
   it("carries the correction guidance for a known plugin defect", () => {
-    const prompt = implementPrompt(url, BASE, "");
+    const prompt = implementPrompt(url, BASE, "", OTHER_TARGET);
 
     expect(prompt).toMatch(/confirm the ticket title/i);
     expect(prompt).toMatch(/commit .*before .*code-review/i);
@@ -62,7 +67,7 @@ describe("implementPrompt", () => {
   });
 
   it("names the conventions document rather than \"the repo's commit convention\"", () => {
-    const prompt = implementPrompt(url, BASE, "");
+    const prompt = implementPrompt(url, BASE, "", OTHER_TARGET);
 
     expect(prompt).toContain(CONVENTIONS_PATH);
     expect(prompt).not.toMatch(/the repo's commit convention/);
@@ -70,7 +75,7 @@ describe("implementPrompt", () => {
 
   // A bare `/code-review` also matches the CLI's own built-in skill.
   it("names the review skill by its plugin wherever it refers to it", () => {
-    const mentions = implementPrompt(url, BASE, "").match(/\S*code-review\S*/g) ?? [];
+    const mentions = implementPrompt(url, BASE, "", OTHER_TARGET).match(/\S*code-review\S*/g) ?? [];
 
     expect(mentions.length).toBeGreaterThan(0);
     for (const mention of mentions) {
@@ -79,14 +84,14 @@ describe("implementPrompt", () => {
   });
 
   it("asks for review sub-agents in the foreground, since omitting the flag backgrounds them", () => {
-    const prompt = implementPrompt(url, BASE, "");
+    const prompt = implementPrompt(url, BASE, "", OTHER_TARGET);
 
     expect(prompt).toContain("`run_in_background: false`");
     expect(prompt).toMatch(/omitt\w* .*run_in_background.* in the background/i);
   });
 
   it("holds the answer until the review has returned and its fixes are committed", () => {
-    const prompt = implementPrompt(url, BASE, "");
+    const prompt = implementPrompt(url, BASE, "", OTHER_TARGET);
 
     expect(prompt).toMatch(/do not answer .*until .*review has returned/i);
     expect(prompt).toMatch(/fixes .*committed/i);
@@ -94,38 +99,38 @@ describe("implementPrompt", () => {
   });
 
   it("says a later answer replaces an earlier one and must repeat the Notes it keeps", () => {
-    const prompt = implementPrompt(url, BASE, "");
+    const prompt = implementPrompt(url, BASE, "", OTHER_TARGET);
 
     expect(prompt).toMatch(/later answer replaces an earlier one/i);
     expect(prompt).toMatch(/repeat every Note/i);
   });
 
   it("keeps uncommitted work off a background task and the final tests in the foreground", () => {
-    expectsForegroundFinish(implementPrompt(url, BASE, ""));
+    expectsForegroundFinish(implementPrompt(url, BASE, "", OTHER_TARGET));
   });
 
   it("leaves the worktree clean but keeps the gitignored files it installed", () => {
-    expectsCleanWorktreeKeepingIgnoredFiles(implementPrompt(url, BASE, ""));
+    expectsCleanWorktreeKeepingIgnoredFiles(implementPrompt(url, BASE, "", OTHER_TARGET));
   });
 
   it("appends the configured extra prompt after the guidance", () => {
-    const prompt = implementPrompt(url, BASE, "Prefer table-driven tests.");
+    const prompt = implementPrompt(url, BASE, "Prefer table-driven tests.", OTHER_TARGET);
 
     expect(prompt.trimEnd().endsWith("Prefer table-driven tests.")).toBe(true);
   });
 
   it("leaves no trailing blank block when no extra prompt is configured", () => {
-    expect(implementPrompt(url, BASE, "")).toBe(implementPrompt(url, BASE, "   "));
+    expect(implementPrompt(url, BASE, "", OTHER_TARGET)).toBe(implementPrompt(url, BASE, "   ", OTHER_TARGET));
   });
 });
 
 describe("verifyPrompt", () => {
   it("does not invoke the implement skill", () => {
-    expect(verifyPrompt(url, "")).not.toContain("/mattpocock-skills:implement");
+    expect(verifyPrompt(url, "", OTHER_TARGET)).not.toContain("/mattpocock-skills:implement");
   });
 
   it("names the Ticket and tells the session to falsify each criterion", () => {
-    const prompt = verifyPrompt(url, "");
+    const prompt = verifyPrompt(url, "", OTHER_TARGET);
 
     expect(prompt).toContain(url);
     expect(prompt).toMatch(/acceptance criteria/i);
@@ -136,7 +141,7 @@ describe("verifyPrompt", () => {
   });
 
   it("appends the configured extra prompt", () => {
-    expect(verifyPrompt(url, "Ignore formatting.").trimEnd().endsWith("Ignore formatting.")).toBe(
+    expect(verifyPrompt(url, "Ignore formatting.", OTHER_TARGET).trimEnd().endsWith("Ignore formatting.")).toBe(
       true,
     );
   });
@@ -144,11 +149,11 @@ describe("verifyPrompt", () => {
 
 describe("fixPrompt", () => {
   it("invokes no plugin skill: the failure is the whole brief", () => {
-    expect(fixPrompt(url, FAILED_CHECK, BASE, "")).not.toContain("/mattpocock-skills:");
+    expect(fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET)).not.toContain("/mattpocock-skills:");
   });
 
   it("names the Ticket, the failure and the evidence that was captured", () => {
-    const prompt = fixPrompt(url, FAILED_CHECK, BASE, "");
+    const prompt = fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET);
 
     expect(prompt).toContain(url);
     expect(prompt).toContain("Check `npm test` failed");
@@ -156,17 +161,17 @@ describe("fixPrompt", () => {
   });
 
   it("says which kind of failure this is", () => {
-    expect(fixPrompt(url, FAILED_CHECK, BASE, "")).toMatch(/a Check .*failed/i);
-    expect(fixPrompt(url, { ...FAILED_CHECK, kind: "unmet-criteria" }, BASE, "")).toMatch(
+    expect(fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET)).toMatch(/a Check .*failed/i);
+    expect(fixPrompt(url, { ...FAILED_CHECK, kind: "unmet-criteria" }, BASE, "", OTHER_TARGET)).toMatch(
       /unmet Acceptance Criteria/i,
     );
-    expect(fixPrompt(url, { ...FAILED_CHECK, kind: "failed-ci" }, BASE, "")).toMatch(
+    expect(fixPrompt(url, { ...FAILED_CHECK, kind: "failed-ci" }, BASE, "", OTHER_TARGET)).toMatch(
       /pull request check failed/i,
     );
     expect(
-      fixPrompt(url, { ...FAILED_CHECK, kind: "unresolved-conflict" }, BASE, ""),
+      fixPrompt(url, { ...FAILED_CHECK, kind: "unresolved-conflict" }, BASE, "", OTHER_TARGET),
     ).toMatch(/conflicts with main/i);
-    expect(fixPrompt(url, { ...FAILED_CHECK, kind: "uncommitted-work" }, BASE, "")).toMatch(
+    expect(fixPrompt(url, { ...FAILED_CHECK, kind: "uncommitted-work" }, BASE, "", OTHER_TARGET)).toMatch(
       /the Stage before you left changes .*never committed/i,
     );
   });
@@ -181,6 +186,7 @@ describe("fixPrompt", () => {
       },
       BASE,
       "",
+      OTHER_TARGET,
     );
 
     expect(prompt).toMatch(/commit what belongs to this Ticket and discard the rest/i);
@@ -188,35 +194,35 @@ describe("fixPrompt", () => {
   });
 
   it("keeps uncommitted work off a background task and the final tests in the foreground", () => {
-    expectsForegroundFinish(fixPrompt(url, FAILED_CHECK, BASE, ""));
+    expectsForegroundFinish(fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET));
   });
 
   it("leaves the worktree clean but keeps the gitignored files it installed", () => {
-    expectsCleanWorktreeKeepingIgnoredFiles(fixPrompt(url, FAILED_CHECK, BASE, ""));
+    expectsCleanWorktreeKeepingIgnoredFiles(fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET));
   });
 
   it("names the conventions document rather than \"the repo's commit convention\"", () => {
-    const prompt = fixPrompt(url, FAILED_CHECK, BASE, "");
+    const prompt = fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET);
 
     expect(prompt).toContain(CONVENTIONS_PATH);
     expect(prompt).not.toMatch(/the repo's commit convention/);
   });
 
   it("asks for the regression test a gap the Verdict found should have had", () => {
-    expect(fixPrompt(url, { ...FAILED_CHECK, kind: "unmet-criteria" }, BASE, "")).toMatch(
+    expect(fixPrompt(url, { ...FAILED_CHECK, kind: "unmet-criteria" }, BASE, "", OTHER_TARGET)).toMatch(
       /regression test/i,
     );
   });
 
   it("tells the session to commit where it is and to open nothing", () => {
-    const prompt = fixPrompt(url, FAILED_CHECK, BASE, "");
+    const prompt = fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET);
 
     expect(prompt).toMatch(/commit .*on the .*branch|branch you are on/i);
     expect(prompt).toMatch(/do not open pull requests/i);
   });
 
   it("appends the configured extra prompt", () => {
-    const prompt = fixPrompt(url, FAILED_CHECK, BASE, "Keep it small.");
+    const prompt = fixPrompt(url, FAILED_CHECK, BASE, "Keep it small.", OTHER_TARGET);
 
     expect(prompt.trimEnd().endsWith("Keep it small.")).toBe(true);
   });
@@ -224,27 +230,27 @@ describe("fixPrompt", () => {
 
 describe("conflictPrompt", () => {
   it("begins with the skill that resolves an in-progress rebase", () => {
-    expect(conflictPrompt(url, CONFLICT, BASE, "").split("\n")[0]).toBe(
+    expect(conflictPrompt(url, CONFLICT, BASE, "", OTHER_TARGET).split("\n")[0]).toBe(
       "/mattpocock-skills:resolving-merge-conflicts",
     );
   });
 
   it("names the Ticket and fences what git printed when the rebase stopped", () => {
-    const prompt = conflictPrompt(url, CONFLICT, BASE, "");
+    const prompt = conflictPrompt(url, CONFLICT, BASE, "", OTHER_TARGET);
 
     expect(prompt).toContain(url);
     expect(prompt).toContain(`\`\`\`\n${CONFLICT}\n\`\`\``);
   });
 
   it("forbids the two ways out that leave the branch unrebased", () => {
-    const prompt = conflictPrompt(url, CONFLICT, BASE, "");
+    const prompt = conflictPrompt(url, CONFLICT, BASE, "", OTHER_TARGET);
 
     expect(prompt).toMatch(/never .*rebase --abort/i);
     expect(prompt).toMatch(/rewind the branch/i);
   });
 
   it("keeps the session inside the conflict, and out of the pipeline's work", () => {
-    const prompt = conflictPrompt(url, CONFLICT, BASE, "");
+    const prompt = conflictPrompt(url, CONFLICT, BASE, "", OTHER_TARGET);
 
     expect(prompt).toMatch(/implement nothing new/i);
     expect(prompt).toMatch(/no conflict marker/i);
@@ -254,51 +260,89 @@ describe("conflictPrompt", () => {
 
   it("appends the configured extra prompt", () => {
     expect(
-      conflictPrompt(url, CONFLICT, BASE, "Keep it small.").trimEnd().endsWith("Keep it small."),
+      conflictPrompt(url, CONFLICT, BASE, "Keep it small.", OTHER_TARGET).trimEnd().endsWith("Keep it small."),
     ).toBe(true);
   });
 });
 
-describe("the self-hosting guidance", () => {
-  it("tells the session to exercise the pipeline through its tests and fakes only", () => {
-    expect(SELF_HOSTING_GUIDANCE).toMatch(/tests? and fakes/i);
-    expect(SELF_HOSTING_GUIDANCE).toMatch(/never run .*against this repository/is);
-    expect(SELF_HOSTING_GUIDANCE).toMatch(/never kill .*process/is);
+describe("the Stage boundary guidance", () => {
+  /** Every Stage prompt, built for one kind of Target, with `extra` as the config's extra prompt. */
+  const everyPrompt = (selfHosted: boolean, extra = "") => [
+    implementPrompt(url, BASE, extra, selfHosted),
+    verifyPrompt(url, extra, selfHosted),
+    fixPrompt(url, FAILED_CHECK, BASE, extra, selfHosted),
+    conflictPrompt(url, CONFLICT, BASE, extra, selfHosted),
+  ];
+
+  it("tells the session what holds in every Target", () => {
+    expect(STAGE_BOUNDARY_GUIDANCE).toMatch(/never run `ticket-runner` against this repository or GitHub/i);
+    expect(STAGE_BOUNDARY_GUIDANCE).toMatch(/never kill processes you did not start/i);
+    expect(STAGE_BOUNDARY_GUIDANCE).toMatch(/refusal is expected; do not work around it/i);
+    expect(STAGE_BOUNDARY_GUIDANCE).toContain("TICKET_RUNNER_STAGE");
   });
 
-  it("is carried verbatim by every Stage prompt, from one place", () => {
-    expect(implementPrompt(url, BASE, "")).toContain(SELF_HOSTING_GUIDANCE);
-    expect(verifyPrompt(url, "")).toContain(SELF_HOSTING_GUIDANCE);
-    expect(fixPrompt(url, FAILED_CHECK, BASE, "")).toContain(SELF_HOSTING_GUIDANCE);
-    expect(conflictPrompt(url, CONFLICT, BASE, "")).toContain(SELF_HOSTING_GUIDANCE);
+  it("names the pipeline as the command that started the session, not as the checkout", () => {
+    expect(STAGE_BOUNDARY_GUIDANCE).toMatch(/started this session/i);
+    expect(STAGE_BOUNDARY_GUIDANCE).not.toMatch(/checkout/i);
   });
 
-  it("stays ahead of the repo's own extra prompt", () => {
-    const prompt = implementPrompt(url, BASE, "Prefer table-driven tests.");
+  it("keeps the checkout, its tests and fakes and its spellings to the self-hosting part", () => {
+    expect(STAGE_BOUNDARY_GUIDANCE).not.toMatch(/tests? and fakes/i);
+    expect(STAGE_BOUNDARY_GUIDANCE).not.toContain("npm run ticket-runner");
+    expect(STAGE_BOUNDARY_GUIDANCE).not.toContain("npx tsx src/cli.ts");
 
-    expect(prompt.indexOf(SELF_HOSTING_GUIDANCE)).toBeLessThan(
-      prompt.indexOf("Prefer table-driven tests."),
-    );
+    expect(SELF_HOSTING_GUIDANCE).toMatch(/this checkout is the pipeline that started this session/i);
+    expect(SELF_HOSTING_GUIDANCE).toMatch(/only through its tests and fakes/i);
+    expect(SELF_HOSTING_GUIDANCE).toContain("`npm run ticket-runner`");
+    expect(SELF_HOSTING_GUIDANCE).toContain("`npx tsx src/cli.ts`");
+  });
+
+  it("gives a Stage in another Target the every-Target part and nothing of the checkout", () => {
+    for (const prompt of everyPrompt(OTHER_TARGET)) {
+      expect(prompt).toContain(STAGE_BOUNDARY_GUIDANCE);
+      expect(prompt).not.toContain(SELF_HOSTING_GUIDANCE);
+      expect(prompt).not.toMatch(/checkout is the pipeline/i);
+      expect(prompt).not.toMatch(/tests? and fakes/i);
+      expect(prompt).not.toContain("npm run ticket-runner");
+      expect(prompt).not.toContain("npx tsx src/cli.ts");
+    }
+  });
+
+  it("gives a Stage in the pipeline's own repository both parts, verbatim from one place", () => {
+    for (const prompt of everyPrompt(SELF_HOSTED)) {
+      expect(prompt).toContain(STAGE_BOUNDARY_GUIDANCE);
+      expect(prompt).toContain(SELF_HOSTING_GUIDANCE);
+    }
+  });
+
+  it("stays ahead of the repo's own extra prompt, in both kinds of Target", () => {
+    for (const selfHosted of [OTHER_TARGET, SELF_HOSTED]) {
+      for (const prompt of everyPrompt(selfHosted, "Prefer table-driven tests.")) {
+        const extra = prompt.indexOf("Prefer table-driven tests.");
+        expect(prompt.indexOf(STAGE_BOUNDARY_GUIDANCE)).toBeLessThan(extra);
+        if (selfHosted) expect(prompt.indexOf(SELF_HOSTING_GUIDANCE)).toBeLessThan(extra);
+      }
+    }
   });
 });
 
 describe("the Notes channel", () => {
   it("tells the implement Stage where a finding for another Ticket goes", () => {
-    const prompt = implementPrompt(url, BASE, "");
+    const prompt = implementPrompt(url, BASE, "", OTHER_TARGET);
 
     expect(prompt).toContain("Notes for other Tickets");
     expect(prompt).toContain("`notes`");
   });
 
   it("tells the fix Stage the same", () => {
-    expect(fixPrompt(url, FAILED_CHECK, BASE, "")).toContain("Notes for other Tickets");
+    expect(fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET)).toContain("Notes for other Tickets");
   });
 
   it("tells every Stage with the channel that a Note is a defect", () => {
     for (const prompt of [
-      implementPrompt(url, BASE, ""),
-      fixPrompt(url, FAILED_CHECK, BASE, ""),
-      verifyPrompt(url, ""),
+      implementPrompt(url, BASE, "", OTHER_TARGET),
+      fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET),
+      verifyPrompt(url, "", OTHER_TARGET),
     ]) {
       expect(prompt).toContain("A Note is a defect");
       expect(prompt).toContain("are not Notes");
@@ -306,21 +350,21 @@ describe("the Notes channel", () => {
   });
 
   it("holds a verify Note to the evidence bar a criterion is held to", () => {
-    const prompt = verifyPrompt(url, "");
+    const prompt = verifyPrompt(url, "", OTHER_TARGET);
 
     expect(prompt).toMatch(/carries the evidence that the defect is real in its `evidence` field/i);
     expect(prompt).toContain("something you suspect but did not demonstrate is not a Note");
   });
 
   it("tells a Stage to leave the number out rather than guess it", () => {
-    expect(implementPrompt(url, BASE, "")).toContain("leave it out when you are not sure");
+    expect(implementPrompt(url, BASE, "", OTHER_TARGET)).toContain("leave it out when you are not sure");
   });
 
   it("asks every Stage with the channel for a Note in its parts, not as one string", () => {
     for (const prompt of [
-      implementPrompt(url, BASE, ""),
-      fixPrompt(url, FAILED_CHECK, BASE, ""),
-      verifyPrompt(url, ""),
+      implementPrompt(url, BASE, "", OTHER_TARGET),
+      fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET),
+      verifyPrompt(url, "", OTHER_TARGET),
     ]) {
       expect(prompt).toContain("`summary` is one short sentence naming the defect");
       expect(prompt).toContain("`evidence` is where the defect is and what shows it is real");
@@ -331,29 +375,29 @@ describe("the Notes channel", () => {
   });
 
   it("promises a Stage nothing about issue titles", () => {
-    expect(implementPrompt(url, BASE, "")).not.toContain("issue's title");
-    expect(fixPrompt(url, FAILED_CHECK, BASE, "")).not.toContain("issue's title");
-    expect(implementPrompt(url, BASE, "", 42)).not.toContain("issue's title");
+    expect(implementPrompt(url, BASE, "", OTHER_TARGET)).not.toContain("issue's title");
+    expect(fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET)).not.toContain("issue's title");
+    expect(implementPrompt(url, BASE, "", OTHER_TARGET, 42)).not.toContain("issue's title");
   });
 
   it("tells a Stage that finding nothing is the ordinary case", () => {
-    expect(implementPrompt(url, BASE, "")).toContain(`"notes": []`);
+    expect(implementPrompt(url, BASE, "", OTHER_TARGET)).toContain(`"notes": []`);
   });
 
   it("names the standing Notes issue when one is open", () => {
-    const prompt = implementPrompt(url, BASE, "", 42);
+    const prompt = implementPrompt(url, BASE, "", OTHER_TARGET, 42);
 
     expect(prompt).toContain("gathered on #42");
-    expect(fixPrompt(url, FAILED_CHECK, BASE, "", 42)).toContain("gathered on #42");
+    expect(fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, 42)).toContain("gathered on #42");
   });
 
   it("says nothing about one when none is open", () => {
-    expect(implementPrompt(url, BASE, "")).not.toContain("gathered on");
-    expect(fixPrompt(url, FAILED_CHECK, BASE, "")).not.toContain("gathered on");
+    expect(implementPrompt(url, BASE, "", OTHER_TARGET)).not.toContain("gathered on");
+    expect(fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET)).not.toContain("gathered on");
   });
 
   it("asks for what the standing issue does not record, not for another instance of it", () => {
-    const prompt = implementPrompt(url, BASE, "", 42);
+    const prompt = implementPrompt(url, BASE, "", OTHER_TARGET, 42);
 
     expect(prompt).toContain("take what it already records as recorded");
     expect(prompt).toContain("changes what a reader would do about it");
@@ -361,14 +405,14 @@ describe("the Notes channel", () => {
   });
 
   it("passes the number alone, so the prompt does not grow with the backlog", () => {
-    const withStanding = implementPrompt(url, BASE, "", 42);
-    const without = implementPrompt(url, BASE, "");
+    const withStanding = implementPrompt(url, BASE, "", OTHER_TARGET, 42);
+    const without = implementPrompt(url, BASE, "", OTHER_TARGET);
 
     expect(withStanding.length - without.length).toBeLessThan(300);
   });
 
   it("tells the verify Stage the same, in its own words", () => {
-    const prompt = verifyPrompt(url, "");
+    const prompt = verifyPrompt(url, "", OTHER_TARGET);
 
     expect(prompt).toContain("Notes for other Tickets");
     expect(prompt).toContain("`notes`");
@@ -378,30 +422,30 @@ describe("the Notes channel", () => {
   });
 
   it("sends the verify Stage's judgement of a criterion to the Verdict, never to a Note", () => {
-    const prompt = verifyPrompt(url, "");
+    const prompt = verifyPrompt(url, "", OTHER_TARGET);
 
     expect(prompt).toMatch(/criterion belongs in the Verdict/i);
     expect(prompt).toMatch(/never in a Note/i);
   });
 
   it("leaves the verify Stage fixing, committing and staging nothing", () => {
-    expect(verifyPrompt(url, "")).toMatch(/fix nothing, commit nothing/i);
+    expect(verifyPrompt(url, "", OTHER_TARGET)).toMatch(/fix nothing, commit nothing/i);
   });
 
   it("names the standing Notes issue to the verify Stage when one is open", () => {
-    expect(verifyPrompt(url, "", 42)).toContain("gathered on #42");
-    expect(verifyPrompt(url, "")).not.toContain("gathered on");
+    expect(verifyPrompt(url, "", OTHER_TARGET, 42)).toContain("gathered on #42");
+    expect(verifyPrompt(url, "", OTHER_TARGET)).not.toContain("gathered on");
   });
 
   it("asks the Stage that only rebases for no Notes", () => {
-    expect(conflictPrompt(url, CONFLICT, BASE, "")).not.toContain("Notes for other Tickets");
+    expect(conflictPrompt(url, CONFLICT, BASE, "", OTHER_TARGET)).not.toContain("Notes for other Tickets");
   });
 });
 
 describe("the title of the branch", () => {
   const prompts = () => [
-    implementPrompt(url, BASE, ""),
-    fixPrompt(url, FAILED_CHECK, BASE, ""),
+    implementPrompt(url, BASE, "", OTHER_TARGET),
+    fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET),
   ];
 
   it("is what both code Stages are asked to answer, for the whole branch", () => {
@@ -422,28 +466,28 @@ describe("the title of the branch", () => {
   });
 
   it("is asked of neither the verify nor the conflict Stage", () => {
-    expect(verifyPrompt(url, "")).not.toContain("`title`");
-    expect(conflictPrompt(url, CONFLICT, BASE, "")).not.toContain("`title`");
+    expect(verifyPrompt(url, "", OTHER_TARGET)).not.toContain("`title`");
+    expect(conflictPrompt(url, CONFLICT, BASE, "", OTHER_TARGET)).not.toContain("`title`");
   });
 });
 
 describe("the resolved base branch", () => {
   it("is what the implement Stage is told its subject lands on", () => {
-    const prompt = implementPrompt(url, "release", "");
+    const prompt = implementPrompt(url, "release", "", OTHER_TARGET);
 
     expect(prompt).toContain("the squash commit on `release`");
     expect(prompt).not.toContain("`main`");
   });
 
   it("is what the fix Stage is told its title lands on", () => {
-    const prompt = fixPrompt(url, FAILED_CHECK, "release", "");
+    const prompt = fixPrompt(url, FAILED_CHECK, "release", "", OTHER_TARGET);
 
     expect(prompt).toContain("the squash commit on `release`");
     expect(prompt).not.toContain("`main`");
   });
 
   it("is what the conflict Stage is told the rebase stopped against", () => {
-    const prompt = conflictPrompt(url, CONFLICT, "release", "");
+    const prompt = conflictPrompt(url, CONFLICT, "release", "", OTHER_TARGET);
 
     expect(prompt).toContain("rebasing it onto `release`");
     expect(prompt).toContain("keep `release`'s everywhere the Ticket is silent");
@@ -456,6 +500,7 @@ describe("the resolved base branch", () => {
       { ...FAILED_CHECK, kind: "unresolved-conflict" },
       "release",
       "",
+      OTHER_TARGET,
     );
 
     expect(prompt).toContain("the branch conflicts with release");

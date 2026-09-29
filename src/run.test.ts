@@ -96,6 +96,7 @@ function pipeline(lanes = 1): Pipeline {
     baseBranch: "main",
     landing: new Landing(),
     standingNotes: new StandingNotes(),
+    selfHosted: false,
     log: (line) => logged.push(line),
   };
 }

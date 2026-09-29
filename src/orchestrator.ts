@@ -130,6 +130,13 @@ export interface Pipeline {
    * them are told which one it is.
    */
   standingNotes: StandingNotes;
+  /**
+   * Whether the Target is the pipeline's own repository, decided once before
+   * the Run started ({@link import("./self-hosting.js").isPipelineRepository}).
+   * Only there is the checkout a Stage stands in the pipeline itself, so only
+   * there is a Stage told to exercise it through its tests and fakes.
+   */
+  selfHosted: boolean;
   log?: (line: string) => void;
 }
 
@@ -993,6 +1000,7 @@ async function implement(
       issue.url,
       pipeline.baseBranch,
       stage.extraPrompt,
+      pipeline.selfHosted,
       await standingNotesNumber(pipeline),
     ),
     cwd: worktree,
@@ -1111,7 +1119,12 @@ async function verify(
 ): Promise<Verdict> {
   const stage = pipeline.config.stages.verify;
   const result = await runStage(pipeline, "verify", {
-    prompt: verifyPrompt(issue.url, stage.extraPrompt, await standingNotesNumber(pipeline)),
+    prompt: verifyPrompt(
+      issue.url,
+      stage.extraPrompt,
+      pipeline.selfHosted,
+      await standingNotesNumber(pipeline),
+    ),
     cwd: worktree,
     logDir,
     jsonSchema: VERDICT_JSON_SCHEMA,
@@ -1201,6 +1214,7 @@ async function fix(
       failure,
       pipeline.baseBranch,
       stage.extraPrompt,
+      pipeline.selfHosted,
       await standingNotesNumber(pipeline),
     ),
     cwd: worktree,
@@ -1299,7 +1313,13 @@ async function conflictStage(
   const stage = pipeline.config.stages.conflict;
   try {
     const result = await runStage(pipeline, "conflict", {
-      prompt: conflictPrompt(issue.url, conflict, pipeline.baseBranch, stage.extraPrompt),
+      prompt: conflictPrompt(
+        issue.url,
+        conflict,
+        pipeline.baseBranch,
+        stage.extraPrompt,
+        pipeline.selfHosted,
+      ),
       cwd: worktree,
       logDir,
     });

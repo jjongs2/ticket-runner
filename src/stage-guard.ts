@@ -1,5 +1,5 @@
 /**
- * The Stage boundary: a Stage session may not run the pipeline it is building.
+ * The Stage boundary: a Stage session may not run the pipeline that started it.
  *
  * Every Stage the AgentRunner starts carries the Stage mark, an environment
  * variable the child inherits, and the CLI refuses to do anything while it is
@@ -27,6 +27,6 @@ export function nestedRunRefusal(env: Record<string, string | undefined>): strin
     "that is already in progress.",
     "A Stage may not run the pipeline: doing so claims a Ticket on the live tracker,",
     "creates a second worktree and starts a nested Run.",
-    "Exercise the pipeline through its tests and fakes instead.",
+    "Leave the pipeline to the Run that started this shell, and carry on with the Stage's own work.",
   ].join(" ");
 }

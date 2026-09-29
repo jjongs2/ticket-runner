@@ -117,6 +117,7 @@ Tests sit beside each module as `*.test.ts`.
 | Module | One line |
 |---|---|
 | [`prompts.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/prompts.ts) | each Stage's prompt, which expands `/mattpocock-skills:<skill>` |
+| [`self-hosting.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/self-hosting.ts) | whether the Target is the pipeline's own repository, which decides what a Stage is told about its checkout |
 | [`verdict.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/verdict.ts) | the Verdict schema and whether it passes |
 | [`title.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/title.ts) | the pull request title from the Stages' answers, then the commits, then the Ticket |
 | [`note-schema.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/note-schema.ts), [`notes.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/notes.ts) | Notes: how a Stage declares them and where they are routed |
@@ -305,7 +306,7 @@ This repository is a Target of its own pipeline, so it follows the same rules as
 - [`CONTEXT.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md): name things with the glossary; a concept that needs a new word goes there first
 - [`docs/templates/`](https://github.com/jjongs2/ticket-runner/tree/main/docs/templates): change a shape there before the code that writes it
 
-A Stage may not run the pipeline. Its shell carries `TICKET_RUNNER_STAGE`, and every command refuses while it is set. Exercise the pipeline through the tests and fakes instead.
+A Stage may not run the pipeline. Its shell carries `TICKET_RUNNER_STAGE`, and every command refuses while it is set, leaving the pipeline to the Run that started it. In this repository, a Stage's prompt also tells it to exercise the pipeline through the tests and fakes instead.
 
 ## Related pages
 

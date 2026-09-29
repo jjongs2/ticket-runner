@@ -215,6 +215,24 @@ export class GhTracker implements Tracker {
   }
 
   /**
+   * The Target's `owner/name`, read through REST like {@link defaultBranch}.
+   * Every failure is no answer, because a Target this cannot name is only a
+   * Target that is not the pipeline's own.
+   */
+  async repository(): Promise<string | undefined> {
+    try {
+      const { exitCode, stdout } = await this.gh(
+        ["api", "repos/{owner}/{repo}", "--jq", ".full_name"],
+        { allowFailure: true },
+      );
+      const name = stdout.trim();
+      return exitCode === 0 && name !== "" ? name : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
    * The tag of the highest Version published on `repository` as a Release.
    *
    * Every failure is the same answer — no answer — because nothing the caller

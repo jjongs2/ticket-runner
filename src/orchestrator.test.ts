@@ -172,6 +172,7 @@ async function run(
       baseBranch: await resolveBaseBranch(tracker, settings),
       landing: new Landing(),
       standingNotes: new StandingNotes(),
+      selfHosted: false,
       log: (line) => logged.push(line),
     },
     TICKET,
@@ -3801,6 +3802,7 @@ describe("the Landing", () => {
       baseBranch: await resolveBaseBranch(tracker, settings),
       landing: new Landing(),
       standingNotes: new StandingNotes(),
+      selfHosted: false,
       log: (line) => logged.push(line),
     };
   });
