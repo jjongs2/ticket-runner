@@ -52,7 +52,7 @@ export default withMermaid(
         "link",
         {
           rel: "stylesheet",
-          href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap",
+          href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap",
         },
       ],
     ],
@@ -121,7 +121,7 @@ export default withMermaid(
         noteBkgColor: "#161b22",
         noteTextColor: "#e6edf3",
         noteBorderColor: "#30363d",
-        fontFamily: "Inter, sans-serif",
+        fontFamily: '"IBM Plex Sans", "IBM Plex Sans KR", sans-serif',
       },
     },
   }),
