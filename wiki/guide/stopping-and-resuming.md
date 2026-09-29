@@ -111,7 +111,7 @@ A few things differ from the Run that handed it off:
 
 Until the relabel, the State file is inert. No Frontier offers a `ready-for-human` Ticket, the sweep passes over it without a word, and a Run given its number skips it as `not-ready`. Once the issue closes, the sweep removes the file, so a Ticket finished by hand leaves nothing behind.
 
-Why a Hand-off keeps the State at all: the Run once misread the rate limit as an ordinary failure and handed off every Ticket it reached. Each of those cost a human a deleted branch. With the State kept, each costs one relabel ([ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-is-a-local-file.md), second amendment).
+Why a Hand-off keeps the State at all: the Run once misread the rate limit as an ordinary failure and handed off every Ticket it reached. Each of those cost a human a deleted branch. With the State kept, each costs one relabel ([ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md), second amendment).
 
 ## Release on a rate limit
 
@@ -245,7 +245,7 @@ Every write but the first is logged and nothing more when it fails. The remote t
 
 ### The `ticket-runner/state` branch
 
-A State file kept in one checkout can be resumed only on that machine. A Ticket a cloud Run released, left stranded or handed off would be lost with the VM, and a Run on a workstation would never know of it. So the State lives on the Target's remote, where a Run on any Host can resume a Ticket another Host left ([ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-is-a-local-file.md), last amendment). It is kept off the issue because the board is written for humans, and a machine record there would be noise and a second source of truth beside the labels.
+A State file kept in one checkout can be resumed only on that machine. A Ticket a cloud Run released, left stranded or handed off would be lost with the VM, and a Run on a workstation would never know of it. So the State lives on the Target's remote, where a Run on any Host can resume a Ticket another Host left ([ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md), last amendment). It is kept off the issue because the board is written for humans, and a machine record there would be noise and a second source of truth beside the labels.
 
 - Each change rewrites the branch as one snapshot commit with no parent. Nothing reads its history, and a branch that grew with every Stage would grow the Target with it.
 - The push uses `--force-with-lease` on the tip it read, so another writer's newer snapshot is never overwritten. It is read again and the edit reapplied, up to three tries.
@@ -346,4 +346,4 @@ Pushes use `--force-with-lease`, so a rebase can rewrite the branch but can neve
 - [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts): `rateLimited`
 - [`src/run-log.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run-log.ts): `transcriptFiles`
 - [`docs/templates/handoff-comment.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/handoff-comment.md), [`docs/templates/draft-pr-body.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/draft-pr-body.md), [`docs/templates/stop-report.txt`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/stop-report.txt)
-- [ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-is-a-local-file.md), [ADR-0006](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md), [ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)
+- [ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md), [ADR-0006](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md), [ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)

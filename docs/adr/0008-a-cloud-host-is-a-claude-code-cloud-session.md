@@ -1,8 +1,6 @@
 # A cloud Host is a Claude Code cloud session, and the Run lock lives on GitHub
 
-A Run can execute on a Host that does not need the human's machine switched on: a Claude Code cloud session, which a human opens from the Claude app on the Target and in which an Operator — the session's own Claude — readies the Host, starts the Run (or a `ticket`) in the background, reports what it prints and passes on a Stop. The whole Run moves, not the Stages alone: inside the cloud VM each Stage is still one `claude -p` child process (ADR-0002), which a probe showed is installed there, authenticates through the session's own proxy with no token of ours, and honours `--json-schema`. Local Runs stay first-class, and the two Hosts share a Target by taking turns: one Run per Target at a time, whichever Host it is on.
-
-This is not yet implemented; the Spec that implements it links here.
+A Run can execute on a Host that does not need the human's machine switched on: a Claude Code cloud session, which a human opens from the Claude app on the Target and in which an Operator — the session's own Claude — readies the Host, starts the Run in the background, narrowed to the Tickets the human names when they name any, reports what it prints and passes on a Stop. The whole Run moves, not the Stages alone: inside the cloud VM each Stage is still one `claude -p` child process (ADR-0002), which a probe showed is installed there, authenticates through the session's own proxy with no token of ours, and honours `--json-schema`. Local Runs stay first-class, and the two Hosts share a Target by taking turns: one Run per Target at a time, whichever Host it is on.
 
 ## Considered options
 
