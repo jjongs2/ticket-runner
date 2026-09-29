@@ -1,0 +1,83 @@
+/* Colours and fonts are CSS variables written by palette.ts. */
+
+.vp-doc table {
+  display: table;
+  width: 100%;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.vp-doc th,
+.vp-doc td {
+  padding: 8px 12px;
+}
+.vp-doc tr:nth-child(2n) {
+  background-color: transparent;
+}
+.vp-doc tbody tr:hover {
+  background-color: var(--vp-c-bg-soft);
+}
+
+/* Mermaid: the theme variables colour most of a diagram; these catch what they miss. */
+.mermaid {
+  display: flex;
+  justify-content: center;
+  margin: 1.5rem 0;
+  padding: 1rem;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+  background: var(--vp-c-bg-soft);
+  cursor: zoom-in;
+  overflow-x: auto;
+}
+.mermaid .node rect,
+.mermaid .node circle,
+.mermaid .node polygon,
+.mermaid .node path {
+  fill: var(--wiki-node) !important;
+  stroke: var(--vp-c-brand-2) !important;
+}
+.mermaid .cluster rect {
+  fill: var(--vp-c-bg-soft) !important;
+  stroke: var(--vp-c-divider) !important;
+}
+.mermaid .edgeLabel,
+.mermaid .edgeLabel rect {
+  background-color: var(--vp-c-bg-soft) !important;
+  fill: var(--vp-c-bg-soft) !important;
+  color: var(--vp-c-text-1) !important;
+}
+/* Mermaid sizes a label's box at its own line height; the page's taller one would clip the text. */
+.vp-doc .mermaid foreignObject div,
+.vp-doc .mermaid foreignObject span,
+.vp-doc .mermaid foreignObject p {
+  line-height: 1.5 !important;
+  margin: 0;
+}
+.mermaid text,
+.mermaid .label,
+.mermaid .nodeLabel {
+  fill: var(--vp-c-text-1) !important;
+  color: var(--vp-c-text-1) !important;
+}
+.mermaid .flowchart-link,
+.mermaid .messageLine0,
+.mermaid .messageLine1 {
+  stroke: var(--wiki-line) !important;
+}
+
+.diagram-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: rgba(0, 0, 0, 0.92);
+  cursor: grab;
+  touch-action: none;
+}
+.diagram-zoom svg {
+  max-width: none;
+  transform-origin: center;
+}
