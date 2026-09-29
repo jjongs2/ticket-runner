@@ -117,6 +117,7 @@ claude --print <prompt> --output-format stream-json --verbose \
 | 모듈 | 한 줄 |
 |---|---|
 | [`prompts.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/prompts.ts) | 각 Stage의 prompt. `/mattpocock-skills:<skill>`을 펼침 |
+| [`self-hosting.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/self-hosting.ts) | Target이 파이프라인 자신의 저장소인지. Stage가 checkout에 대해 무엇을 듣는지 정함 |
 | [`verdict.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/verdict.ts) | Verdict schema와 통과 여부 |
 | [`title.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/title.ts) | pull request 제목: Stage의 답, 그다음 commit, 그다음 Ticket |
 | [`note-schema.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/note-schema.ts), [`notes.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/notes.ts) | Note: Stage가 적는 방식과 보내지는 곳 |
@@ -305,7 +306,7 @@ checkout은 번호 옆에 commit도 함께 알려 줍니다([찍히는 번호](#
 - [`CONTEXT.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md): 이름은 용어집을 따릅니다. 새 단어가 필요한 개념은 거기부터 적습니다.
 - [`docs/templates/`](https://github.com/jjongs2/ticket-runner/tree/main/docs/templates): 모양을 바꿀 때는 그걸 쓰는 코드보다 여기를 먼저 바꿉니다.
 
-Stage는 파이프라인을 실행할 수 없습니다. Stage의 셸에는 `TICKET_RUNNER_STAGE`가 있고, 이 변수가 있으면 모든 명령이 거절됩니다. 대신 테스트와 fake로 파이프라인을 돌려 보세요.
+Stage는 파이프라인을 실행할 수 없습니다. Stage의 셸에는 `TICKET_RUNNER_STAGE`가 있고, 이 변수가 있으면 모든 명령이 거절되어 파이프라인은 그 셸을 띄운 Run의 몫으로 남습니다. 이 저장소에서는 Stage의 프롬프트가 대신 테스트와 fake로 파이프라인을 돌려 보라고 덧붙입니다.
 
 ## 관련 페이지 {#related-pages}
 

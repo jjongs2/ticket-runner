@@ -80,7 +80,7 @@ Every Stage runs in the Ticket's worktree with `--permission-prompts none`, the 
 | fix | `Ticket: <issue URL>`, no skill | optional `title` and `notes` |
 | conflict | `/mattpocock-skills:resolving-merge-conflicts` | none |
 
-Every prompt then carries the same self-hosting guidance (never run the pipeline's own commands, never kill processes the Stage did not start), and ends with the Stage's `extraPrompt` from the config. The implement prompt adds guidance that works around the skill in an unattended session: commit before the review, invoke `/mattpocock-skills:code-review` by its full name, run the review sub-agents in the foreground, and leave the worktree clean.
+Every prompt then carries the Stage boundary guidance (never run `ticket-runner` against the repository or GitHub, never kill processes the Stage did not start, and expect the CLI to refuse under the Stage mark). Where the Target is the pipeline's own repository, it adds that the checkout is the pipeline, to be exercised only through its tests and fakes. The prompt ends with the Stage's `extraPrompt` from the config. The implement prompt adds guidance that works around the skill in an unattended session: commit before the review, invoke `/mattpocock-skills:code-review` by its full name, run the review sub-agents in the foreground, and leave the worktree clean.
 
 **The Stage mark.** Every Stage's shell carries `TICKET_RUNNER_STAGE=<stage>`, and the CLI refuses to start while it is set. A Stage therefore cannot claim a Ticket or start a nested Run by mistake. It is a tripwire, not a sandbox: a session that unsets the variable gets through, which is why the prompt says the same thing in words.
 

@@ -12,6 +12,7 @@ import { readinessRefusal } from "./readiness.js";
 import { LOCAL_STATE_DIR, localStateTickets } from "./resume.js";
 import { writeRunVersion } from "./run-log.js";
 import { type RunStop, processRun } from "./run.js";
+import { isPipelineRepository } from "./self-hosting.js";
 import { conventionsWarning, newerVersionLine } from "./staleness.js";
 import { type StopSource, StopSignal, listenForStop } from "./stop.js";
 import { startupMessages } from "./startup.js";
@@ -185,6 +186,10 @@ async function execute(
   // pull of this Run goes to the branch this answers.
   const baseBranch = await resolveBaseBranch(tracker, config);
 
+  // Once per Run as well: only a Target that is the pipeline's own repository
+  // has a checkout that is the pipeline, and every Stage is told which it is in.
+  const selfHosted = await isPipelineRepository(tracker, options.repository);
+
   const pipeline: Pipeline = {
     tracker,
     runner,
@@ -202,6 +207,7 @@ async function execute(
     // Once per Run as well: the Notes of every Ticket the night takes land on
     // one issue, and the Run looks it up once however many it writes.
     standingNotes: new StandingNotes(),
+    selfHosted,
     log,
   };
 

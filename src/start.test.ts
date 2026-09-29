@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CONFIG_FILENAME, loadConfig } from "./config.js";
 import { CLAUDE_SECTION, CONVENTIONS_PATH, conventionsDoc } from "./conventions.js";
 import { OPERATOR_SKILL_PATH, operatorSkill } from "./operator-skill.js";
+import { SELF_HOSTING_GUIDANCE, STAGE_BOUNDARY_GUIDANCE } from "./prompts.js";
 import { type Work, startRun } from "./start.js";
 import type { StopSource } from "./stop.js";
 import {
@@ -840,6 +841,82 @@ describe("what a Run says about another Version", () => {
 
     expect(tracker.versionTagLookups).toEqual([]);
     expect(out).not.toContain("A newer Version");
+  });
+});
+
+describe("what a Run tells its Stages about the checkout they stand in", () => {
+  /**
+   * One Ticket through all four Stages: verify finds a criterion unmet, so a
+   * fix Stage runs, and the rebase before the merge conflicts once, so a
+   * conflict Stage runs. Answers with every prompt the Run gave, by Stage.
+   */
+  async function everyStagePrompt(repository?: string): Promise<string[]> {
+    tracker.addIssue({ number: 4 });
+    runner.queue(
+      "verify",
+      stageResult({
+        result: {
+          criteria: [{ text: "it works", status: "unmet", evidence: "npm test is red" }],
+          pass: false,
+        },
+      }),
+    );
+    workspace.conflictOnce("CONFLICT (content): Merge conflict in src/a.ts");
+
+    // A fix session commits, as the real one does when it mends anything.
+    runner.leaves("fix", () => workspace.commits.push("fix(cli): mend the thing (#4)"));
+
+    const { code } = await start({ command: "run" }, undefined, repository);
+
+    expect(code).toBe(0);
+    const stages = ["implement", "verify", "fix", "conflict"] as const;
+    for (const stage of stages) expect(runner.prompts(stage)).not.toEqual([]);
+    return stages.flatMap((stage) => runner.prompts(stage));
+  }
+
+  it("tells every Stage in the pipeline's own repository that the checkout is the pipeline", async () => {
+    tracker.repositoryName = REPOSITORY;
+
+    for (const prompt of await everyStagePrompt(REPOSITORY)) {
+      expect(prompt).toContain(STAGE_BOUNDARY_GUIDANCE);
+      expect(prompt).toContain(SELF_HOSTING_GUIDANCE);
+    }
+  });
+
+  it("tells every Stage in another Target only what holds there", async () => {
+    tracker.repositoryName = "acme/shop";
+
+    for (const prompt of await everyStagePrompt(REPOSITORY)) {
+      expect(prompt).toContain(STAGE_BOUNDARY_GUIDANCE);
+      expect(prompt).not.toContain(SELF_HOSTING_GUIDANCE);
+    }
+  });
+
+  it("treats a Target whose repository cannot be read as another Target", async () => {
+    tracker.repositoryFails = true;
+
+    for (const prompt of await everyStagePrompt(REPOSITORY)) {
+      expect(prompt).toContain(STAGE_BOUNDARY_GUIDANCE);
+      expect(prompt).not.toContain(SELF_HOSTING_GUIDANCE);
+    }
+  });
+
+  it("treats a pipeline whose package names no repository as running in another Target", async () => {
+    tracker.repositoryName = REPOSITORY;
+
+    for (const prompt of await everyStagePrompt()) {
+      expect(prompt).not.toContain(SELF_HOSTING_GUIDANCE);
+    }
+  });
+
+  it("asks for the Target's repository once per Run, however many Tickets it takes", async () => {
+    tracker.repositoryName = REPOSITORY;
+    for (const number of [4, 5]) tracker.addIssue({ number });
+
+    await start({ command: "run" }, undefined, REPOSITORY);
+
+    expect(tracker.repositoryLookups).toBe(1);
+    expect(runner.prompts("implement")).toHaveLength(2);
   });
 });
 

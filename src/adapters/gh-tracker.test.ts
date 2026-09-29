@@ -169,6 +169,27 @@ describe("reading", () => {
     await expect(tracker(ok("\n")).defaultBranch()).rejects.toThrow(/no default branch/);
   });
 
+  it("reads the Target's repository as owner/name through REST", async () => {
+    expect(await tracker(ok("acme/repo\n")).repository()).toBe("acme/repo");
+    expect(calls[0]).toEqual(["api", "repos/{owner}/{repo}", "--jq", ".full_name"]);
+  });
+
+  /** A Target this cannot name is treated as any other, so no way of failing throws. */
+  it("answers with no repository rather than throwing when gh fails", async () => {
+    expect(await tracker(failedExecution("HTTP 404")).repository()).toBeUndefined();
+    expect(await tracker(ok("\n")).repository()).toBeUndefined();
+  });
+
+  it("answers with no repository when gh itself cannot be run", async () => {
+    const gh = trackerWith({
+      run: async () => {
+        throw new Error("spawn gh ENOENT");
+      },
+    });
+
+    expect(await gh.repository()).toBeUndefined();
+  });
+
   it("lists label names through REST, every page of them", async () => {
     const labels = await tracker(ok('[{"name":"needs-triage"},{"name":"wontfix"}]')).listLabels();
 

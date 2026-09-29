@@ -80,7 +80,7 @@ fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종�
 | fix | `Ticket: <issue URL>`, skill 없음 | 선택 항목 `title`과 `notes` |
 | conflict | `/mattpocock-skills:resolving-merge-conflicts` | 없음 |
 
-모든 프롬프트에는 같은 self-hosting 안내(파이프라인 자신의 명령을 실행하지 말 것, Stage가 띄우지 않은 프로세스를 kill하지 말 것)가 붙고, 마지막에 설정의 Stage별 `extraPrompt`가 붙습니다. implement 프롬프트에는 무인 세션에서 skill의 약점을 피해 가는 안내가 더 붙습니다. 리뷰 전에 먼저 commit할 것, `/mattpocock-skills:code-review`를 전체 이름으로 부를 것, 리뷰 sub-agent를 foreground로 돌릴 것, worktree를 깨끗이 남길 것 등입니다.
+모든 프롬프트에는 Stage 경계 안내(저장소나 GitHub을 대상으로 `ticket-runner`를 실행하지 말 것, Stage가 띄우지 않은 프로세스를 kill하지 말 것, Stage mark가 있는 동안 CLI가 거절하는 건 예상된 일임)가 붙습니다. Target이 파이프라인 자신의 저장소라면, checkout이 곧 파이프라인이니 테스트와 fake로만 돌려 보라는 안내가 더 붙습니다. 마지막에는 설정의 Stage별 `extraPrompt`가 붙습니다. implement 프롬프트에는 무인 세션에서 skill의 약점을 피해 가는 안내가 더 붙습니다. 리뷰 전에 먼저 commit할 것, `/mattpocock-skills:code-review`를 전체 이름으로 부를 것, 리뷰 sub-agent를 foreground로 돌릴 것, worktree를 깨끗이 남길 것 등입니다.
 
 **Stage mark.** 모든 Stage의 셸에는 `TICKET_RUNNER_STAGE=<stage>`가 설정되고, 이 변수가 있으면 CLI는 시작을 거부합니다. 그래서 Stage가 실수로 Ticket을 claim하거나 중첩 Run을 띄울 수 없습니다. 다만 sandbox가 아니라 걸림줄일 뿐이라, 변수를 지운 세션은 통과합니다. 그래서 프롬프트에서도 같은 내용을 말로 한 번 더 전합니다.
 

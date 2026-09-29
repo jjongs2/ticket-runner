@@ -73,6 +73,15 @@ export class FakeTracker implements Tracker {
   /** What GitHub calls this Target's default branch; the Run resolves from it. */
   defaultBranchName = "main";
   /**
+   * The Target's repository as `owner/name`, as {@link repository} answers. The
+   * repository the fake's issue URLs name, which is not the pipeline's own.
+   */
+  repositoryName: string | undefined = "acme/repo";
+  /** When set, the lookup throws, as a `gh` that is not installed at all does. */
+  repositoryFails = false;
+  /** How many times the Target's repository was asked for. */
+  repositoryLookups = 0;
+  /**
    * The tag of the highest Version published on the pipeline's own repository,
    * as {@link latestVersionTag} answers. Nothing by default, which is the
    * answer a Target with no network gets and the one nothing is said over.
@@ -156,6 +165,13 @@ export class FakeTracker implements Tracker {
   // before it touches a Ticket, where the log is about what it wrote.
   async defaultBranch(): Promise<string> {
     return this.defaultBranchName;
+  }
+
+  // Not in `calls`: a read, and one a Run makes before it touches a Ticket.
+  async repository(): Promise<string | undefined> {
+    this.repositoryLookups += 1;
+    if (this.repositoryFails) throw new Error("gh: command not found");
+    return this.repositoryName;
   }
 
   // Not in `calls`: a read, and one about the pipeline's own repository rather

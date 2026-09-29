@@ -27,6 +27,6 @@ export function nestedRunRefusal(env: Record<string, string | undefined>): strin
     "that is already in progress.",
     "A Stage may not run the pipeline: doing so claims a Ticket on the live tracker,",
     "creates a second worktree and starts a nested Run.",
-    "Exercise the pipeline through its tests and fakes instead.",
+    "Leave the pipeline to the Run that started this shell, and carry on with the Stage's own work.",
   ].join(" ");
 }

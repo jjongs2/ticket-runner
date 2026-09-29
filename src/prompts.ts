@@ -10,14 +10,34 @@ import { STAGE_ENV_VAR } from "./stage-guard.js";
 import { BRANCH_TITLE } from "./title.js";
 
 /**
- * Appended to every Stage prompt, the fix Stage included. The mechanical guard
- * in `stage-guard.ts` is a tripwire against a slip; this is what covers intent.
+ * Appended to every Stage prompt, the fix Stage included, in every Target. The
+ * mechanical guard in `stage-guard.ts` is a tripwire against a slip; this is
+ * what covers intent. It holds wherever the Stage runs, so it names the
+ * pipeline as the command that started the session and says nothing of the
+ * checkout, which in any other Target is the Target's own.
  */
-export const SELF_HOSTING_GUIDANCE = `This checkout is the pipeline that started this session, so running it is running yourself:
+export const STAGE_BOUNDARY_GUIDANCE = `The \`ticket-runner\` command started this session, so running it is running yourself:
 
-- Exercise the pipeline only through its tests and fakes. Never run its commands against this repository or GitHub, by any spelling: \`ticket-runner\`, \`npm run ticket-runner\`, \`npx tsx src/cli.ts\`.
-- Never kill processes you did not start. A pattern kill such as \`pkill -f tsx\` takes down the Run you belong to.
+- Never run \`ticket-runner\` against this repository or GitHub.
+- Never kill processes you did not start. A pattern kill such as \`pkill -f node\` takes down the Run you belong to.
 - ${STAGE_ENV_VAR} is set in this shell and the pipeline's own CLI refuses to start while it is. That refusal is expected; do not work around it.`;
+
+/**
+ * Appended after {@link STAGE_BOUNDARY_GUIDANCE} only where the Target is the
+ * pipeline's own repository, as the Run decided before its first Ticket. There
+ * the checkout is the pipeline, so it has tests and fakes to exercise it with
+ * and spellings of its commands that name no installed `ticket-runner`.
+ */
+export const SELF_HOSTING_GUIDANCE = `This checkout is the pipeline that started this session:
+
+- Exercise the pipeline only through its tests and fakes. Never run it from this checkout either, by any spelling: \`npm run ticket-runner\`, \`npx tsx src/cli.ts\`.`;
+
+/** What a Stage is told about the pipeline it runs under, in the Target it runs in. */
+function stageBoundary(selfHosted: boolean): string {
+  return selfHosted
+    ? `${STAGE_BOUNDARY_GUIDANCE}\n\n${SELF_HOSTING_GUIDANCE}`
+    : STAGE_BOUNDARY_GUIDANCE;
+}
 
 /**
  * How the two Stages that write code are told to finish. A session ends with its
@@ -173,12 +193,13 @@ export function implementPrompt(
   issueUrl: string,
   base: string,
   extraPrompt: string,
+  selfHosted: boolean,
   standingNotes?: number,
 ): string {
   return sections([
     `/mattpocock-skills:implement ${issueUrl}`,
     implementGuidance(base),
-    SELF_HOSTING_GUIDANCE,
+    stageBoundary(selfHosted),
     notesGuidance(standingNotes),
     extraPrompt,
   ]);
@@ -188,12 +209,13 @@ export function implementPrompt(
 export function verifyPrompt(
   issueUrl: string,
   extraPrompt: string,
+  selfHosted: boolean,
   standingNotes?: number,
 ): string {
   return sections([
     `Ticket: ${issueUrl}`,
     VERIFY_INSTRUCTIONS,
-    SELF_HOSTING_GUIDANCE,
+    stageBoundary(selfHosted),
     verifyNotesGuidance(standingNotes),
     extraPrompt,
   ]);
@@ -205,13 +227,14 @@ export function conflictPrompt(
   conflict: string,
   base: string,
   extraPrompt: string,
+  selfHosted: boolean,
 ): string {
   return sections([
     "/mattpocock-skills:resolving-merge-conflicts",
     `Ticket: ${issueUrl}`,
     conflictInstructions(base),
     outputSection("## Where the rebase stopped", conflict),
-    SELF_HOSTING_GUIDANCE,
+    stageBoundary(selfHosted),
     extraPrompt,
   ]);
 }
@@ -222,13 +245,14 @@ export function fixPrompt(
   failure: FixFailure,
   base: string,
   extraPrompt: string,
+  selfHosted: boolean,
   standingNotes?: number,
 ): string {
   return sections([
     `Ticket: ${issueUrl}`,
     fixInstructions(base),
     failureSection(failure, base),
-    SELF_HOSTING_GUIDANCE,
+    stageBoundary(selfHosted),
     notesGuidance(standingNotes),
     extraPrompt,
   ]);

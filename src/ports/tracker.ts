@@ -193,6 +193,16 @@ export interface Tracker {
    */
   defaultBranch(): Promise<string>;
   /**
+   * The Target's GitHub repository as `owner/name`, or nothing where GitHub
+   * could not be asked.
+   *
+   * Asked once at the start of a Run, to learn whether the Target is the
+   * pipeline's own repository, which decides what each Stage is told about the
+   * checkout it stands in. Nothing is refused over the answer, so no answer is
+   * an answer: a Target this cannot name is treated as any other Target.
+   */
+  repository(): Promise<string | undefined>;
+  /**
    * The tag of the highest Version `repository` has published as a GitHub
    * Release, named `owner/name`, or nothing where GitHub could not be asked.
    *

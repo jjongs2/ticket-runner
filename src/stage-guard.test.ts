@@ -31,7 +31,11 @@ describe("nestedRunRefusal", () => {
     expect(nestedRunRefusal({ [STAGE_ENV_VAR]: "  " })).toMatch(/belongs to a Stage/);
   });
 
-  it("points the session at the tests and fakes instead", () => {
-    expect(nestedRunRefusal({ [STAGE_ENV_VAR]: "implement" })).toMatch(/tests? and fakes/i);
+  // The refusal comes before any Target is known, so it says only what holds in every one.
+  it("leaves the pipeline to the Run and names nothing only a checkout has", () => {
+    const refusal = nestedRunRefusal({ [STAGE_ENV_VAR]: "implement" });
+
+    expect(refusal).toMatch(/leave the pipeline to the Run that started this shell/i);
+    expect(refusal).not.toMatch(/tests? and fakes/i);
   });
 });
