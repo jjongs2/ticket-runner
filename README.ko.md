@@ -20,7 +20,7 @@ Acceptance Criteria 체크리스트가 달리고, blocker가 연결됩니다. **
 5. rebase하고, pull request를 열고, CI를 기다린 뒤 squash merge합니다.
 
 한 번 실패하면 고치는 세션 한 번과 두 번째 검사를 받습니다. 그래도 끝내지 못한 일은 사람에게 돌아옵니다.
-`ready-for-human` 라벨과 draft pull request, 무엇이 실패했는지 적은 댓글이 함께 남습니다. 구독의
+`ready-for-human` 라벨과 draft pull request, 무엇이 실패했는지 적은 코멘트가 함께 남습니다. 구독의
 rate limit에 걸려 멈춘 세션은 아무것도 잃지 않습니다. 이슈는 보드로 돌아가고, 다음 Run이 멈춘 곳부터
 이어 합니다.
 
@@ -76,7 +76,7 @@ ticket-runner remove           # Target에서: init이 쓴 것과 Run이 남긴 
 npm uninstall -g ticket-runner # 전역 설치
 ```
 
-`remove`는 먼저 묻고(`--yes`를 주면 묻지 않습니다), commit은 하지 않습니다. 열린 pull request나 댓글을
+`remove`는 먼저 묻고(`--yes`를 주면 묻지 않습니다), commit은 하지 않습니다. 열린 pull request나 코멘트를
 단 이슈처럼 일부러 남겨 둔 것은 보고에 적어 줍니다. `npx`는 캐시 말고는 아무것도 남기지 않습니다.
 
 ## 더 알아보기

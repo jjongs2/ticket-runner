@@ -106,7 +106,7 @@ Target에서는 lock 말고 아무것도 필요 없습니다. 설정도, `gh` �
 0.5.2+331d79c.dirty
 ```
 
-같은 문자열이 Run 요약의 머리, 모든 Progress 코멘트, `init` 보고서, 각 State 파일, 각 Run의 `version.txt`에 들어갑니다. 그래서 파이프라인이 쓴 것은 무엇이든 그걸 쓴 파이프라인까지 거슬러 올라갈 수 있습니다([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
+같은 문자열이 Run 요약의 머리, 모든 Progress comment, `init` 보고서, 각 State 파일, 각 Run의 `version.txt`에 들어갑니다. 그래서 파이프라인이 쓴 것은 무엇이든 그걸 쓴 파이프라인까지 거슬러 올라갈 수 있습니다([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
 
 ## 시작 전에 거절되는 경우 {#refused-before-it-starts}
 
@@ -144,7 +144,7 @@ Frontier blocked.
 | `handed` | 사람에게 Hand-off됨. 멈춘 Stage와 이유가 붙음 |
 | `released` | rate limit 때문에 해당 Stage에서 Release됨. 누구도 할 일이 없음 |
 | `skipped` | 이유와 함께 넘어감([Guard](./planning.md#guards), 또는 위의 표) |
-| `noted` | 바로 윗줄이 남긴 [Note](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)와 간 곳. 기존 이슈면 `comment`, 상설 Notes 이슈면 `new` |
+| `noted` | 바로 윗줄이 남긴 [Note](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)와 간 곳. 이미 있는 이슈(열려 있던 Notes 이슈 포함)면 `comment`, Notes 이슈를 새로 연 Note 하나만 `new` |
 
 | 마지막 줄 | Run이 끝난 이유 |
 |---|---|

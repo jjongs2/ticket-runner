@@ -144,7 +144,7 @@ A newer-Version line, when there is one, comes above the header ([Install and re
 | `handed` | Handed off to a human: the Stage it stopped at, and why |
 | `released` | Released by the rate limit, at the named Stage. Nobody has to do anything |
 | `skipped` | Passed over, with the reason ([Guards](./planning.md#guards), or the table above) |
-| `noted` | A [Note](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) the row above made, and where it went: `comment` on an existing issue, or `new` for the standing Notes issue |
+| `noted` | A [Note](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) the row above made, and where it went: `comment` on an issue already there, the Notes issue included, or `new` for the one Note that opened the Notes issue |
 
 | Last line | Why the Run ended |
 |---|---|

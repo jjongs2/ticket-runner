@@ -57,7 +57,7 @@ fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종�
 
 1. **State file**을 씁니다. Ticket의 branch, 도달한 상태(`claimed`), Fix budget을 썼는지가 담깁니다. 이게 가장 먼저인 이유는, 어떤 State file에도 이름이 없는 Claim만큼은 반드시 막아야 하기 때문입니다. 기록 작업 중 실패하면 Ticket을 실패시키는 건 이것뿐이고, 이후의 기록은 실패해도 로그만 남기고 Run은 계속됩니다.
 2. Ticket을 `gh` 사용자에게 assign하고, `in-progress`를 붙이고 `ready-for-agent`를 뗍니다. Stranded Ticket은 이미 이 Claim을 달고 있으니 다시 쓰지 않습니다.
-3. Ticket에 아직 유효한 hand-off 댓글이 있으면, 지난 일이라는 표시 한 줄을 덧붙입니다. _Taken again by a later Run; this hand-off is history._
+3. Ticket에 아직 유효한 hand-off 코멘트가 있으면, 지난 일이라는 표시 한 줄을 덧붙입니다. _Taken again by a later Run; this hand-off is history._
 
 출처: [`orchestrator.ts` · `ResumeRecord`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts), [`handoff.ts` · `markHandoffsTaken`](https://github.com/jjongs2/ticket-runner/blob/main/src/handoff.ts).
 
@@ -71,7 +71,7 @@ fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종�
 
 출처: [`branch.ts` · `branchName`, `worktreePath`](https://github.com/jjongs2/ticket-runner/blob/main/src/branch.ts), [`git-workspace.ts` · `createWorktree`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts).
 
-같은 이름의 branch가 이미 있으면 절대 재사용하지 않습니다. Ticket은 `setup`에서 Hand-off되고, 댓글에 누구의 branch인지와 치우는 명령이 적힙니다. 재개되는 Ticket은 State file에 적힌 branch에서 이어 갑니다. 자세한 내용은 [멈추고 이어 하기](./stopping-and-resuming.md)를 보세요.
+같은 이름의 branch가 이미 있으면 절대 재사용하지 않습니다. Ticket은 `setup`에서 Hand-off되고, 코멘트에 누구의 branch인지와 치우는 명령이 적힙니다. 재개되는 Ticket은 State file에 적힌 branch에서 이어 갑니다. 자세한 내용은 [멈추고 이어 하기](./stopping-and-resuming.md)를 보세요.
 
 ## Stage가 도는 방식 {#how-a-stage-runs}
 
@@ -125,7 +125,7 @@ implement skill이 Ticket을 읽고, 만들고, 리뷰합니다. 세션이 끝�
 
 ## verify Stage와 Verdict {#the-verify-stage-and-its-verdict}
 
-merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 그 코드가 제대로 도는지 물어보기에 가장 믿기 어려운 상대입니다. 그래서 plugin skill 없이 새로 띄운 세션이 각 Acceptance Criterion이 충족되지 **않았음**을 증명하려고 합니다. 이 세션은 본문과 댓글에서 기준을 읽고, 코드를 돌려 보고, 버릴 테스트를 써도 되지만 commit은 하면 안 됩니다. 끝나면 파이프라인이 worktree에서 `git reset --hard`와 `git clean -fd`를 실행해, 임시 파일이 pull request에 섞이지 않게 합니다. 그 정리로 임시 작업이 사라지니, Note는 그보다 먼저 보냅니다.
+merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 그 코드가 제대로 도는지 물어보기에 가장 믿기 어려운 상대입니다. 그래서 plugin skill 없이 새로 띄운 세션이 각 Acceptance Criterion이 충족되지 **않았음**을 증명하려고 합니다. 이 세션은 본문과 코멘트에서 기준을 읽고, 코드를 돌려 보고, 버릴 테스트를 써도 되지만 commit은 하면 안 됩니다. 끝나면 파이프라인이 worktree에서 `git reset --hard`와 `git clean -fd`를 실행해, 임시 파일이 pull request에 섞이지 않게 합니다. 그 정리로 임시 작업이 사라지니, Note는 그보다 먼저 보냅니다.
 
 **Verdict**는 기준마다 `text`, `status`(`met`, `unmet`, `unverifiable`), `evidence`를 담고, 에이전트 자신의 `pass`도 담습니다. 에이전트의 `pass`는 참고일 뿐이고, 파이프라인이 직접 판단합니다. 기준은 **`unmet`이 하나도 없고 `met`이 하나 이상**일 것입니다.
 
@@ -161,7 +161,7 @@ merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 �
 | merge 실패 | merge | 아니요, Hand-off |
 | 어디서든 rate limit | 어디든 | 아니요, Release |
 
-fix Stage가 끝나면 Ticket은 Check부터 다시 시작합니다. verify Stage를 포함해 모든 관문이 수정본을 다시 채점하므로, 수정본도 처음 구현과 같은 기준을 통과해야 합니다. fix Stage 후 branch가 자라지 않았다면 곧바로 Hand-off입니다. 아무도 건드리지 않은 branch를 다시 채점해 봐야 똑같이 실패할 뿐이기 때문입니다. squash나 amend로 짧아진 branch도 자라지 않은 것으로 봅니다. 종류와 상관없이 두 번째 실패는 Hand-off이고, hand-off 댓글에 budget을 이미 썼다고 적힙니다.
+fix Stage가 끝나면 Ticket은 Check부터 다시 시작합니다. verify Stage를 포함해 모든 관문이 수정본을 다시 채점하므로, 수정본도 처음 구현과 같은 기준을 통과해야 합니다. fix Stage 후 branch가 자라지 않았다면 곧바로 Hand-off입니다. 아무도 건드리지 않은 branch를 다시 채점해 봐야 똑같이 실패할 뿐이기 때문입니다. squash나 amend로 짧아진 branch도 자라지 않은 것으로 봅니다. 종류와 상관없이 두 번째 실패는 Hand-off이고, hand-off 코멘트에 budget을 이미 썼다고 적힙니다.
 
 budget 사용 여부는 fix Stage가 돌아온 뒤 State file에 기록됩니다. rate limit으로 멈춘 fix Stage는 아무것도 쓰지 않습니다. Release는 이미 쓴 budget을 다음 Run으로 그대로 넘기고, Hand-off는 budget을 되돌려 줍니다. Ticket은 사람 손을 거쳐야만 돌아오기 때문입니다.
 
@@ -309,9 +309,9 @@ Ticket은 이미 merge됐으니 여기서부터는 Hand-off될 수 없습니다.
 | merge | ✅ #31 | – | – |
 ```
 
-행에는 몇 단어만 적습니다. 사람이 행동해야 하는 것은 알림을 받을 가치가 있으니 따로 댓글로 올립니다. hand-off, guard 경고, Note가 그렇습니다. 사람에게서 Ticket을 되가져오는 Run은 새 Progress comment를 시작하고, 사람이 읽은 댓글은 그대로 둡니다. 댓글 작성이 실패해도 Ticket에는 영향이 없습니다. 출처: [`progress.ts` · `Progress`](https://github.com/jjongs2/ticket-runner/blob/main/src/progress.ts).
+행에는 몇 단어만 적습니다. 사람이 행동해야 하는 것은 알림을 받을 가치가 있으니 따로 코멘트로 올립니다. hand-off, guard 경고, Note가 그렇습니다. 사람에게서 Ticket을 되가져오는 Run은 새 Progress comment를 시작하고, 사람이 읽은 코멘트는 그대로 둡니다. 코멘트 작성이 실패해도 Ticket에는 영향이 없습니다. 출처: [`progress.ts` · `Progress`](https://github.com/jjongs2/ticket-runner/blob/main/src/progress.ts).
 
-**충족된 기준에 체크.** merge 뒤에는 Verdict가 `met`으로 판정한 기준마다, 그것이 적힌 곳이 본문이든 댓글이든(예: triage가 brief를 올린 댓글) 찾아서 체크합니다(`- [ ]` → `- [x]`). 공백과 대소문자 차이만 봐줍니다. `unverifiable` 기준은 아무도 근거를 모으지 않았으니 체크하지 않습니다. Stage가 문구를 크게 바꿔 맞출 수 없는 기준도 그대로 두고, 몇 개를 맞추지 못했는지 Run 로그에 남깁니다. 출처: [`criteria.ts` · `tickMetCriteria`](https://github.com/jjongs2/ticket-runner/blob/main/src/criteria.ts).
+**충족된 기준에 체크.** merge 뒤에는 Verdict가 `met`으로 판정한 기준마다, 그것이 적힌 곳이 본문이든 코멘트든(예: triage가 brief를 올린 코멘트) 찾아서 체크합니다(`- [ ]` → `- [x]`). 공백과 대소문자 차이만 봐줍니다. `unverifiable` 기준은 아무도 근거를 모으지 않았으니 체크하지 않습니다. Stage가 문구를 크게 바꿔 맞출 수 없는 기준도 그대로 두고, 몇 개를 맞추지 못했는지 Run 로그에 남깁니다. 출처: [`criteria.ts` · `tickMetCriteria`](https://github.com/jjongs2/ticket-runner/blob/main/src/criteria.ts).
 
 ## Note {#notes}
 
@@ -321,14 +321,14 @@ Note에는 `summary`(필수)와 선택 항목 `evidence`, `impact`, `next`, `tic
 
 | Note가 가리키는 곳 | 가는 곳 |
 |---|---|
-| 열려 있고, claim되지 않았고, Spec이 아닌 Ticket | 그 Ticket의 댓글 |
+| 열려 있고, claim되지 않았고, Spec이 아닌 Ticket | 그 Ticket의 코멘트 |
 | Ticket 없음, 또는 Stage 자신의 Ticket(곧 닫힐 것) | standing Notes 이슈 |
 | 닫혔거나, claim됐거나(`in-progress`), Spec인 이슈 | standing Notes 이슈. 원래 어느 Ticket 몫이었고 왜 그쪽으로 가지 않았는지 함께 적음 |
-| 댓글을 받지 않는 번호(지어낸 번호, 잠긴 이슈) | standing Notes 이슈. 원래 가려던 번호와 함께 |
+| 코멘트를 받지 않는 번호(지어낸 번호, 잠긴 이슈) | standing Notes 이슈. 원래 가려던 번호와 함께 |
 
-**standing Notes 이슈**는 Note를 댓글로 모으는, 열린 `needs-triage` 이슈 하나입니다. 제목은 "Notes from the 파이프라인"입니다. 제목이 아니라 본문의 마커로 찾으므로, 이름을 바꿔도 두 번째 이슈가 생기지 않습니다. 필요한 첫 Note가 열고, Run의 모든 Lane이 함께 씁니다. triage가 손으로 비운 뒤 닫으면, 다음 Note가 새로 엽니다. 열려 있는 동안에는 Note를 쓰는 Stage의 프롬프트에 그 번호가 들어가, 이미 보고된 내용을 읽고 읽는 사람의 판단을 바꿀 만한 것만 더하게 합니다.
+**standing Notes 이슈**는 Note를 코멘트로 모으는, 열린 `needs-triage` 이슈 하나입니다. 제목은 "Notes from the 파이프라인"입니다. 제목이 아니라 본문의 마커로 찾으므로, 이름을 바꿔도 두 번째 이슈가 생기지 않습니다. 필요한 첫 Note가 열고, Run의 모든 Lane이 함께 씁니다. triage가 손으로 비운 뒤 닫으면, 다음 Note가 새로 엽니다. 열려 있는 동안에는 Note를 쓰는 Stage의 프롬프트에 그 번호가 들어가, 이미 보고된 내용을 읽고 읽는 사람의 판단을 바꿀 만한 것만 더하게 합니다.
 
-Note 댓글은 출처(`From #<origin> <stage>`)로 시작하고, 이어서 굵은 요약과 항목별 라벨이 붙은 내용이 옵니다. 줄 머리의 `- [ ]`는 escape되므로, Note가 Acceptance Criteria로 읽히는 일은 없습니다. 올리지 못한 Note는 그 Note 하나만 잃을 뿐, Ticket에는 영향을 주지 않습니다. Run 요약에는 각 Note가 그것을 만든 Ticket 아래 `noted` 행으로 나옵니다.
+Note 코멘트는 출처(`From #<origin> <stage>`)로 시작하고, 이어서 굵은 요약과 항목별 라벨이 붙은 내용이 옵니다. 줄 머리의 `- [ ]`는 escape되므로, Note가 Acceptance Criteria로 읽히는 일은 없습니다. 올리지 못한 Note는 그 Note 하나만 잃을 뿐, Ticket에는 영향을 주지 않습니다. Run 요약에는 각 Note가 그것을 만든 Ticket 아래 `noted` 행으로 나옵니다.
 
 출처: [`notes.ts` · `routeNotes`](https://github.com/jjongs2/ticket-runner/blob/main/src/notes.ts), [`templates.ts` · `noteComment`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts).
 
@@ -350,4 +350,4 @@ Note 댓글은 출처(`From #<origin> <stage>`)로 시작하고, 이어서 굵�
 - [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts), [`src/adapters/git-workspace.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts), [`src/adapters/gh-tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts)
 - [ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md): Stage마다 `claude -p` 자식 프로세스 하나
 - [ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md): Landing은 직렬화된 구간
-- [`docs/templates/`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/README.md): Progress comment, pull request 본문, squash commit, Note 댓글의 정확한 모양
+- [`docs/templates/`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/README.md): Progress comment, pull request 본문, squash commit, Note 코멘트의 정확한 모양

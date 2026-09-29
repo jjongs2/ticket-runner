@@ -13,7 +13,7 @@ description: 세 port와 그 adapter, src/ 모듈 지도, Version을 끊고 찍�
 
 | Port | 떼어 내는 효과 | Adapter · 테스트용 fake |
 |---|---|---|
-| `Tracker` | GitHub: issue, 라벨, 댓글, pull request, CI, merge | `GhTracker` · `FakeTracker` |
+| `Tracker` | GitHub: issue, 라벨, 코멘트, pull request, CI, merge | `GhTracker` · `FakeTracker` |
 | `AgentRunner` | Claude: Stage 세션 하나 | `ClaudeAgentRunner` · `FakeAgentRunner` |
 | `Workspace` | git: worktree, Check, rebase, push, State와 Run lock | `GitWorkspace` · `FakeWorkspace` |
 
@@ -109,7 +109,7 @@ claude --print <prompt> --output-format stream-json --verbose \
 | [`branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/branch.ts) | `agent/<n>-<slug>`와 `.worktrees/ticket-<n>` |
 | [`stranded.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stranded.ts) | Stranded Ticket을 찾는 sweep |
 | [`resume.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/resume.ts) | State file의 모양과 이름 |
-| [`handoff.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/handoff.ts) | Ticket을 다시 가져갈 때 예전 hand-off 댓글을 지난 일로 표시 |
+| [`handoff.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/handoff.ts) | Ticket을 다시 가져갈 때 예전 hand-off 코멘트를 지난 일로 표시 |
 | [`stop.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stop.ts) | `ticket-runner stop`, 그리고 Run 쪽에서 받는 SIGTERM |
 | [`lock.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lock.ts) | Run lock 파일의 내용, 쥔 쪽이 살아 있는지 |
 | [`host.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/host.ts) | workstation인지 cloud인지, 어느 것인지 |

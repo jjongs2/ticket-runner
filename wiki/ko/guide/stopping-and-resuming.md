@@ -14,8 +14,8 @@ Run은 아무도 지켜보지 않는 사이에 돌아가니, 일이 틀어졌을
 | 끝맺음 | 원인 | 남는 것 |
 |---|---|---|
 | merge | 모든 관문을 초록으로 통과 | 닫힌 issue. branch와 State file은 사라짐 |
-| [Hand-off](#hand-off) | Fix budget으로 감당할 수 없는 실패 | `ready-for-human`, 댓글, draft pull request. 작업과 State 유지 |
-| [Release](#release-on-a-rate-limit) | 구독 rate limit | `ready-for-agent`, 댓글 없음. 작업과 State 유지 |
+| [Hand-off](#hand-off) | Fix budget으로 감당할 수 없는 실패 | `ready-for-human`, 코멘트, draft pull request. 작업과 State 유지 |
+| [Release](#release-on-a-rate-limit) | 구독 rate limit | `ready-for-agent`, 코멘트 없음. 작업과 State 유지 |
 | [Stop](#stop-and-kill) | `ticket-runner stop`(SIGTERM) | 새로 남는 것 없음 |
 | [Kill](#stop-and-kill) | Ctrl+C, SIGKILL, 사라진 Host | Claim, 마지막 push 시점의 작업, State |
 
@@ -51,10 +51,10 @@ stateDiagram-v2
 2. State file을 기록합니다. draft pull request 번호를 담고 Fix budget은 쓰지 않은 것으로 돌려 둡니다. 이 Run의 어떤 Stage도 작업을 남겼을 수 없는 경우라면 대신 파일을 지웁니다(아래 참고).
 3. transcript를 remote에 남겨 둡니다. 각 Stage의 `.command`와 `.transcript.jsonl` 파일(재시도분은 `retry/` 아래), Run의 `version.txt`를 `ticket-runner/state` branch의 `ticket-<n>/<runId>/` 아래에 올립니다.
 4. transcript 위치가 드러나도록 draft 본문을 다시 씁니다.
-5. hand-off 댓글을 답니다.
+5. hand-off 코멘트를 답니다.
 6. `in-progress`를 떼고, `ready-for-human`을 붙이고, 담당자를 해제합니다.
 
-댓글은 [`docs/templates/handoff-comment.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/handoff-comment.md)의 모양을 따릅니다.
+코멘트는 [`docs/templates/handoff-comment.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/handoff-comment.md)의 모양을 따릅니다.
 
 ```md
 <!-- ticket-runner:handoff -->
@@ -82,7 +82,7 @@ stateDiagram-v2
 | 이어받았는데 이 Host의 branch가 remote의 것과 갈라짐 | 새로 열지 않음. 열린 것은 draft로 | 유지: 양쪽 다 파이프라인의 작업 |
 | worktree가 준비된 뒤의 모든 실패 | 새로 열거나, 열린 것을 draft로 되돌림 | 유지 |
 
-댓글은 worktree가 있으면 늘 알려 줍니다. 이 Run의 worktree이거나, 앞을 막은 branch가 checkout된 worktree입니다. 실패 문구에 해야 할 일이 적혀 있습니다. 예를 들면 `delete it with git branch -D <branch> if the work on it is abandoned, or finish it by hand, then relabel the Ticket ready-for-agent` 같은 식입니다. State file은 이 Run의 어떤 Stage도 그 branch에서 일하지 않았을 때만 지웁니다. 앞을 막은 branch 위에 파일을 남겨 두면, 다음 Run이 사람의 작업 위로 이어받아 implement Stage를 돌려 버릴 수 있기 때문입니다.
+코멘트는 worktree가 있으면 늘 알려 줍니다. 이 Run의 worktree이거나, 앞을 막은 branch가 checkout된 worktree입니다. 실패 문구에 해야 할 일이 적혀 있습니다. 예를 들면 `delete it with git branch -D <branch> if the work on it is abandoned, or finish it by hand, then relabel the Ticket ready-for-agent` 같은 식입니다. State file은 이 Run의 어떤 Stage도 그 branch에서 일하지 않았을 때만 지웁니다. 앞을 막은 branch 위에 파일을 남겨 두면, 다음 Run이 사람의 작업 위로 이어받아 implement Stage를 돌려 버릴 수 있기 때문입니다.
 
 ### 무엇이 어디에 남나 {#what-stays-where}
 
@@ -104,10 +104,10 @@ Ticket을 파이프라인에 돌려주려면 라벨을 `ready-for-human`에서 `
 
 넘겼던 Run 때와 달라지는 점이 몇 가지 있습니다.
 
-- **Fix budget**: 새로 채워집니다. Ticket이 사람 손을 거쳤으니, 그 사람이 한 일에 새 budget을 쓰라는 뜻입니다. 예전 댓글에는 budget을 썼다고 그대로 남습니다. 실제로 썼으니까요.
+- **Fix budget**: 새로 채워집니다. Ticket이 사람 손을 거쳤으니, 그 사람이 한 일에 새 budget을 쓰라는 뜻입니다. 예전 코멘트에는 budget을 썼다고 그대로 남습니다. 실제로 썼으니까요.
 - **Draft pull request**: CI를 기다리기 전에 draft를 풉니다. draft에서는 workflow가 아예 돌지 않는 일이 많아서, 그대로 기다리면 "check 없음"으로 읽히기 때문입니다. 사람이 닫아 버린 pull request처럼 draft가 풀리지 않으면 `pr`에서 Hand-off합니다. 닫았다는 건 이어 가지 말라는 뜻이니까요.
-- **Hand-off 댓글**: 각 댓글의 marker 바로 아래에 `_Taken again by a later Run; this hand-off is history._`가 붙습니다. 수정이라서 알림은 가지 않습니다.
-- **Progress comment**: 새로 하나 답니다. 사람이 읽었던 댓글은 읽은 모습 그대로 둡니다.
+- **Hand-off 코멘트**: 각 코멘트의 marker 바로 아래에 `_Taken again by a later Run; this hand-off is history._`가 붙습니다. 수정이라서 알림은 가지 않습니다.
+- **Progress comment**: 새로 하나 답니다. 사람이 읽었던 코멘트는 읽은 모습 그대로 둡니다.
 
 라벨을 바꾸기 전까지 State file은 가만히 있습니다. 어떤 Frontier도 `ready-for-human` Ticket을 내놓지 않고, sweep은 아무 말 없이 지나가며, 번호를 지정한 Run은 `not-ready`로 건너뜁니다. issue가 닫히면 sweep이 파일을 지우니, 손으로 마무리한 Ticket은 아무것도 남기지 않습니다.
 
@@ -132,7 +132,7 @@ Release가 하는 일([`orchestrator.ts` · `release`](https://github.com/jjongs
 - Progress comment에 `⏸ rate limited` 줄을 하나 남깁니다. 보고는 이게 전부입니다.
 - State file을 최신으로 맞춥니다. implement Stage가 멈췄으면 `claimed`, 그 뒤의 Stage가 멈췄으면 `implemented`입니다. Fix budget은 그대로 가져가되, 한도에 걸린 게 fix Stage 자신이면 쓴 것으로 치지 않습니다.
 - Claim을 되돌립니다. `ready-for-agent`를 붙이고, `in-progress`를 떼고, 마지막으로 담당자를 해제합니다. 다른 Run은 담당자를 보고 가져간 Ticket인지 판단하니, 담당자를 맨 마지막에 뗍니다.
-- 댓글을 달지 않고, draft pull request도 열지 않습니다.
+- 코멘트를 달지 않고, draft pull request도 열지 않습니다.
 
 그 뒤로 Run은 더 claim하지 않습니다. 한 Stage를 멈춘 한도는 다음 Stage도 멈출 테니까요. 이미 바쁜 Lane은 자기 Ticket을 끝까지 마치고, 마지막 Lane이 돌아오면 Run이 끝납니다. 한도가 풀리기를 기다리지는 않습니다. 요약은 `Rate limited.`로 끝납니다. Release된 Ticket도 가져간 것으로 치니, Hand-off가 없으면 exit code는 `0`입니다.
 
