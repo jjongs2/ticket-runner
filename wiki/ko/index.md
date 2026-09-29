@@ -1,14 +1,14 @@
 ---
 layout: doc
 title: ticket-runner
-description: 계획은 사람이 GitHub에서 세우고, 각 Ticket을 merge까지 가져가는 일은 아무도 지켜보지 않는 사이 파이프라인이 합니다.
+description: ticket-runner는 mattpocock-skills 체인에서 사람이 지켜보지 않아도 되는 절반을 맡습니다. 계획은 사람이 세우고, 각 Ticket을 merge까지 가져가는 일은 파이프라인이 합니다.
 ---
 
 # ticket-runner
 
 계획은 사람이, 실행은 파이프라인이.
 
-기능을 계획하는 일에는 판단이 필요하니 사람 몫으로 남겨 둡니다. 사람은 GitHub에 이슈를 쓰고, 이슈마다 체크박스로 된 [Acceptance Criteria](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)를 달고, 막는 이슈를 연결한 뒤 `ready-for-agent` 라벨을 붙입니다. 그다음부터 merge까지는 되풀이되는 일이라 파이프라인이 무인으로 처리합니다. [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)마다 헤드리스 Claude Code 세션에 구현을 맡기고, 저장소의 테스트를 직접 돌리고, 두 번째 세션에게 기준이 충족되지 않았음을 증명해 보라고 시킨 다음, pull request를 열고 CI를 기다려 squash-merge합니다. 끝내지 못한 일은 draft pull request와 코멘트를 남겨 사람에게 돌려줍니다.
+ticket-runner는 [`mattpocock-skills`](https://github.com/mattpocock/skills) 체인에서 사람이 지켜보지 않아도 되는 절반을 맡습니다. 기능을 계획하는 일에는 판단이 필요하니 사람이 자기 세션에서 합니다. `/grilling`, `/to-spec`, `/to-tickets`(또는 `/triage`)가 기능을 GitHub 이슈 여러 개로 나누고, 이슈마다 체크박스로 된 [Acceptance Criteria](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)와 blocker 연결, `ready-for-agent` 라벨을 답니다. 그다음부터 merge까지는 되풀이되는 일이라 파이프라인이 무인으로 처리합니다. 사람이 입력했을 `/implement`를 파이프라인이 대신 부립니다. [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)마다 헤드리스 Claude Code 세션에 구현을 맡기고, 저장소의 테스트를 직접 돌리고, 두 번째 세션에게 기준이 충족되지 않았음을 증명해 보라고 시킨 다음, pull request를 열고 CI를 기다려 squash-merge합니다. 끝내지 못한 일은 draft pull request와 코멘트를 남겨 사람에게 돌려줍니다.
 
 ## 왜 만들었나 {#why-it-exists}
 

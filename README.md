@@ -2,18 +2,19 @@
 
 [한국어](https://github.com/jjongs2/ticket-runner/blob/main/README.ko.md)
 
-Humans plan on GitHub; `ticket-runner` carries each ready issue to a merged pull request while
-nobody watches.
+`ticket-runner` runs the unattended half of the
+[`mattpocock-skills`](https://github.com/mattpocock/skills) chain. You plan with its skills; it
+takes every ready Ticket to a merged pull request while nobody watches.
 
 ## What it does
 
-The work is split in two. **Planning** is yours: you shape a feature into small GitHub issues,
-each with a checklist of Acceptance Criteria. You can write them by hand, or with the plugin's
-`/grilling`, `/to-spec`, `/to-tickets` and `/triage`. **Execution** is the pipeline's. For every issue labelled
-`ready-for-agent` whose blockers have closed, it:
+The chain is split in two. **Planning** is yours: `/grilling`, `/to-spec` and `/to-tickets` (or
+`/triage`) turn a feature into small GitHub issues, each labelled `ready-for-agent`, with a
+checklist of Acceptance Criteria and its blockers linked. **Execution** is the pipeline's. For
+every such issue whose blockers have closed, it:
 
 1. claims the issue and creates a branch and a git worktree for it
-2. runs a headless `claude -p` session that implements it
+2. runs a headless `claude -p` session that implements it with `/implement`
 3. runs your tests and typecheck itself
 4. runs a second, fresh session that tries to prove the Acceptance Criteria are *not* met
 5. rebases, opens a pull request, waits for CI and squash-merges
@@ -27,8 +28,8 @@ board, and the next Run carries on from where it stopped.
 
 It fits a repository where:
 
-- issues live on GitHub, and you are willing to write each one small enough for one session,
-  with `- [ ]` Acceptance Criteria and blockers as GitHub's native `blocked by` links
+- you plan with `mattpocock-skills`, set up once with `/setup-matt-pocock-skills` and GitHub
+  Issues as the tracker, and each Ticket is small enough for one session
 - a CI workflow runs on pull requests, and there is a test or typecheck command the pipeline can
   run itself
 - the machine running it has Node 22 or newer, `git`, an authenticated

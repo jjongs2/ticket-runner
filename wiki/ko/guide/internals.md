@@ -307,7 +307,7 @@ checkout은 번호 옆에 commit도 함께 알려 줍니다([찍히는 번호](#
 - [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md): branch, commit, pull request, Version PR, issue, 그리고 코드 규칙(strict ESM TypeScript, 코드 옆의 테스트, 모든 효과는 port로, `scripts/`는 얇게)
 - [`docs/agents/pipeline-conventions.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/agents/pipeline-conventions.md): 파이프라인이 모든 Target에 요구하는 것
 - [`CONTEXT.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md): 이름은 용어집을 따릅니다. 새 단어가 필요한 개념은 거기부터 적습니다.
-- [`docs/templates/`](https://github.com/jjongs2/ticket-runner/tree/main/docs/templates): 모양을 바꿀 때는 그걸 쓰는 코드보다 여기를 먼저 바꿉니다
+- [`docs/templates/`](https://github.com/jjongs2/ticket-runner/tree/main/docs/templates): 모양을 바꿀 때는 그걸 쓰는 코드보다 여기를 먼저 바꿉니다.
 
 Stage는 파이프라인을 실행할 수 없습니다. Stage의 셸에는 `TICKET_RUNNER_STAGE`가 있고, 이 변수가 있으면 모든 명령이 거절됩니다. 대신 테스트와 fake로 파이프라인을 돌려 보세요.
 

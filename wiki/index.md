@@ -1,14 +1,14 @@
 ---
 layout: doc
 title: ticket-runner
-description: Humans plan on GitHub; the pipeline carries each Ticket to a merge while nobody watches.
+description: "ticket-runner runs the unattended half of the mattpocock-skills chain: humans plan, and the pipeline carries each Ticket to a merge while nobody watches."
 ---
 
 # ticket-runner
 
 Humans plan, the pipeline executes.
 
-Planning a feature takes judgement, so it stays with humans: they write the issues on GitHub, give each one checkbox [Acceptance Criteria](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md), link its blockers, and label it `ready-for-agent`. Carrying an issue from there to a merge is repetitive, so the pipeline does it unattended. For each [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) it has a headless Claude Code session implement the work, runs the repository's own tests, has a second session try to prove the criteria are not met, opens a pull request, waits for CI and squash-merges. Whatever it cannot finish goes back to a human with a draft pull request and a comment.
+ticket-runner runs the unattended half of the [`mattpocock-skills`](https://github.com/mattpocock/skills) chain. Planning a feature takes judgement, so it stays with humans, in their own sessions: `/grilling`, `/to-spec` and `/to-tickets` (or `/triage`) turn it into GitHub issues, each with checkbox [Acceptance Criteria](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md), its blockers linked and the `ready-for-agent` label. Carrying an issue from there to a merge is repetitive, so the pipeline does it unattended, driving `/implement` where a human would have typed it. For each [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) it has a headless Claude Code session implement the work, runs the repository's own tests, has a second session try to prove the criteria are not met, opens a pull request, waits for CI and squash-merges. Whatever it cannot finish goes back to a human with a draft pull request and a comment.
 
 ## Why it exists
 
