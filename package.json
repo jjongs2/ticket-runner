@@ -1,6 +1,6 @@
 {
   "name": "ticket-runner",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "Drives the mattpocock-skills chain unattended: humans plan, the pipeline executes.",
   "license": "MIT",
   "repository": {

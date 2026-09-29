@@ -4,6 +4,49 @@ One section per Version, newest first, written in the Version PR that cut it and
 published as the body of that Version's GitHub Release (ADR-0007). The shape is
 `docs/templates/version-notes.md`.
 
+## 0.6.0 (2026-09-29)
+
+### ticket-runner
+
+- The pipeline is `ticket-runner` in its package, command, branches, files and markers, under MIT ([#202])
+- `ticket-runner remove` takes the pipeline out of a Target, refusing while work is in flight ([#204])
+- The package leaves out the tests and their fakes ([#214])
+
+### Runs
+
+- `ticket-runner run 12 13` works only the Tickets it names ([#205])
+- A Note is posted as a bold summary, then its Evidence, Impact and Next ([#195])
+
+### Fixes
+
+- A pull request takes the title its Stages answer, not its first commit's subject ([#206])
+- A Stage is told it runs in the pipeline's checkout only in the pipeline's own repository ([#213])
+
+### Docs
+
+- A wiki at <https://jjongs2.github.io/ticket-runner/>, and a README rewritten for newcomers ([#207])
+- ADR-0004, -0006 and -0008 read as decisions in force ([#211])
+
+### After upgrading
+
+Nothing reads the old name, so move each Target by hand, while no Run holds it and no Ticket is `in-progress`:
+
+1. `npm uninstall -g agent-pipeline`, then `npm install -g "github:jjongs2/ticket-runner#semver:*"`
+2. Rename `agent-pipeline.json` to `ticket-runner.json`, and `.agent-pipeline/` to `.ticket-runner/` in the directory and its `.gitignore` line
+3. Delete `.claude/skills/agent-pipeline/`, and write `ticket-runner` for `agent-pipeline` in the `CLAUDE.md` section that points at the conventions document
+4. Copy the State branch, when there is one, then delete both old branches: `git push origin origin/agent-pipeline/state:refs/heads/ticket-runner/state` and `git push origin --delete agent-pipeline/state agent-pipeline/lock`
+5. Run `ticket-runner init`
+
+[#195]: https://github.com/jjongs2/ticket-runner/pull/195
+[#202]: https://github.com/jjongs2/ticket-runner/pull/202
+[#204]: https://github.com/jjongs2/ticket-runner/pull/204
+[#205]: https://github.com/jjongs2/ticket-runner/pull/205
+[#206]: https://github.com/jjongs2/ticket-runner/pull/206
+[#207]: https://github.com/jjongs2/ticket-runner/pull/207
+[#211]: https://github.com/jjongs2/ticket-runner/pull/211
+[#213]: https://github.com/jjongs2/ticket-runner/pull/213
+[#214]: https://github.com/jjongs2/ticket-runner/pull/214
+
 ## 0.5.2 (2026-09-25)
 
 ### Progress comments
