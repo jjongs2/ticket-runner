@@ -15,12 +15,14 @@ Planning a feature takes judgement, so it stays with humans: they write the issu
 You need Node 22 or newer, `git`, an authenticated [`gh`](https://cli.github.com/), and `claude` with the `mattpocock-skills` plugin, version 1.2.3. [Installation](./guide/installation.md) has the full list.
 
 ```bash
-npm install -g ticket-runner   # or try it first: npx ticket-runner init
+npm install -g ticket-runner
 
-cd ~/code/acme                 # the repository you want it to work in
-ticket-runner init             # set it up, and report what only you can fix
-ticket-runner run              # take every ready Ticket to a merge
+cd ~/code/acme        # the repository you want it to work in
+ticket-runner init    # set it up, and report what only you can fix
+ticket-runner run     # take every ready Ticket to a merge
 ```
+
+To try it before installing anything, type `npx ticket-runner` wherever these pages say `ticket-runner`: see [Try it without installing](./guide/installation.md#try-it-without-installing).
 
 `init` exits `1` while anything it reports is still yours to fix, so `ticket-runner init && ticket-runner run` stops before a Run that could not work. A Run takes only issues that [Planning](./guide/planning.md) made usable: labelled `ready-for-agent`, with `- [ ]` criteria, and blocked only through GitHub's own `blocked by` links.
 

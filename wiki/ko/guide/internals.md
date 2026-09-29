@@ -194,7 +194,7 @@ A newer Version is out: 0.6.0, and this is 0.5.2 — upgrade with `npm install -
 
 네트워크가 없거나, `gh`가 없거나, 아무도 볼 수 없는 저장소라서 조회하지 못하면 아무것도 찍지 않습니다. 이 때문에 무언가를 거절하는 일은 없습니다.
 
-설치와 업그레이드는 `npm install -g ticket-runner`로 하고, 전역 설치 없이 써 보려면 `npx ticket-runner init`을 쓰면 됩니다. 안내 줄이 말하는 GitHub tag 범위 `npm install -g "github:jjongs2/ticket-runner#semver:*"`로도 가장 높은 Version tag가 설치됩니다. [설치](./installation.md)를 참고하세요.
+설치와 업그레이드는 `npm install -g ticket-runner`로 하고, 전역 설치 없이 써 보려면 `npx`를 쓰면 됩니다([설치 없이 써 보기](./installation.md#try-it-without-installing)). 안내 줄이 말하는 GitHub tag 범위 `npm install -g "github:jjongs2/ticket-runner#semver:*"`로도 가장 높은 Version tag가 설치됩니다. [설치](./installation.md)를 참고하세요.
 
 ## ADR 요약 {#the-adrs-in-brief}
 

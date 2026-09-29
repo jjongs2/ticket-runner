@@ -40,7 +40,7 @@ claude plugin install mattpocock-skills@claude-plugins-official
 npm install -g ticket-runner
 ```
 
-업그레이드도 같은 명령입니다. 전역 설치 없이 먼저 써 보고 싶다면 `npx ticket-runner init`으로 배포된 패키지를 한 번 실행하면 됩니다.
+업그레이드도 같은 명령입니다.
 
 GitHub의 Version 태그에서 바로 설치해도 됩니다. 이 범위는 `main`이 아니라 가장 높은 태그를 가리키므로, 받은 사본은 언제나 스스로 이름을 댈 수 있는 Version입니다([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
 
@@ -55,6 +55,25 @@ A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -
 ```
 
 지금 사본이 최신이거나 더 앞서 있을 때, 또는 GitHub에 물어볼 수조차 없을 때(네트워크나 `gh`가 없을 때)는 아무것도 출력하지 않습니다. 개발용 체크아웃은 번호로만 비교합니다. 출처: [`staleness.ts` · `newerVersionLine`](https://github.com/jjongs2/ticket-runner/blob/main/src/staleness.ts).
+
+### 설치 없이 써 보기 {#try-it-without-installing}
+
+`npx`는 npm 캐시에서 패키지를 실행하므로 전역에 아무것도 설치하지 않습니다. Target에서 시작하고, 이 문서나 파이프라인의 메시지가 `ticket-runner`라고 하는 자리에 `npx ticket-runner`를 입력하세요.
+
+```bash
+cd ~/code/acme
+npx ticket-runner init
+npx ticket-runner run
+npx ticket-runner remove   # 다 써 봤으면
+```
+
+| 하려는 일 | 입력 |
+|---|---|
+| 예전에 캐시된 것 말고 가장 새 Version 쓰기 | `npx ticket-runner@latest …` |
+| 명령마다 같은 Version 쓰기 | `npx ticket-runner@<version> …` |
+| `npx`가 남긴 것 지우기 | `~/.npm/_npx` 삭제 |
+
+처음 한 번은 npm이 패키지를 내려받기 전에 묻습니다. `npx -y`를 주면 묻지 않습니다. `stop`도 같은 머신의 다른 터미널에서 `npx ticket-runner stop`으로 보냅니다.
 
 ## `init`으로 Target 준비하기 {#set-a-target-up-with-init}
 

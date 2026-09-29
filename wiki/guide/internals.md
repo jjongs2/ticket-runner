@@ -194,7 +194,7 @@ A newer Version is out: 0.6.0, and this is 0.5.2 — upgrade with `npm install -
 
 A lookup that cannot be made (no network, no `gh`, a repository nobody can see) prints nothing. Nothing is ever refused over it.
 
-Install and upgrade with `npm install -g ticket-runner`, or try it with `npx ticket-runner init` without a global install. The GitHub tag range the message names, `npm install -g "github:jjongs2/ticket-runner#semver:*"`, also installs the highest Version tag. See [Installation](./installation.md).
+Install and upgrade with `npm install -g ticket-runner`, or try it through `npx` without one ([Try it without installing](./installation.md#try-it-without-installing)). The GitHub tag range the message names, `npm install -g "github:jjongs2/ticket-runner#semver:*"`, also installs the highest Version tag. See [Installation](./installation.md).
 
 ## The ADRs in brief
 

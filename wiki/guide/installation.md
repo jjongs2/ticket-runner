@@ -40,7 +40,7 @@ claude plugin install mattpocock-skills@claude-plugins-official
 npm install -g ticket-runner
 ```
 
-The same line upgrades it. To try the pipeline without a global install, `npx ticket-runner init` runs the published package once.
+The same line upgrades it.
 
 Installing straight from GitHub's Version tags works too. The range asks for the highest tag rather than `main`, so the copy you get is always a Version it can name ([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)):
 
@@ -55,6 +55,25 @@ A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -
 ```
 
 Nothing is printed when this copy is the latest or ahead of it, or when GitHub could not be asked at all (no network, no `gh`). A development checkout is compared by number only. Source: [`staleness.ts` · `newerVersionLine`](https://github.com/jjongs2/ticket-runner/blob/main/src/staleness.ts).
+
+### Try it without installing
+
+`npx` runs the package from npm's cache, so nothing is installed globally. Start it in the Target, and type `npx ticket-runner` wherever these pages, or the pipeline's own messages, say `ticket-runner`:
+
+```bash
+cd ~/code/acme
+npx ticket-runner init
+npx ticket-runner run
+npx ticket-runner remove   # when you are done with it
+```
+
+| To | Type |
+|---|---|
+| Take the newest Version rather than one npm cached earlier | `npx ticket-runner@latest …` |
+| Keep one Version between commands | `npx ticket-runner@<version> …` |
+| Clear what `npx` left behind | delete `~/.npm/_npx` |
+
+The first time, npm asks before it downloads the package; `npx -y` skips the question. `stop` works the same way, from another terminal on the same machine: `npx ticket-runner stop`.
 
 ## Set a Target up with `init`
 

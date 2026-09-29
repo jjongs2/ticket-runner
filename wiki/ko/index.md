@@ -15,12 +15,14 @@ description: 계획은 사람이 GitHub에서 세우고, 각 Ticket을 merge까�
 Node 22 이상, `git`, 인증된 [`gh`](https://cli.github.com/), 그리고 `mattpocock-skills` 플러그인 1.2.3 버전이 설치된 `claude`가 필요합니다. 전체 목록은 [설치](./guide/installation.md)에 있습니다.
 
 ```bash
-npm install -g ticket-runner   # 먼저 써 보려면: npx ticket-runner init
+npm install -g ticket-runner
 
-cd ~/code/acme                 # 파이프라인이 일할 저장소
-ticket-runner init             # 준비해 두고, 사람이 고칠 것을 알려 줌
-ticket-runner run              # 준비된 Ticket을 모두 merge까지
+cd ~/code/acme        # 파이프라인이 일할 저장소
+ticket-runner init    # 준비해 두고, 사람이 고칠 것을 알려 줌
+ticket-runner run     # 준비된 Ticket을 모두 merge까지
 ```
+
+설치 없이 먼저 써 보려면, 이 문서에서 `ticket-runner`라고 쓴 자리에 `npx ticket-runner`를 입력하세요. [설치 없이 써 보기](./guide/installation.md#try-it-without-installing)에 자세히 있습니다.
 
 `init`은 알려 준 항목 중 하나라도 아직 사람이 고칠 게 남아 있으면 `1`로 끝납니다. 그래서 `ticket-runner init && ticket-runner run`은 어차피 안 될 Run을 시작하기 전에 멈춥니다. Run은 [계획](./guide/planning.md)이 쓸 수 있게 만들어 둔 이슈만 가져갑니다. `ready-for-agent` 라벨이 있고, `- [ ]` 기준이 있고, GitHub 자체의 `blocked by` 연결로만 막혀 있는 이슈입니다.
 
