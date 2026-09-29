@@ -221,7 +221,7 @@ conventions 문서의 표시 `<!-- ticket-runner:version <number> -->`에는 방
 
 ### 새 Version 확인 {#the-newer-version-check}
 
-Run과 `init`은 파이프라인 자신의 저장소에서 공개된 가장 높은 Version을 찾아봅니다. 저장소는 `package.json`의 `repository` 필드에서 읽으니, fork는 자기 자신을 묻습니다. 조회는 GitHub Release를 읽되 draft와 prerelease는 뺍니다. tag workflow는 npm에 Version이 올라간 뒤에야 Release를 만드니, Release가 있는 Version은 업그레이드로 설치할 수 있습니다. 번호만 비교하므로, 최신 Version보다 앞선 commit을 돌리는 checkout도 낡은 것으로 보지 않습니다.
+Run과 `init`은 파이프라인 자신의 저장소에서 공개된 가장 높은 Version을 찾아봅니다. 저장소는 `package.json`의 `repository` 필드에서 읽으니, fork는 자기 자신을 묻습니다. 조회는 tag가 아니라 GitHub Release를 읽되 draft와 prerelease는 뺍니다. tag workflow는 npm에 Version이 올라간 뒤에야 Release를 만드니, Release가 있는 Version은 업그레이드로 설치할 수 있습니다. 번호만 비교하므로, 최신 Version보다 앞선 commit을 돌리는 checkout도 낡은 것으로 보지 않습니다.
 
 새 Version이 있으면 [`staleness.ts` · `newerVersionLine`](https://github.com/jjongs2/ticket-runner/blob/main/src/staleness.ts)이 한 줄을 Run 로그 맨 위와 요약 머리에 찍습니다.
 

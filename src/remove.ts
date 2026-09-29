@@ -22,6 +22,7 @@ import {
 } from "./readiness.js";
 import { STATE_BRANCH } from "./resume.js";
 import { nestedRunRefusal } from "./stage-guard.js";
+import { UPGRADE_COMMAND } from "./staleness.js";
 import { describeHolder } from "./stop.js";
 
 /**
@@ -151,8 +152,8 @@ export async function removeTarget(options: RemoveOptions): Promise<number> {
   if (newer !== undefined) {
     return refuse(
       `Refusing to remove: ${newer.mark} set this Target up and this is ${newer.own}, so it may` +
-        " have left things this Version does not know to remove. Upgrade with" +
-        " `npm install -g ticket-runner`, then run `ticket-runner remove` again.",
+        ` have left things this Version does not know to remove. Upgrade with \`${UPGRADE_COMMAND}\`,` +
+        " then run `ticket-runner remove` again.",
     );
   }
 

@@ -21,6 +21,12 @@ import type { Tracker } from "./ports/tracker.js";
 import { readTargetFile } from "./readiness.js";
 import { isHigher, tagNumber, versionNumber } from "./version-number.js";
 
+/**
+ * How any copy is upgraded, whatever repository it asks about: every Version
+ * is on npm before it has a GitHub Release (ADR-0007).
+ */
+export const UPGRADE_COMMAND = "npm install -g ticket-runner";
+
 export interface StalenessQuestion {
   tracker: Tracker;
   /** The Version this copy is, as the CLI resolved it once and handed it down. */
@@ -54,7 +60,7 @@ export async function newerVersionLine({
   const published = latest === undefined ? undefined : tagNumber(latest);
   if (published === undefined || !isHigher(published, own)) return undefined;
 
-  return `A newer Version is out: ${published}, and this is ${own} — upgrade with \`npm install -g ticket-runner\`.`;
+  return `A newer Version is out: ${published}, and this is ${own} — upgrade with \`${UPGRADE_COMMAND}\`.`;
 }
 
 /**

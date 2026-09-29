@@ -221,7 +221,7 @@ The conventions document's mark, `<!-- ticket-runner:version <number> -->`, has 
 
 ### The newer-Version check
 
-A Run and `init` each look up the highest published Version of the pipeline's own repository. They read it from `package.json`'s `repository` field, so a fork asks about itself. The lookup reads GitHub Releases, skipping drafts and prereleases, because the tag workflow makes a Release only once npm has the Version, so a Release names one the upgrade can install. Only numbers are compared, so a checkout running past the latest Version is not stale.
+A Run and `init` each look up the highest published Version of the pipeline's own repository. They read it from `package.json`'s `repository` field, so a fork asks about itself. The lookup reads GitHub Releases rather than tags, skipping drafts and prereleases. The tag workflow makes a Release only once npm has the Version, so a Release names one the upgrade can install. Only numbers are compared, so a checkout running past the latest Version is not stale.
 
 When a newer one is out, [`staleness.ts` · `newerVersionLine`](https://github.com/jjongs2/ticket-runner/blob/main/src/staleness.ts) prints one line, at the top of the Run log and again at the head of the summary:
 
