@@ -6,6 +6,9 @@ on:
 
 permissions:
   contents: write
+  # npm's trusted publishing trades this job's OIDC token for the right to
+  # publish, so no npm token is stored or read anywhere.
+  id-token: write
 
 jobs:
   version-tag:
@@ -15,42 +18,55 @@ jobs:
         with:
           # Every tag, so a push that cuts no Version is recognised as one.
           fetch-depth: 0
-      # A Version is two things, the tag and its GitHub Release, so both are
-      # read and a push finishes whichever half is missing. A re-run of a job
-      # that went red after pushing the tag therefore heals the Version, and so
-      # does the next push, whatever it carries.
+      # A Version is three things, the tag, the same Version on npm and its
+      # GitHub Release, so each is read and a push makes whichever is missing,
+      # in that order. A re-run of a job that went red halfway therefore heals
+      # the Version, and so does the next push, whatever it carries.
       - id: version
         name: What this Version is missing
         env:
           GH_TOKEN: ${{ github.token }}
-        # `missing` is `both`, `release` or `nothing`. A GitHub Release with no
-        # tag is something GitHub cannot have, so those are all the cases.
+        # Each of `tag`, `npm` and `release` under `missing` is `true` or
+        # `false`, and gates its own step below. A lookup that failed reads as
+        # missing rather than as present: the worst a network blip costs is a
+        # red job the next push heals, because `npm publish` refuses a Version
+        # npm already has and `gh release create` a GitHub Release that is
+        # already there.
         run: |
           set -euo pipefail
-          tag="v$(node -p "require('./package.json').version")"
+          name="$(node -p "require('./package.json').name")"
+          version="$(node -p "require('./package.json').version")"
+          tag="v$version"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          if ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
-            echo "$tag does not exist; this push cuts it."
-            echo "missing=both" >> "$GITHUB_OUTPUT"
-          # A lookup that failed reads as missing rather than as present: the
-          # worst a network blip costs is a red job the next push heals, because
-          # `gh release create` refuses a GitHub Release that is already there.
-          elif ! gh release view "$tag" >/dev/null 2>&1; then
-            echo "$tag exists with no GitHub Release; this push publishes it."
-            echo "missing=release" >> "$GITHUB_OUTPUT"
+          missing() { echo "missing-$1=$2" >> "$GITHUB_OUTPUT"; }
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            missing tag false
           else
-            echo "$tag is cut; this push carries no Version."
-            echo "missing=nothing" >> "$GITHUB_OUTPUT"
+            echo "$tag does not exist; this push cuts it."
+            missing tag true
           fi
-      - if: steps.version.outputs.missing != 'nothing'
+          # `npm view` prints nothing for a Version the package does not have,
+          # and fails for a package npm has never heard of.
+          if [ "$(npm view "$name@$version" version 2>/dev/null || true)" = "$version" ]; then
+            missing npm false
+          else
+            echo "npm has no $name@$version; this push publishes it."
+            missing npm true
+          fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            missing release false
+          else
+            echo "$tag has no GitHub Release; this push publishes it."
+            missing release true
+          fi
+      - if: steps.version.outputs.missing-npm == 'true' || steps.version.outputs.missing-release == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - if: steps.version.outputs.missing != 'nothing'
-        run: npm ci
+          registry-url: https://registry.npmjs.org
       - name: Tag the commit
-        if: steps.version.outputs.missing == 'both'
+        if: steps.version.outputs.missing-tag == 'true'
         env:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
@@ -61,8 +77,27 @@ jobs:
           # not the subject of the commit it points at.
           git tag -a "$TAG" -m "$TAG" "$GITHUB_SHA"
           git push origin "refs/tags/$TAG"
+      - name: Publish to npm
+        if: steps.version.outputs.missing-npm == 'true'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # Trusted publishing needs an npm newer than the one Node 22 bundles.
+          npm install -g npm@^11.5.1
+          # Published from the commit the tag names, never from this push's, so
+          # a Version healed by a later push is byte for byte the code its tag
+          # names. The package runs nothing on publish, so it needs no install.
+          git worktree add --detach "$RUNNER_TEMP/tagged" "refs/tags/$TAG"
+          cd "$RUNNER_TEMP/tagged"
+          npm publish
+      - if: steps.version.outputs.missing-release == 'true'
+        run: npm ci
+      # After npm, and skipped when publishing there failed, so a GitHub Release
+      # exists only for a Version npm has: the newer-Version line a Run prints
+      # reads GitHub Releases and names the npm install.
       - name: Publish the GitHub Release
-        if: steps.version.outputs.missing != 'nothing'
+        if: steps.version.outputs.missing-release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}

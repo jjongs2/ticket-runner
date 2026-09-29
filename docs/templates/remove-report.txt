@@ -159,7 +159,7 @@ Refusing to remove: `gh` is not installed — install the GitHub CLI from https:
 
 4. A conventions document a newer Version stamped:
 
-Refusing to remove: 0.6.0 set this Target up and this is 0.5.2, so it may have left things this Version does not know to remove. Upgrade with `npm install -g "github:jjongs2/ticket-runner#semver:*"`, then run `ticket-runner remove` again.
+Refusing to remove: 0.6.0 set this Target up and this is 0.5.2, so it may have left things this Version does not know to remove. Upgrade with `npm install -g ticket-runner`, then run `ticket-runner remove` again.
 
 5. Neither a terminal nor `--yes`:
 

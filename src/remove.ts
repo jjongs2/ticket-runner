@@ -22,6 +22,7 @@ import {
 } from "./readiness.js";
 import { STATE_BRANCH } from "./resume.js";
 import { nestedRunRefusal } from "./stage-guard.js";
+import { UPGRADE_COMMAND } from "./staleness.js";
 import { describeHolder } from "./stop.js";
 
 /**
@@ -66,8 +67,6 @@ export interface RemoveOptions {
   repoRoot: string;
   /** The Version doing the removing, which the report's first line names (ADR-0007). */
   version: string;
-  /** The pipeline's own repository, as `owner/name`, which the upgrade is named from. */
-  repository?: string | undefined;
   /** Read before anything is removed, because it names the in-progress label. */
   config: Config;
   tracker: Tracker;
@@ -151,14 +150,10 @@ export async function removeTarget(options: RemoveOptions): Promise<number> {
   // emptied as done.
   const newer = newerSetUp(repoRoot, options.version);
   if (newer !== undefined) {
-    const upgrade =
-      options.repository === undefined
-        ? "Upgrade `ticket-runner`"
-        : `Upgrade with \`npm install -g "github:${options.repository}#semver:*"\``;
     return refuse(
       `Refusing to remove: ${newer.mark} set this Target up and this is ${newer.own}, so it may` +
-        ` have left things this Version does not know to remove. ${upgrade}, then run` +
-        " `ticket-runner remove` again.",
+        ` have left things this Version does not know to remove. Upgrade with \`${UPGRADE_COMMAND}\`,` +
+        " then run `ticket-runner remove` again.",
     );
   }
 

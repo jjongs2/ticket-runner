@@ -170,7 +170,7 @@ claude --print <prompt> --output-format stream-json --verbose \
 
 Version이 없던 때는 두 설치본이 같은 번호를 말하면서 몇 주씩 떨어진 코드를 돌릴 수 있었습니다. 그래서 transcript에서 찾은 버그를 commit과 이을 수 없었고, 낡은 설치본은 Target이 지난주 파이프라인처럼 굴 때에야 드러났습니다. 파이프라인이 Target에 남기는 것들도 어느 파이프라인이 썼는지 말해 주지 않아서, 설치본이 다른 두 머신이 같은 conventions 문서를 번갈아 다시 쓰곤 했습니다.
 
-[Version](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)은 `main`이 `v<x.y.z>` tag와 GitHub Release로 달고 있는 번호입니다. 설치된 사본이 이 번호를 알려 줍니다. 머신에는 `main`이 아니라 Version을 설치하니, `0.5.2`라고 말하는 두 머신은 같은 코드를 돌립니다([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
+[Version](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)은 `main`이 `v<x.y.z>` tag로 달고, npm에 올리고, GitHub Release로 공개하는 번호입니다. 설치된 사본이 이 번호를 알려 줍니다. 머신에는 `main`이 아니라 Version을 설치하니, `0.5.2`라고 말하는 두 머신은 같은 코드를 돌립니다([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
 
 ### Version을 끊는 방법 {#how-one-is-cut}
 
@@ -181,14 +181,15 @@ flowchart LR
     CK -- 거절 --> PR
     CK -- 통과 --> MG["사람이 리뷰하고 merge"]
     MG --> TG["version-tag.yml: v‹number› tag"]
-    TG --> RL["GitHub Release, 본문은 CHANGELOG 섹션"]
+    TG --> NP["npm: ticket-runner@‹number›, tag에서 올림"]
+    NP --> RL["GitHub Release, 본문은 CHANGELOG 섹션"]
 ```
 <!-- Sources: src/version-pr.ts, scripts/version.ts, .github/workflows/version-pr.yml, .github/workflows/version-tag.yml -->
 
 - **번호.** 지난 Version 뒤로 Spec이 하나라도 닫혔으면 minor를, 그 밖에는 작은 기능까지 포함해 모두 patch를 올립니다. 질문은 오직 "Spec이 닫혔나"뿐입니다. 언제 끊을지는 사람이 정합니다. Planning의 결정이니까요.
 - **Version PR.** `package.json`과 lock file의 번호를 올리고, `CHANGELOG.md`에 그 Version의 섹션을 더하고, `npx tsx scripts/version.ts mark`로 이 저장소의 conventions 문서에 새 표시를 합니다. 초안은 [`/cut-a-version`](https://github.com/jjongs2/ticket-runner/blob/main/.claude/skills/cut-a-version/SKILL.md) skill이 만들고, merge는 하지 않습니다.
 - **검사**는 이유를 한꺼번에 모두 알려 줍니다. 번호가 모든 tag보다 높지 않을 때, lock file이 다른 번호일 때, 섹션이 없을 때, 섹션에 `### After upgrading` 제목이 없을 때입니다. 번호를 건드리지 않은 pull request는 그대로 통과합니다.
-- **tag workflow**는 merge commit에 tag를 달고, 그 섹션을 GitHub Release로 올립니다. 섹션이 없으면 GitHub이 만든 notes를 씁니다. 빠진 쪽만 채우니, 반쯤 끊긴 Version도 다시 돌리면 온전해집니다.
+- **tag workflow**는 merge commit에 tag를 달고, tag가 가리키는 commit을 trusted publishing으로 npm에 올린 뒤(npm token은 어디에도 없습니다), 그 섹션을 GitHub Release로 올립니다. 섹션이 없으면 GitHub이 만든 notes를 씁니다. 셋 중 빠진 것만 채우니, 반쯤 끊긴 Version도 다시 돌리면 온전해집니다.
 
 release-please와 Changesets는 둘 다 채택하지 않았습니다. 앞의 것은 해마다 만료되는 token, 저장소 설정, 그리고 `feat`/`fix`만 Version을 끊는다는 규칙이 필요했습니다. 뒤의 것은 모든 Stage의 일에 changeset 파일 쓰기를 얹었을 것입니다.
 
@@ -220,17 +221,17 @@ conventions 문서의 표시 `<!-- ticket-runner:version <number> -->`에는 방
 
 ### 새 Version 확인 {#the-newer-version-check}
 
-Run과 `init`은 파이프라인 자신의 저장소에서 공개된 가장 높은 Version을 찾아봅니다. 저장소는 `package.json`의 `repository` 필드에서 읽으니, fork는 자기 자신을 묻습니다. 조회는 GitHub Release를 읽되 draft와 prerelease는 뺍니다. Release가 아직 나오지 않은 tag는 설치할 수 없으니까요. 번호만 비교하므로, 최신 Version보다 앞선 commit을 돌리는 checkout도 낡은 것으로 보지 않습니다.
+Run과 `init`은 파이프라인 자신의 저장소에서 공개된 가장 높은 Version을 찾아봅니다. 저장소는 `package.json`의 `repository` 필드에서 읽으니, fork는 자기 자신을 묻습니다. 조회는 tag가 아니라 GitHub Release를 읽되 draft와 prerelease는 뺍니다. tag workflow는 npm에 Version이 올라간 뒤에야 Release를 만드니, Release가 있는 Version은 업그레이드로 설치할 수 있습니다. 번호만 비교하므로, 최신 Version보다 앞선 commit을 돌리는 checkout도 낡은 것으로 보지 않습니다.
 
 새 Version이 있으면 [`staleness.ts` · `newerVersionLine`](https://github.com/jjongs2/ticket-runner/blob/main/src/staleness.ts)이 한 줄을 Run 로그 맨 위와 요약 머리에 찍습니다.
 
 ```
-A newer Version is out: 0.6.0, and this is 0.5.2 — upgrade with `npm install -g "github:jjongs2/ticket-runner#semver:*"`.
+A newer Version is out: 0.6.0, and this is 0.5.2 — upgrade with `npm install -g ticket-runner`.
 ```
 
 네트워크가 없거나, `gh`가 없거나, 아무도 볼 수 없는 저장소라서 조회하지 못하면 아무것도 찍지 않습니다. 이 때문에 무언가를 거절하는 일은 없습니다.
 
-설치와 업그레이드는 `npm install -g ticket-runner`로 하고, 전역 설치 없이 써 보려면 `npx`를 쓰면 됩니다([설치 없이 써 보기](./installation.md#try-it-without-installing)). 안내 줄이 말하는 GitHub tag 범위 `npm install -g "github:jjongs2/ticket-runner#semver:*"`로도 가장 높은 Version tag가 설치됩니다. [설치](./installation.md)를 참고하세요.
+설치와 업그레이드는 `npm install -g ticket-runner`로 하고, 전역 설치 없이 써 보려면 `npx`를 쓰면 됩니다([설치 없이 써 보기](./installation.md#try-it-without-installing)). GitHub tag 범위 `npm install -g "github:jjongs2/ticket-runner#semver:*"`로도 가장 높은 Version tag가 설치됩니다. [설치](./installation.md)를 참고하세요.
 
 ## ADR 요약 {#the-adrs-in-brief}
 
@@ -274,7 +275,7 @@ A newer Version is out: 0.6.0, and this is 0.5.2 — upgrade with `npm install -
 
 ### [ADR-0007: A Version is cut by a human, and installs follow tags](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md) {#adr-0007}
 
-- **결정**: Version은 사람이 Version PR을 merge해서 끊고, 설치는 tag를 따릅니다.
+- **결정**: Version은 사람이 Version PR을 merge해서 끊고, tag workflow가 npm에 올리며, 설치는 npm에서 합니다. GitHub tag 범위로 설치해도 됩니다.
 - **이유**: 언제 끊을지는 Planning의 결정입니다. 같은 번호의 두 머신이 같은 코드를 돌려야 번호가 쓸모 있는 표시가 됩니다.
 - **비용**: Version notes는 agent의 도움을 받아 손으로 씁니다.
 

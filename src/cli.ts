@@ -81,7 +81,6 @@ async function main(argv: string[]): Promise<number> {
     return removeTarget({
       repoRoot: root,
       version,
-      repository,
       config: loadConfig(root, version),
       tracker: new GhTracker({ cwd: root }),
       workspace: new GitWorkspace(root),

@@ -21,7 +21,7 @@ again beside the transcripts.
 A Run whose Version is below the highest one published on GitHub gains a line
 above that header, which is also the first thing it logged hours earlier:
 
-A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g "github:jjongs2/ticket-runner#semver:*"`.
+A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g ticket-runner`.
 ticket-runner <version> run <runId> · <duration>
 
   merged   #3 Run: drain the Frontier (PR #12)

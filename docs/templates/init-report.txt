@@ -27,7 +27,7 @@ files it is about to gain. Where a newer Version has been published, one line
 follows it and nothing comes between them:
 
 ticket-runner <version> init · <repo root>
-A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g "github:jjongs2/ticket-runner#semver:*"`.
+A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g ticket-runner`.
 
 Wrote:
   ...

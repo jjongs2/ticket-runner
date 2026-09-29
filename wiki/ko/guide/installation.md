@@ -49,10 +49,10 @@ GitHub의 Version 태그에서 바로 설치해도 됩니다. 이 범위는 `mai
 npm install -g "github:jjongs2/ticket-runner#semver:*"
 ```
 
-`init`과 `run`은 GitHub Release로 공개된 가장 새로운 Version을 찾아봅니다. 그게 지금 사본이 보고하는 번호보다 높으면 한 줄을 출력할 뿐, 아무것도 거절하지 않습니다.
+`init`과 `run`은 GitHub Release로 공개된 가장 새로운 Version을 찾아봅니다. GitHub Release는 npm에 올라간 Version에만 생깁니다. 그게 지금 사본이 보고하는 번호보다 높으면 한 줄을 출력할 뿐, 아무것도 거절하지 않습니다.
 
 ```text
-A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g "github:jjongs2/ticket-runner#semver:*"`.
+A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g ticket-runner`.
 ```
 
 지금 사본이 최신이거나 더 앞서 있을 때, 또는 GitHub에 물어볼 수조차 없을 때(네트워크나 `gh`가 없을 때)는 아무것도 출력하지 않습니다. 개발용 체크아웃은 번호로만 비교합니다.
@@ -255,7 +255,7 @@ Target마다 먼저 `ticket-runner remove`를 실행하세요. 명령을 지운 
 ## 참고 자료 {#references}
 
 - [`src/init.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/init.ts), [`src/labels.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/labels.ts), [`src/conventions.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/conventions.ts), [`src/operator-skill.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/operator-skill.ts)
-- [`src/readiness.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/readiness.ts), [`src/start.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts), [`src/startup.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts), [`src/staleness.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/staleness.ts)
+- [`src/readiness.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/readiness.ts), [`src/start.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts), [`src/startup.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts), [`src/staleness.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/staleness.ts), [`.github/workflows/version-tag.yml`](https://github.com/jjongs2/ticket-runner/blob/main/.github/workflows/version-tag.yml)
 - [`src/remove.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/remove.ts), [`src/command-line.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/command-line.ts), [`src/cli.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/cli.ts)
 - [`docs/templates/init-report.txt`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/init-report.txt), [`docs/templates/remove-report.txt`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/remove-report.txt)
 - [ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md), [ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md), [ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)
