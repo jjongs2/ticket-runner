@@ -1,6 +1,6 @@
 # ticket-runner
 
-A tool that drives the mattpocock-skills chain unattended: humans plan, the pipeline executes.
+A tool that drives the mattpocock-skills chain: humans plan, the pipeline executes.
 
 ## Language
 
