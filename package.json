@@ -1,7 +1,14 @@
 {
   "name": "ticket-runner",
   "version": "0.6.0",
-  "description": "Drives the mattpocock-skills chain unattended: humans plan, the pipeline executes.",
+  "description": "Drives the mattpocock-skills chain: humans plan, the pipeline executes.",
+  "keywords": [
+    "claude-code",
+    "cli",
+    "github-issues",
+    "mattpocock-skills"
+  ],
+  "homepage": "https://jjongs2.github.io/ticket-runner/",
   "license": "MIT",
   "repository": {
     "type": "git",
