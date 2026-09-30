@@ -17,7 +17,7 @@
   background-color: var(--vp-c-bg-soft);
 }
 
-/* Mermaid: the theme variables colour most of a diagram; these catch what they miss. */
+/* Mermaid: its own theme lays a diagram out; these colour it for whichever theme the page is in. */
 .mermaid {
   display: flex;
   justify-content: center;
@@ -32,16 +32,20 @@
 .mermaid .node rect,
 .mermaid .node circle,
 .mermaid .node polygon,
-.mermaid .node path {
+.mermaid .node path,
+.mermaid .actor {
   fill: var(--wiki-node) !important;
   stroke: var(--vp-c-brand-2) !important;
 }
-.mermaid .cluster rect {
+.mermaid .cluster rect,
+.mermaid .note {
   fill: var(--vp-c-bg-soft) !important;
   stroke: var(--vp-c-divider) !important;
 }
 .mermaid .edgeLabel,
-.mermaid .edgeLabel rect {
+.mermaid .edgeLabel rect,
+.mermaid .edgeLabel p,
+.mermaid .labelBkg {
   background-color: var(--vp-c-bg-soft) !important;
   fill: var(--vp-c-bg-soft) !important;
   color: var(--vp-c-text-1) !important;
@@ -54,15 +58,28 @@
   margin: 0;
 }
 .mermaid text,
+.mermaid tspan,
 .mermaid .label,
 .mermaid .nodeLabel {
   fill: var(--vp-c-text-1) !important;
   color: var(--vp-c-text-1) !important;
 }
 .mermaid .flowchart-link,
+.mermaid .transition,
+.mermaid .actor-line,
 .mermaid .messageLine0,
 .mermaid .messageLine1 {
   stroke: var(--wiki-line) !important;
+}
+/* Arrowheads, and the discs a sequence diagram numbers its messages on. */
+.mermaid marker path,
+.mermaid marker polygon,
+.mermaid marker circle {
+  fill: var(--wiki-line) !important;
+  stroke: var(--wiki-line) !important;
+}
+.mermaid text.sequenceNumber {
+  fill: var(--vp-c-bg) !important;
 }
 
 .diagram-zoom {

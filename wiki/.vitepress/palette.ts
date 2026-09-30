@@ -1,6 +1,5 @@
-// The wiki's colours and fonts, in one place. The config hands them to Mermaid, which
-// needs literal values, and writes them into the page as CSS variables, which is what
-// custom.css reads.
+// The wiki's colours and fonts, in one place. The config writes them into the page as
+// CSS variables, which is what custom.css reads, diagrams included.
 
 export const colors = {
   bg: "#0d1117",
@@ -17,6 +16,12 @@ export const colors = {
   brandSoft: "rgba(109, 93, 252, 0.16)",
 };
 
+// The light theme keeps VitePress's own colours; only the diagrams need two of their own.
+export const lightColors = {
+  node: "#ffffff",
+  line: "#57606a",
+};
+
 // Plex Sans KR shares Plex Sans's Latin glyphs, so English and Korean set in one text look alike.
 export const fonts = {
   sans: '"IBM Plex Sans", "IBM Plex Sans KR", ui-sans-serif, system-ui, sans-serif',
@@ -30,6 +35,8 @@ export const paletteCss = `
 html:root {
   --vp-font-family-base: ${fonts.sans};
   --vp-font-family-mono: ${fonts.mono};
+  --wiki-node: ${lightColors.node};
+  --wiki-line: ${lightColors.line};
 }
 html.dark {
   --vp-c-bg: ${colors.bg};
@@ -47,27 +54,8 @@ html.dark {
   --wiki-line: ${colors.line};
 }`;
 
+// Mermaid is given one set of theme variables for both themes, so it gets no colours:
+// custom.css paints the diagrams from the page's variables instead.
 export const mermaidTheme = {
-  primaryColor: colors.node,
-  primaryTextColor: colors.text,
-  primaryBorderColor: colors.brand,
-  lineColor: colors.line,
-  secondaryColor: colors.node,
-  tertiaryColor: colors.surface,
-  background: colors.bg,
-  mainBkg: colors.node,
-  nodeBorder: colors.brand,
-  clusterBkg: colors.surface,
-  clusterBorder: colors.border,
-  titleColor: colors.text,
-  edgeLabelBackground: colors.surface,
-  actorBkg: colors.node,
-  actorBorder: colors.brand,
-  actorTextColor: colors.text,
-  signalColor: colors.line,
-  signalTextColor: colors.text,
-  noteBkgColor: colors.surface,
-  noteTextColor: colors.text,
-  noteBorderColor: colors.border,
   fontFamily: fonts.sans,
 };
