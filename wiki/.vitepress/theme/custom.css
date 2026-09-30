@@ -17,7 +17,8 @@
   background-color: var(--vp-c-bg-soft);
 }
 
-/* Mermaid: the theme variables colour most of a diagram; these catch what they miss. */
+/* Mermaid: its own theme lays a diagram out; these colour it for whichever theme the page is in,
+   on the page and in the zoomed copy alike. */
 .mermaid {
   display: flex;
   justify-content: center;
@@ -29,19 +30,23 @@
   cursor: zoom-in;
   overflow-x: auto;
 }
-.mermaid .node rect,
-.mermaid .node circle,
-.mermaid .node polygon,
-.mermaid .node path {
+:is(.mermaid, .diagram-zoom) .node rect,
+:is(.mermaid, .diagram-zoom) .node circle,
+:is(.mermaid, .diagram-zoom) .node polygon,
+:is(.mermaid, .diagram-zoom) .node path,
+:is(.mermaid, .diagram-zoom) .actor {
   fill: var(--wiki-node) !important;
   stroke: var(--vp-c-brand-2) !important;
 }
-.mermaid .cluster rect {
+:is(.mermaid, .diagram-zoom) .cluster rect,
+:is(.mermaid, .diagram-zoom) .note {
   fill: var(--vp-c-bg-soft) !important;
   stroke: var(--vp-c-divider) !important;
 }
-.mermaid .edgeLabel,
-.mermaid .edgeLabel rect {
+:is(.mermaid, .diagram-zoom) .edgeLabel,
+:is(.mermaid, .diagram-zoom) .edgeLabel rect,
+:is(.mermaid, .diagram-zoom) .edgeLabel p,
+:is(.mermaid, .diagram-zoom) .labelBkg {
   background-color: var(--vp-c-bg-soft) !important;
   fill: var(--vp-c-bg-soft) !important;
   color: var(--vp-c-text-1) !important;
@@ -53,16 +58,29 @@
   line-height: 1.5 !important;
   margin: 0;
 }
-.mermaid text,
-.mermaid .label,
-.mermaid .nodeLabel {
+:is(.mermaid, .diagram-zoom) text,
+:is(.mermaid, .diagram-zoom) tspan,
+:is(.mermaid, .diagram-zoom) .label,
+:is(.mermaid, .diagram-zoom) .nodeLabel {
   fill: var(--vp-c-text-1) !important;
   color: var(--vp-c-text-1) !important;
 }
-.mermaid .flowchart-link,
-.mermaid .messageLine0,
-.mermaid .messageLine1 {
+:is(.mermaid, .diagram-zoom) .flowchart-link,
+:is(.mermaid, .diagram-zoom) .transition,
+:is(.mermaid, .diagram-zoom) .actor-line,
+:is(.mermaid, .diagram-zoom) .messageLine0,
+:is(.mermaid, .diagram-zoom) .messageLine1 {
   stroke: var(--wiki-line) !important;
+}
+/* Arrowheads, and the discs a sequence diagram numbers its messages on. */
+:is(.mermaid, .diagram-zoom) marker path,
+:is(.mermaid, .diagram-zoom) marker polygon,
+:is(.mermaid, .diagram-zoom) marker circle {
+  fill: var(--wiki-line) !important;
+  stroke: var(--wiki-line) !important;
+}
+:is(.mermaid, .diagram-zoom) text.sequenceNumber {
+  fill: var(--vp-c-bg) !important;
 }
 
 .diagram-zoom {
@@ -73,7 +91,7 @@
   align-items: center;
   justify-content: center;
   padding: 2rem;
-  background: rgba(0, 0, 0, 0.92);
+  background: var(--vp-c-bg);
   cursor: grab;
   touch-action: none;
 }

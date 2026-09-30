@@ -95,8 +95,9 @@ export default withMermaid(
         },
       },
     },
+    // The light theme's; the plugin switches to "dark" whenever the page is dark.
     mermaid: {
-      theme: "dark",
+      theme: "neutral",
       themeVariables: mermaidTheme,
     },
   }),
