@@ -51,6 +51,8 @@ heading and the prose, dated today.
 Terse, because the reader is deciding whether to upgrade and the pull request
 is one click away:
 
+- One sentence under the heading, before the groups: what this Version is, by
+  the change that matters most or the thread several share.
 - One line per change, about a dozen words, ending in its pull request numbers.
   The line says what changed; the why and the how stay in the pull request.
 - `After upgrading` in one or two lines, or the single word `nothing`.
