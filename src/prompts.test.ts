@@ -229,10 +229,11 @@ describe("fixPrompt", () => {
 });
 
 describe("conflictPrompt", () => {
-  it("begins with the skill that resolves an in-progress rebase", () => {
-    expect(conflictPrompt(url, CONFLICT, BASE, "", OTHER_TARGET).split("\n")[0]).toBe(
-      "/mattpocock-skills:resolving-merge-conflicts",
-    );
+  it("invokes no plugin skill and refers to none: the stopped rebase is the whole brief", () => {
+    const prompt = conflictPrompt(url, CONFLICT, BASE, "", OTHER_TARGET);
+
+    expect(prompt).not.toContain("/mattpocock-skills:");
+    expect(prompt).not.toMatch(/skill/i);
   });
 
   it("names the Ticket and fences what git printed when the rebase stopped", () => {
