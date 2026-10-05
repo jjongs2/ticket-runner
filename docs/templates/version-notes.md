@@ -1,5 +1,7 @@
 ## <number> (<yyyy-mm-dd>)
 
+<one sentence: what this Version is, for a reader deciding whether to upgrade>
+
 ### <group the writer names>
 
 - <what changed, for a reader of the pipeline> ([#<pr>])
@@ -18,12 +20,18 @@ The `## ` heading is the section's boundary — the check on the Version PR look
 for the number there, and the tag workflow publishes everything under it up to
 the next `## ` as the Release body. The date is the day the Version is cut.
 
+Under the heading, one sentence says what the Version is before any group lists
+a change: the change that matters most to a reader, or the thread several share.
+It names no pull request; the lines below carry them. Sections cut before this
+sentence was asked for have none.
+
 `After upgrading` is a fixed heading: always last, always present, and the one
 thing a reader of this tool cannot get from the pull request list, because the
 pipeline rewrites files in every Target it is set up in. When nothing is asked
 of a Target, it says so in one word rather than being left out.
 
-Everything above it is grouped by what changed, in the writer's own words.
+Everything between the sentence and it is grouped by what changed, in the
+writer's own words.
 Lines are terse: about a dozen words, ending in the pull request numbers the
 change landed in. One line per change, not per pull request — three pull
 requests that built one thing are one line carrying three numbers.

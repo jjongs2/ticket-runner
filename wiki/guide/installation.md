@@ -41,7 +41,7 @@ claude plugin install mattpocock-skills@claude-plugins-official
 npm install -g ticket-runner
 ```
 
-The same line upgrades it.
+The same line upgrades it. Then read **After upgrading** in the [Release](https://github.com/jjongs2/ticket-runner/releases) of each Version newer than the one you had: it says what your Targets need, such as running `init` again.
 
 Installing straight from GitHub's Version tags works too. The range asks for the highest tag rather than `main`, so the copy you get is always a Version it can name ([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)):
 
