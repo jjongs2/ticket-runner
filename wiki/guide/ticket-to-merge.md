@@ -69,7 +69,7 @@ A branch of that name that already exists is never reused. The Ticket is handed 
 
 ## How a Stage runs
 
-A [Stage](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) is one `claude -p` child process with one job ([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)). Headless mode expands `/plugin:skill` in the prompt, which is the only way to drive a user-invoked skill of the `mattpocock-skills` plugin (version 1.2.3). A process per Stage also gives each Stage its own limits, a JSON schema for its answer, and a command line a human can paste to reproduce it.
+A [Stage](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) is one `claude -p` child process with one job ([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)). Headless mode expands `/plugin:skill` in the prompt, which is the only way to drive a user-invoked skill of the `mattpocock-skills` plugin (version 1.2.3 or later). A process per Stage also gives each Stage its own limits, a JSON schema for its answer, and a command line a human can paste to reproduce it.
 
 Every Stage runs in the Ticket's worktree with `--permission-prompts none`, the configured `permissionMode`, and its own `model`, `effort`, `maxTurns` and `maxMinutes` (see [Configuration](./configuration.md)). The wall-clock limit is enforced by killing the process.
 
@@ -78,7 +78,7 @@ Every Stage runs in the Ticket's worktree with `--permission-prompts none`, the 
 | implement | `/mattpocock-skills:implement <issue URL>` | optional `title` and [`notes`](#notes) |
 | verify | `Ticket: <issue URL>`, no skill | the Verdict, optional `notes` |
 | fix | `Ticket: <issue URL>`, no skill | optional `title` and `notes` |
-| conflict | `/mattpocock-skills:resolving-merge-conflicts` | none |
+| conflict | `Ticket: <issue URL>`, no skill | none |
 
 Every prompt then carries the Stage boundary guidance (never run `ticket-runner` against the repository or GitHub, never kill processes the Stage did not start, and expect the CLI to refuse under the Stage mark). Where the Target is the pipeline's own repository, it adds that the checkout is the pipeline, to be exercised only through its tests and fakes. The prompt ends with the Stage's `extraPrompt` from the config. The implement prompt adds guidance that works around the skill in an unattended session: commit before the review, invoke `/mattpocock-skills:code-review` by its full name, run the review sub-agents in the foreground, and leave the worktree clean.
 
@@ -200,7 +200,7 @@ The Base branch is first brought up to the remote's: `git pull --ff-only` when i
 
 ### The Conflict Stage
 
-A conflict is not a defect in the branch: the Base branch moved on underneath it. So one [Conflict Stage](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) runs in the stopped rebase with git's output, driving `/mattpocock-skills:resolving-merge-conflicts`, and **it does not spend the Fix budget.** It is told to finish the rebase and never abort it, to keep both intents where they are compatible and the Ticket's where they are not, and to touch no file the conflict did not.
+A conflict is not a defect in the branch: the Base branch moved on underneath it. So one [Conflict Stage](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) runs in the stopped rebase with git's output and no plugin skill, and **it does not spend the Fix budget.** It is told to finish the rebase and never abort it, to keep both intents where they are compatible and the Ticket's where they are not, and to touch no file the conflict did not.
 
 **The worktree decides, not the session's exit.** The rebase counts as resolved only when all of these hold:
 

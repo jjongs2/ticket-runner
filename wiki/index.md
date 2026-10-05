@@ -31,7 +31,7 @@ It does not fit when:
 
 ## Quick Start
 
-You need Node 22 or newer, `git`, an authenticated [`gh`](https://cli.github.com/), and `claude` with the `mattpocock-skills` plugin, version 1.2.3. [Installation](./guide/installation.md) has the full list.
+You need Node 22 or newer, `git`, an authenticated [`gh`](https://cli.github.com/), and `claude` with the `mattpocock-skills` plugin, version 1.2.3 or later. [Installation](./guide/installation.md) has the full list.
 
 ```bash
 npm install -g ticket-runner
