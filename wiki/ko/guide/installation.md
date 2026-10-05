@@ -41,7 +41,7 @@ claude plugin install mattpocock-skills@claude-plugins-official
 npm install -g ticket-runner
 ```
 
-업그레이드도 같은 명령입니다. 그다음 Target이나 사람이 할 일은 쓰던 Version 다음부터 각 Version의 [Release](https://github.com/jjongs2/ticket-runner/releases)에 있는 **After upgrading**에 적혀 있습니다.
+업그레이드도 같은 명령입니다. 그다음 쓰던 것보다 새로운 Version마다 [Release](https://github.com/jjongs2/ticket-runner/releases)의 **After upgrading**을 읽으세요. `init` 다시 실행하기처럼 Target에서 해야 할 일이 적혀 있습니다.
 
 GitHub의 Version 태그에서 바로 설치해도 됩니다. 이 범위는 `main`이 아니라 가장 높은 태그를 가리키므로, 받은 사본은 언제나 스스로 이름을 댈 수 있는 Version입니다([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
 
