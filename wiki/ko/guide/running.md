@@ -25,10 +25,10 @@ description: Run 시작하기, Lane 주기, 지정한 Ticket으로 좁히기, �
 | | `/implement-spec` | Run |
 |---|---|---|
 | 지켜보는 사람 | 나. 내 세션에서 보면서 방향을 틀 수 있음 | 없음. 끝난 뒤 요약과 보드를 읽음 |
-| 일의 단위 | Spec 하나. 그 Ticket들이 한 branch에 함께 모임 | Ticket 하나. branch와 pull request가 Ticket마다 따로 |
+| 일의 단위 | Spec 하나 전체를 세션 하나에서 | Ticket 하나. branch와 pull request가 Ticket마다 따로 |
 | 관문 | skill이 밟는 단계, 그다음 나의 검토 | Ticket마다 Check, verify Stage, CI |
-| 끝나는 모습 | Spec의 작업이 한 덩어리로 내 검토를 기다림 | Ticket마다 base branch에 merge되거나 사람에게 넘어감 |
-| 이어 하기 | 어디까지 했는지 남는 기록이 없어 남은 일은 내가 가려내야 함 | [Stranded Ticket](./stopping-and-resuming.md)을 다음 Run이 어느 Host에서든 이어 감 |
+| 끝나는 모습 | 세션이 끝나면 Spec의 작업이 내 검토를 기다림 | Ticket마다 Base branch에 merge되거나 사람에게 넘어감 |
+| 이어 하기 | 어디까지 했는지 보드에 남는 기록이 없어 남은 일은 내가 가려내야 함 | [Stranded Ticket](./stopping-and-resuming.md)을 다음 Run이 어느 Host에서든 이어 감 |
 | 보드에 남는 표시 | 작업하는 동안 없음 | Run이 쥔 동안 `in-progress`와 담당자 |
 
 둘이 한 Spec을 나눠 맡지는 않습니다. `/implement-spec`은 작업하는 Ticket에 아무 표시도 남기지 않으니 그 Ticket들은 Frontier에 그대로 남고, Run도 가져가 같은 일을 다른 branch에서 한 번 더 합니다. Spec에 `/implement-spec`을 돌리기 전에 그 Ticket들에서 `ready-for-agent`를 떼세요([라벨](./planning.md#labels)). skill이 단계마다 하는 일, pull request를 여는 조건, 알려진 약점은 [upstream 페이지](https://www.aihero.dev/skills-implement-spec)에 있습니다.
