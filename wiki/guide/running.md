@@ -18,6 +18,21 @@ A [Run](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) exists so
 
 `init` and `remove` are on [Install and remove](./installation.md). An unknown command or option, or a bad argument, is refused with the usage and exit code `2`.
 
+## `/implement-spec` or a Run
+
+The plugin's `/implement-spec` also carries a Spec's Tickets to code. It runs in your own session and a Run runs unattended, and the other differences follow from that:
+
+| | `/implement-spec` | A Run |
+|---|---|---|
+| Who watches | You, in your own session, free to steer it | Nobody; you read the summary and the board afterwards |
+| Unit of work | A Spec, its Tickets landing together on one branch | A Ticket, with its own branch and pull request |
+| Gates | The skill's own steps, then your review | The Checks, the verify Stage and CI, for every Ticket |
+| How it ends | With the Spec's work in one piece, waiting for your review | With each Ticket merged into the base branch or handed to a human |
+| Resuming | Nothing records how far it got, so what is left is yours to work out | A [Stranded Ticket](./stopping-and-resuming.md) resumes in the next Run, on any Host |
+| Mark on the board | None while it works | `in-progress` and an assignee while a Run holds a Ticket |
+
+The two do not share a Spec. `/implement-spec` leaves no mark on the Tickets it works, so they stay on the Frontier and a Run takes them too, doing the same work again on other branches. Before you run `/implement-spec` on a Spec, take `ready-for-agent` off its Tickets ([Labels](./planning.md#labels)). What the skill does step by step, when it opens a pull request and its known rough edges are on its [upstream page](https://www.aihero.dev/skills-implement-spec).
+
 ## `run`
 
 `run` drains the [Frontier](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md): the open Tickets labelled `ready-for-agent` that nobody is assigned to and whose native blockers have all closed ([Planning](./planning.md)). Before it takes anything it passes, in order, every refusal a Run can meet: [Target readiness](./installation.md#target-readiness-what-run-refuses), leftover local State files, a missing Check, and the Run lock. Each of these exits `2` and leaves nothing behind.

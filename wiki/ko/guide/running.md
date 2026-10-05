@@ -18,6 +18,21 @@ description: Run 시작하기, Lane 주기, 지정한 Ticket으로 좁히기, �
 
 `init`과 `remove`는 [설치와 제거](./installation.md)에 있습니다. 모르는 명령이나 옵션, 잘못된 인자는 사용법과 함께 종료 코드 `2`로 거절합니다.
 
+## `/implement-spec`과 Run {#implement-spec-or-a-run}
+
+플러그인의 `/implement-spec`도 Spec의 Ticket들을 코드로 옮깁니다. `/implement-spec`은 내 세션에서 돌고 Run은 무인으로 돌며, 나머지 차이는 모두 여기서 나옵니다.
+
+| | `/implement-spec` | Run |
+|---|---|---|
+| 지켜보는 사람 | 나. 내 세션에서 보면서 방향을 틀 수 있음 | 없음. 끝난 뒤 요약과 보드를 읽음 |
+| 일의 단위 | Spec 하나. 그 Ticket들이 한 branch에 함께 모임 | Ticket 하나. branch와 pull request가 Ticket마다 따로 |
+| 관문 | skill이 밟는 단계, 그다음 나의 검토 | Ticket마다 Check, verify Stage, CI |
+| 끝나는 모습 | Spec의 작업이 한 덩어리로 내 검토를 기다림 | Ticket마다 base branch에 merge되거나 사람에게 넘어감 |
+| 이어 하기 | 어디까지 했는지 남는 기록이 없어 남은 일은 내가 가려내야 함 | [Stranded Ticket](./stopping-and-resuming.md)을 다음 Run이 어느 Host에서든 이어 감 |
+| 보드에 남는 표시 | 작업하는 동안 없음 | Run이 쥔 동안 `in-progress`와 담당자 |
+
+둘이 한 Spec을 나눠 맡지는 않습니다. `/implement-spec`은 작업하는 Ticket에 아무 표시도 남기지 않으니 그 Ticket들은 Frontier에 그대로 남고, Run도 가져가 같은 일을 다른 branch에서 한 번 더 합니다. Spec에 `/implement-spec`을 돌리기 전에 그 Ticket들에서 `ready-for-agent`를 떼세요([라벨](./planning.md#labels)). skill이 단계마다 하는 일, pull request를 여는 조건, 알려진 약점은 [upstream 페이지](https://www.aihero.dev/skills-implement-spec)에 있습니다.
+
 ## `run` {#run}
 
 `run`은 [Frontier](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)를 비웁니다. Frontier는 `ready-for-agent` 라벨이 붙은 열린 Ticket 중 담당자가 없고 네이티브 blocker가 모두 닫힌 것들입니다([계획](./planning.md)). 무언가를 가져가기 전에 Run이 마주칠 수 있는 거절을 순서대로 모두 통과합니다. [Target readiness](./installation.md#target-readiness-what-run-refuses), 남아 있는 로컬 State 파일, Check 없음, 그리고 Run lock입니다. 어느 것이든 종료 코드 `2`로 끝나고 아무것도 남기지 않습니다.
