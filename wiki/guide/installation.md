@@ -22,7 +22,7 @@ A Run works unattended, so anything missing has to be caught before it starts, n
 | Node 22 or newer | The package's `engines` field | npm, at install |
 | `git` | Every Ticket gets its own worktree and branch | – |
 | [`gh`](https://cli.github.com/), authenticated for the Target | Every GitHub call goes through `gh api` | `init` reports it; `run` refuses a Host without `gh` |
-| `claude`, with the `mattpocock-skills` plugin, version 1.2.3 | Each Stage is a `claude -p` session driving the plugin's skills ([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)) | `init` reports both |
+| `claude`, with the `mattpocock-skills` plugin, version 1.2.3 or later | Each Stage is a `claude -p` session, and the implement Stage drives the plugin's skills ([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)) | `init` reports both |
 | A GitHub repository with Tickets planned for it | The board is where Tickets come from; see [Planning](./planning.md) | – |
 | `/setup-matt-pocock-skills`, run once in the repository with GitHub Issues as the tracker | The planning skills file Specs and Tickets as GitHub issues because of it | – |
 | A CI workflow in `.github/workflows` | A pull request with no checks is never merged, unless [`gates.ci`](./configuration.md#gates) is off | `init` reports it |

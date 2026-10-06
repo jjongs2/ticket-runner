@@ -163,7 +163,7 @@ ${titleGuidance(base)}`;
 
 const conflictInstructions = (base: string) => `You are the conflict Stage of an unattended pipeline. The Ticket below is already implemented on the branch you are on, and rebasing it onto \`${base}\` stopped on a conflict. That rebase is still in progress in this worktree, and finishing it is the whole of your job.
 
-- Follow the skill. Resolve every hunk and carry the rebase through to the end; never \`git rebase --abort\`, and never rewind the branch to escape the conflict.
+- Resolve every hunk and carry the rebase through to the end; never \`git rebase --abort\`, and never rewind the branch to escape the conflict.
 - Where the two sides are compatible, keep both intents. Where they are not, keep the behaviour this Ticket's Acceptance Criteria ask for, and keep \`${base}\`'s everywhere the Ticket is silent.
 - Resolve, do not redesign. Implement nothing new, and touch no file the conflict did not.
 - Leave no conflict marker behind in any file, committed or not.
@@ -221,7 +221,7 @@ export function verifyPrompt(
   ]);
 }
 
-/** `/mattpocock-skills:resolving-merge-conflicts`, then the conflict git reported. */
+/** A fresh session with no plugin skill, given the conflict git reported. */
 export function conflictPrompt(
   issueUrl: string,
   conflict: string,
@@ -230,7 +230,6 @@ export function conflictPrompt(
   selfHosted: boolean,
 ): string {
   return sections([
-    "/mattpocock-skills:resolving-merge-conflicts",
     `Ticket: ${issueUrl}`,
     conflictInstructions(base),
     outputSection("## Where the rebase stopped", conflict),

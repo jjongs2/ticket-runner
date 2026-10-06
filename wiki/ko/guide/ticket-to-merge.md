@@ -69,7 +69,7 @@ fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종�
 
 ## Stage가 도는 방식 {#how-a-stage-runs}
 
-[Stage](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)는 일 하나만 맡는 `claude -p` 자식 프로세스입니다([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)). headless 모드는 프롬프트 안의 `/plugin:skill`을 펼쳐 주는데, `mattpocock-skills` 플러그인(버전 1.2.3)의 사용자 호출형 skill을 구동하는 방법은 이것뿐입니다. Stage마다 프로세스를 따로 두면 Stage별 한도, 답변용 JSON schema, 사람이 붙여 넣어 그대로 재현할 수 있는 명령줄도 함께 얻습니다.
+[Stage](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)는 일 하나만 맡는 `claude -p` 자식 프로세스입니다([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)). headless 모드는 프롬프트 안의 `/plugin:skill`을 펼쳐 주는데, `mattpocock-skills` 플러그인(버전 1.2.3 이상)의 사용자 호출형 skill을 구동하는 방법은 이것뿐입니다. Stage마다 프로세스를 따로 두면 Stage별 한도, 답변용 JSON schema, 사람이 붙여 넣어 그대로 재현할 수 있는 명령줄도 함께 얻습니다.
 
 모든 Stage는 Ticket의 worktree에서 `--permission-prompts none`, 설정된 `permissionMode`, 그리고 Stage별 `model`, `effort`, `maxTurns`, `maxMinutes`로 실행됩니다([설정](./configuration.md) 참고). 시간 한도는 프로세스를 kill해서 지킵니다.
 
@@ -78,7 +78,7 @@ fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종�
 | implement | `/mattpocock-skills:implement <issue URL>` | 선택 항목 `title`과 [`notes`](#notes) |
 | verify | `Ticket: <issue URL>`, skill 없음 | Verdict, 선택 항목 `notes` |
 | fix | `Ticket: <issue URL>`, skill 없음 | 선택 항목 `title`과 `notes` |
-| conflict | `/mattpocock-skills:resolving-merge-conflicts` | 없음 |
+| conflict | `Ticket: <issue URL>`, skill 없음 | 없음 |
 
 모든 프롬프트에는 Stage 경계 안내(저장소나 GitHub을 대상으로 `ticket-runner`를 실행하지 말 것, Stage가 띄우지 않은 프로세스를 kill하지 말 것, Stage mark가 있는 동안 CLI가 거절하는 건 예상된 일임)가 붙습니다. Target이 파이프라인 자신의 저장소라면, checkout이 곧 파이프라인이니 테스트와 fake로만 돌려 보라는 안내가 더 붙습니다. 마지막에는 설정의 Stage별 `extraPrompt`가 붙습니다. implement 프롬프트에는 무인 세션에서 skill의 약점을 피해 가는 안내가 더 붙습니다. 리뷰 전에 먼저 commit할 것, `/mattpocock-skills:code-review`를 전체 이름으로 부를 것, 리뷰 sub-agent를 foreground로 돌릴 것, worktree를 깨끗이 남길 것 등입니다.
 
@@ -200,7 +200,7 @@ Ticket은 fix Stage, Hand-off, Release 때도 Landing을 나가므로, 누구도
 
 ### Conflict Stage {#the-conflict-stage}
 
-충돌은 branch의 결함이 아닙니다. 그 아래에서 Base branch가 앞으로 나간 것뿐입니다. 그래서 멈춘 rebase 안에서 [Conflict Stage](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) 하나가 git 출력과 함께 `/mattpocock-skills:resolving-merge-conflicts`를 구동하고, **Fix budget은 쓰지 않습니다.** 이 Stage에는 rebase를 끝까지 마치고 절대 abort하지 말 것, 양쪽이 양립하면 두 의도를 모두 살리고 아니면 Ticket 쪽을 따를 것, 충돌하지 않은 파일은 건드리지 말 것을 요청합니다.
+충돌은 branch의 결함이 아닙니다. 그 아래에서 Base branch가 앞으로 나간 것뿐입니다. 그래서 멈춘 rebase 안에서 [Conflict Stage](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) 하나가 플러그인 skill 없이 git 출력을 받아 돌고, **Fix budget은 쓰지 않습니다.** 이 Stage에는 rebase를 끝까지 마치고 절대 abort하지 말 것, 양쪽이 양립하면 두 의도를 모두 살리고 아니면 Ticket 쪽을 따를 것, 충돌하지 않은 파일은 건드리지 말 것을 요청합니다.
 
 **판단은 세션의 종료 상태가 아니라 worktree가 합니다.** 다음을 모두 만족해야 rebase가 해결된 것으로 봅니다.
 

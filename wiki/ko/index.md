@@ -31,7 +31,7 @@ ticket-runner는 [`mattpocock-skills`](https://github.com/mattpocock/skills) 체
 
 ## 빠르게 시작하기 {#quick-start}
 
-Node 22 이상, `git`, 인증된 [`gh`](https://cli.github.com/), 그리고 `mattpocock-skills` 플러그인 1.2.3 버전이 설치된 `claude`가 필요합니다. 전체 목록은 [설치](./guide/installation.md)에 있습니다.
+Node 22 이상, `git`, 인증된 [`gh`](https://cli.github.com/), 그리고 `mattpocock-skills` 플러그인 1.2.3 이상 버전이 설치된 `claude`가 필요합니다. 전체 목록은 [설치](./guide/installation.md)에 있습니다.
 
 ```bash
 npm install -g ticket-runner

@@ -783,14 +783,14 @@ describe("rebase", () => {
     expect(runner.stages()).toEqual(["implement", "verify", "conflict"]);
   });
 
-  it("drives the skill, from the worktree, under the conflict Stage's own limits", async () => {
+  it("briefs the conflict Stage, from the worktree, under its own limits", async () => {
     workspace.conflictOnce(CONFLICT);
 
     await run();
 
     const request = runner.requests.find((r) => r.stage === "conflict");
     expect(request).toMatchObject({ cwd: worktree, maxTurns: 120, maxMinutes: 30 });
-    expect(request?.prompt).toContain("/mattpocock-skills:resolving-merge-conflicts");
+    expect(request?.prompt).not.toContain("/mattpocock-skills:");
     expect(request?.prompt).toContain(URL);
     expect(request?.prompt).toContain(CONFLICT);
   });

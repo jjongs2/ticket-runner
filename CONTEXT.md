@@ -99,7 +99,7 @@ The Stage that adversarially tries to prove a Ticket's Acceptance Criteria are n
 _Avoid_: review, QA, audit
 
 **Conflict Stage**:
-The Stage that resolves a rebase conflict, driving the resolving-merge-conflicts skill in the worktree where git stopped. What it left behind is judged by the worktree, not by how the session ended.
+The Stage that resolves a rebase conflict in the worktree where git stopped. What it left behind is judged by the worktree, not by how the session ended.
 _Avoid_: merge Stage, conflict resolution
 
 **Acceptance Criteria**:

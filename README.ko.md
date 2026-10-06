@@ -35,7 +35,7 @@ rate limit에 걸려 멈춘 세션은 아무것도 잃지 않습니다. 이슈�
   설정해 두었고, Ticket 하나는 세션 하나로 끝낼 만큼 작습니다.
 - pull request에서 도는 CI 워크플로가 있고, 파이프라인이 직접 돌릴 테스트나 typecheck 명령이 있습니다.
 - 돌리는 머신에 Node 22 이상, `git`, 인증된 [`gh`](https://cli.github.com/), 그리고
-  [`mattpocock-skills`](https://github.com/mattpocock/skills) 플러그인 1.2.3 버전을 설치한 `claude`가
+  [`mattpocock-skills`](https://github.com/mattpocock/skills) 플러그인 1.2.3 이상 버전을 설치한 `claude`가
   있습니다.
 
 파이프라인은 묻지 않고 base branch에 merge합니다. 그걸 원하는 저장소에 쓰세요.
