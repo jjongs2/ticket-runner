@@ -1,4 +1,4 @@
-# ticket-runner conventions <!-- ticket-runner:version 0.6.0 -->
+# ticket-runner conventions <!-- ticket-runner:version 0.6.1 -->
 
 What `ticket-runner` requires of this repository, and nothing else. `ticket-runner init` writes this file and rewrites it whenever those requirements change, so an edit made here does not survive the next `init`. Everything the pipeline leaves to this repository — which commit types and scopes it uses, how it reviews, what it tests — belongs in the repository's own contributing guide.
 

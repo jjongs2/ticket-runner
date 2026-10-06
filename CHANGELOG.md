@@ -4,6 +4,37 @@ One section per Version, newest first, written in the Version PR that cut it and
 published as the body of that Version's GitHub Release (ADR-0007). The shape is
 `docs/templates/version-notes.md`.
 
+## 0.6.1 (2026-10-06)
+
+Each Version now reaches npm and installs with `npm install -g ticket-runner`, and the conflict Stage works with `mattpocock-skills` 1.3.1.
+
+### npm
+
+- Each cut Version is published to npm, and the pipeline names `npm install -g ticket-runner` ([#216])
+- The package's npm page carries keywords and a homepage ([#219])
+
+### Fixes
+
+- The conflict Stage runs without a skill, so `mattpocock-skills` 1.3.1 no longer breaks it ([#222])
+
+### Docs
+
+- The README shows the npm Version and the licence as badges ([#217])
+- The wiki's diagrams read in the light theme ([#218])
+- The Running page compares `/implement-spec` with a Run ([#222])
+- Version notes open with a summary, and the Install page points upgrades at them ([#220])
+
+### After upgrading
+
+Run `ticket-runner init` in each Target to refresh the Operator's skill, which now installs from npm. The GitHub tag install keeps working.
+
+[#216]: https://github.com/jjongs2/ticket-runner/pull/216
+[#217]: https://github.com/jjongs2/ticket-runner/pull/217
+[#218]: https://github.com/jjongs2/ticket-runner/pull/218
+[#219]: https://github.com/jjongs2/ticket-runner/pull/219
+[#220]: https://github.com/jjongs2/ticket-runner/pull/220
+[#222]: https://github.com/jjongs2/ticket-runner/pull/222
+
 ## 0.6.0 (2026-09-29)
 
 ### ticket-runner

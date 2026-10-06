@@ -1,6 +1,6 @@
 {
   "name": "ticket-runner",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Drives the mattpocock-skills chain: humans plan, the pipeline executes.",
   "keywords": [
     "claude-code",
