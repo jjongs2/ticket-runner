@@ -28,7 +28,7 @@ description: GitHub 이슈가 파이프라인이 가져가는 Ticket이 되는 �
 | `to-tickets` | **Ticket**: Spec의 네이티브 sub-issue. 하나가 에이전트 세션 하나 분량이고, `ready-for-agent` 라벨이 붙음 |
 | `triage` | 다른 경로로 들어온 이슈를 Ticket으로. 브리프(와 그 기준)는 코멘트로 올라감 |
 
-[Spec](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)은 그 자체로 구현하지 않고, 그 아래 Ticket만 구현합니다. Spec에 `ready-for-agent` 라벨이 남아 있으면 아래의 `spec` Guard가 떼어 냅니다. [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)은 implement Stage 한 번에 끝날 만큼 작아야 합니다. implement Stage는 기본으로 300턴, 60분입니다([설정](./configuration.md#stages)).
+[Spec](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 그 자체로 구현하지 않고, 그 아래 Ticket만 구현합니다. Spec에 `ready-for-agent` 라벨이 남아 있으면 아래의 `spec` Guard가 떼어 냅니다. [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 implement Stage 한 번에 끝날 만큼 작아야 합니다. implement Stage는 기본으로 300턴, 60분입니다([설정](./configuration.md#stages)).
 
 부모와 blocker까지 달아서 직접 만들려면:
 
@@ -89,7 +89,7 @@ blocker 중 하나라도 열려 있으면 Ticket은 기다립니다. 같은 Run�
 
 ## Guard {#guards}
 
-계획은 몇 가지 알려진 방식으로 어긋납니다. `to-spec`이 Spec에 `ready-for-agent` 라벨을 남겨 두기도 하고, 체크박스 기준 없이 들어온 이슈도 있고, `to-tickets`가 네이티브 연결은 만들지 않고 본문에 `Blocked by: #n`만 적어 두기도 합니다. 이대로 가져가면 파이프라인은 Spec 전체를 거대한 Ticket 하나로 구현하거나, verify가 채점할 수 없는 일을 하거나, 선행 작업이 끝나기도 전에 Ticket을 시작하게 됩니다. [Guard](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)는 이런 후보를 claim하기 전에 넘기고, 왜 넘겼는지 한 번 알려 줍니다. 계획 결과를 고친 뒤 다시 돌리면 됩니다.
+계획은 몇 가지 알려진 방식으로 어긋납니다. `to-spec`이 Spec에 `ready-for-agent` 라벨을 남겨 두기도 하고, 체크박스 기준 없이 들어온 이슈도 있고, `to-tickets`가 네이티브 연결은 만들지 않고 본문에 `Blocked by: #n`만 적어 두기도 합니다. 이대로 가져가면 파이프라인은 Spec 전체를 거대한 Ticket 하나로 구현하거나, verify가 채점할 수 없는 일을 하거나, 선행 작업이 끝나기도 전에 Ticket을 시작하게 됩니다. [Guard](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 이런 후보를 claim하기 전에 넘기고, 왜 넘겼는지 한 번 알려 줍니다. 계획 결과를 고친 뒤 다시 돌리면 됩니다.
 
 ```mermaid
 flowchart TD
@@ -116,7 +116,7 @@ flowchart TD
 
 건너뛸 때마다 무엇을 고치면 되는지 적은 경고 코멘트를 하나 달고, Run 요약에는 `skipped  #<n> <reason>`으로 남깁니다. 경고에는 숨은 `<!-- ticket-runner:guard:<reason> -->` 표시가 있어서 이유마다 한 번만 올라갑니다. 밤마다 도는 Run이 고쳐지지 않은 같은 이슈를 다시 만나도 더는 아무 말도 하지 않습니다. 이슈를 고치면 다음 Run이 가져갑니다. 코멘트 문구는 [`docs/templates/guard-comment.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/guard-comment.md)에 있습니다.
 
-Guard는 [Stranded Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)도 재개하기 전에 채점합니다. Guard가 보는 것은 누가 쥐고 있느냐가 아니라 이슈 자체이기 때문입니다.
+Guard는 [Stranded Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)도 재개하기 전에 채점합니다. Guard가 보는 것은 누가 쥐고 있느냐가 아니라 이슈 자체이기 때문입니다.
 
 ## 관련 페이지 {#related-pages}
 

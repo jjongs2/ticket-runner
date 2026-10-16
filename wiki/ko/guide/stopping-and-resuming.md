@@ -43,7 +43,7 @@ stateDiagram-v2
 
 ## Hand-off {#hand-off}
 
-[Hand-off](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)는 Ticket을 사람에게 넘기는 일입니다. merge도 Release도 아닌 끝맺음은 모두 이렇게 끝납니다. Fix budget을 쓴 뒤의 두 번째 실패, 시간을 넘긴 Stage, 끝나지 않은 CI, setup에서 앞을 막은 branch 같은 경우입니다. 이 가운데 누군가의 결함이 아닌 경우도 있습니다.
+[Hand-off](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 Ticket을 사람에게 넘기는 일입니다. merge도 Release도 아닌 끝맺음은 모두 이렇게 끝납니다. Fix budget을 쓴 뒤의 두 번째 실패, 시간을 넘긴 Stage, 끝나지 않은 CI, setup에서 앞을 막은 branch 같은 경우입니다. 이 가운데 누군가의 결함이 아닌 경우도 있습니다.
 
 Hand-off는 이 순서로 진행됩니다.
 
@@ -115,7 +115,7 @@ Hand-off가 State를 남기는 이유가 있습니다. 예전에 Run이 rate lim
 
 ## rate limit에 걸렸을 때의 Release {#release-on-a-rate-limit}
 
-구독 rate limit에 걸린 Stage는 무언가를 잘못한 게 아닙니다. 이걸 Hand-off로 처리하면 아무 문제 없는 Ticket의 라벨을 사람이 다시 바꿔야 하고, fix Stage를 돌려 봐야 같은 한도에 또 걸릴 뿐입니다. 그래서 Ticket을 [Release](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)합니다. Ticket은 보드로 돌아가고, 다음 Run은 마지막으로 끝낸 Stage에서부터 Fix budget도 그대로인 채 이어 갑니다.
+구독 rate limit에 걸린 Stage는 무언가를 잘못한 게 아닙니다. 이걸 Hand-off로 처리하면 아무 문제 없는 Ticket의 라벨을 사람이 다시 바꿔야 하고, fix Stage를 돌려 봐야 같은 한도에 또 걸릴 뿐입니다. 그래서 Ticket을 [Release](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)합니다. Ticket은 보드로 돌아가고, 다음 Run은 마지막으로 끝낸 Stage에서부터 Fix budget도 그대로인 채 이어 갑니다.
 
 이 판단은 실패한 세션에 대해서만 합니다. 아래 셋 중 하나만 있어도 됩니다.
 
@@ -180,7 +180,7 @@ stop file이 없으니, `stop`을 두 번 해도 처음과 같은 내용을 출�
 
 kill된 Run은 아무것도 놓아주지 않습니다. 그 Ticket들은 Claim을 그대로 달고 있고, 작업은 마지막으로 push한 시점까지 remote에 있습니다. 그래서 State file은 Release가 아니라 Claim과 함께 씁니다. kill된 Run에게는 파일을 쓸 기회가 없으니까요.
 
-[Stranded Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)은 State file이 아직 있고, 이 파이프라인의 Claim(현재 `gh` 사용자에게 할당 + `in-progress` 라벨)도 그대로 달린 Ticket입니다. 이미 claim된 상태라 Frontier는 이런 Ticket을 내놓지 않습니다. 그래서 모든 Run은 Frontier를 보기 전에 State file부터 훑습니다.
+[Stranded Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 State file이 아직 있고, 이 파이프라인의 Claim(현재 `gh` 사용자에게 할당 + `in-progress` 라벨)도 그대로 달린 Ticket입니다. 이미 claim된 상태라 Frontier는 이런 Ticket을 내놓지 않습니다. 그래서 모든 Run은 Frontier를 보기 전에 State file부터 훑습니다.
 
 | State file의 Ticket | sweep이 하는 일 |
 |---|---|

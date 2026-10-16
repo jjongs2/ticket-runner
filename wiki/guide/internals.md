@@ -170,7 +170,7 @@ This is why every external effect goes through a port, the pipeline's own bookke
 
 Without Versions, two installs could report the same number and run code weeks apart, so a bug read off a transcript could not be tied to a commit, and a stale install showed only when a Target behaved like last week's pipeline. Nothing the pipeline left in a Target said which pipeline wrote it either, so two machines on different installs rewrote the same conventions document back and forth.
 
-A [Version](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) is a number that `main` carries as a tag `v<x.y.z>`, published to npm and with a GitHub Release. An installed copy reports it. Machines install a Version, never `main`, so two machines that report `0.5.2` run the same code ([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
+A [Version](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is a number that `main` carries as a tag `v<x.y.z>`, published to npm and with a GitHub Release. An installed copy reports it. Machines install a Version, never `main`, so two machines that report `0.5.2` run the same code ([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
 
 ### How one is cut
 
@@ -304,7 +304,7 @@ This repository is a Target of its own pipeline, so it follows the same rules as
 
 - [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md): branches, commits, pull requests, Version PRs, issues, and code rules (strict ESM TypeScript, tests beside the code, every effect through a port, `scripts/` kept thin)
 - [`docs/agents/pipeline-conventions.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/agents/pipeline-conventions.md): what the pipeline requires of any Target
-- [`CONTEXT.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md): name things with the glossary; a concept that needs a new word goes there first
+- [`GLOSSARY.md`](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md): name things with the glossary; a concept that needs a new word goes there first
 - [`docs/templates/`](https://github.com/jjongs2/ticket-runner/tree/main/docs/templates): change a shape there before the code that writes it
 
 A Stage may not run the pipeline. Its shell carries `TICKET_RUNNER_STAGE`, and every command refuses while it is set, leaving the pipeline to the Run that started it. In this repository, a Stage's prompt also tells it to exercise the pipeline through the tests and fakes instead.

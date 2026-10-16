@@ -2187,7 +2187,7 @@ describe("the State file a claimed Ticket keeps", () => {
 /**
  * A **Stranded Ticket**: one a Run claimed and never released, because the Run
  * was killed. The Claim is still on the board and the State file is still beside
- * the worktree, which together is what says so (CONTEXT.md).
+ * the worktree, which together is what says so (GLOSSARY.md).
  */
 describe("resuming a stranded Ticket", () => {
   /** Exactly what a killed Run leaves: the Claim, the worktree, the State file. */

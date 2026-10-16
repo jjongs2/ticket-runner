@@ -5,7 +5,7 @@ description: 머신과 저장소에 필요한 것, ticket-runner 설치, init이
 
 # 설치와 제거
 
-Run은 무인으로 돌기 때문에, 빠진 게 있다면 Ticket 도중이 아니라 시작하기 전에 잡아내야 합니다. 준비 단계가 없다면 저장소에 무엇이 있어야 하는지(무시할 디렉터리, triage 라벨, squash merge, Stage가 읽는 규칙)를 소스를 읽어 가며 알아내거나, Run이 도중에 즉석으로 만들어 넣어야 합니다. 그래서 준비를 셋으로 나눴습니다. `init`은 파이프라인이 직접 쓸 수 있는 것은 제자리에 두고, 사람만 고칠 수 있는 것은 알려 줍니다. `run`은 같은 목록을 확인해서 하나라도 빠진 [Target](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)(명령을 실행한 저장소)은 아무것도 고치지 않고 거절합니다. `remove`는 `init`이 한 일과 Run이 남긴 것을 모두 되돌리니, 내 저장소에 파이프라인을 시험해 봐도 안전합니다.
+Run은 무인으로 돌기 때문에, 빠진 게 있다면 Ticket 도중이 아니라 시작하기 전에 잡아내야 합니다. 준비 단계가 없다면 저장소에 무엇이 있어야 하는지(무시할 디렉터리, triage 라벨, squash merge, Stage가 읽는 규칙)를 소스를 읽어 가며 알아내거나, Run이 도중에 즉석으로 만들어 넣어야 합니다. 그래서 준비를 셋으로 나눴습니다. `init`은 파이프라인이 직접 쓸 수 있는 것은 제자리에 두고, 사람만 고칠 수 있는 것은 알려 줍니다. `run`은 같은 목록을 확인해서 하나라도 빠진 [Target](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)(명령을 실행한 저장소)은 아무것도 고치지 않고 거절합니다. `remove`는 `init`이 한 일과 Run이 남긴 것을 모두 되돌리니, 내 저장소에 파이프라인을 시험해 봐도 안전합니다.
 
 | 단계 | 명령 | 하는 일 |
 |---|---|---|
@@ -83,7 +83,7 @@ cd ~/code/acme
 ticket-runner init
 ```
 
-두 번 실행해도 한 번 실행한 것과 같습니다. 무언가를 쓰기 전에 Target에 이미 있는지부터 확인하기 때문입니다. commit은 하지 않으니, 쓴 내용은 그 저장소의 평소 리뷰 절차를 거쳐 히스토리에 들어갑니다. Ticket을 claim하지 않으므로 [Run lock](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)도 잡지 않습니다.
+두 번 실행해도 한 번 실행한 것과 같습니다. 무언가를 쓰기 전에 Target에 이미 있는지부터 확인하기 때문입니다. commit은 하지 않으니, 쓴 내용은 그 저장소의 평소 리뷰 절차를 거쳐 히스토리에 들어갑니다. Ticket을 claim하지 않으므로 [Run lock](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)도 잡지 않습니다.
 
 ### 쓰는 것 {#what-it-writes}
 

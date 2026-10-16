@@ -94,7 +94,7 @@ npm uninstall -g ticket-runner # 전역 설치
 - [멈추고 이어 하기](https://jjongs2.github.io/ticket-runner/ko/guide/stopping-and-resuming)
 - [내부 구조](https://jjongs2.github.io/ticket-runner/ko/guide/internals)
 
-용어는 [`CONTEXT.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)에, 설계 결정은
+용어는 [`GLOSSARY.md`](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)에, 설계 결정은
 [`docs/adr/`](https://github.com/jjongs2/ticket-runner/tree/main/docs/adr)에, 파이프라인 자체를 고칠
 때의 규칙은 [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md)에
 있습니다. 모두 영어입니다.

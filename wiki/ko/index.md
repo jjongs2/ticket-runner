@@ -8,11 +8,11 @@ description: ticket-runner는 mattpocock-skills 체인에서 사람이 지켜보
 
 계획은 사람이, 실행은 파이프라인이.
 
-ticket-runner는 [`mattpocock-skills`](https://github.com/mattpocock/skills) 체인에서 사람이 지켜보지 않아도 되는 절반을 맡습니다. 기능을 계획하는 일에는 판단이 필요하니 사람이 자기 세션에서 합니다. `/grilling`, `/to-spec`, `/to-tickets`(또는 `/triage`)가 기능을 GitHub 이슈 여러 개로 나누고, 이슈마다 체크박스로 된 [Acceptance Criteria](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)와 blocker 연결, `ready-for-agent` 라벨을 답니다. 그다음부터 merge까지는 되풀이되는 일이라 파이프라인이 무인으로 처리합니다. 사람이 입력했을 `/implement`를 파이프라인이 대신 부립니다. [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)마다 헤드리스 Claude Code 세션에 구현을 맡기고, 저장소의 테스트를 직접 돌리고, 두 번째 세션에게 기준이 충족되지 않았음을 증명해 보라고 시킨 다음, pull request를 열고 CI를 기다려 squash-merge합니다. 끝내지 못한 일은 draft pull request와 코멘트를 남겨 사람에게 돌려줍니다.
+ticket-runner는 [`mattpocock-skills`](https://github.com/mattpocock/skills) 체인에서 사람이 지켜보지 않아도 되는 절반을 맡습니다. 기능을 계획하는 일에는 판단이 필요하니 사람이 자기 세션에서 합니다. `/grilling`, `/to-spec`, `/to-tickets`(또는 `/triage`)가 기능을 GitHub 이슈 여러 개로 나누고, 이슈마다 체크박스로 된 [Acceptance Criteria](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)와 blocker 연결, `ready-for-agent` 라벨을 답니다. 그다음부터 merge까지는 되풀이되는 일이라 파이프라인이 무인으로 처리합니다. 사람이 입력했을 `/implement`를 파이프라인이 대신 부립니다. [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)마다 헤드리스 Claude Code 세션에 구현을 맡기고, 저장소의 테스트를 직접 돌리고, 두 번째 세션에게 기준이 충족되지 않았음을 증명해 보라고 시킨 다음, pull request를 열고 CI를 기다려 squash-merge합니다. 끝내지 못한 일은 draft pull request와 코멘트를 남겨 사람에게 돌려줍니다.
 
 ## 왜 만들었나 {#why-it-exists}
 
-계획이 끝나도 Ticket마다 사람이 붙어 있는 세션이 하나씩 필요합니다. 세션을 열고, Ticket을 붙여 넣고, 기다리고, 리뷰하고, commit하고, merge하고, 닫은 다음, 막힘이 풀린 다음 Ticket을 찾아 나서야 합니다. Ticket이 열 개면 세션도 열 개입니다. 게다가 Ticket을 닫아 주는 게 없으니 [Frontier](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)(더는 아무것도 막지 않는 Ticket들)는 저절로 움직이지 않습니다. 파이프라인이 있으면 사람의 몫은 계획에서 끝납니다. 명령 하나로 Frontier를 비우고, merge된 코드를 남깁니다.
+계획이 끝나도 Ticket마다 사람이 붙어 있는 세션이 하나씩 필요합니다. 세션을 열고, Ticket을 붙여 넣고, 기다리고, 리뷰하고, commit하고, merge하고, 닫은 다음, 막힘이 풀린 다음 Ticket을 찾아 나서야 합니다. Ticket이 열 개면 세션도 열 개입니다. 게다가 Ticket을 닫아 주는 게 없으니 [Frontier](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)(더는 아무것도 막지 않는 Ticket들)는 저절로 움직이지 않습니다. 파이프라인이 있으면 사람의 몫은 계획에서 끝납니다. 명령 하나로 Frontier를 비우고, merge된 코드를 남깁니다.
 
 ## 잘 맞는 경우와 맞지 않는 경우 {#when-it-fits-and-when-it-does-not}
 
@@ -91,4 +91,4 @@ rate limit은 implement만이 아니라 어느 Stage에서든 걸릴 수 있고,
 | [멈추고 이어 하기](./guide/stopping-and-resuming.md) | Hand-off, Release, Stop과 kill, Stranded Ticket, Ticket 돌려주기, Run lock과 State branch |
 | [내부 구조](./guide/internals.md) | 포트와 어댑터, 모듈 지도, Version, ADR 요약, 파이프라인 자체를 고치는 법 |
 
-파이프라인이 쓰는 용어(Ticket, Run, Stage, Lane 등)는 [용어집](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) 한곳에 정의되어 있습니다.
+파이프라인이 쓰는 용어(Ticket, Run, Stage, Lane 등)는 [용어집](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 한곳에 정의되어 있습니다.

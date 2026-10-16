@@ -5,7 +5,7 @@ description: Run 시작하기, Lane 주기, 지정한 Ticket으로 좁히기, �
 
 # 실행하기
 
-[Run](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)은 명령 하나 걸어 두고 자리를 떠도 되게 하려고 있습니다. 준비된 Ticket을 모두 가져가 하나하나 merge나 사람에게까지 데려가고, 가져갈 게 더 없으면 알아서 끝납니다. 나중에 궁금할 만한 것은 요약과 보드, 그리고 디스크에 남긴 transcript에 다 있습니다.
+[Run](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 명령 하나 걸어 두고 자리를 떠도 되게 하려고 있습니다. 준비된 Ticket을 모두 가져가 하나하나 merge나 사람에게까지 데려가고, 가져갈 게 더 없으면 알아서 끝납니다. 나중에 궁금할 만한 것은 요약과 보드, 그리고 디스크에 남긴 transcript에 다 있습니다.
 
 | 명령 | 하는 일 | 종료 코드 |
 |---|---|---|
@@ -35,9 +35,9 @@ description: Run 시작하기, Lane 주기, 지정한 Ticket으로 좁히기, �
 
 ## `run` {#run}
 
-`run`은 [Frontier](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)를 비웁니다. Frontier는 `ready-for-agent` 라벨이 붙은 열린 Ticket 중 담당자가 없고 네이티브 blocker가 모두 닫힌 것들입니다([계획](./planning.md)). 무언가를 가져가기 전에 Run이 마주칠 수 있는 거절을 순서대로 모두 통과합니다. [Target readiness](./installation.md#target-readiness-what-run-refuses), 남아 있는 로컬 State 파일, Check 없음, 그리고 Run lock입니다. 어느 것이든 종료 코드 `2`로 끝나고 아무것도 남기지 않습니다.
+`run`은 [Frontier](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)를 비웁니다. Frontier는 `ready-for-agent` 라벨이 붙은 열린 Ticket 중 담당자가 없고 네이티브 blocker가 모두 닫힌 것들입니다([계획](./planning.md)). 무언가를 가져가기 전에 Run이 마주칠 수 있는 거절을 순서대로 모두 통과합니다. [Target readiness](./installation.md#target-readiness-what-run-refuses), 남아 있는 로컬 State 파일, Check 없음, 그리고 Run lock입니다. 어느 것이든 종료 코드 `2`로 끝나고 아무것도 남기지 않습니다.
 
-그다음 [Lane](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)으로 Ticket을 가져갑니다. Lane 하나에 Ticket 하나, 기본은 Lane 하나입니다.
+그다음 [Lane](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)으로 Ticket을 가져갑니다. Lane 하나에 Ticket 하나, 기본은 Lane 하나입니다.
 
 ```mermaid
 flowchart TD
@@ -157,7 +157,7 @@ Frontier blocked.
 | `handed` | 사람에게 Hand-off됨. 멈춘 Stage와 이유가 붙음 |
 | `released` | rate limit 때문에 해당 Stage에서 Release됨. 누구도 할 일이 없음 |
 | `skipped` | 이유와 함께 넘어감([Guard](./planning.md#guards), 또는 위의 표) |
-| `noted` | 바로 윗줄이 남긴 [Note](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)와 간 곳. 이미 있는 이슈(열려 있던 Notes 이슈 포함)면 `comment`, Notes 이슈를 새로 연 Note 하나만 `new` |
+| `noted` | 바로 윗줄이 남긴 [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)와 간 곳. 이미 있는 이슈(열려 있던 Notes 이슈 포함)면 `comment`, Notes 이슈를 새로 연 Note 하나만 `new` |
 
 | 마지막 줄 | Run이 끝난 이유 |
 |---|---|
@@ -196,7 +196,7 @@ Stage가 한 일은 모두 Target의 gitignore된 `.ticket-runner/` 아래 디�
 
 ## Claude 앱에서 실행하기 {#from-the-claude-app}
 
-워크스테이션에서는 Run이 그 머신이 켜져 있는 동안만 돕니다. 머신이 잠들거나, 재부팅되거나, 꺼지면 다시 돌아올 때까지 Frontier가 줄지 않고, Run을 들여다보거나 멈추는 것도 시작한 터미널에서만 할 수 있습니다. Claude 앱에서 시작한 Run에는 이런 제약이 없습니다. 앱에서 Target으로 Claude Code 클라우드 세션을 열고 "run it"이라고 말하면 됩니다. 그 세션의 Claude가 [Operator](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)입니다. 클라우드 세션은 저장소 말고는 아무것도 가져오지 않으니, Operator는 `init`이 Target에 써 둔 스킬 `.claude/skills/ticket-runner/SKILL.md`를 따릅니다([ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)).
+워크스테이션에서는 Run이 그 머신이 켜져 있는 동안만 돕니다. 머신이 잠들거나, 재부팅되거나, 꺼지면 다시 돌아올 때까지 Frontier가 줄지 않고, Run을 들여다보거나 멈추는 것도 시작한 터미널에서만 할 수 있습니다. Claude 앱에서 시작한 Run에는 이런 제약이 없습니다. 앱에서 Target으로 Claude Code 클라우드 세션을 열고 "run it"이라고 말하면 됩니다. 그 세션의 Claude가 [Operator](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)입니다. 클라우드 세션은 저장소 말고는 아무것도 가져오지 않으니, Operator는 `init`이 Target에 써 둔 스킬 `.claude/skills/ticket-runner/SKILL.md`를 따릅니다([ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)).
 
 | 이렇게 말하면 | Operator는 |
 |---|---|

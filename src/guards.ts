@@ -53,7 +53,7 @@ export function skipReason(
   readyForAgent: string,
   /**
    * Whether this is a **Stranded Ticket**: one this checkout already holds, left
-   * claimed by a Run that never came back (CONTEXT.md). Both refusals read the
+   * claimed by a Run that never came back (GLOSSARY.md). Both refusals read the
    * Claim as somebody else's work, and a stranded Ticket wears it itself — the
    * assignee is this very user and `ready-for-agent` came off when the Claim was
    * made — so it passes them and is resumed rather than refused. The Planning

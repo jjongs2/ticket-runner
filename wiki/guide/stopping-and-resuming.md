@@ -43,7 +43,7 @@ A resumed Ticket carries on from the state it had reached. It does not start ove
 
 ## Hand-off
 
-A [Hand-off](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) gives a Ticket to a human. It is how every ending goes that is neither a merge nor a Release: a second failure after the Fix budget is spent, a Stage that timed out, CI that never finished, a branch in the way at setup. Not every one of them is somebody's defect.
+A [Hand-off](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) gives a Ticket to a human. It is how every ending goes that is neither a merge nor a Release: a second failure after the Fix budget is spent, a Stage that timed out, CI that never finished, a branch in the way at setup. Not every one of them is somebody's defect.
 
 A Hand-off does this, in order:
 
@@ -115,7 +115,7 @@ Why a Hand-off keeps the State at all: the Run once misread the rate limit as an
 
 ## Release on a rate limit
 
-A Stage that hits the subscription rate limit has failed at nothing. Handing the Ticket off would make a human relabel a Ticket nothing was wrong with, and a fix Stage would only meet the same limit. So the Ticket is [released](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) instead: it goes back on the board, and the next Run resumes it from the last Stage it finished, with its Fix budget as it was.
+A Stage that hits the subscription rate limit has failed at nothing. Handing the Ticket off would make a human relabel a Ticket nothing was wrong with, and a fix Stage would only meet the same limit. So the Ticket is [released](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) instead: it goes back on the board, and the next Run resumes it from the last Stage it finished, with its Fix budget as it was.
 
 The pipeline decides this only for a session that failed. Any one of three signs is enough:
 
@@ -180,7 +180,7 @@ There is no stop file, so a second `stop` prints the same thing as the first.
 
 A killed Run releases nothing. Its Tickets keep their Claim, and their work stays on the remote as of the last push. That is why the State file is written as part of the Claim, not by the Release: a killed Run would never get to write it.
 
-A [Stranded Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) is one whose State file is still there while it still carries this pipeline's Claim (assigned to the current `gh` user, and labelled `in-progress`). No Frontier offers it, because it is claimed. So every Run sweeps the State files before it looks at the Frontier:
+A [Stranded Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is one whose State file is still there while it still carries this pipeline's Claim (assigned to the current `gh` user, and labelled `in-progress`). No Frontier offers it, because it is claimed. So every Run sweeps the State files before it looks at the Frontier:
 
 | The State file's Ticket | What the sweep does |
 |---|---|

@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { hostname } from "node:os";
 
 /**
- * Which kind of Host a Run executes on (CONTEXT.md), decided here and nowhere
+ * Which kind of Host a Run executes on (GLOSSARY.md), decided here and nowhere
  * else, so every part of the pipeline that behaves differently in the cloud
  * asks the same question the same way.
  */

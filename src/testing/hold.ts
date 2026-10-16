@@ -12,7 +12,7 @@
  * and {@link release} lets all of them, and everything that arrives after, past.
  *
  * Scaffolding the fakes are built from rather than a word the pipeline uses, so
- * it is not in `CONTEXT.md`: nothing a Run does is ever held.
+ * it is not in `GLOSSARY.md`: nothing a Run does is ever held.
  */
 export class Hold {
   /** How many runs have reached the hold, parked or waved through. */

@@ -170,7 +170,7 @@ claude --print <prompt> --output-format stream-json --verbose \
 
 Version이 없던 때는 두 설치본이 같은 번호를 말하면서 몇 주씩 떨어진 코드를 돌릴 수 있었습니다. 그래서 transcript에서 찾은 버그를 commit과 이을 수 없었고, 낡은 설치본은 Target이 지난주 파이프라인처럼 굴 때에야 드러났습니다. 파이프라인이 Target에 남기는 것들도 어느 파이프라인이 썼는지 말해 주지 않아서, 설치본이 다른 두 머신이 같은 conventions 문서를 번갈아 다시 쓰곤 했습니다.
 
-[Version](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)은 `main`이 `v<x.y.z>` tag로 달고, npm에 올리고, GitHub Release로 공개하는 번호입니다. 설치된 사본이 이 번호를 알려 줍니다. 머신에는 `main`이 아니라 Version을 설치하니, `0.5.2`라고 말하는 두 머신은 같은 코드를 돌립니다([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
+[Version](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 `main`이 `v<x.y.z>` tag로 달고, npm에 올리고, GitHub Release로 공개하는 번호입니다. 설치된 사본이 이 번호를 알려 줍니다. 머신에는 `main`이 아니라 Version을 설치하니, `0.5.2`라고 말하는 두 머신은 같은 코드를 돌립니다([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
 
 ### Version을 끊는 방법 {#how-one-is-cut}
 
@@ -304,7 +304,7 @@ checkout은 번호 옆에 commit도 함께 알려 줍니다([찍히는 번호](#
 
 - [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md): branch, commit, pull request, Version PR, issue, 그리고 코드 규칙(strict ESM TypeScript, 코드 옆의 테스트, 모든 효과는 port로, `scripts/`는 얇게)
 - [`docs/agents/pipeline-conventions.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/agents/pipeline-conventions.md): 파이프라인이 모든 Target에 요구하는 것
-- [`CONTEXT.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md): 이름은 용어집을 따릅니다. 새 단어가 필요한 개념은 거기부터 적습니다.
+- [`GLOSSARY.md`](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md): 이름은 용어집을 따릅니다. 새 단어가 필요한 개념은 거기부터 적습니다.
 - [`docs/templates/`](https://github.com/jjongs2/ticket-runner/tree/main/docs/templates): 모양을 바꿀 때는 그걸 쓰는 코드보다 여기를 먼저 바꿉니다.
 
 Stage는 파이프라인을 실행할 수 없습니다. Stage의 셸에는 `TICKET_RUNNER_STAGE`가 있고, 이 변수가 있으면 모든 명령이 거절되어 파이프라인은 그 셸을 띄운 Run의 몫으로 남습니다. 이 저장소에서는 Stage의 프롬프트가 대신 테스트와 fake로 파이프라인을 돌려 보라고 덧붙입니다.

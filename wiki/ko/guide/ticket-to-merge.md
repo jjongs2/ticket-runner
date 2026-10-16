@@ -5,7 +5,7 @@ description: Ticket 하나가 Run 안에서 Claim부터 Stage, Check, Verdict, F
 
 # Ticket 하나가 merge되기까지
 
-Run은 아무도 지켜보지 않으니, 세션 하나의 말만 믿고 merge할 수는 없습니다. 그래서 모든 [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)은 같은 관문을 같은 순서로 지납니다. 결정적인 Check, 작업이 틀렸음을 증명하려 드는 두 번째 세션, 그리고 CI입니다. 새 세션이 고칠 수 있는 실패라면 fix Stage를 딱 한 번 얻고, 그 밖의 실패는 사람에게 넘어갑니다. 한 Run의 Ticket들은 나란히 구현되지만 merge는 하나씩 하므로, CI가 채점한 코드가 그대로 Base branch에 들어갑니다.
+Run은 아무도 지켜보지 않으니, 세션 하나의 말만 믿고 merge할 수는 없습니다. 그래서 모든 [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 같은 관문을 같은 순서로 지납니다. 결정적인 Check, 작업이 틀렸음을 증명하려 드는 두 번째 세션, 그리고 CI입니다. 새 세션이 고칠 수 있는 실패라면 fix Stage를 딱 한 번 얻고, 그 밖의 실패는 사람에게 넘어갑니다. 한 Run의 Ticket들은 나란히 구현되지만 merge는 하나씩 하므로, CI가 채점한 코드가 그대로 Base branch에 들어갑니다.
 
 이 페이지는 Ticket 하나를 Claim부터 merge까지 따라갑니다. Hand-off, Release, Stop, 돌아오지 못한 Run처럼 중간에 멈추는 경우는 [멈추고 이어 하기](./stopping-and-resuming.md)에서 다룹니다.
 
@@ -69,7 +69,7 @@ fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종�
 
 ## Stage가 도는 방식 {#how-a-stage-runs}
 
-[Stage](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)는 일 하나만 맡는 `claude -p` 자식 프로세스입니다([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)). headless 모드는 프롬프트 안의 `/plugin:skill`을 펼쳐 주는데, `mattpocock-skills` 플러그인(버전 1.2.3 이상)의 사용자 호출형 skill을 구동하는 방법은 이것뿐입니다. Stage마다 프로세스를 따로 두면 Stage별 한도, 답변용 JSON schema, 사람이 붙여 넣어 그대로 재현할 수 있는 명령줄도 함께 얻습니다.
+[Stage](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 일 하나만 맡는 `claude -p` 자식 프로세스입니다([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)). headless 모드는 프롬프트 안의 `/plugin:skill`을 펼쳐 주는데, `mattpocock-skills` 플러그인(버전 1.2.3 이상)의 사용자 호출형 skill을 구동하는 방법은 이것뿐입니다. Stage마다 프로세스를 따로 두면 Stage별 한도, 답변용 JSON schema, 사람이 붙여 넣어 그대로 재현할 수 있는 명령줄도 함께 얻습니다.
 
 모든 Stage는 Ticket의 worktree에서 `--permission-prompts none`, 설정된 `permissionMode`, 그리고 Stage별 `model`, `effort`, `maxTurns`, `maxMinutes`로 실행됩니다([설정](./configuration.md) 참고). 시간 한도는 프로세스를 kill해서 지킵니다.
 
@@ -130,7 +130,7 @@ merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 �
 
 ## fix Stage와 Fix budget {#the-fix-stage-and-the-fix-budget}
 
-횟수에 제한이 없으면, 무인 파이프라인은 풀 수 없는 Ticket 하나를 붙잡고 돌 때마다 세션 비용을 치르며 끝없이 맴돌 수 있습니다. 그래서 [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)은 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사람에게 넘어갑니다. fix Stage는 같은 branch에서 plugin skill 없이 새로 띄운 세션입니다. implement skill을 쓰면 Ticket을 다시 읽고 처음부터 시작해 버리는데, 여기서 바라는 건 구체적인 결함 하나를 고치는 것이기 때문입니다. 프롬프트에는 실패의 종류, 한 줄 요약, 그리고 코드 블록에 담긴 evidence가 들어갑니다. 실패를 재현하고, 원인을 고치고, 충족되지 않은 기준에는 회귀 테스트를 더하고, Ticket 범위를 벗어나지 말라고 요청합니다.
+횟수에 제한이 없으면, 무인 파이프라인은 풀 수 없는 Ticket 하나를 붙잡고 돌 때마다 세션 비용을 치르며 끝없이 맴돌 수 있습니다. 그래서 [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사람에게 넘어갑니다. fix Stage는 같은 branch에서 plugin skill 없이 새로 띄운 세션입니다. implement skill을 쓰면 Ticket을 다시 읽고 처음부터 시작해 버리는데, 여기서 바라는 건 구체적인 결함 하나를 고치는 것이기 때문입니다. 프롬프트에는 실패의 종류, 한 줄 요약, 그리고 코드 블록에 담긴 evidence가 들어갑니다. 실패를 재현하고, 원인을 고치고, 충족되지 않은 기준에는 회귀 테스트를 더하고, Ticket 범위를 벗어나지 말라고 요청합니다.
 
 새 세션이 고칠 수 있는 결함만 budget을 씁니다.
 
@@ -159,7 +159,7 @@ budget 사용 여부는 fix Stage가 돌아온 뒤 State file에 기록됩니다
 
 Ticket 하나에 드는 시간은 대부분 implement와 verify 세션이고, 이 세션들이 하는 일은 다른 Ticket과 부딪히지 않습니다. 하나씩만 처리하면 서로 독립된 Ticket 여섯 개짜리 Frontier는 하나일 때보다 여섯 배 오래 걸리고, Spec을 작은 Ticket으로 잘게 나눌수록 기다림만 길어집니다. Frontier에는 애초에 서로 기대지 않는 Ticket만 있으니, Run은 여러 개를 한꺼번에 가져갑니다.
 
-Run은 [Lane](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) 수만큼 Ticket을 동시에 쥡니다. `--lanes`, 없으면 설정의 `lanes`, 그것도 없으면 하나입니다. 시작할 때 빈 Lane을 모두 채우고, Lane의 Ticket이 끝나는 즉시 다시 채웁니다.
+Run은 [Lane](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 수만큼 Ticket을 동시에 쥡니다. `--lanes`, 없으면 설정의 `lanes`, 그것도 없으면 하나입니다. 시작할 때 빈 Lane을 모두 채우고, Lane의 Ticket이 끝나는 즉시 다시 채웁니다.
 
 1. 먼저 [Stranded Ticket](./stopping-and-resuming.md). 첫 채우기 전에 한 번 찾아 둡니다.
 2. 그다음 Frontier. **채울 때마다 새로 계산**합니다. 아무도 assign되지 않은 열린 `ready-for-agent` 이슈 중 native blocker가 모두 닫힌 것을, 번호가 낮은 순으로 고릅니다.
@@ -170,7 +170,7 @@ Lane들은 서로 다른 worktree에서 동시에 Check를 돌리므로, Check�
 
 ## Landing {#the-landing}
 
-Lane마다 제각기 rebase하고 merge하면, 다른 Lane이 그새 옮겨 놓은 Base branch를 기준으로 CI가 채점한 branch가 merge됩니다. 그러면 어떤 관문도 본 적 없는 코드가 들어가는 셈입니다. merge 직전에 다시 rebase하면 Check와 CI 비용을 두 번 치러야 합니다. 그래서 rebase 직전의 Base branch pull부터 merge 직후의 pull까지인 [Landing](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)에는 한 번에 Ticket 하나만, 도착한 순서대로 들어갑니다. Ticket의 rebase와 merge 사이에 Base branch가 움직일 수 없으니, CI가 채점한 그대로 merge됩니다([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)). 시간이 많이 드는 implement와 verify는 계속 병렬로 돕니다. 대신 한 Lane의 Conflict Stage나 느린 CI가 다른 Lane의 Landing을 붙잡아 둡니다. GitHub merge queue는 저장소 설정 하나를 Target readiness의 일부로 만들어 버리기 때문에 채택하지 않았습니다.
+Lane마다 제각기 rebase하고 merge하면, 다른 Lane이 그새 옮겨 놓은 Base branch를 기준으로 CI가 채점한 branch가 merge됩니다. 그러면 어떤 관문도 본 적 없는 코드가 들어가는 셈입니다. merge 직전에 다시 rebase하면 Check와 CI 비용을 두 번 치러야 합니다. 그래서 rebase 직전의 Base branch pull부터 merge 직후의 pull까지인 [Landing](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)에는 한 번에 Ticket 하나만, 도착한 순서대로 들어갑니다. Ticket의 rebase와 merge 사이에 Base branch가 움직일 수 없으니, CI가 채점한 그대로 merge됩니다([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)). 시간이 많이 드는 implement와 verify는 계속 병렬로 돕니다. 대신 한 Lane의 Conflict Stage나 느린 CI가 다른 Lane의 Landing을 붙잡아 둡니다. GitHub merge queue는 저장소 설정 하나를 Target readiness의 일부로 만들어 버리기 때문에 채택하지 않았습니다.
 
 ```mermaid
 sequenceDiagram
@@ -200,7 +200,7 @@ Ticket은 fix Stage, Hand-off, Release 때도 Landing을 나가므로, 누구도
 
 ### Conflict Stage {#the-conflict-stage}
 
-충돌은 branch의 결함이 아닙니다. 그 아래에서 Base branch가 앞으로 나간 것뿐입니다. 그래서 멈춘 rebase 안에서 [Conflict Stage](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) 하나가 플러그인 skill 없이 git 출력을 받아 돌고, **Fix budget은 쓰지 않습니다.** 이 Stage에는 rebase를 끝까지 마치고 절대 abort하지 말 것, 양쪽이 양립하면 두 의도를 모두 살리고 아니면 Ticket 쪽을 따를 것, 충돌하지 않은 파일은 건드리지 말 것을 요청합니다.
+충돌은 branch의 결함이 아닙니다. 그 아래에서 Base branch가 앞으로 나간 것뿐입니다. 그래서 멈춘 rebase 안에서 [Conflict Stage](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 하나가 플러그인 skill 없이 git 출력을 받아 돌고, **Fix budget은 쓰지 않습니다.** 이 Stage에는 rebase를 끝까지 마치고 절대 abort하지 말 것, 양쪽이 양립하면 두 의도를 모두 살리고 아니면 Ticket 쪽을 따를 것, 충돌하지 않은 파일은 건드리지 말 것을 요청합니다.
 
 **판단은 세션의 종료 상태가 아니라 worktree가 합니다.** 다음을 모두 만족해야 rebase가 해결된 것으로 봅니다.
 
@@ -281,7 +281,7 @@ Ticket은 이미 merge됐으니 여기서부터는 Hand-off될 수 없습니다.
 
 ## 보드에 남기는 기록 {#what-the-board-is-told}
 
-**Progress comment.** Ticket마다 [Progress comment](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md)가 하나 있습니다. 숨은 마커로 다시 찾아 단계가 끝날 때마다 제자리에서 고쳐 쓰므로, 알림은 첫 작성 때만 갑니다. 첫 행이 기록될 때 처음 올라갑니다. Ticket을 다룬 Run마다 자기 섹션을 가지며, 이전 Run들의 섹션 아래에 Version, Run id, branch를 머리글로 달고 붙습니다.
+**Progress comment.** Ticket마다 [Progress comment](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)가 하나 있습니다. 숨은 마커로 다시 찾아 단계가 끝날 때마다 제자리에서 고쳐 쓰므로, 알림은 첫 작성 때만 갑니다. 첫 행이 기록될 때 처음 올라갑니다. Ticket을 다룬 Run마다 자기 섹션을 가지며, 이전 Run들의 섹션 아래에 Version, Run id, branch를 머리글로 달고 붙습니다.
 
 ```text
 **ticket-runner** `0.4.0` · run `2026-09-17T09-00-00-000` · `agent/4-planning-guards`
@@ -303,7 +303,7 @@ Ticket은 이미 merge됐으니 여기서부터는 Hand-off될 수 없습니다.
 
 ## Note {#notes}
 
-Stage는 자기 Ticket과 상관없는 결함을 자주 만납니다. 고치면 verify가 채점하는 범위를 넘어 Ticket이 넓어지고, 무시하면 transcript 속에 묻혀 버립니다. 그래서 implement, verify, fix Stage는 [Note](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) 목록을 남기며 끝나고, 파이프라인은 각 Note를 사람이 볼 만한 곳에 올립니다. Note는 결함이어야 하고, 취향이나 리팩터링, 있으면 좋을 테스트는 Note가 아닙니다. 지금 Ticket 안에서 손대지도 않습니다. verify의 경우, 기준에 대한 판단은 Note가 아니라 Verdict에 들어갑니다.
+Stage는 자기 Ticket과 상관없는 결함을 자주 만납니다. 고치면 verify가 채점하는 범위를 넘어 Ticket이 넓어지고, 무시하면 transcript 속에 묻혀 버립니다. 그래서 implement, verify, fix Stage는 [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 목록을 남기며 끝나고, 파이프라인은 각 Note를 사람이 볼 만한 곳에 올립니다. Note는 결함이어야 하고, 취향이나 리팩터링, 있으면 좋을 테스트는 Note가 아닙니다. 지금 Ticket 안에서 손대지도 않습니다. verify의 경우, 기준에 대한 판단은 Note가 아니라 Verdict에 들어갑니다.
 
 Note에는 `summary`(필수)와 선택 항목 `evidence`, `impact`, `next`, `ticket`이 있습니다. Note는 Stage 자체의 결과를 판정하기 전에 보내므로, turn이 바닥난 Stage도 알아챈 것은 전합니다.
 

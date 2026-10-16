@@ -96,6 +96,6 @@ The [project wiki](https://jjongs2.github.io/ticket-runner/) explains the pipeli
 - [Stopping and resuming](https://jjongs2.github.io/ticket-runner/guide/stopping-and-resuming)
 - [Internals](https://jjongs2.github.io/ticket-runner/guide/internals)
 
-The vocabulary is defined in [`CONTEXT.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md), the decisions in
+The vocabulary is defined in [`GLOSSARY.md`](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), the decisions in
 [`docs/adr/`](https://github.com/jjongs2/ticket-runner/tree/main/docs/adr), and the conventions for working on the pipeline itself in
 [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md).
