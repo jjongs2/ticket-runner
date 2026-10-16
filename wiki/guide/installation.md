@@ -5,7 +5,7 @@ description: What a machine and a repository need, how to install ticket-runner,
 
 # Install and remove
 
-A Run works unattended, so anything missing has to be caught before it starts, not halfway through a Ticket. Without a setup step, you would learn what a repository needs (ignored directories, triage labels, squash merging, the conventions a Stage reads) by reading the source, or a Run would put it there on the fly. The setup is split three ways instead. `init` puts in place what the pipeline can write itself and reports what only you can fix. `run` checks the same list and refuses a [Target](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) (the repository you start it in) that is missing any of it, without repairing anything. `remove` undoes both `init` and whatever Runs left behind, so trying the pipeline on a repository of your own is safe.
+A Run works unattended, so anything missing has to be caught before it starts, not halfway through a Ticket. Without a setup step, you would learn what a repository needs (ignored directories, triage labels, squash merging, the conventions a Stage reads) by reading the source, or a Run would put it there on the fly. The setup is split three ways instead. `init` puts in place what the pipeline can write itself and reports what only you can fix. `run` checks the same list and refuses a [Target](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) (the repository you start it in) that is missing any of it, without repairing anything. `remove` undoes both `init` and whatever Runs left behind, so trying the pipeline on a repository of your own is safe.
 
 | Step | Command | What it does |
 |---|---|---|
@@ -83,7 +83,7 @@ cd ~/code/acme
 ticket-runner init
 ```
 
-Running it twice is running it once: every write first asks whether the Target already has the thing. It commits nothing, so what it wrote reaches the Target's history through whatever review that repository uses. It takes no [Run lock](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md), because it claims no Ticket.
+Running it twice is running it once: every write first asks whether the Target already has the thing. It commits nothing, so what it wrote reaches the Target's history through whatever review that repository uses. It takes no [Run lock](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), because it claims no Ticket.
 
 ### What it writes
 

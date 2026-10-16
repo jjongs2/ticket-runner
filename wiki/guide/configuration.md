@@ -54,20 +54,20 @@ The second sentence is added only for an unknown key. On a machine with a stale 
 
 - `baseBranch`: string
 
-The [Base branch](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) is what a Run branches each Ticket from, rebases it onto, targets its pull request at, and pulls the main checkout to after a merge. Without this field it is whatever GitHub calls the repository's default branch, so a Target on `master` needs no setting. It is resolved once at the start of a Run.
+The [Base branch](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is what a Run branches each Ticket from, rebases it onto, targets its pull request at, and pulls the main checkout to after a merge. Without this field it is whatever GitHub calls the repository's default branch, so a Target on `master` needs no setting. It is resolved once at the start of a Run.
 
 ## `lanes`
 
 - `lanes`: whole number ≥ 1
 
-How many Tickets a Run holds at once, one per [Lane](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md). `run --lanes <n>` overrides it for one Run. Lanes run their Checks at the same time, each in its own worktree, so a Target whose Checks need a port, a database or anything else they would share keeps this at `1`. Only one Lane at a time is in the Landing (rebase to merge), so more Lanes speed up implement and verify, not merging ([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)).
+How many Tickets a Run holds at once, one per [Lane](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md). `run --lanes <n>` overrides it for one Run. Lanes run their Checks at the same time, each in its own worktree, so a Target whose Checks need a port, a database or anything else they would share keeps this at `1`. Only one Lane at a time is in the Landing (rebase to merge), so more Lanes speed up implement and verify, not merging ([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)).
 
 ## `checks`
 
 - `checks`: array of strings
 - `checkTimeoutMinutes`: number > 0
 
-A [Check](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) is a deterministic command the pipeline runs itself, never an agent's opinion. Each one runs through the shell in the Ticket's worktree, after the implement Stage, after a fix Stage and after a resolved rebase conflict. A non-zero exit fails the gate, and the Ticket spends its [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md).
+A [Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is a deterministic command the pipeline runs itself, never an agent's opinion. Each one runs through the shell in the Ticket's worktree, after the implement Stage, after a fix Stage and after a resolved rebase conflict. A non-zero exit fails the gate, and the Ticket spends its [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md).
 
 Without this field the pipeline infers `npm test` and `npm run typecheck` from whichever of the `test` and `typecheck` scripts `package.json` defines.
 

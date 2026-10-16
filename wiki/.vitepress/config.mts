@@ -4,7 +4,7 @@ import { fonts, mermaidTheme, paletteCss } from "./palette";
 
 const repo = "https://github.com/jjongs2/ticket-runner";
 const editPattern = `${repo}/edit/main/wiki/:path`;
-const glossary = `${repo}/blob/main/CONTEXT.md`;
+const glossary = `${repo}/blob/main/GLOSSARY.md`;
 
 type Page = { link: string; en: string; ko: string };
 type Section = { en: string; ko: string; pages: Page[] };

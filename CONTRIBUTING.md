@@ -1,6 +1,6 @@
 # Contributing
 
-Conventions for humans and agents working in this repo. Vocabulary is defined in `CONTEXT.md`; decisions in `docs/adr/`. What the pipeline requires of any Target, this repository included, is in [`docs/agents/pipeline-conventions.md`](docs/agents/pipeline-conventions.md), which `ticket-runner init` writes; this guide adds what is only ours and points at that document for the rest. Anything a config file or `--help` already answers is left out here on purpose.
+Conventions for humans and agents working in this repo. Vocabulary is defined in `GLOSSARY.md`; decisions in `docs/adr/`. What the pipeline requires of any Target, this repository included, is in [`docs/agents/pipeline-conventions.md`](docs/agents/pipeline-conventions.md), which `ticket-runner init` writes; this guide adds what is only ours and points at that document for the rest. Anything a config file or `--help` already answers is left out here on purpose.
 
 ## Branches
 
@@ -77,7 +77,7 @@ Write issue titles in the glossary's words and keep them short. Describe behavio
 - Tests reach the orchestrator through in-memory fakes of the ports. The git-backed `Workspace` is tested against a real temporary repository. Tests never spawn `gh` or `claude`.
 - Every external effect goes through a port, the pipeline's own state included: the Run lock and a Ticket's State go through `Workspace` like every other external effect (ADR-0004), so the tests that reach them use the in-memory fake rather than a temporary repo root.
 - `scripts/` is this repository's own plumbing, what a workflow runs and no install carries. It stays thin: the judgement it needs is a module in `src/`, where the tests are.
-- Name things with the glossary. A concept that needs a new word is a signal to update `CONTEXT.md` first.
+- Name things with the glossary. A concept that needs a new word is a signal to update `GLOSSARY.md` first.
 
 ## Language
 

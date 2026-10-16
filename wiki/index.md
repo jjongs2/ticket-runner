@@ -8,11 +8,11 @@ description: "ticket-runner runs the unattended half of the mattpocock-skills ch
 
 Humans plan, the pipeline executes.
 
-ticket-runner runs the unattended half of the [`mattpocock-skills`](https://github.com/mattpocock/skills) chain. Planning a feature takes judgement, so it stays with humans, in their own sessions: `/grilling`, `/to-spec` and `/to-tickets` (or `/triage`) turn it into GitHub issues, each with checkbox [Acceptance Criteria](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md), its blockers linked and the `ready-for-agent` label. Carrying an issue from there to a merge is repetitive, so the pipeline does it unattended, driving `/implement` where a human would have typed it. For each [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) it has a headless Claude Code session implement the work, runs the repository's own tests, has a second session try to prove the criteria are not met, opens a pull request, waits for CI and squash-merges. Whatever it cannot finish goes back to a human with a draft pull request and a comment.
+ticket-runner runs the unattended half of the [`mattpocock-skills`](https://github.com/mattpocock/skills) chain. Planning a feature takes judgement, so it stays with humans, in their own sessions: `/grilling`, `/to-spec` and `/to-tickets` (or `/triage`) turn it into GitHub issues, each with checkbox [Acceptance Criteria](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), its blockers linked and the `ready-for-agent` label. Carrying an issue from there to a merge is repetitive, so the pipeline does it unattended, driving `/implement` where a human would have typed it. For each [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) it has a headless Claude Code session implement the work, runs the repository's own tests, has a second session try to prove the criteria are not met, opens a pull request, waits for CI and squash-merges. Whatever it cannot finish goes back to a human with a draft pull request and a comment.
 
 ## Why it exists
 
-After Planning, every Ticket still needs an attended session: open it, paste the Ticket, wait, review, commit, merge, close, then go and find the next unblocked Ticket. Ten Tickets are ten sessions. The [Frontier](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md), the Tickets nothing blocks any more, never moves by itself, because nothing closes Tickets. The pipeline ends your part when Planning ends: one command drains the Frontier and leaves merged code behind.
+After Planning, every Ticket still needs an attended session: open it, paste the Ticket, wait, review, commit, merge, close, then go and find the next unblocked Ticket. Ten Tickets are ten sessions. The [Frontier](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), the Tickets nothing blocks any more, never moves by itself, because nothing closes Tickets. The pipeline ends your part when Planning ends: one command drains the Frontier and leaves merged code behind.
 
 ## When it fits, and when it does not
 
@@ -91,4 +91,4 @@ Any Stage can be rate-limited, not only implement; every one of them ends in a R
 | [Stopping and resuming](./guide/stopping-and-resuming.md) | Hand-off, Release, Stop against kill, Stranded Tickets, handing a Ticket back, the Run lock and the State branch |
 | [Internals](./guide/internals.md) | Ports and adapters, a map of the modules, Versions, the ADRs, working on the pipeline itself |
 
-The words the pipeline uses (Ticket, Run, Stage, Lane and the rest) are defined once, in the [glossary](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md).
+The words the pipeline uses (Ticket, Run, Stage, Lane and the rest) are defined once, in the [glossary](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md).

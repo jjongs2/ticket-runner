@@ -45,7 +45,7 @@ export type RebaseState = { resolved: true } | { resolved: false; unresolved: st
  * `implemented` one carrying that Stage's work on its branch with no merge
  * behind it.
  *
- * A state of the lifecycle, not a Stage — a Stage is a session (CONTEXT.md), and
+ * A state of the lifecycle, not a Stage — a Stage is a session (GLOSSARY.md), and
  * what the State records is what the Ticket has, not what was running. Only these
  * two, because everything after the implement Stage — the Checks, the rebase,
  * the pull request, CI and the merge — is re-run from the top by a Run that

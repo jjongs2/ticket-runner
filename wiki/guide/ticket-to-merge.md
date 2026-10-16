@@ -5,7 +5,7 @@ description: The path one Ticket takes through a Run, from the Claim through the
 
 # From Ticket to merge
 
-Nobody watches a Run, so nothing may merge on a single session's word. Every [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) goes through the same gates in the same order: deterministic Checks, a second session that tries to prove the work wrong, and CI. A failure a fresh session could mend buys exactly one fix Stage; anything else goes to a human. The Tickets of a Run are implemented side by side, but they land one at a time, so what CI graded is what reaches the Base branch.
+Nobody watches a Run, so nothing may merge on a single session's word. Every [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) goes through the same gates in the same order: deterministic Checks, a second session that tries to prove the work wrong, and CI. A failure a fresh session could mend buys exactly one fix Stage; anything else goes to a human. The Tickets of a Run are implemented side by side, but they land one at a time, so what CI graded is what reaches the Base branch.
 
 This page follows one Ticket from its Claim to its merge. What happens when it stops short, whether by a Hand-off, a Release, a Stop or a Run that never came back, is on [Stopping and resuming](./stopping-and-resuming.md).
 
@@ -69,7 +69,7 @@ A branch of that name that already exists is never reused. The Ticket is handed 
 
 ## How a Stage runs
 
-A [Stage](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) is one `claude -p` child process with one job ([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)). Headless mode expands `/plugin:skill` in the prompt, which is the only way to drive a user-invoked skill of the `mattpocock-skills` plugin (version 1.2.3 or later). A process per Stage also gives each Stage its own limits, a JSON schema for its answer, and a command line a human can paste to reproduce it.
+A [Stage](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is one `claude -p` child process with one job ([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)). Headless mode expands `/plugin:skill` in the prompt, which is the only way to drive a user-invoked skill of the `mattpocock-skills` plugin (version 1.2.3 or later). A process per Stage also gives each Stage its own limits, a JSON schema for its answer, and a command line a human can paste to reproduce it.
 
 Every Stage runs in the Ticket's worktree with `--permission-prompts none`, the configured `permissionMode`, and its own `model`, `effort`, `maxTurns` and `maxMinutes` (see [Configuration](./configuration.md)). The wall-clock limit is enforced by killing the process.
 
@@ -130,7 +130,7 @@ The **Verdict** is one entry per criterion: `text`, `status` (`met`, `unmet` or 
 
 ## The fix Stage and the Fix budget
 
-Without a cap, an unattended pipeline could loop on a Ticket it cannot solve, paying for a session on every pass. So the [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) is one fix Stage per Ticket, and whatever still fails after it goes to a human. The fix Stage is a fresh session on the same branch, with no plugin skill: the implement skill would re-read the Ticket and start over, and what is wanted is one concrete defect mended. Its prompt names the kind of failure, the one-line summary, and the evidence in a fence. It is asked to reproduce the failure, fix the cause, add a regression test for an unmet criterion, and stay inside the Ticket.
+Without a cap, an unattended pipeline could loop on a Ticket it cannot solve, paying for a session on every pass. So the [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is one fix Stage per Ticket, and whatever still fails after it goes to a human. The fix Stage is a fresh session on the same branch, with no plugin skill: the implement skill would re-read the Ticket and start over, and what is wanted is one concrete defect mended. Its prompt names the kind of failure, the one-line summary, and the evidence in a fence. It is asked to reproduce the failure, fix the cause, add a regression test for an unmet criterion, and stay inside the Ticket.
 
 Only a defect a fresh session could mend spends the budget:
 
@@ -159,7 +159,7 @@ The budget is recorded in the State file once the fix Stage comes back. A fix St
 
 Most of a Ticket's time goes on its implement and verify sessions, and nothing they do collides with another Ticket's. Taken one at a time, a Frontier of six independent Tickets would take six times as long as one, and planning a Spec into small Tickets would only lengthen the wait. The Frontier already holds nothing but Tickets that do not depend on each other, so a Run takes several at once.
 
-A Run holds as many Tickets at once as it has [Lanes](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md): `--lanes`, else `lanes` in the config, else one. Every free Lane is filled at the start, and a Lane is refilled the moment its Ticket ends:
+A Run holds as many Tickets at once as it has [Lanes](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md): `--lanes`, else `lanes` in the config, else one. Every free Lane is filled at the start, and a Lane is refilled the moment its Ticket ends:
 
 1. [Stranded Tickets](./stopping-and-resuming.md) first, found once before the first fill.
 2. Then the Frontier, **recomputed at every refill**: open `ready-for-agent` issues nobody is assigned to, whose native blockers are all closed, lowest number first.
@@ -170,7 +170,7 @@ Lanes run their Checks at the same time in different worktrees, so a Target whos
 
 ## The Landing
 
-Lanes that each rebased and merged on their own would merge branches that CI graded against a Base branch another Lane had since moved, so what landed would be code no gate had seen. Rebasing again just before the merge would pay for the Checks and CI twice. So the [Landing](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md), from the pull of the Base branch before the rebase to the pull after the merge, holds one Ticket at a time, in arrival order. The Base branch cannot move between a Ticket's rebase and its merge, and what CI graded is what lands ([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)). implement and verify, where the time goes, stay parallel. The cost is that one Lane's Conflict Stage or slow CI holds the others' Landing. GitHub's merge queue was rejected, because it would make a repository setting part of Target readiness.
+Lanes that each rebased and merged on their own would merge branches that CI graded against a Base branch another Lane had since moved, so what landed would be code no gate had seen. Rebasing again just before the merge would pay for the Checks and CI twice. So the [Landing](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), from the pull of the Base branch before the rebase to the pull after the merge, holds one Ticket at a time, in arrival order. The Base branch cannot move between a Ticket's rebase and its merge, and what CI graded is what lands ([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)). implement and verify, where the time goes, stay parallel. The cost is that one Lane's Conflict Stage or slow CI holds the others' Landing. GitHub's merge queue was rejected, because it would make a repository setting part of Target readiness.
 
 ```mermaid
 sequenceDiagram
@@ -200,7 +200,7 @@ The Base branch is first brought up to the remote's: `git pull --ff-only` when i
 
 ### The Conflict Stage
 
-A conflict is not a defect in the branch: the Base branch moved on underneath it. So one [Conflict Stage](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) runs in the stopped rebase with git's output and no plugin skill, and **it does not spend the Fix budget.** It is told to finish the rebase and never abort it, to keep both intents where they are compatible and the Ticket's where they are not, and to touch no file the conflict did not.
+A conflict is not a defect in the branch: the Base branch moved on underneath it. So one [Conflict Stage](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) runs in the stopped rebase with git's output and no plugin skill, and **it does not spend the Fix budget.** It is told to finish the rebase and never abort it, to keep both intents where they are compatible and the Ticket's where they are not, and to touch no file the conflict did not.
 
 **The worktree decides, not the session's exit.** The rebase counts as resolved only when all of these hold:
 
@@ -281,7 +281,7 @@ The Ticket is merged, so nothing below can hand it off. Each step's failure is l
 
 ## What the board is told
 
-**The Progress comment.** A Ticket gets one [Progress comment](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md), found again by a hidden marker and rewritten in place as each step ends, so only the first write notifies anyone. It is posted when the first row is recorded. Each Run that works the Ticket has its own section below earlier Runs' sections, headed by the Version, the Run id and the branch:
+**The Progress comment.** A Ticket gets one [Progress comment](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), found again by a hidden marker and rewritten in place as each step ends, so only the first write notifies anyone. It is posted when the first row is recorded. Each Run that works the Ticket has its own section below earlier Runs' sections, headed by the Version, the Run id and the branch:
 
 ```text
 **ticket-runner** `0.4.0` · run `2026-09-17T09-00-00-000` · `agent/4-planning-guards`
@@ -303,7 +303,7 @@ Rows carry a few words only. Anything a human has to act on is its own comment, 
 
 ## Notes
 
-A Stage keeps meeting defects that are not its Ticket's. Fixing them widens the Ticket past what verify grades; ignoring them loses them in a transcript. So the implement, verify and fix Stages end with a list of [Notes](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md), and the pipeline posts each one where a human will meet it. A Note is a defect, never a preference, a refactor or a nice-to-have test. It is never acted on in the current Ticket. For verify, a judgement on a criterion belongs in the Verdict, not in a Note.
+A Stage keeps meeting defects that are not its Ticket's. Fixing them widens the Ticket past what verify grades; ignoring them loses them in a transcript. So the implement, verify and fix Stages end with a list of [Notes](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), and the pipeline posts each one where a human will meet it. A Note is a defect, never a preference, a refactor or a nice-to-have test. It is never acted on in the current Ticket. For verify, a judgement on a criterion belongs in the Verdict, not in a Note.
 
 Each Note has a `summary` (required), and optional `evidence`, `impact`, `next` and `ticket`. Notes are routed before the Stage's own outcome is judged, so a Stage that ran out of turns still reports what it noticed.
 

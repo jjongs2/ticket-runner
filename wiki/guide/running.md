@@ -5,7 +5,7 @@ description: Starting a Run, giving it Lanes, narrowing it to named Tickets, sto
 
 # Running
 
-A [Run](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) exists so you can start one command and walk away. It takes every Ticket that is ready, carries each to a merge or to a human, and ends on its own when nothing it may take is left. Everything you might want to know afterwards is in its summary, on the board, and in the transcripts it leaves on disk.
+A [Run](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) exists so you can start one command and walk away. It takes every Ticket that is ready, carries each to a merge or to a human, and ends on its own when nothing it may take is left. Everything you might want to know afterwards is in its summary, on the board, and in the transcripts it leaves on disk.
 
 | Command | What it does | Exit codes |
 |---|---|---|
@@ -35,9 +35,9 @@ The two do not share a Spec. `/implement-spec` leaves no mark on the Tickets it 
 
 ## `run`
 
-`run` drains the [Frontier](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md): the open Tickets labelled `ready-for-agent` that nobody is assigned to and whose native blockers have all closed ([Planning](./planning.md)). Before it takes anything it passes, in order, every refusal a Run can meet: [Target readiness](./installation.md#target-readiness-what-run-refuses), leftover local State files, a missing Check, and the Run lock. Each of these exits `2` and leaves nothing behind.
+`run` drains the [Frontier](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md): the open Tickets labelled `ready-for-agent` that nobody is assigned to and whose native blockers have all closed ([Planning](./planning.md)). Before it takes anything it passes, in order, every refusal a Run can meet: [Target readiness](./installation.md#target-readiness-what-run-refuses), leftover local State files, a missing Check, and the Run lock. Each of these exits `2` and leaves nothing behind.
 
-It then takes Tickets through its [Lanes](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md), one Ticket per Lane, one Lane by default:
+It then takes Tickets through its [Lanes](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), one Ticket per Lane, one Lane by default:
 
 ```mermaid
 flowchart TD
@@ -157,7 +157,7 @@ A newer-Version line, when there is one, comes above the header ([Install and re
 | `handed` | Handed off to a human: the Stage it stopped at, and why |
 | `released` | Released by the rate limit, at the named Stage. Nobody has to do anything |
 | `skipped` | Passed over, with the reason ([Guards](./planning.md#guards), or the table above) |
-| `noted` | A [Note](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) the row above made, and where it went: `comment` on an issue already there, the Notes issue included, or `new` for the one Note that opened the Notes issue |
+| `noted` | A [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) the row above made, and where it went: `comment` on an issue already there, the Notes issue included, or `new` for the one Note that opened the Notes issue |
 
 | Last line | Why the Run ended |
 |---|---|
@@ -196,7 +196,7 @@ The command line is written before the Stage starts and output as it arrives, so
 
 ## From the Claude app
 
-On a workstation, a Run lasts only while the machine stays on: one that sleeps, reboots or is switched off stops the Frontier draining until you are back, and the Run can be watched or stopped only from the terminal that started it. A Run started from the Claude app has neither limit: open a Claude Code cloud session on the Target from the app and say "run it". The session's own Claude is the [Operator](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md): it follows the skill `init` wrote into the Target, `.claude/skills/ticket-runner/SKILL.md`, because a cloud session carries nothing over but the repository ([ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)).
+On a workstation, a Run lasts only while the machine stays on: one that sleeps, reboots or is switched off stops the Frontier draining until you are back, and the Run can be watched or stopped only from the terminal that started it. A Run started from the Claude app has neither limit: open a Claude Code cloud session on the Target from the app and say "run it". The session's own Claude is the [Operator](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md): it follows the skill `init` wrote into the Target, `.claude/skills/ticket-runner/SKILL.md`, because a cloud session carries nothing over but the repository ([ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)).
 
 | You say | The Operator |
 |---|---|

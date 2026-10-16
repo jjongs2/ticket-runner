@@ -126,7 +126,7 @@ export interface CreatePullRequest {
 
 /**
  * The outcome of waiting for a pull request's CI checks. Distinct from a Check,
- * which is a command the pipeline runs itself (CONTEXT.md).
+ * which is a command the pipeline runs itself (GLOSSARY.md).
  *
  * `none` means the PR has no checks at all, which `gates.ci` treats as a
  * failure rather than a silent bypass.
@@ -207,7 +207,7 @@ export interface Tracker {
    * Release, named `owner/name`, or nothing where GitHub could not be asked.
    *
    * Named for the tag rather than for the Release, because a Release in this
-   * codebase is what a rate-limited Stage does to a Ticket (CONTEXT.md). A
+   * codebase is what a rate-limited Stage does to a Ticket (GLOSSARY.md). A
    * published GitHub Release is what makes a tag a Version anybody can install,
    * which is why it is the question rather than the tag alone.
    *

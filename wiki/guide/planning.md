@@ -28,7 +28,7 @@ Planning is a chain of skills from the `mattpocock-skills` plugin, run in your o
 | `to-tickets` | **Tickets**: native sub-issues of the Spec, each one agent session of work, labelled `ready-for-agent` |
 | `triage` | Tickets from issues that arrived some other way, with the brief (and its criteria) posted as a comment |
 
-A [Spec](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) is never implemented itself; only its Tickets are. If a Spec is left labelled `ready-for-agent`, the `spec` Guard below takes the label off it. A [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) should be small enough for one implement Stage, which by default has 300 turns and 60 minutes ([Configuration](./configuration.md#stages)).
+A [Spec](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is never implemented itself; only its Tickets are. If a Spec is left labelled `ready-for-agent`, the `spec` Guard below takes the label off it. A [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) should be small enough for one implement Stage, which by default has 300 turns and 60 minutes ([Configuration](./configuration.md#stages)).
 
 To file one by hand with its parent and blockers in place:
 
@@ -89,7 +89,7 @@ To keep the pipeline off a Ticket, take `ready-for-agent` off it, or assign some
 
 ## Guards
 
-Planning goes wrong in a few known ways. `to-spec` can leave its Spec labelled `ready-for-agent`, an issue can arrive with no checkbox criteria, and `to-tickets` sometimes writes `Blocked by: #n` into the body without creating the native link. Taken as they are, these would have the pipeline implement a whole Spec as one giant Ticket, work on something verify cannot grade, or start a Ticket before its prerequisites exist. A [Guard](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) passes such a candidate over before it is claimed and says once why, so you fix the Planning output and run again.
+Planning goes wrong in a few known ways. `to-spec` can leave its Spec labelled `ready-for-agent`, an issue can arrive with no checkbox criteria, and `to-tickets` sometimes writes `Blocked by: #n` into the body without creating the native link. Taken as they are, these would have the pipeline implement a whole Spec as one giant Ticket, work on something verify cannot grade, or start a Ticket before its prerequisites exist. A [Guard](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) passes such a candidate over before it is claimed and says once why, so you fix the Planning output and run again.
 
 ```mermaid
 flowchart TD
@@ -116,7 +116,7 @@ flowchart TD
 
 Each skip posts one warning comment saying what to fix, and appears in the Run summary as `skipped  #<n> <reason>`. The warning carries a hidden `<!-- ticket-runner:guard:<reason> -->` marker, so it is posted at most once per reason: a nightly Run that meets the same unfixed issue again says nothing more. Fix the issue and the next Run takes it. The comment's wording is in [`docs/templates/guard-comment.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/guard-comment.md).
 
-The Guards also grade a [Stranded Ticket](https://github.com/jjongs2/ticket-runner/blob/main/CONTEXT.md) before it is resumed, since they are about the issue, not about who holds it.
+The Guards also grade a [Stranded Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) before it is resumed, since they are about the issue, not about who holds it.
 
 ## Related pages
 
