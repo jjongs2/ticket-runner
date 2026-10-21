@@ -69,6 +69,7 @@ flowchart LR
     X --> K
     X -. 또 실패 .-> H["Hand-off: ready-for-human"]
     I -. rate limit, API 장애 .-> RL["Release: ready-for-agent"]
+    K -. Base branch도 실패 .-> RL
   end
   R --> F
   M -. 막힘을 풂 .-> F
@@ -77,7 +78,7 @@ flowchart LR
 ```
 <!-- Sources: src/run.ts, src/orchestrator.ts, src/frontier.ts, src/guards.ts -->
 
-rate limit이나 일시적인 API 장애는 implement만이 아니라 어느 Stage에서든 일어날 수 있고, 어디서 일어나든 Release로 끝납니다. 실행 쪽 절반은 [Ticket 하나가 merge되기까지](./guide/ticket-to-merge.md)에서 한 단계씩 따라가 봅니다.
+rate limit이나 일시적인 API 장애는 implement만이 아니라 어느 Stage에서든 일어날 수 있고, 어디서 일어나든 Release로 끝납니다. Base branch에서도 똑같이 실패하는 Check나 빨간 CI도 Release로 끝납니다. branch가 물려받은 실패이니 fix Stage를 쓰지 않습니다. 실행 쪽 절반은 [Ticket 하나가 merge되기까지](./guide/ticket-to-merge.md)에서 한 단계씩 따라가 봅니다.
 
 ## 가이드 {#the-guide}
 

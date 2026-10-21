@@ -67,11 +67,11 @@ Run이 동시에 쥐는 Ticket 수입니다. [Lane](https://github.com/jjongs2/t
 - `checks`: 문자열 배열
 - `checkTimeoutMinutes`: 0보다 큰 수
 
-[Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 파이프라인이 직접 돌리는 결정적인 명령이지, 에이전트의 의견이 아닙니다. 각 명령은 Ticket의 worktree에서 셸을 통해 돌고, implement Stage 뒤, fix Stage 뒤, rebase 충돌을 해결한 뒤에 실행됩니다. 0이 아닌 코드로 끝나면 게이트를 통과하지 못하고, Ticket은 [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)을 씁니다.
+[Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 파이프라인이 직접 돌리는 결정적인 명령이지, 에이전트의 의견이 아닙니다. 각 명령은 Ticket의 worktree에서 셸을 통해 돌고, implement Stage 뒤, fix Stage 뒤, rebase 충돌을 해결한 뒤에 실행됩니다. 0이 아닌 코드로 끝나면 게이트를 통과하지 못하고, Ticket은 [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)을 씁니다. 단, Base branch도 같은 명령에 실패하면 예외입니다. 실패한 명령을 branch와 Base branch의 merge-base에 만든 깨끗한 worktree에서 한 번 더 돌려 보고, 거기서도 실패하면 Ticket을 Release합니다([Ticket 하나가 merge되기까지](./ticket-to-merge.md#the-checks) 참고). CI가 빨갛게 끝났을 때는 모든 명령을 거기서 같은 식으로 돌리므로, CI도 돌리는 명령을 적어 두는 게 좋습니다.
 
 이 필드가 없으면 `package.json`에 `test`, `typecheck` 스크립트 중 정의된 것을 보고 `npm test`와 `npm run typecheck`를 추론합니다.
 
-`checkTimeoutMinutes`는 모든 명령에 하나로 적용되는 한도이고, 명령마다 이 시간을 통째로 받습니다. 한도에서 kill된 명령은 실패한 Check이고 다른 실패처럼 Fix budget을 씁니다. 멈춰 버리는 테스트 스위트는 branch 자기 코드의 결함이기 때문입니다. fix Stage에는 Check가 실패한 게 아니라 멈췄다는 사실이 전달됩니다.
+`checkTimeoutMinutes`는 모든 명령에 하나로 적용되는 한도이고, 명령마다 이 시간을 통째로 받습니다. merge-base에서 돌릴 때도 같습니다. 한도에서 kill된 명령은 실패한 Check이고 다른 실패처럼 Fix budget을 씁니다. 멈춰 버리는 테스트 스위트는 branch 자기 코드의 결함이기 때문입니다. fix Stage에는 Check가 실패한 게 아니라 멈췄다는 사실이 전달됩니다.
 
 ## `gates` {#gates}
 
