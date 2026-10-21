@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NOTES_LIST_SCHEMA } from "./note-schema.js";
+import { CODE_STAGE_NOTES_LIST_SCHEMA, NOTES_LIST_SCHEMA } from "./note-schema.js";
 import { CODE_STAGE_JSON_SCHEMA } from "./title.js";
 import { VERDICT_JSON_SCHEMA } from "./verdict.js";
 
@@ -30,8 +30,22 @@ describe("NOTES_LIST_SCHEMA", () => {
     expect(NOTES_LIST_SCHEMA.items.properties.summary.description).not.toContain("title");
   });
 
-  it("is the one declaration both the Stages that write and the one that grades read", () => {
-    expect(CODE_STAGE_JSON_SCHEMA.properties.notes).toBe(NOTES_LIST_SCHEMA);
+  it("is the one declaration of a Note both the Stages that write and the one that grades read", () => {
+    expect(CODE_STAGE_JSON_SCHEMA.properties.notes.items).toBe(NOTES_LIST_SCHEMA.items);
     expect(VERDICT_JSON_SCHEMA.properties.notes).toBe(NOTES_LIST_SCHEMA);
+  });
+
+  it("tells the Stages that write code a defect their branch introduced is theirs to fix", () => {
+    const { description } = CODE_STAGE_NOTES_LIST_SCHEMA;
+
+    expect(description).toContain(NOTES_LIST_SCHEMA.description.split(" Empty")[0]);
+    expect(description).toMatch(/a defect this branch introduced\b.* belongs to this Ticket/i);
+    expect(description).toContain("behaves correctly on the Base branch and wrongly here");
+    expect(description).toMatch(/one in code this branch added/i);
+    expect(description).toMatch(/fix it, and do not list it here/i);
+  });
+
+  it("leaves the verify Stage's list without that rule, since verify fixes nothing", () => {
+    expect(NOTES_LIST_SCHEMA.description).not.toMatch(/this branch introduced/i);
   });
 });

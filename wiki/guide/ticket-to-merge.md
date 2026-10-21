@@ -82,6 +82,14 @@ Every Stage runs in the Ticket's worktree with `--permission-prompts none`, the 
 
 Every prompt then carries the Stage boundary guidance (never run `ticket-runner` against the repository or GitHub, never kill processes the Stage did not start, and expect the CLI to refuse under the Stage mark). Where the Target is the pipeline's own repository, it adds that the checkout is the pipeline, to be exercised only through its tests and fakes. The prompt ends with the Stage's `extraPrompt` from the config. The implement prompt adds guidance that works around the skill in an unattended session: commit before the review, invoke `/mattpocock-skills:code-review` by its full name, run the review sub-agents in the foreground, and leave the worktree clean.
 
+**The Checks in a prompt.** The pipeline runs the Checks itself right after implement, fix and conflict, and verify grades a commit that has just passed them. So where `checks` names commands, every prompt names them too, with what to do about them. Where it names none, no prompt mentions them.
+
+| Stage | Told about the Checks |
+|---|---|
+| implement, fix | While working, run only the tests the change touches. Commit, then run the full Checks once in the foreground; for implement, after the review's fixes are committed |
+| verify | They passed on this commit. Do not re-run them; grade a criterion that asks only for them from that fact |
+| conflict | Run the type checker and the tests covering the resolved files, not the whole suite |
+
 **The Stage mark.** Every Stage's shell carries `TICKET_RUNNER_STAGE=<stage>`, and the CLI refuses to start while it is set. A Stage therefore cannot claim a Ticket or start a nested Run by mistake. It is a tripwire, not a sandbox: a session that unsets the variable gets through, which is why the prompt says the same thing in words.
 
 **Transcripts.** Each Stage writes `<stage>.command`, `.stdout`, `.stderr` and `.transcript.jsonl` under `.ticket-runner/runs/<runId>/<n>/`. The command line is written before the process starts, and the output as it arrives, so a killed Run still leaves them. The fix Stage and the pass it buys write to `<n>/retry/`, so the failing pass keeps its files. See [Running](./running.md) for reading them.
@@ -117,7 +125,7 @@ Both failures spend the Fix budget. A Check runs the branch's own code, so a han
 
 ## The verify Stage and its Verdict
 
-No human reviews the code before it merges, and the session that wrote it is the last one to trust on whether it works. So a fresh session, with no plugin skill, tries to prove each Acceptance Criterion is **not** met. It reads the criteria from the body and the comments, runs the code, may write throwaway tests, and must not commit. Afterwards the pipeline runs `git reset --hard` and `git clean -fd` in the worktree, so its scratch files never reach the pull request. Its Notes are routed first, because the scratch work goes with the discard.
+No human reviews the code before it merges, and the session that wrote it is the last one to trust on whether it works. So a fresh session, with no plugin skill, tries to prove each Acceptance Criterion is **not** met. It reads the criteria from the body and the comments, runs the code, may write throwaway tests, and must not commit. A criterion that cannot be met without overturning a documented decision or another criterion is `unmet`, with evidence saying a human decision is needed. Afterwards the pipeline runs `git reset --hard` and `git clean -fd` in the worktree, so its scratch files never reach the pull request. Its Notes are routed first, because the scratch work goes with the discard.
 
 The **Verdict** is one entry per criterion: `text`, `status` (`met`, `unmet` or `unverifiable`) and `evidence`, plus the agent's own `pass`. The agent's `pass` is advisory. The pipeline decides for itself: **no criterion unmet and at least one met.**
 
@@ -128,9 +136,11 @@ The **Verdict** is one entry per criterion: `text`, `status` (`met`, `unmet` or 
 | All `unverifiable` | `❌ no evidence` | Hand-off: there is nothing to merge on |
 | Missing or malformed | `❌ no Verdict` | Hand-off |
 
+A verify after a fix for unmet criteria gets the first Verdict's unmet criteria and their evidence, and is told such a criterion is met only when that counterexample is gone and the whole criterion holds. A retry verify that a later Run resumes after a Release gets none, since the State file keeps no Verdict.
+
 ## The fix Stage and the Fix budget
 
-Without a cap, an unattended pipeline could loop on a Ticket it cannot solve, paying for a session on every pass. So the [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is one fix Stage per Ticket, and whatever still fails after it goes to a human. The fix Stage is a fresh session on the same branch, with no plugin skill: the implement skill would re-read the Ticket and start over, and what is wanted is one concrete defect mended. Its prompt names the kind of failure, the one-line summary, and the evidence in a fence. It is asked to reproduce the failure, fix the cause, add a regression test for an unmet criterion, and stay inside the Ticket.
+Without a cap, an unattended pipeline could loop on a Ticket it cannot solve, paying for a session on every pass. So the [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is one fix Stage per Ticket, and whatever still fails after it goes to a human. The fix Stage is a fresh session on the same branch, with no plugin skill: the implement skill would re-read the Ticket and start over, and what is wanted is one concrete defect mended. Its prompt names the kind of failure, the one-line summary, and the evidence in a fence. It is asked to reproduce the failure, fix the cause, add a regression test for an unmet criterion, and stay inside the Ticket and the defects its own branch introduced. Sent in for unmet criteria, it commits nothing and says why when one cannot be met without overturning a documented decision or another criterion, which hands the Ticket to a human.
 
 Only a defect a fresh session could mend spends the budget:
 
@@ -151,7 +161,7 @@ Only a defect a fresh session could mend spends the budget:
 | The merge failed | merge | No, Hand-off |
 | A rate limit, anywhere | any | No, a Release |
 
-After a fix Stage, the Ticket starts again at the Checks. Every gate grades the fix, the verify Stage included, so a fix is held to the same bar as the first attempt. A fix Stage whose branch did not grow is a Hand-off straight away: re-grading an untouched branch could only fail the same way. A squashed or amended branch counts as not grown. A second failure of any kind is a Hand-off, and the hand-off comment says the budget was already used.
+After a fix Stage, the Ticket starts again at the Checks. Every gate grades the fix, the verify Stage included, so a fix is held to the same bar as the first attempt. A fix Stage whose branch did not grow is a Hand-off straight away: re-grading an untouched branch could only fail the same way. A squashed or amended branch counts as not grown. Its hand-off comment carries the evidence the fix Stage was sent in with, so an unmet criterion left for a human arrives with the question its evidence asks. A second failure of any kind is a Hand-off, and the hand-off comment says the budget was already used.
 
 The budget is recorded in the State file once the fix Stage comes back. A fix Stage stopped by the rate limit spends nothing. A Release carries a spent budget over to the next Run; a Hand-off gives it back, because the Ticket only returns through a human's hands.
 
@@ -200,7 +210,7 @@ The Base branch is first brought up to the remote's: `git pull --ff-only` when i
 
 ### The Conflict Stage
 
-A conflict is not a defect in the branch: the Base branch moved on underneath it. So one [Conflict Stage](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) runs in the stopped rebase with git's output and no plugin skill, and **it does not spend the Fix budget.** It is told to finish the rebase and never abort it, to keep both intents where they are compatible and the Ticket's where they are not, and to touch no file the conflict did not.
+A conflict is not a defect in the branch: the Base branch moved on underneath it. So one [Conflict Stage](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) runs in the stopped rebase with git's output and no plugin skill, and **it does not spend the Fix budget.** It is told to finish the rebase and never abort it, to keep both intents where they are compatible and the Ticket's where they are not, and to change a file the conflict did not touch only to repair what the merge broke, such as a renamed name or a moved field. It implements nothing new and changes no behaviour the criteria cover.
 
 **The worktree decides, not the session's exit.** The rebase counts as resolved only when all of these hold:
 
@@ -303,7 +313,7 @@ Rows carry a few words only. Anything a human has to act on is its own comment, 
 
 ## Notes
 
-A Stage keeps meeting defects that are not its Ticket's. Fixing them widens the Ticket past what verify grades; ignoring them loses them in a transcript. So the implement, verify and fix Stages end with a list of [Notes](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), and the pipeline posts each one where a human will meet it. A Note is a defect, never a preference, a refactor or a nice-to-have test. It is never acted on in the current Ticket. For verify, a judgement on a criterion belongs in the Verdict, not in a Note.
+A Stage keeps meeting defects that are not its Ticket's. Fixing them widens the Ticket past what verify grades; ignoring them loses them in a transcript. So the implement, verify and fix Stages end with a list of [Notes](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), and the pipeline posts each one where a human will meet it. A Note is a defect, never a preference, a refactor or a nice-to-have test. It is never acted on in the current Ticket. A defect the branch itself introduced, one that behaves correctly on the Base branch and wrongly on the branch or one in code the branch added, belongs to the Ticket: implement and fix are told to fix it rather than note it. For verify, a judgement on a criterion belongs in the Verdict, not in a Note.
 
 Each Note has a `summary` (required), and optional `evidence`, `impact`, `next` and `ticket`. Notes are routed before the Stage's own outcome is judged, so a Stage that ran out of turns still reports what it noticed.
 
@@ -330,7 +340,7 @@ Every Note comment opens with where it came from (`From #<origin> <stage>`), the
 
 - [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `processTicket`, `takeTicket`, `verify`, `fix`, `resolveConflict`, `requireGreenCi`
 - [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts), [`src/frontier.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts), [`src/landing.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/landing.ts)
-- [`src/prompts.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/prompts.ts), [`src/self-hosting.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/self-hosting.ts), [`src/verdict.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/verdict.ts), [`src/title.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/title.ts), [`src/lifecycle.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lifecycle.ts)
+- [`src/prompts.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/prompts.ts), [`src/self-hosting.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/self-hosting.ts), [`src/verdict.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/verdict.ts), [`src/title.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/title.ts), [`src/note-schema.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/note-schema.ts), [`src/lifecycle.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lifecycle.ts)
 - [`src/progress.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/progress.ts), [`src/criteria.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/criteria.ts), [`src/notes.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/notes.ts), [`src/templates.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts), [`src/handoff.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/handoff.ts)
 - [`src/stage-guard.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stage-guard.ts), [`src/run-log.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run-log.ts), [`src/startup.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts), [`src/config.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts)
 - [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts), [`src/adapters/git-workspace.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts), [`src/adapters/gh-tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts), [`src/adapters/process-tree.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/process-tree.ts)

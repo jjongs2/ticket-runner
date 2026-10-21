@@ -30,8 +30,8 @@ import { z } from "zod";
  * A Stage that ends with Notes.
  *
  * Narrower than a Stage name on purpose: the conflict Stage is given no Notes
- * channel — it finishes a rebase and touches no file the conflict did not — so
- * a Note that claimed to come from one would be a Note nothing could have made.
+ * channel — it finishes a rebase and implements nothing — so a Note that
+ * claimed to come from one would be a Note nothing could have made.
  */
 export type NotingStage = "implement" | "verify" | "fix";
 

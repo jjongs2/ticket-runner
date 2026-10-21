@@ -327,6 +327,10 @@ async function takeTicket(
   let fixUsed = resume?.fixUsed ?? false;
   // The pass behind a fix Stage logs beside the first one rather than over it.
   let logDir = stageLogDir(repoRoot, runId, ticket);
+  // The unmet criteria the fix Stage was sent in for, and their evidence, which
+  // the verify behind it is held to. Only this Run's: the State file keeps no
+  // Verdict, so a retry a later Run resumes is graded without them.
+  let unmetBefore: string | undefined;
 
   // Declared out here because ticking the Acceptance Criteria it proved happens
   // after the merge, where a failure may no longer hand the Ticket off.
@@ -399,7 +403,7 @@ async function takeTicket(
         await requireCommitted(pipeline, worktree, progress);
         await runChecks(pipeline, worktree, progress);
         point = "verify";
-        verdict = await verify(pipeline, issue, worktree, logDir, progress, notes);
+        verdict = await verify(pipeline, issue, worktree, logDir, progress, notes, unmetBefore);
 
         point = "rebase";
         // The Landing, from here until the Base branch has been pulled: the
@@ -463,6 +467,7 @@ async function takeTicket(
         // the queue at the back when it reaches the rebase again.
         landing.leave();
         logDir = retryLogDir(repoRoot, runId, ticket);
+        if (failure.kind === "unmet-criteria") unmetBefore = failure.evidence;
         await fix(
           pipeline,
           issue,
@@ -1001,6 +1006,7 @@ async function implement(
       pipeline.baseBranch,
       stage.extraPrompt,
       pipeline.selfHosted,
+      pipeline.config.checks,
       await standingNotesNumber(pipeline),
     ),
     cwd: worktree,
@@ -1116,6 +1122,8 @@ async function verify(
   logDir: string,
   progress: Progress,
   notes: RoutedNote[],
+  /** The unmet criteria and evidence of the Verdict a fix Stage was sent in for. */
+  unmetBefore: string | undefined,
 ): Promise<Verdict> {
   const stage = pipeline.config.stages.verify;
   const result = await runStage(pipeline, "verify", {
@@ -1123,7 +1131,9 @@ async function verify(
       issue.url,
       stage.extraPrompt,
       pipeline.selfHosted,
+      pipeline.config.checks,
       await standingNotesNumber(pipeline),
+      unmetBefore,
     ),
     cwd: worktree,
     logDir,
@@ -1215,6 +1225,7 @@ async function fix(
       pipeline.baseBranch,
       stage.extraPrompt,
       pipeline.selfHosted,
+      pipeline.config.checks,
       await standingNotesNumber(pipeline),
     ),
     cwd: worktree,
@@ -1239,9 +1250,17 @@ async function fix(
   // A branch that grew is the whole signal, which is not the same as one that
   // changed: a session that squashed the branch shorter, or amended in place,
   // is read here as having committed nothing.
+  //
+  // The hand-off carries the evidence the Stage was sent in with. Committing
+  // nothing is also how a fix Stage hands back an unmet criterion only a human
+  // can settle, and the human then reads the question where it was asked.
   if (!grew) {
     await progress.record(stageRow("fix", result, "❌ no commits"));
-    throw new TicketFailure("fix", "the fix Stage left no new commits on the branch");
+    throw new TicketFailure(
+      "fix",
+      "the fix Stage left no new commits on the branch",
+      failure.evidence,
+    );
   }
 
   await progress.record(stageRow("fix", result, "✅ committed"));
@@ -1319,6 +1338,7 @@ async function conflictStage(
         pipeline.baseBranch,
         stage.extraPrompt,
         pipeline.selfHosted,
+        pipeline.config.checks,
       ),
       cwd: worktree,
       logDir,

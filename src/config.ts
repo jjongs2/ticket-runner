@@ -127,8 +127,8 @@ const STAGE_DEFAULTS = {
   implement: { maxTurns: 300, maxMinutes: 60 },
   verify: { maxTurns: 80, maxMinutes: 20 },
   fix: { maxTurns: 150, maxMinutes: 40 },
-  // Resolving one rebase is narrower work than mending a defect, and the skill
-  // has the Checks to run before it finishes.
+  // Resolving one rebase is narrower work than mending a defect, and the full
+  // Checks are the pipeline's to run once it finishes.
   conflict: { maxTurns: 120, maxMinutes: 30 },
 } as const;
 

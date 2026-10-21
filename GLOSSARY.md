@@ -135,7 +135,7 @@ A Ticket whose State file is still there while the Ticket still carries this Tar
 _Avoid_: orphan, zombie, abandoned Ticket, crashed Ticket, dead Ticket
 
 **Note**:
-A defect the implement, verify or fix Stage meets that belongs to another Ticket, or to no Ticket yet — something that behaves wrongly or breaks, never a preference, a refactor or a test that would be nice to have. Routed to that Ticket's comments when it is open, unclaimed and not a Spec, and otherwise to the standing Notes issue, the one `needs-triage` issue every Note that cannot reach a Ticket is gathered on as a comment; never acted on in the current Ticket.
+A defect the implement, verify or fix Stage meets that belongs to another Ticket, or to no Ticket yet — something that behaves wrongly or breaks, never a preference, a refactor or a test that would be nice to have. Routed to that Ticket's comments when it is open, unclaimed and not a Spec, and otherwise to the standing Notes issue, the one `needs-triage` issue every Note that cannot reach a Ticket is gathered on as a comment; never acted on in the current Ticket. A defect the Ticket's own branch introduced — one that behaves correctly on the Base branch and wrongly on the branch, or one in code the branch added — belongs to that Ticket: the implement and fix Stages fix it rather than noting it, and only verify, which fixes nothing, still notes one it demonstrates beside the criteria.
 _Avoid_: handoff, finding, TODO, side note
 
 ### Versions

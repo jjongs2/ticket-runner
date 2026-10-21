@@ -581,6 +581,29 @@ describe("Stage invocation", () => {
   });
 });
 
+describe("the Check commands a Stage is told about", () => {
+  /** Every Stage's prompt, from a Run that met an unmet criterion and a conflict. */
+  async function everyStagePrompt(checks: string[]): Promise<string[]> {
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
+    workspace.conflictOnce(CONFLICT);
+    await run({ checks });
+    expect(runner.stages()).toEqual(["implement", "verify", "fix", "verify", "conflict"]);
+    return runner.requests.map((request) => request.prompt);
+  }
+
+  it("are the configured ones, named to every Stage", async () => {
+    for (const prompt of await everyStagePrompt(["npm test", "npm run typecheck"])) {
+      expect(prompt).toContain("`npm test`, `npm run typecheck`");
+    }
+  });
+
+  it("are named to no Stage where the config has none", async () => {
+    for (const prompt of await everyStagePrompt([])) {
+      expect(prompt).not.toMatch(/the pipeline runs its Checks|Checks passed on this commit/i);
+    }
+  });
+});
+
 describe("implement Stage failures", () => {
   it("hands off when the Stage itself fails", async () => {
     runner.queue("implement", { ok: false, failure: "nonzero-exit" });
@@ -1425,6 +1448,28 @@ describe("the fix Stage", () => {
     expect(runner.prompts("fix")[0]).toMatch(/regression test/i);
   });
 
+  it("gives the verify behind it the first Verdict's unmet criteria and what meeting them takes", async () => {
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
+
+    await run();
+
+    const [first, second] = runner.prompts("verify");
+    expect(first).not.toMatch(/judged unmet before the fix/i);
+    expect(first).not.toContain("it works — npm test is red");
+    expect(second).toMatch(/judged unmet before the fix/i);
+    expect(second).toContain("it works — npm test is red");
+    expect(second).toMatch(/counterexample is gone and the whole criterion holds/i);
+  });
+
+  it("gives the verify behind a fix for anything else no earlier Verdict", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+
+    await run();
+
+    expect(runner.prompts("verify")).toHaveLength(1);
+    expect(runner.prompts("verify")[0]).not.toMatch(/judged unmet before the fix/i);
+  });
+
   it("retries a red CI without opening a second pull request", async () => {
     tracker.queueCi({ state: "failed", summary: "checks/build failed", excerpt: "" });
 
@@ -1600,6 +1645,28 @@ describe("a fix Stage that committed nothing", () => {
     expect(outcome).toMatchObject({ outcome: "handed-off", stage: "fix" });
     expect(handoffBody()).toContain("the fix Stage left no new commits on the branch");
     expect(progressTable()).toContain("| fix | ❌ no commits |");
+  });
+
+  it("hands off with the unmet criteria and their evidence it was sent in for", async () => {
+    runner.queue(
+      "verify",
+      stageResult({
+        result: verdictResult([
+          {
+            text: "it reads the feed",
+            status: "unmet",
+            evidence: "ADR-0003 forbids the feed; a human decision is needed",
+          },
+        ]),
+      }),
+    );
+
+    await run();
+
+    expect(handoffBody()).toContain("the fix Stage left no new commits on the branch");
+    expect(handoffBody()).toContain(
+      "- it reads the feed — ADR-0003 forbids the feed; a human decision is needed",
+    );
   });
 
   it("routes the Notes it made before its own outcome is judged", async () => {
