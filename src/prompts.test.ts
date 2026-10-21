@@ -601,7 +601,7 @@ describe("a defect the branch introduced", () => {
       fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS),
     ]) {
       expect(prompt).toMatch(/a defect this branch introduced\b.* belongs to this Ticket/i);
-      expect(prompt).toContain("behaves correctly on `main` and wrongly here");
+      expect(prompt).toContain("behaves correctly on the Base branch and wrongly here");
       expect(prompt).toMatch(/one in code this branch added/i);
       expect(prompt).toMatch(/fix it, and do not record it as a Note/i);
     }

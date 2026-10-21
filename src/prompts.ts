@@ -6,6 +6,7 @@
 
 import { CONVENTIONS_PATH } from "./conventions.js";
 import type { FailureKind } from "./lifecycle.js";
+import { OWN_DEFECT } from "./note-schema.js";
 import { STAGE_ENV_VAR } from "./stage-guard.js";
 import { BRANCH_TITLE } from "./title.js";
 
@@ -112,12 +113,9 @@ ${FINISH_GUIDANCE}
  * "another Ticket" alone left it unowned, and such Notes became bug issues
  * opened after the branch that caused them had merged.
  */
-const notesGuidance = (
-  base: string,
-  standingNotes?: number,
-) => `Notes for other Tickets: if you discover something that belongs to another Ticket, or to no Ticket yet, do not act on it here and do not widen this Ticket to cover it.
+const notesGuidance = (standingNotes?: number) => `Notes for other Tickets: if you discover something that belongs to another Ticket, or to no Ticket yet, do not act on it here and do not widen this Ticket to cover it.
 
-- A defect this branch introduced, one that behaves correctly on \`${base}\` and wrongly here, or one in code this branch added, belongs to this Ticket: fix it, and do not record it as a Note.
+- ${OWN_DEFECT}: fix it, and do not record it as a Note.
 - Record anything else as a Note instead. Your structured output carries a \`notes\` list, and the pipeline posts each entry where a human will meet it.
 ${noteEntryGuidance(standingNotes)}`;
 
@@ -175,6 +173,13 @@ function standingLine(standingNotes?: number): string {
 }
 
 /**
+ * What makes an unmet criterion one only a human can settle, in the words both
+ * the verify and the fix Stage are given.
+ */
+const NEEDS_A_HUMAN =
+  "cannot be met without overturning a documented decision or another criterion";
+
+/**
  * The verify Stage's brief. It grades a commit the Checks have just passed, so
  * where the config names any it is told so and told not to run them again: in
  * the logged Runs re-running them was about two fifths of a verify Stage's wall
@@ -192,7 +197,7 @@ const verifyInstructions = (checks: readonly string[]) => `You are the verify St
 - Attempt to falsify every criterion: run the code, run the tests that bear on it, and write throwaway tests where that is the only way to tell.${verifyChecksLine(checks)}
 - Judge the code as it is. Do not fix anything, and never commit, stage or push. Scratch files are fine; the pipeline discards them.
 - Mark a criterion \`unverifiable\` only when no evidence can be gathered, never as a substitute for looking.
-- When a criterion cannot be met without overturning a documented decision or another criterion, mark it \`unmet\` and say in its evidence that a human decision is needed, naming what it collides with. A workaround that sidesteps the collision does not meet it.
+- When a criterion ${NEEDS_A_HUMAN}, mark it \`unmet\` and say in its evidence that a human decision is needed, naming what it collides with. A workaround that sidesteps the collision does not meet it.
 - End by emitting the Verdict: one entry per criterion with its status and the evidence you actually gathered.`;
 
 /** The Checks as the verify Stage is told about them: passed, and not its to run. */
@@ -215,15 +220,15 @@ const fixInstructions = (
 
 - Commit your fix on the branch you are on, in this worktree. Do not create a branch, do not open pull requests, and do not close the Ticket.
 - Start from the evidence: reproduce the failure, find what actually causes it, and fix that rather than the symptom.
-- Where the failure is an unmet Acceptance Criterion, add the regression test that would have caught it and commit it with the fix.${kind === "unmet-criteria" ? DESIGN_CONFLICT_LINE : ""}
+- Where the failure is an unmet Acceptance Criterion, add the regression test that would have caught it and commit it with the fix.${kind === "unmet-criteria" ? HUMAN_DECISION_LINE : ""}
 - Stay inside this Ticket's Acceptance Criteria and the defects this branch introduced. Anything else you find belongs to another Ticket, not to this session; record it as a Note rather than mending it.${codeChecksLine(checks, false)}
 ${FINISH_GUIDANCE}
 - Write commit subjects in the convention \`${CONVENTIONS_PATH}\` states. The pipeline re-runs the Checks and the verify Stage as soon as you finish.
 ${titleGuidance(base)}`;
 
 /** What the fix Stage sent in for unmet criteria does with one only a human can settle. */
-const DESIGN_CONFLICT_LINE = `
-- When any unmet criterion cannot be met without overturning a documented decision or another criterion, as the verify Stage's evidence may already say, commit nothing and say why in your last message. Do not work around it: a fix Stage that commits nothing hands the Ticket to a human, with the unmet criteria and their evidence.`;
+const HUMAN_DECISION_LINE = `
+- When any unmet criterion ${NEEDS_A_HUMAN}, as the verify Stage's evidence may already say, commit nothing and say why in your last message. Do not work around it: a fix Stage that commits nothing hands the Ticket to a human, with the unmet criteria and their evidence.`;
 
 /**
  * The conflict Stage's brief. It may reach past the conflicted files only to
@@ -281,7 +286,7 @@ export function implementPrompt(
     `/mattpocock-skills:implement ${issueUrl}`,
     implementGuidance(base, checks),
     stageBoundary(selfHosted),
-    notesGuidance(base, standingNotes),
+    notesGuidance(standingNotes),
     extraPrompt,
   ]);
 }
@@ -345,7 +350,7 @@ export function fixPrompt(
     fixInstructions(base, failure.kind, checks),
     failureSection(failure, base),
     stageBoundary(selfHosted),
-    notesGuidance(base, standingNotes),
+    notesGuidance(standingNotes),
     extraPrompt,
   ]);
 }

@@ -61,6 +61,13 @@ export const NOTES_LIST_SCHEMA = {
 } as const;
 
 /**
+ * Whose a defect the branch itself introduced is, in the words both the code
+ * Stages' schema and their prompts use: one declaration, so the two cannot drift.
+ */
+export const OWN_DEFECT =
+  "A defect this branch introduced, one that behaves correctly on the Base branch and wrongly here, or one in code this branch added, belongs to this Ticket";
+
+/**
  * The list as the implement and fix Stages read it: a defect their own branch
  * introduced is theirs to fix, not to list. verify keeps the list without it,
  * because it fixes nothing and grades the Acceptance Criteria alone, so a
@@ -68,6 +75,5 @@ export const NOTES_LIST_SCHEMA = {
  */
 export const CODE_STAGE_NOTES_LIST_SCHEMA = {
   ...NOTES_LIST_SCHEMA,
-  description:
-    "Defects that belong to another Ticket, or to no Ticket yet. A defect this branch introduced, one that behaves correctly on the Base branch and wrongly here, or one in code this branch added, belongs to this Ticket: fix it, and do not list it here. Empty when you found none, which is the ordinary case.",
+  description: `Defects that belong to another Ticket, or to no Ticket yet. ${OWN_DEFECT}: fix it, and do not list it here. Empty when you found none, which is the ordinary case.`,
 } as const;

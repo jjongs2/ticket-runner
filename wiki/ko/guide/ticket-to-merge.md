@@ -210,7 +210,7 @@ Ticket은 fix Stage, Hand-off, Release 때도 Landing을 나가므로, 누구도
 
 ### Conflict Stage {#the-conflict-stage}
 
-충돌은 branch의 결함이 아닙니다. 그 아래에서 Base branch가 앞으로 나간 것뿐입니다. 그래서 멈춘 rebase 안에서 [Conflict Stage](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 하나가 플러그인 skill 없이 git 출력을 받아 돌고, **Fix budget은 쓰지 않습니다.** 이 Stage에는 rebase를 끝까지 마치고 절대 abort하지 말 것, 양쪽이 양립하면 두 의도를 모두 살리고 아니면 Ticket 쪽을 따를 것, 충돌하지 않은 파일은 merge가 망가뜨린 것을 고칠 때만 손댈 것을 요청합니다. 바뀐 이름이나 옮겨진 field 같은 것들입니다. 새로 구현하는 것은 없고, 기준이 다루는 동작도 바꾸지 않습니다.
+충돌은 branch의 결함이 아닙니다. 그 아래에서 Base branch가 앞으로 나간 것뿐입니다. 그래서 멈춘 rebase 안에서 [Conflict Stage](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 하나가 플러그인 skill 없이 git 출력을 받아 돌고, **Fix budget은 쓰지 않습니다.** 이 Stage에는 rebase를 끝까지 마치고 절대 abort하지 말 것, 양쪽이 양립하면 두 의도를 모두 살리고 아니면 Ticket 쪽을 따를 것, 충돌하지 않은 파일은 바뀐 이름이나 옮겨진 field처럼 merge가 망가뜨린 것을 고칠 때만 손댈 것을 요청합니다. 새로 구현하는 것은 없고, 기준이 다루는 동작도 바꾸지 않습니다.
 
 **판단은 세션의 종료 상태가 아니라 worktree가 합니다.** 다음을 모두 만족해야 rebase가 해결된 것으로 봅니다.
 
@@ -313,7 +313,7 @@ Ticket은 이미 merge됐으니 여기서부터는 Hand-off될 수 없습니다.
 
 ## Note {#notes}
 
-Stage는 자기 Ticket과 상관없는 결함을 자주 만납니다. 고치면 verify가 채점하는 범위를 넘어 Ticket이 넓어지고, 무시하면 transcript 속에 묻혀 버립니다. 그래서 implement, verify, fix Stage는 [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 목록을 남기며 끝나고, 파이프라인은 각 Note를 사람이 볼 만한 곳에 올립니다. Note는 결함이어야 하고, 취향이나 리팩터링, 있으면 좋을 테스트는 Note가 아닙니다. 지금 Ticket 안에서 손대지도 않습니다. 단, branch 스스로 만든 결함은 Note가 아닙니다. Base branch에서는 제대로 돌고 branch에서는 틀리게 도는 결함, 또는 branch가 추가한 코드의 결함은 그 Ticket의 것이고, implement와 fix는 이를 고치라고 지시받습니다. verify의 경우, 기준에 대한 판단은 Note가 아니라 Verdict에 들어갑니다.
+Stage는 자기 Ticket과 상관없는 결함을 자주 만납니다. 고치면 verify가 채점하는 범위를 넘어 Ticket이 넓어지고, 무시하면 transcript 속에 묻혀 버립니다. 그래서 implement, verify, fix Stage는 [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 목록을 남기며 끝나고, 파이프라인은 각 Note를 사람이 볼 만한 곳에 올립니다. Note는 결함이어야 하고, 취향이나 리팩터링, 있으면 좋을 테스트는 Note가 아닙니다. 지금 Ticket 안에서 손대지도 않습니다. 단, branch 스스로 만든 결함, 즉 Base branch에서는 제대로 돌고 branch에서는 틀리게 도는 결함이나 branch가 추가한 코드의 결함은 그 Ticket의 것입니다. implement와 fix는 이를 Note로 남기지 말고 고치라고 지시받습니다. verify의 경우, 기준에 대한 판단은 Note가 아니라 Verdict에 들어갑니다.
 
 Note에는 `summary`(필수)와 선택 항목 `evidence`, `impact`, `next`, `ticket`이 있습니다. Note는 Stage 자체의 결과를 판정하기 전에 보내므로, turn이 바닥난 Stage도 알아챈 것은 전합니다.
 
@@ -340,7 +340,7 @@ Note 코멘트는 출처(`From #<origin> <stage>`)로 시작하고, 이어서 �
 
 - [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `processTicket`, `takeTicket`, `verify`, `fix`, `resolveConflict`, `requireGreenCi`
 - [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts), [`src/frontier.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts), [`src/landing.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/landing.ts)
-- [`src/prompts.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/prompts.ts), [`src/self-hosting.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/self-hosting.ts), [`src/verdict.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/verdict.ts), [`src/title.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/title.ts), [`src/lifecycle.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lifecycle.ts)
+- [`src/prompts.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/prompts.ts), [`src/self-hosting.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/self-hosting.ts), [`src/verdict.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/verdict.ts), [`src/title.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/title.ts), [`src/note-schema.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/note-schema.ts), [`src/lifecycle.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lifecycle.ts)
 - [`src/progress.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/progress.ts), [`src/criteria.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/criteria.ts), [`src/notes.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/notes.ts), [`src/templates.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts), [`src/handoff.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/handoff.ts)
 - [`src/stage-guard.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stage-guard.ts), [`src/run-log.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run-log.ts), [`src/startup.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts), [`src/config.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts)
 - [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts), [`src/adapters/git-workspace.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts), [`src/adapters/gh-tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts), [`src/adapters/process-tree.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/process-tree.ts)
