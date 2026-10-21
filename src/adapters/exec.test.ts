@@ -133,6 +133,82 @@ describe("the wall-clock limit", () => {
   });
 });
 
+describe("the kill at the wall-clock limit", () => {
+  /** Whether a process of that id is still there to be signalled. */
+  function alive(pid: number): boolean {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** The pid a child printed, the way each script below names its background process. */
+  function backgroundPid(stdout: string): number {
+    return Number(stdout.trim().split("\n")[0]);
+  }
+
+  /** A killed process lingers as a zombie until its new parent reaps it. */
+  async function goneSoon(pid: number): Promise<boolean> {
+    for (let tries = 0; tries < 20; tries += 1) {
+      if (!alive(pid)) return true;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    return false;
+  }
+
+  it("takes a process the command started in the background with it", async () => {
+    const result = await exec("sleep 30 & echo $!; wait", [], { shell: true, timeoutMs: 300 });
+    const pid = backgroundPid(result.stdout);
+
+    expect(result.timedOut).toBe(true);
+    expect(await goneSoon(pid)).toBe(true);
+  });
+
+  // Claude Code starts each Bash tool command in a session of its own, so a
+  // Stage's test suite is in no process group the Stage itself is in.
+  it("takes a background process that left for a process group of its own", async () => {
+    const script = `
+      const { spawn } = require("node:child_process");
+      const shell = spawn("/bin/sh", ["-c", "sleep 30"], { detached: true, stdio: "ignore" });
+      process.stdout.write(shell.pid + "\\n");
+      setTimeout(() => {}, 30_000);
+    `;
+
+    const result = await exec("node", ["-e", script], { timeoutMs: 500 });
+    const pid = backgroundPid(result.stdout);
+
+    expect(result.timedOut).toBe(true);
+    expect(await goneSoon(pid)).toBe(true);
+  });
+
+  it("kills what ignores SIGTERM once the grace is over", async () => {
+    const result = await exec("trap '' TERM; sleep 30 & echo $!; wait", [], {
+      shell: true,
+      timeoutMs: 300,
+      killGraceMs: 300,
+    });
+    const pid = backgroundPid(result.stdout);
+
+    expect(result.timedOut).toBe(true);
+    expect(await goneSoon(pid)).toBe(true);
+  });
+
+  it("asks with SIGTERM first, so a command can tidy up before it goes", async () => {
+    const script = `
+      process.on("SIGTERM", () => { process.stdout.write("tidied"); process.exit(0); });
+      setTimeout(() => {}, 30_000);
+    `;
+
+    const result = await exec("node", ["-e", script], { timeoutMs: 500 });
+
+    expect(result.timedOut).toBe(true);
+    expect(result.exitCode).toBe(124);
+    expect(result.stdout).toBe("tidied");
+  });
+});
+
 describe("a child that exits on its own", () => {
   it("settles without waiting for a descendant holding stdout", async () => {
     const script = `${leaveDescendantHolding("stdout")} descendant.unref(); process.exitCode = 3;`;
