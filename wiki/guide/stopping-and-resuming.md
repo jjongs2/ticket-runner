@@ -117,7 +117,7 @@ Why a Hand-off keeps the State at all: the Run once misread the rate limit as an
 
 A Stage that hits the subscription rate limit has failed at nothing, and neither has one the API stopped on its own side. Handing the Ticket off would make a human relabel a Ticket nothing was wrong with, and a fix Stage would only meet the same limit or the same outage. So the Ticket is [released](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) instead: it goes back on the board, and the next Run resumes it from the last Stage it finished, with its Fix budget as it was.
 
-The pipeline decides this only for a session that failed. Any one of three signs is enough:
+Both are read only off a session that failed. It was rate-limited on any one of three signs:
 
 | Sign | Why it is there |
 |---|---|
@@ -127,7 +127,7 @@ The pipeline decides this only for a session that failed. Any one of three signs
 
 A session that succeeds is never rate-limited, however often it mentions rate limits.
 
-A session that failed and is not rate-limited is a transient API failure when its `result` event ends with `terminal_reason: "api_error"` and an `api_error_status` that is a 5xx or absent: `529 Overloaded`, say, or "No response from API". The CLI has already retried the request by the time it gives up, so the Stage is not retried in place. Any other status, and any other error, is the Stage's own and goes to the Fix budget or a Hand-off as before.
+A session that failed and is not rate-limited is a transient API failure when its `result` event ends with `terminal_reason: "api_error"` and an `api_error_status` that is a 5xx or absent: `529 Overloaded`, say, or "No response from API". The CLI has already retried the request by the time it gives up, so the Stage is not retried in place. Any other status, and any other error, is the Stage's own and goes to the Fix budget or a Hand-off.
 
 What the Release does:
 

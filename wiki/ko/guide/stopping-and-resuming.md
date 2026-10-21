@@ -117,7 +117,7 @@ Hand-off가 State를 남기는 이유가 있습니다. 예전에 Run이 rate lim
 
 구독 rate limit에 걸린 Stage는 무언가를 잘못한 게 아닙니다. API가 자기 쪽 문제로 멈춰 세운 Stage도 마찬가지입니다. 이걸 Hand-off로 처리하면 아무 문제 없는 Ticket의 라벨을 사람이 다시 바꿔야 하고, fix Stage를 돌려 봐야 같은 한도나 같은 장애에 또 걸릴 뿐입니다. 그래서 Ticket을 [Release](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)합니다. Ticket은 보드로 돌아가고, 다음 Run은 마지막으로 끝낸 Stage에서부터 Fix budget도 그대로인 채 이어 갑니다.
 
-이 판단은 실패한 세션에 대해서만 합니다. 아래 셋 중 하나만 있어도 됩니다.
+두 판단 모두 실패한 세션에 대해서만 합니다. rate limit은 아래 셋 중 하나만 있어도 됩니다.
 
 | 신호 | 왜 보나 |
 |---|---|
@@ -127,7 +127,7 @@ Hand-off가 State를 남기는 이유가 있습니다. 예전에 Run이 rate lim
 
 성공한 세션은 rate limit 이야기를 아무리 많이 해도 rate-limited로 보지 않습니다.
 
-실패했지만 rate limit은 아닌 세션의 `result` 이벤트가 `terminal_reason: "api_error"`로 끝나고 `api_error_status`가 5xx이거나 없으면, 일시적인 API 장애로 봅니다. `529 Overloaded`나 "No response from API" 같은 경우입니다. CLI가 포기할 때는 이미 요청을 재시도한 뒤이므로, Stage를 그 자리에서 다시 돌리지 않습니다. 그 밖의 status와 다른 오류는 Stage 자신의 실패이고, 전처럼 Fix budget이나 Hand-off로 갑니다.
+실패했지만 rate limit은 아닌 세션의 `result` 이벤트가 `terminal_reason: "api_error"`로 끝나고 `api_error_status`가 5xx이거나 없으면, 일시적인 API 장애로 봅니다. `529 Overloaded`나 "No response from API" 같은 경우입니다. CLI가 포기할 때는 이미 요청을 재시도한 뒤이므로, Stage를 그 자리에서 다시 돌리지 않습니다. 그 밖의 status와 다른 오류는 Stage 자신의 실패이고, Fix budget이나 Hand-off로 갑니다.
 
 Release가 하는 일:
 
@@ -136,7 +136,7 @@ Release가 하는 일:
 - Claim을 되돌립니다. `ready-for-agent`를 붙이고, `in-progress`를 떼고, 마지막으로 담당자를 해제합니다. 다른 Run은 담당자를 보고 가져간 Ticket인지 판단하니, 담당자를 맨 마지막에 뗍니다.
 - 코멘트를 달지 않고, draft pull request도 열지 않습니다.
 
-그 뒤로 Run은 더 claim하지 않습니다. 한 Stage를 멈춘 원인은 다음 Stage도 멈출 테니까요. 이미 바쁜 Lane은 자기 Ticket을 끝까지 마치고, 마지막 Lane이 돌아오면 Run이 끝납니다. 한도가 풀리기를 기다리지는 않습니다. 요약은 요청을 거절한 `rate_limit_event`가 알려 준 시각으로 `Rate limited · resets 2026-09-20 03:40 UTC.`처럼 끝나고, 시각을 알려 준 이벤트가 없으면 `Rate limited.`, API 장애였으면 `API failure.`로 끝납니다. Release된 Ticket도 가져간 것으로 치니, Hand-off가 없으면 exit code는 `0`입니다.
+그 뒤로 Run은 더 claim하지 않습니다. 한 Stage를 멈춘 원인은 다음 Stage도 멈출 테니까요. 이미 바쁜 Lane은 자기 Ticket을 끝까지 마치고, 마지막 Lane이 돌아오면 Run이 끝납니다. 한도가 풀리기를 기다리지는 않습니다. 요약의 마지막 줄은 `Rate limited · resets 2026-09-20 03:40 UTC.`처럼, 요청을 거절한 `rate_limit_event`가 알려 준 시각을 담습니다. 시각을 알려 준 이벤트가 없으면 `Rate limited.`이고, API 장애였으면 `API failure.`입니다. Release된 Ticket도 가져간 것으로 치니, Hand-off가 없으면 exit code는 `0`입니다.
 
 한도가 풀리거나 API가 회복된 뒤 Run을 시작하면 그 Ticket이 Frontier에 돌아와 있고, State file에서 이어 갑니다.
 

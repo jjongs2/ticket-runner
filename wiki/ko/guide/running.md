@@ -59,7 +59,7 @@ flowchart TD
 
 - **Frontier는 Lane을 채울 때마다 다시 조회합니다.** 한 번 찍어 둔 목록을 쓰지 않습니다. 그래서 blocker를 닫는 merge가 일어나면, 그것 때문에 기다리던 Ticket이 같은 Run에 들어옵니다.
 - **실패한 Ticket은 Hand-off되고** 그 Lane은 다음 Ticket을 가져갑니다. 나쁜 Ticket 하나 때문에 밤 전체를 잃지는 않습니다.
-- **Release가 일어나면 채우기를 멈춥니다.** rate limit이나 일시적인 API 장애로 멈춘 Ticket은 Release되고, 같은 원인이 다음 Stage도 막을 테니 Run은 더 claim하지 않습니다. 아직 바쁜 Lane은 쥔 것을 마저 끝냅니다. Run은 limit이 풀리기를 기다리지 않습니다. 풀리는 시각을 알려 줄 뿐이고, 다음 Run은 사람이나 Operator가 시작합니다.
+- **Release가 일어나면 채우기를 멈춥니다.** rate limit이나 일시적인 API 장애로 멈춘 Ticket은 Release되고, 같은 원인이 다음 Stage도 막을 테니 Run은 더 claim하지 않습니다. 아직 바쁜 Lane은 쥔 것을 마저 끝냅니다. Run은 한도가 풀리기를 기다리지 않습니다. 풀리는 시각을 알려 줄 뿐이고, 다음 Run은 사람이나 Operator가 시작합니다.
 - **Run이 끝나는 때**는 바쁜 Lane이 없고 가져갈 것도 남지 않았을 때입니다. Frontier가 비었거나, 남은 것이 모두 막혀 있을 때죠.
 
 Lane 안에서 Ticket 하나에 일어나는 일은 [Ticket 하나가 merge되기까지](./ticket-to-merge.md)에 있습니다. Stranded Ticket과 Release는 [멈추고 이어 하기](./stopping-and-resuming.md)에 있습니다.
@@ -163,8 +163,8 @@ Frontier blocked.
 |---|---|
 | `Frontier empty.` | 가져갈 것이 남지 않음 |
 | `Frontier blocked.` | 남은 것에 모두 열린 blocker가 있음 |
-| `Rate limited · resets 2026-09-20 03:40 UTC.` | rate limit에 의한 Release가 멈춤. 시각은 CLI가 알려 준 limit이 풀리는 시각(UTC)이고, 알려 주지 않았으면 `Rate limited.`로 끝남 |
-| `API failure.` | 일시적인 API 장애에 의한 Release가 멈춤 |
+| `Rate limited · resets 2026-09-20 03:40 UTC.` | rate limit으로 Release되어 멈춤. 시각은 CLI가 알려 준, 한도가 풀리는 시각(UTC)이고, 알려 주지 않았으면 `Rate limited.`로 끝남 |
+| `API failure.` | 일시적인 API 장애로 Release되어 멈춤 |
 | `Stopped at 22:07 · finishing #4 #9.` | 그 시각(UTC)에 Stop이 왔고, 그때 그 Ticket들이 Lane에 있었음 |
 
 Stop이나 Release로 끝난 Run은 Frontier 끝까지 가 보지 못했으니 `blocked` 줄을 출력하지 않습니다.

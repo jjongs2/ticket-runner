@@ -194,7 +194,7 @@ class Releasing extends Error {
     readonly reason: ReleaseCause,
     readonly limitResetsAt?: string,
   ) {
-    super(`the ${point} Stage was released · ${RELEASE_WORDS[reason]}`);
+    super(`the ${point} Stage was stopped · ${RELEASE_WORDS[reason]}`);
   }
 }
 
@@ -217,9 +217,10 @@ function asTicketFailure(error: unknown, point: FailurePoint): TicketFailure {
  * Nothing ends in a merge that has not been through a green pass of the whole
  * gauntlet.
  *
- * A Stage the subscription rate limit stopped ends none of that: the Ticket is
- * released, and a Run started once the limit has reset resumes it from the state
- * it had reached rather than from the top. A hand-off keeps that state too, so a
+ * A Stage the subscription rate limit or a transient API failure stopped ends
+ * none of that: the Ticket is released, and a Run started once the limit has
+ * reset, or the API recovered, resumes it from the state it had reached rather
+ * than from the top. A hand-off keeps that state too, so a
  * human who relabels the Ticket `ready-for-agent` hands it back and the next Run
  * carries on from what it reached rather than paying for the implement Stage a
  * second time.
@@ -503,8 +504,8 @@ async function takeTicket(
           record,
         );
         // Recorded once the Stage has come back, not when the budget was
-        // committed: a fix Stage the rate limit stopped before it ran spends
-        // nothing, and the release below says so.
+        // committed: a fix Stage the rate limit or an API failure stopped
+        // before it ran spends nothing, and the release below says so.
         await record.advance({ fixUsed: true });
       }
     }
@@ -899,7 +900,7 @@ async function releasedStage(
     point,
     stage === "implement" ? "claimed" : "implemented",
     cause,
-    cause === "rate-limited" ? result.limitResetsAt : undefined,
+    result.limitResetsAt,
   );
 }
 
@@ -1053,15 +1054,15 @@ async function implement(
   await recordTitle(result, record);
 
   // Pushed whatever became of the Stage, like its Notes: a session that
-  // committed and then ran into the rate limit still committed, and the Host
-  // that resumes the Ticket may be another one.
+  // committed and then was stopped by the rate limit or an API failure still
+  // committed, and the Host that resumes the Ticket may be another one.
   const commits = await commitCount(pipeline, branch);
   if (commits > 0) await pushCommitted(pipeline, issue.number, worktree, branch);
   if (!result.ok) throw await stageDidNotFinish(pipeline, progress, "implement", result);
 
   // An agent that gave up silently leaves a clean branch behind. That is a
   // failure, not something to verify. A resumed Ticket's branch is not clean —
-  // it carries what the Stage the rate limit stopped had committed — so this
+  // it carries what the Stage a Release stopped had committed — so this
   // asks the same question there: is there anything at all to grade. Whether it
   // is enough is the Verdict's business, not this guard's.
   if (commits === 0) {
@@ -1081,7 +1082,7 @@ async function implement(
  * Nothing is discarded here: a fix Stage sent in for it decides what belongs
  * to the Ticket, and a hand-off leaves the changes where a human can find them.
  * The summary names no Stage, because a resumed Ticket cannot say which one
- * left them: a fix Stage the rate limit stopped spent no budget.
+ * left them: a fix Stage a Release stopped spent no budget.
  */
 async function requireCommitted(
   pipeline: Pipeline,
@@ -1311,9 +1312,10 @@ async function fix(
  * came back clean because it quietly abandoned the rebase has not, and only the
  * worktree can tell the difference.
  *
- * A Stage the rate limit stopped is read the same way, and only then released:
- * one that had already finished the rebase leaves nothing that needs an agent
- * session, so the Ticket carries on to the Checks, the pull request and CI.
+ * A Stage the rate limit or an API failure stopped is read the same way, and
+ * only then released: one that had already finished the rebase leaves nothing
+ * that needs an agent session, so the Ticket carries on to the Checks, the pull
+ * request and CI.
  */
 async function resolveConflict(
   pipeline: Pipeline,
@@ -1379,8 +1381,8 @@ async function conflictStage(
     const state = await pipeline.workspace.rebaseState(worktree, pipeline.baseBranch);
     if (state.resolved) {
       // The worktree decides the row, as it decides the outcome: a Stage that
-      // ran out of turns, or into the rate limit, after finishing the rebase
-      // did the job it was sent to do.
+      // ran out of turns, or into the rate limit or an API failure, after
+      // finishing the rebase did the job it was sent to do.
       await progress.record(stageRow("conflict", result, "✅ rebased"));
       // The rebase rewrote the branch, and the resolution is a commit of the
       // Stage's like any other.

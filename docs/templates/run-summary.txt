@@ -39,8 +39,8 @@ Tickets in flight at once, and each takes as long as its own Stages take.
 
 `released` is a Ticket the subscription rate limit or a transient API failure
 stopped mid-flight — an API error with a 5xx status or none, after the CLI had
-given up retrying it: its Claim was undone, and the State file it has been keeping since it was claimed says
-where the next Run resumes it from. Nobody has to do anything about it, which is
+given up retrying it: its Claim was undone, and the State file it has been
+keeping since it was claimed says where the next Run resumes it from. Nobody has to do anything about it, which is
 why it is not `handed`. It stops the Run filling Lanes, so no Ticket is claimed
 after it; the Lanes still busy finish what they hold, and whatever they end as
 has its row after the `released` one:

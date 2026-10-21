@@ -208,9 +208,9 @@ export interface Tracker {
    *
    * Named for the tag rather than for the Release, because a Release in this
    * codebase is what a Stage the rate limit or an API failure stopped does to
-   * a Ticket (GLOSSARY.md). A
-   * published GitHub Release is what makes a tag a Version anybody can install,
-   * which is why it is the question rather than the tag alone.
+   * a Ticket (GLOSSARY.md). A published GitHub Release is what makes a tag a
+   * Version anybody can install, which is why it is the question rather than
+   * the tag alone.
    *
    * The one method of this port that is not about the Target: it is asked about
    * the pipeline's own repository, so a Run and `init` can say that a newer
