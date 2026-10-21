@@ -2619,6 +2619,17 @@ describe("resuming a released Ticket", () => {
     expect(pr.squashCommit?.subject).toBe("feat: name the pipeline ticket-runner (#100)");
   });
 
+  it("titles a draft PR the hand-off opens with the title an earlier Run recorded", async () => {
+    released({ title: "feat: name the pipeline ticket-runner" });
+    runner.queue("verify", { ok: false, failure: "timed-out" });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off" });
+    expect(tracker.pullRequest(100).draft).toBe(true);
+    expect(tracker.pullRequest(100).title).toBe("feat: name the pipeline ticket-runner");
+  });
+
   it("retitles the pull request the earlier Run opened with the recorded title", async () => {
     tracker.pullRequests.push({
       number: 100,

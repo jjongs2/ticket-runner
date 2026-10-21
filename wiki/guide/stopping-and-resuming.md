@@ -47,7 +47,7 @@ A [Hand-off](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) giv
 
 A Hand-off does this, in order:
 
-1. Opens a pull request, or reuses one. A pull request that is already open goes back into draft. Otherwise, when the worktree is one this Run may push from, the branch is pushed and a draft pull request opens under the Ticket's title. A failure here is logged; it never costs the relabel.
+1. Opens a pull request, or reuses one. A pull request that is already open goes back into draft. Otherwise, when the worktree is one this Run may push from, the branch is pushed and a draft pull request opens under the title the State file holds, or the Ticket's title when it holds none. A failure here is logged; it never costs the relabel.
 2. Records the State file, with the draft pull request in it and the Fix budget unspent. Where no Stage of this Run could have left work, it removes the file instead (see below).
 3. Keeps the transcripts on the remote. It takes each Stage's `.command` and `.transcript.jsonl` file (the retries' too, under `retry/`) and the Run's `version.txt`, and puts them under `ticket-<n>/<runId>/` on the `ticket-runner/state` branch.
 4. Rewrites the draft's body so it names where the transcripts are.
