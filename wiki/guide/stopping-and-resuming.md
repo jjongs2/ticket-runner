@@ -15,7 +15,7 @@ This page covers what each ending leaves behind, and how the pipeline gets back 
 |---|---|---|
 | Merge | a green pass through every gate | a closed issue; branch and State file gone |
 | [Hand-off](#hand-off) | a failure the Fix budget cannot cover | `ready-for-human`, a comment, a draft pull request; work and State kept |
-| [Release](#release-on-a-rate-limit) | the subscription rate limit, or a transient API failure | `ready-for-agent`, no comment; work and State kept |
+| [Release](#release-on-a-rate-limit) | the subscription rate limit, a transient API failure, or a [failing Base branch](#release-over-a-failing-base-branch) | `ready-for-agent`, no comment on the Ticket; work and State kept |
 | [Stop](#stop-and-kill) | `ticket-runner stop` (SIGTERM) | nothing new |
 | [Kill](#stop-and-kill) | Ctrl+C, SIGKILL, a vanished Host | the Claim; work as last pushed, and State |
 
@@ -140,6 +140,19 @@ The Run then claims nothing more, because what stopped one Stage would stop the 
 
 Start a Run once the limit has reset, or the API has recovered, and the Ticket is back on the Frontier, resumed from its State file.
 
+## Release over a failing Base branch {#release-over-a-failing-base-branch}
+
+A Check that fails on the Ticket's branch, or CI that fails on its pull request, may be a failure the branch inherited: a test on the Base branch that reads the wall clock fails on every branch at once. The pipeline runs the Check commands at the branch's merge-base with the Base branch ([From Ticket to merge](./ticket-to-merge.md#a-failure-the-base-branch-shares)), and when one fails there too, the Ticket is released as on a rate limit, with these differences:
+
+- the Progress row reads ``⏸ `<command>` fails on the Base branch``, on the `checks` or `ci` row
+- the State file records `rebaseFirst`, so the next Run rebases the branch onto the Base branch before its Checks
+- the pipeline posts one Note on the standing Notes issue per Run per merge-base, naming the command and quoting the tail of its output. The Ticket itself gets no comment.
+- the summary ends ``Base branch `main` fails `npm test` at 1a2b3c4.``
+
+The Fix budget stays as it was, spent or not: a Ticket whose budget is already spent is released, not handed off. An open pull request stays open, and the next Run updates it.
+
+Mend the Check on the Base branch, then start a Run. Each released Ticket comes back through the Frontier, is rebased onto the mended Base branch (through the Landing, briefly), and goes on to its Checks. A rebase that conflicts is aborted, and the Checks grade the branch as it was; the Landing's rebase meets the conflict later, with the Conflict Stage behind it. A Run started before the Base branch is mended releases the Ticket again, and costs one run of the failing Check.
+
 ## Stop and kill
 
 A Run can end early in two ways, and they leave opposite things behind ([ADR-0006](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md)).
@@ -215,6 +228,7 @@ The file is JSON a human can read without the pipeline:
   "fixUsed": false,
   "pullRequest": 31,
   "title": "feat: release a rate-limited Ticket (#8)",
+  "rebaseFirst": true,
   "runId": "2026-09-17T09-00-00-000",
   "version": "0.5.2",
   "updatedAt": "2026-09-17T10:14:02.511Z"
@@ -229,6 +243,7 @@ The file is JSON a human can read without the pipeline:
 | `fixUsed` | whether the Fix budget is spent. Resuming buys no second chance, except after a Hand-off. |
 | `pullRequest` | the pull request already open, so a resumed Run does not open a second one |
 | `title` | the latest title the implement or fix Stage gave for the whole branch, which names the pull request |
+| `rebaseFirst` | present only after a Release over a failing Base branch: rebase onto the Base branch before the Checks |
 | `runId`, `version`, `updatedAt` | which Run and which [Version](./internals.md#versions) wrote it, and when |
 
 There are only two states. Everything after the implement Stage (Checks, Verify, rebase, pull request, CI, merge) is run again from the Checks by a Run that resumes at `implemented`. None of those steps is worth a state a resume could land on halfway.
@@ -240,7 +255,8 @@ There are only two states. Everything after the implement Stage (Checks, Verify,
 | a code Stage gives a title | `title` |
 | a pull request opens | `pullRequest` |
 | a fix Stage comes back | `fixUsed: true` |
-| Release, Hand-off | updated, as above |
+| Release, Hand-off | updated, as above; a Release over a failing Base branch adds `rebaseFirst` |
+| the rebase `rebaseFirst` asks for is done | `rebaseFirst` dropped |
 | merge; sweep finds the issue closed; the branch is in neither the worktree here nor on the remote; Hand-off over a branch in the way | removed |
 
 Every write but the first is logged and nothing more when it fails. The remote then holds an earlier state of the same Ticket, and resuming from further back costs a Stage rather than being wrong.

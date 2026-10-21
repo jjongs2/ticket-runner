@@ -69,6 +69,7 @@ flowchart LR
     X --> K
     X -. fails again .-> H["Hand-off: ready-for-human"]
     I -. rate limit, API failure .-> RL["Release: ready-for-agent"]
+    K -. Base branch fails too .-> RL
   end
   R --> F
   M -. unblocks .-> F
@@ -77,7 +78,7 @@ flowchart LR
 ```
 <!-- Sources: src/run.ts, src/orchestrator.ts, src/frontier.ts, src/guards.ts -->
 
-Any Stage can be stopped by the rate limit or a transient API failure, not only implement; every one of them ends in a Release. [From Ticket to merge](./guide/ticket-to-merge.md) walks the Execution half one step at a time.
+Any Stage can be stopped by the rate limit or a transient API failure, not only implement; every one of them ends in a Release. So does a failing Check or red CI that the Base branch fails too: the branch inherited it, so no fix Stage is spent on it. [From Ticket to merge](./guide/ticket-to-merge.md) walks the Execution half one step at a time.
 
 ## The guide
 

@@ -45,7 +45,7 @@ flowchart TD
 ```
 <!-- Sources: src/orchestrator.ts, src/lifecycle.ts -->
 
-Every edge to the fix Stage is taken at most once per Ticket. A second failure of any kind, or any failure the fix Stage cannot act on, is a Hand-off. A Stage the rate limit or a transient API failure stopped leaves this diagram entirely: it releases the Ticket (see [Stopping and resuming](./stopping-and-resuming.md)).
+Every edge to the fix Stage is taken at most once per Ticket. A second failure of any kind, or any failure the fix Stage cannot act on, is a Hand-off. A Stage the rate limit or a transient API failure stopped leaves this diagram entirely: it releases the Ticket (see [Stopping and resuming](./stopping-and-resuming.md)). So does a failing Check or red CI that the Base branch fails too ([below](#a-failure-the-base-branch-shares)).
 
 ## The Claim
 
@@ -124,6 +124,25 @@ The commands come from `checks` in the config, or else `npm test` and `npm run t
 
 Both failures spend the Fix budget. A Check runs the branch's own code, so a hang is a defect in that code, which is what a fix Stage is for.
 
+### A failure the Base branch shares
+
+A test on the Base branch that starts failing, one that reads the wall clock say, fails on every branch at once. Charged to each Ticket, it costs every one its Fix budget, and each fix Stage mends it differently in its own pull request. So before a failure is charged, the pipeline asks whether the branch brought it or inherited it:
+
+| What failed | Run at the merge-base |
+|---|---|
+| A Check command | that command |
+| CI on the pull request | every Check command, stopping at the first that fails |
+
+The merge-base is the branch's with the Base branch as the remote holds it, which is what the branch inherited whichever checkout is behind. It is checked out clean in `.worktrees/base-<commit>`, the command runs under the same `checkTimeoutMinutes`, and the worktree is removed. Each command runs once per Run per merge-base, so Tickets in several Lanes failing together pay for one run. CI's own runs on the Base branch cannot answer this: a workflow that runs only on pull requests leaves the squash commit with none, and a failure the clock brings starts after the last green run.
+
+| The merge-base | Progress cell | Result |
+|---|---|---|
+| passes | ``❌ `<command>` failed``, or CI's `❌ failed` | Spends the Fix budget, as above |
+| fails too | ``⏸ `<command>` fails on the Base branch`` | A Release; the budget stays as it was, spent or not |
+| could not be checked out or run | as if it passed | Spends the Fix budget, and the Run log says why |
+
+The Release posts the pipeline's own Note on the standing Notes issue, once per Run per merge-base, naming the command and quoting the last 40 lines it printed. The Run claims no more Tickets, and the next Run rebases the Ticket onto the Base branch before its Checks, so a fix a human has landed there reaches it.
+
 ## The verify Stage and its Verdict
 
 No human reviews the code before it merges, and the session that wrote it is the last one to trust on whether it works. So a fresh session, with no plugin skill, tries to prove each Acceptance Criterion is **not** met. It reads the criteria from the body and the comments, runs the code, may write throwaway tests, and must not commit. A criterion that cannot be met without overturning a documented decision or another criterion is `unmet`, with evidence saying a human decision is needed. Afterwards the pipeline runs `git reset --hard` and `git clean -fd` in the worktree, so its scratch files never reach the pull request. Its Notes are routed first, because the scratch work goes with the discard.
@@ -149,9 +168,11 @@ Only a defect a fresh session could mend spends the budget:
 |---|---|---|
 | Changes no commit carries | checks | Yes |
 | A Check failed or timed out | checks | Yes |
+| A Check failed that the merge-base fails too | checks | No, a Release |
 | A criterion `unmet` | verify | Yes |
 | The Conflict Stage did not finish the rebase | rebase | Yes |
 | A pull request check failed | ci | Yes |
+| A pull request check failed, and the merge-base fails a Check | ci | No, a Release |
 | A Stage that did not finish (timed out, turn-capped, non-zero, invalid result) | its Stage | No, Hand-off |
 | implement left no commits | implement | No, Hand-off |
 | A Verdict with no evidence, or none at all | verify | No, Hand-off |
@@ -252,6 +273,7 @@ The pipeline polls the head commit's check runs and commit statuses every 15 sec
 |---|---|---|
 | Every check passed or skipped | `✅ passed` | Merge |
 | A check failed, was cancelled, timed out, needs action or could not start | `❌ failed` | Spends the Fix budget |
+| The same, and the merge-base fails a Check command | ``⏸ `<command>` fails on the Base branch`` | A Release ([above](#a-failure-the-base-branch-shares)) |
 | Checks still pending at the timeout | `❌ timed out` | Hand-off |
 | No checks, and GitHub finds the pull request conflicting | `❌ conflicting` | Hand-off at once |
 | No checks after the grace period, `gates.ci` on | `❌ no checks` | Hand-off |
@@ -329,6 +351,8 @@ Each Note has a `summary` (required), and optional `evidence`, `impact`, `next` 
 
 Every Note comment opens with where it came from (`From #<origin> <stage>`), then the summary in bold and each part under its label. A `- [ ]` at the head of a line is escaped, so a Note is never read as Acceptance Criteria. A Note that cannot be posted costs that Note alone, never the Ticket. The Run summary lists each Note as a `noted` row under the Ticket that made it.
 
+One Note comes from the pipeline rather than a Stage: a Release over a failing Base branch. It opens `From the pipeline, releasing #<n> at <checks|ci>` and always goes to the standing Notes issue.
+
 ## Related pages
 
 - [Planning](./planning.md): the Guards that run before the Claim, and how to write Acceptance Criteria verify can grade.
@@ -340,6 +364,7 @@ Every Note comment opens with where it came from (`From #<origin> <stage>`), the
 ## References
 
 - [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `processTicket`, `takeTicket`, `verify`, `fix`, `resolveConflict`, `requireGreenCi`
+- [`src/failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts): the Checks run at a merge-base, once per Run
 - [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts), [`src/frontier.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts), [`src/landing.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/landing.ts)
 - [`src/prompts.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/prompts.ts), [`src/self-hosting.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/self-hosting.ts), [`src/verdict.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/verdict.ts), [`src/title.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/title.ts), [`src/note-schema.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/note-schema.ts), [`src/lifecycle.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lifecycle.ts)
 - [`src/progress.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/progress.ts), [`src/criteria.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/criteria.ts), [`src/notes.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/notes.ts), [`src/templates.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts), [`src/handoff.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/handoff.ts)

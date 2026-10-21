@@ -67,11 +67,11 @@ How many Tickets a Run holds at once, one per [Lane](https://github.com/jjongs2/
 - `checks`: array of strings
 - `checkTimeoutMinutes`: number > 0
 
-A [Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is a deterministic command the pipeline runs itself, never an agent's opinion. Each one runs through the shell in the Ticket's worktree, after the implement Stage, after a fix Stage and after a resolved rebase conflict. A non-zero exit fails the gate, and the Ticket spends its [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md).
+A [Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is a deterministic command the pipeline runs itself, never an agent's opinion. Each one runs through the shell in the Ticket's worktree, after the implement Stage, after a fix Stage and after a resolved rebase conflict. A non-zero exit fails the gate, and the Ticket spends its [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), unless the Base branch fails the same command: the failing command is run once more in a clean worktree at the branch's merge-base with the Base branch, and a failure there releases the Ticket instead (see [From Ticket to merge](./ticket-to-merge.md#the-checks)). A red CI runs every command there the same way, so the commands should be ones CI runs too.
 
 Without this field the pipeline infers `npm test` and `npm run typecheck` from whichever of the `test` and `typecheck` scripts `package.json` defines.
 
-`checkTimeoutMinutes` is one limit for every command, and each command gets the whole of it. A command killed at the limit is a failed Check and spends the Fix budget like any other, because a suite that hangs is a defect in the branch's own code. The fix Stage is told that the Check hung rather than failed.
+`checkTimeoutMinutes` is one limit for every command, and each command gets the whole of it, at the merge-base too. A command killed at the limit is a failed Check and spends the Fix budget like any other, because a suite that hangs is a defect in the branch's own code. The fix Stage is told that the Check hung rather than failed.
 
 ## `gates`
 

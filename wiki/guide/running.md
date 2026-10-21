@@ -59,7 +59,7 @@ flowchart TD
 
 - **The Frontier is listed again at every refill**, never snapshotted. A merge that closes a blocker puts the Ticket it unblocked into the same Run.
 - **A Ticket that fails is handed off** and its Lane takes the next one; one bad Ticket does not cost the rest of the night.
-- **A Release stops the filling.** A Ticket the rate limit or a transient API failure stopped is released, and the Run claims nothing else, since the same cause would stop the next Stage too. The Lanes still busy finish what they hold. The Run does not wait for the limit to reset; it says when it resets, and a human or an Operator starts the next Run.
+- **A Release stops the filling.** A Ticket the rate limit or a transient API failure stopped is released, and so is one whose failing Check the Base branch fails too. The Run claims nothing else, since the same cause would stop the next Ticket too. The Lanes still busy finish what they hold. The Run does not wait for the limit to reset or the Base branch to be mended; it says when the limit resets, or which Check the Base branch fails, and a human or an Operator starts the next Run.
 - **The Run ends** when no Lane is busy and nothing is left to take: the Frontier is empty, or everything on it is blocked.
 
 What happens to each Ticket inside a Lane is on [From Ticket to merge](./ticket-to-merge.md). Stranded Tickets and Releases are on [Stopping and resuming](./stopping-and-resuming.md).
@@ -155,9 +155,9 @@ A newer-Version line, when there is one, comes above the header ([Install and re
 |---|---|
 | `merged` | Merged; the pull request is named |
 | `handed` | Handed off to a human: the Stage it stopped at, and why |
-| `released` | Released at the named Stage by the `rate limit` or an `API failure`, a 5xx or unanswered API error the CLI had given up retrying. Nobody has to do anything |
+| `released` | Released at the named Stage by the `rate limit` or an `API failure`, a 5xx or unanswered API error the CLI had given up retrying, or at `checks` or `ci` by a `failing Base branch`. Nobody has to do anything about the Ticket |
 | `skipped` | Passed over, with the reason ([Guards](./planning.md#guards), or the table above) |
-| `noted` | A [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) the row above made, and where it went: `comment` on an issue already there, the Notes issue included, or `new` for the one Note that opened the Notes issue |
+| `noted` | A [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) the row above made, `from #<n> pipeline` when it is the pipeline's own about a failing Base branch, and where it went: `comment` on an issue already there, the Notes issue included, or `new` for the one Note that opened the Notes issue |
 
 | Last line | Why the Run ended |
 |---|---|
@@ -165,6 +165,7 @@ A newer-Version line, when there is one, comes above the header ([Install and re
 | `Frontier blocked.` | Everything left has an open blocker |
 | `Rate limited · resets 2026-09-20 03:40 UTC.` | A Release by the rate limit stopped it. The time is the one the CLI gave for the limit's reset, in UTC; a Run it gave none ends `Rate limited.` |
 | `API failure.` | A Release by a transient API failure stopped it |
+| ``Base branch `main` fails `npm test` at 1a2b3c4.`` | A Release over a failing Base branch stopped it: the Check, and the merge-base it failed at. Mend it on the Base branch; the Note on the standing Notes issue has its output |
 | `Stopped at 22:07 · finishing #4 #9.` | A Stop arrived at that time (UTC), while those Tickets were in its Lanes |
 
 A Run a Stop or a Release ended prints no `blocked` rows, since it never reached the end of the Frontier.
