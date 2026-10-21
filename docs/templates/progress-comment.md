@@ -78,10 +78,10 @@ Ticket for a later Run to resume.
 |---|---|
 | implement | `✅ committed`, `❌ no commits`, `⏸ rate limited`, `⏸ API failure`, `❌ <why the Stage did not finish>` |
 | fix | `✅ committed`, `❌ no commits`, `⏸ rate limited`, `⏸ API failure`, `❌ <why the Stage did not finish>` |
-| checks | `✅ passed`, `❌ uncommitted work`, ``❌ `<command>` failed``, ``❌ `<command>` timed out`` |
+| checks | `✅ passed`, `❌ uncommitted work`, ``❌ `<command>` failed``, ``❌ `<command>` timed out``, ``⏸ `<command>` fails on the Base branch`` |
 | verify | `✅ <k> met · <u> unverifiable`, `❌ <k> unmet`, `❌ no evidence`, `❌ no Verdict`, `⏸ rate limited`, `⏸ API failure`, `❌ <why the Stage did not finish>` |
 | conflict | `✅ rebased`, `❌ unresolved`, `⏸ rate limited`, `⏸ API failure`, `❌ unknown` |
-| ci | `✅ passed`, `❌ failed`, `❌ conflicting`, `❌ no checks`, `⚠️ no checks`, `❌ timed out` |
+| ci | `✅ passed`, `❌ failed`, `❌ conflicting`, `❌ no checks`, `⚠️ no checks`, `❌ timed out`, ``⏸ `<command>` fails on the Base branch`` |
 | merge | `✅ #<pr>` |
 
 A `checks` row tells a command that exited non-zero from one the wall-clock
@@ -93,6 +93,16 @@ conflicting with the Base branch, which has moved since the rebase — a human
 merging on GitHub meanwhile, say. GitHub runs no workflow for such a pull
 request, so it is not `❌ no checks`, and it is not the `conflict` Stage: that
 row is the rebase before the pull request, and this one comes after it.
+
+``⏸ `<command>` fails on the Base branch`` is a failing Check, or a red CI, that
+the branch inherited rather than brought. The pipeline ran the Check commands
+once in a clean worktree at the branch's merge-base with the Base branch, and
+`<command>` failed there too: on a `checks` row the command that failed on the
+branch, on a `ci` row the first Check command the merge-base failed. Nothing
+about the Ticket is wrong, so the Ticket is released with its Fix budget as it
+was, and this is the last row of its Run's table, like the rate limit's. It
+names the command rather than the limit, because what a human does about it is
+mend the Base branch, which the Note on the standing Notes issue says.
 
 `❌ uncommitted work` is the `checks` row no command wrote: the worktree held
 changes no commit carries, so no Check ran. What lands is the branch, and a
