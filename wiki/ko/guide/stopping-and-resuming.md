@@ -151,7 +151,7 @@ Ticket의 branch에서 실패한 Check, 또는 pull request에서 실패한 CI�
 
 Fix budget은 썼든 안 썼든 그대로입니다. budget을 이미 쓴 Ticket도 Hand-off가 아니라 Release됩니다. 열려 있던 pull request는 그대로 두고, 다음 Run이 갱신합니다.
 
-Base branch에서 Check를 고친 뒤 Run을 시작하세요. Release된 Ticket은 Frontier로 돌아와, 고친 Base branch 위로 rebase되고(잠깐 Landing을 거칩니다) Check로 갑니다. rebase가 충돌하면 중단하고 원래 branch 그대로 Check를 돌립니다. 충돌은 나중에 Landing의 rebase가 Conflict Stage와 함께 다룹니다. Base branch를 고치기 전에 Run을 시작하면 Ticket은 다시 Release되고, 실패하는 Check 한 번 값만 듭니다.
+Base branch에서 Check를 고친 뒤 Run을 시작하세요. Release된 Ticket은 Frontier로 돌아와, 고친 Base branch 위로 rebase되고(잠깐 Landing을 거칩니다) Check로 갑니다. rebase가 충돌하면 그 자리에서 Conflict Stage로 보내고, 해결하지 못하면 Landing에서처럼 Fix budget을 씁니다. 충돌을 그냥 두면 branch는 실패하는 merge-base를 그대로 물고 있어 다시 Release될 뿐입니다. Base branch를 고치기 전에 Run을 시작하면 Ticket은 다시 Release되고, 실패하는 Check 한 번 값만 듭니다.
 
 ## Stop과 kill {#stop-and-kill}
 
@@ -353,7 +353,8 @@ push는 `--force-with-lease`를 쓰니, rebase가 branch를 다시 쓸 수는 �
 
 ## 참고 {#references}
 
-- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `takeTicket`, `resumable`, `ResumeRecord`, `release`, `handOff`
+- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `takeTicket`, `resumable`, `ResumeRecord`, `rebaseFirst`, `release`, `noteFailingBase`, `handOff`
+- [`src/failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts): `BaseBranchChecks`
 - [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts): `processRun`
 - [`src/stranded.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stranded.ts): `strandedTickets`, `holdsClaim`
 - [`src/resume.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/resume.ts): `readStateFile`, `STATE_BRANCH`, `localStateTickets`

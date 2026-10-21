@@ -89,13 +89,15 @@ From the pipeline, releasing #<origin> at <checks|ci>
 **Next**: mend `<command>` on `<base>`. The next Run takes the released Tickets up again from their State files, rebased onto `<base>` before their Checks.
 ````
 
-`<point>` is `checks` when the Check failed on the branch and `ci` when CI did.
+`<checks|ci>` is `checks` when the Check failed on the branch and `ci` when CI
+did.
 `<commit>` is the full commit, so it can be checked out as it is. The tail is
 the last 40 lines the command printed, in a fence longer than any run of
 backticks in them; it is the pipeline's own words around it, so only the tail
-has its checkboxes escaped.
+has its checkboxes escaped. A command that printed nothing has no fence, and
+its Evidence ends `It printed nothing.` where the tail would be introduced.
 
-Every part of a Stage's Note is the Stage's own words, with one edit: a `- [ ]` at the start of a
-list item is escaped to `- \[ \]`. An unescaped one would read as an Acceptance
+Every part of a Stage's Note is the Stage's own words, with one edit: a `- [ ]`
+at the start of a list item is escaped to `- \[ \]`. An unescaped one would read as an Acceptance
 Criterion, and the guards, the Verdict and the tick-on-merge all take a Ticket's
 checkboxes at face value.

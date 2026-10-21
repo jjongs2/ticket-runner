@@ -2323,6 +2323,50 @@ describe("a Check the Base branch fails too", () => {
     expect(tracker.pullRequest(100).merged).toBe(false);
   });
 
+  it("gives the Landing up before it runs the Checks at the merge-base for a red CI", async () => {
+    tracker.ci = { state: "failed", summary: "checks/typecheck failed", excerpt: "" };
+    workspace.failBaseCheck("npm test", "FAIL");
+    const landing = new Landing();
+    const entered: boolean[] = [];
+    const runCheck = workspace.runCheck.bind(workspace);
+    workspace.runCheck = async (command, cwd, timeoutMs) => {
+      if (cwd === baseWorktree) {
+        const other = landing.turn();
+        let inside = false;
+        void other.enter().then(() => {
+          inside = true;
+        });
+        await settle();
+        entered.push(inside);
+        other.leave();
+      }
+      return runCheck(command, cwd, timeoutMs);
+    };
+    const settings = config();
+
+    const outcome = await processTicket(
+      {
+        tracker,
+        runner,
+        workspace,
+        config: settings,
+        repoRoot,
+        runId: "run-1",
+        version: VERSION,
+        host: "workstation",
+        baseBranch: "main",
+        landing,
+        standingNotes: new StandingNotes(),
+        baseChecks: new BaseBranchChecks(),
+        selfHosted: false,
+      },
+      TICKET,
+    );
+
+    expect(outcome).toMatchObject({ outcome: "released", stage: "ci" });
+    expect(entered).toEqual([true]);
+  });
+
   it("spends the Fix budget on a red CI the merge-base passes every Check of", async () => {
     tracker.queueCi({ state: "failed", summary: "checks/build failed", excerpt: "" });
 
@@ -2397,15 +2441,30 @@ describe("resuming a Ticket released over a failing Base branch", () => {
     expect(seen[0]?.state).not.toHaveProperty("rebaseFirst");
   });
 
-  it("carries on to its Checks un-rebased when the rebase conflicts, and leaves the conflict to the Landing", async () => {
+  it("sends a conflicting rebase to the Conflict Stage before its Checks, so it is not released over the same commit again", async () => {
     releasedOverBase();
     workspace.conflictOnce(CONFLICT);
+    const seen = stateAtEachStage();
 
     expect(await run()).toMatchObject({ outcome: "merged" });
 
-    expect(workspace.aborts).toBeGreaterThanOrEqual(2);
-    expect(runner.stages()).toEqual(["verify"]);
-    expect(logged.some((line) => line.includes("goes to its Checks before its rebase"))).toBe(true);
+    expect(runner.stages()).toEqual(["conflict", "verify"]);
+    expect(workspace.calls.indexOf("rebaseState")).toBeLessThan(
+      workspace.calls.indexOf("runCheck:npm test"),
+    );
+    expect(seen[0]?.state).toMatchObject({ rebaseFirst: true });
+    expect(seen[1]?.state).not.toHaveProperty("rebaseFirst");
+  });
+
+  it("spends the Fix budget on a conflict the Conflict Stage could not resolve, as at the Landing", async () => {
+    releasedOverBase();
+    workspace.conflictOnce(CONFLICT);
+    workspace.rebaseStateAfterStage = UNRESOLVED;
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+
+    expect(runner.stages()).toEqual(["conflict", "fix", "verify"]);
+    expect(runner.prompts("fix")[0]).toContain(CONFLICT);
   });
 
   it("is not rebased first when it was released for any other reason", async () => {

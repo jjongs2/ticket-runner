@@ -24,6 +24,7 @@ import type { Issue, Tracker } from "./ports/tracker.js";
 import type {
   KeptTranscripts,
   ReachedState,
+  RebaseOutcome,
   TicketState,
   Workspace,
   WorktreeFromRemote,
@@ -424,11 +425,6 @@ async function takeTicket(
       // resume rebases from the same clean start a released Ticket does.
       await workspace.abortRebase(worktree);
     }
-    if (resume?.rebaseFirst === true) {
-      point = "rebase";
-      await rebaseFirst(pipeline, ticket, worktree, branch, landing);
-      await record.advance({ rebaseFirst: false });
-    }
     if (resume === undefined || resume.state === "claimed") {
       point = "implement";
       await implement(pipeline, issue, worktree, branch, logDir, progress, notes, record);
@@ -439,11 +435,21 @@ async function takeTicket(
     let commits: string[];
     let coAuthors: string[];
     let title: string;
+    // Owed once, by a Ticket released over a failing Base branch, and inside
+    // the passes rather than before them: a conflict it meets spends the Fix
+    // budget as one at the Landing does.
+    let rebaseOwed = resume?.rebaseFirst === true;
 
     // Checks through CI, run again from the top when the fix budget buys a
     // second pass: a fix earns no shortcut, so every gate grades it afresh.
     for (;;) {
       try {
+        if (rebaseOwed) {
+          rebaseOwed = false;
+          point = "rebase";
+          await rebaseFirst(pipeline, issue, worktree, branch, logDir, landing, progress);
+          await record.advance({ rebaseFirst: false });
+        }
         point = "checks";
         // Before anything grades the worktree, and so before verify discards
         // what a Stage left uncommitted.
@@ -499,7 +505,7 @@ async function takeTicket(
         );
         await record.advance({ pullRequest });
         point = "ci";
-        await requireGreenCi(pipeline, worktree, pullRequest, progress);
+        await requireGreenCi(pipeline, worktree, pullRequest, progress, landing);
         break;
       } catch (error) {
         // A rate limit or an API failure is nobody's defect, so the fix budget
@@ -1111,36 +1117,38 @@ async function implement(
  * reaches the branch. Without it the Ticket would meet the same failure with
  * its budget unspent, and spend it.
  *
- * Through the Landing, which is where the Base branch is brought up to the
- * remote's and rebased onto (ADR-0005), and out of it again at once. A rebase
- * that conflicts is aborted and the Checks grade the branch as it was: the
- * rebase at the Landing meets the same conflict, with the conflict Stage
- * behind it.
+ * The pull and the rebase go through the Landing, which is where the Base
+ * branch is brought up to the remote's and rebased onto (ADR-0005), and out of
+ * it again at once: nothing is merged behind them. A conflict goes to the
+ * Conflict Stage as one at the Landing does, outside it, since the rebase
+ * there runs again before the pull request anyway. Left unresolved, the
+ * branch would keep the merge-base that fails and be released again by every
+ * Run that took it up.
  */
 async function rebaseFirst(
   pipeline: Pipeline,
-  ticket: number,
+  issue: Issue,
   worktree: string,
   branch: string,
+  logDir: string,
   landing: LandingTurn,
+  progress: Progress,
 ): Promise<void> {
   const { workspace, baseBranch } = pipeline;
   await landing.enter();
+  let rebase: RebaseOutcome;
   try {
     await workspace.pullBase(baseBranch);
-    const rebase = await workspace.rebase(worktree, baseBranch);
-    if (rebase.ok) {
-      await pushCommitted(pipeline, ticket, worktree, branch);
-      pipeline.log?.(`#${ticket} rebased onto ${baseBranch} before its Checks`);
-      return;
-    }
-    await workspace.abortRebase(worktree);
-    pipeline.log?.(
-      `#${ticket} conflicts with ${baseBranch}, so it goes to its Checks before its rebase`,
-    );
+    rebase = await workspace.rebase(worktree, baseBranch);
   } finally {
     landing.leave();
   }
+  if (!rebase.ok) {
+    await resolveConflict(pipeline, issue, worktree, branch, logDir, rebase.conflict, progress);
+    return;
+  }
+  await pushCommitted(pipeline, issue.number, worktree, branch);
+  pipeline.log?.(`#${issue.number} rebased onto ${baseBranch} before its Checks`);
 }
 
 /**
@@ -1183,11 +1191,13 @@ async function runChecks(
       const durationMs = Date.now() - startedAt;
       // Asked before the row is written, because the row is what differs: a
       // Check the Base branch fails too is nothing the Ticket did.
-      const inherited = await inheritedFailure(pipeline, worktree, [command]);
-      if (inherited !== undefined) {
-        await progress.record({ point: "checks", outcome: failingBaseCell(inherited), durationMs });
-        throw releasedOverBase("checks", inherited);
-      }
+      await releaseIfTheBaseFails(pipeline, {
+        point: "checks",
+        worktree,
+        commands: [command],
+        progress,
+        durationMs,
+      });
       // A Check that hung and one that failed are the same failure to the fix
       // budget and the hand-off; they are told apart only in what they say, so
       // that a fix Stage knows whether it is mending a hang or an assertion.
@@ -1245,17 +1255,39 @@ async function inheritedFailure(
   }
 }
 
-/** The row a Check the Base branch fails too earns, on the Checks or on CI. */
-function failingBaseCell(failing: FailingBase): string {
-  return `⏸ \`${failing.command}\` fails on the Base branch`;
-}
-
 /**
- * The Release a failing Base branch raises. Only a Ticket that reached its
- * Checks meets one, so the implement Stage's work is always on its branch.
+ * Release the Ticket when the Base branch fails one of `commands` too, with the
+ * row that says so; return when it does not, for the caller to charge the
+ * failure to the Ticket as it always did.
+ *
+ * Only a Ticket that reached its Checks gets here, so the implement Stage's
+ * work is always on its branch.
  */
-function releasedOverBase(point: "checks" | "ci", failing: FailingBase): Releasing {
-  return new Releasing(point, "implemented", "failing-base", undefined, failing);
+async function releaseIfTheBaseFails(
+  pipeline: Pipeline,
+  {
+    point,
+    worktree,
+    commands,
+    progress,
+    durationMs,
+  }: {
+    point: "checks" | "ci";
+    worktree: string;
+    commands: readonly string[];
+    progress: Progress;
+    /** How long the failure took on the branch, which the row reports. */
+    durationMs: number;
+  },
+): Promise<void> {
+  const inherited = await inheritedFailure(pipeline, worktree, commands);
+  if (inherited === undefined) return;
+  await progress.record({
+    point,
+    outcome: `⏸ \`${inherited.command}\` fails on the Base branch`,
+    durationMs,
+  });
+  throw new Releasing(point, "implemented", "failing-base", undefined, inherited);
 }
 
 /**
@@ -1603,6 +1635,7 @@ async function requireGreenCi(
   worktree: string,
   pullRequest: number,
   progress: Progress,
+  landing: LandingTurn,
 ): Promise<void> {
   const startedAt = Date.now();
   const outcome = await pipeline.tracker.waitForCi(
@@ -1617,16 +1650,21 @@ async function requireGreenCi(
       await record("✅ passed");
       return;
     case "failed": {
+      // Out of the Landing first: whether the Ticket is released or sent to a
+      // fix Stage, it leaves, and the Checks below take minutes nobody else
+      // should wait behind.
+      landing.leave();
       // CI's own runs on the Base branch cannot say whether it fails there: a
       // workflow that runs only on pull requests leaves a squash commit with
       // none, and a failure the clock brings starts after its last green run.
       // So the merge-base is graded with the Checks, which CI runs too.
-      const durationMs = Date.now() - startedAt;
-      const inherited = await inheritedFailure(pipeline, worktree, pipeline.config.checks);
-      if (inherited !== undefined) {
-        await progress.record({ point: "ci", outcome: failingBaseCell(inherited), durationMs });
-        throw releasedOverBase("ci", inherited);
-      }
+      await releaseIfTheBaseFails(pipeline, {
+        point: "ci",
+        worktree,
+        commands: pipeline.config.checks,
+        progress,
+        durationMs: Date.now() - startedAt,
+      });
       await record("❌ failed");
       // The names are the line a human reads; the log excerpt is what a fix
       // Stage works from, and it is empty whenever none could be fetched.

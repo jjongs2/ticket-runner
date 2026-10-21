@@ -133,7 +133,7 @@ Base branch의 테스트가 이를테면 현재 시각에 기대다가 실패하
 | Check 명령 | 그 명령 |
 | pull request의 CI | 모든 Check 명령. 처음 실패하는 데서 멈춤 |
 
-merge-base는 branch와, remote에 있는 Base branch 사이의 것입니다. 어느 checkout이 뒤처져 있든 branch가 실제로 물려받은 commit입니다. 그 commit을 `.worktrees/base-<commit>`에 깨끗하게 checkout하고, 같은 `checkTimeoutMinutes`로 명령을 돌린 뒤 worktree를 지웁니다. 명령은 Run마다 merge-base마다 한 번만 돌리므로, 여러 Lane의 Ticket이 함께 실패해도 한 번 값만 치릅니다. Base branch에 대한 CI 자신의 실행 기록으로는 판단할 수 없습니다. pull request에서만 도는 workflow는 squash commit에 아무 기록도 남기지 않고, 시계 때문에 생긴 실패는 마지막 green 실행 뒤에 시작되기 때문입니다.
+merge-base는 branch와, remote에 있는 Base branch 사이의 것입니다. 어느 checkout이 뒤처져 있든 branch가 실제로 물려받은 commit입니다. 그 commit을 `.worktrees/base-<commit>`에 깨끗하게 checkout하고, 같은 `checkTimeoutMinutes`로 명령을 돌린 뒤 worktree를 지웁니다. 거기에는 아무것도 설치하지 않습니다. 명령은 Ticket의 worktree처럼 main checkout에서 의존성을 찾으므로, 자기만의 install이나 build 단계가 필요한 명령은 거기서도 실패하고, 그 이유는 Note의 출력에 드러납니다. 명령은 Run마다 merge-base마다 한 번만 돌리므로, 여러 Lane의 Ticket이 함께 실패해도 한 번 값만 치릅니다. Base branch에 대한 CI 자신의 실행 기록으로는 판단할 수 없습니다. pull request에서만 도는 workflow는 squash commit에 아무 기록도 남기지 않고, 시계 때문에 생긴 실패는 마지막 green 실행 뒤에 시작되기 때문입니다.
 
 | merge-base 결과 | Progress 칸 | 결과 |
 |---|---|---|

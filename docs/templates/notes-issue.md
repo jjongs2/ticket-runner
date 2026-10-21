@@ -16,7 +16,8 @@ open.
 
 The standing issue every Note that cannot reach a Ticket becomes a comment on,
 the pipeline's own Note about a failing Base branch included, labelled
-`needs-triage` so it sits on the board with everything else awaiting a human. The first line is the title; the rest is the body.
+`needs-triage` so it sits on the board with everything else awaiting a human.
+The first line is the title; the rest is the body.
 
 Opened lazily, by the first Note of a Run that needs one and finds none open, and
 written once. The pipeline never touches the body again: what is under it is

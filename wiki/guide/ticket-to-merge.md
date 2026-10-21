@@ -133,7 +133,7 @@ A test on the Base branch that starts failing, one that reads the wall clock say
 | A Check command | that command |
 | CI on the pull request | every Check command, stopping at the first that fails |
 
-The merge-base is the branch's with the Base branch as the remote holds it, which is what the branch inherited whichever checkout is behind. It is checked out clean in `.worktrees/base-<commit>`, the command runs under the same `checkTimeoutMinutes`, and the worktree is removed. Each command runs once per Run per merge-base, so Tickets in several Lanes failing together pay for one run. CI's own runs on the Base branch cannot answer this: a workflow that runs only on pull requests leaves the squash commit with none, and a failure the clock brings starts after the last green run.
+The merge-base is the branch's with the Base branch as the remote holds it, which is what the branch inherited whichever checkout is behind. It is checked out clean in `.worktrees/base-<commit>`, the command runs under the same `checkTimeoutMinutes`, and the worktree is removed. Nothing is installed there: the command finds its dependencies in the main checkout, as a Ticket's worktree does, so a command that needs an install or a build step of its own fails there too, and the Note's output shows why. Each command runs once per Run per merge-base, so Tickets in several Lanes failing together pay for one run. CI's own runs on the Base branch cannot answer this: a workflow that runs only on pull requests leaves the squash commit with none, and a failure the clock brings starts after the last green run.
 
 | The merge-base | Progress cell | Result |
 |---|---|---|

@@ -26,9 +26,9 @@ export interface RunResult {
  * A Run that drained the Frontier carries what was left held back; one a
  * Release stopped carries no candidates, because it ended before it could say
  * one was held back all Run, and the rate limit carries when it resets, where a
- * Stage was told, and a failing Base branch the Check it fails and where; one a
- * human stopped carries the moment it was asked and what
- * it still had in hand. That is why this is a choice rather than a flag beside
+ * Stage was told, and a failing Base branch the Check it fails and where; one
+ * a human stopped carries the moment it was asked and what it still had in
+ * hand. That is why this is a choice rather than a flag beside
  * the list: the stops do not report the same things.
  */
 export type RunStop =

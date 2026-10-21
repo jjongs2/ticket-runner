@@ -74,13 +74,17 @@ export class BaseBranchChecks {
   /**
    * Post the Note about `commit` once this Run: the first caller posts it and
    * gets it back, and every caller after it gets nothing. A post that failed
-   * is forgotten, so the next Ticket released over the same commit tries again.
+   * is forgotten, so a Ticket that was waiting on it, or one released over the
+   * same commit later, tries again.
    */
   async noteOnce(commit: string, post: () => Promise<RoutedNote>): Promise<RoutedNote | undefined> {
     const posted = this.#notes.get(commit);
     if (posted !== undefined) {
-      await posted.catch(() => undefined);
-      return undefined;
+      const delivered = await posted.then(
+        () => true,
+        () => false,
+      );
+      return delivered ? undefined : await this.noteOnce(commit, post);
     }
     const posting = post();
     this.#notes.set(commit, posting);

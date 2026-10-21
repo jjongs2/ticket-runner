@@ -151,7 +151,7 @@ A Check that fails on the Ticket's branch, or CI that fails on its pull request,
 
 The Fix budget stays as it was, spent or not: a Ticket whose budget is already spent is released, not handed off. An open pull request stays open, and the next Run updates it.
 
-Mend the Check on the Base branch, then start a Run. Each released Ticket comes back through the Frontier, is rebased onto the mended Base branch (through the Landing, briefly), and goes on to its Checks. A rebase that conflicts is aborted, and the Checks grade the branch as it was; the Landing's rebase meets the conflict later, with the Conflict Stage behind it. A Run started before the Base branch is mended releases the Ticket again, and costs one run of the failing Check.
+Mend the Check on the Base branch, then start a Run. Each released Ticket comes back through the Frontier, is rebased onto the mended Base branch (through the Landing, briefly), and goes on to its Checks. A rebase that conflicts goes to the Conflict Stage there and then, and one it cannot resolve spends the Fix budget, as at the Landing; left alone, the branch would keep the merge-base that fails and be released again. A Run started before the Base branch is mended releases the Ticket again, and costs one run of the failing Check.
 
 ## Stop and kill
 
@@ -353,7 +353,8 @@ Pushes use `--force-with-lease`, so a rebase can rewrite the branch but can neve
 
 ## References
 
-- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `takeTicket`, `resumable`, `ResumeRecord`, `release`, `handOff`
+- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `takeTicket`, `resumable`, `ResumeRecord`, `rebaseFirst`, `release`, `noteFailingBase`, `handOff`
+- [`src/failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts): `BaseBranchChecks`
 - [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts): `processRun`
 - [`src/stranded.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stranded.ts): `strandedTickets`, `holdsClaim`
 - [`src/resume.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/resume.ts): `readStateFile`, `STATE_BRANCH`, `localStateTickets`
