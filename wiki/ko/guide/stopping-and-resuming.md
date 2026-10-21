@@ -47,7 +47,7 @@ stateDiagram-v2
 
 Hand-off는 이 순서로 진행됩니다.
 
-1. pull request를 열거나 기존 것을 씁니다. 이미 열려 있는 pull request는 draft로 되돌립니다. 그렇지 않고 이 Run이 push해도 되는 worktree라면, branch를 push하고 Ticket 제목으로 draft pull request를 엽니다. 여기서 실패하면 로그만 남기고, 라벨 변경은 어떻게든 이뤄집니다.
+1. pull request를 열거나 기존 것을 씁니다. 이미 열려 있는 pull request는 draft로 되돌립니다. 그렇지 않고 이 Run이 push해도 되는 worktree라면, branch를 push하고 State file에 담긴 title로 draft pull request를 엽니다. 담긴 title이 없으면 Ticket 제목을 씁니다. 여기서 실패하면 로그만 남기고, 라벨 변경은 어떻게든 이뤄집니다.
 2. State file을 기록합니다. draft pull request 번호를 담고 Fix budget은 쓰지 않은 것으로 돌려 둡니다. 이 Run의 어떤 Stage도 작업을 남겼을 수 없는 경우라면 대신 파일을 지웁니다(아래 참고).
 3. transcript를 remote에 남겨 둡니다. 각 Stage의 `.command`와 `.transcript.jsonl` 파일(재시도분은 `retry/` 아래), Run의 `version.txt`를 `ticket-runner/state` branch의 `ticket-<n>/<runId>/` 아래에 올립니다.
 4. transcript 위치가 드러나도록 draft 본문을 다시 씁니다.

@@ -1690,8 +1690,11 @@ async function handOff(
       const pr = await tracker.createPullRequest({
         base: pipeline.baseBranch,
         head: branch,
-        // Nothing here is merged, so there is no commit subject worth deriving.
-        title: issue.title,
+        // A human can still merge the draft, and its squash commit takes this
+        // title, so it is the one a Stage answered for the branch where there is
+        // one. Without it, the Ticket title rather than a commit subject: the
+        // pipeline merges nothing here, so it derives nothing for a merge.
+        title: record.title ?? issue.title,
         body: draftPullRequestBody(draftBody),
         draft: true,
       });

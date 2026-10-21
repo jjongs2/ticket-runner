@@ -495,7 +495,19 @@ describe("the pull request title and the squash commit", () => {
     );
   });
 
-  it("keeps the Ticket title on a draft PR the hand-off opens, which merges nothing", async () => {
+  it("titles a draft PR the hand-off opens with the title the State file holds", async () => {
+    runner.queue("implement", titled("feat(cli): do the whole thing"));
+    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+
+    const outcome = await run();
+
+    // A human can still merge the draft, and its squash commit takes this title.
+    expect(outcome).toMatchObject({ outcome: "handed-off" });
+    expect(tracker.pullRequest(100).draft).toBe(true);
+    expect(tracker.pullRequest(100).title).toBe("feat(cli): do the whole thing");
+  });
+
+  it("titles a draft PR the hand-off opens with the Ticket title when the State file holds none", async () => {
     workspace.commits = [];
 
     const outcome = await run();
@@ -2605,6 +2617,17 @@ describe("resuming a released Ticket", () => {
     expect(runner.stages()).toEqual(["verify"]);
     expect(pr.title).toBe("feat: name the pipeline ticket-runner");
     expect(pr.squashCommit?.subject).toBe("feat: name the pipeline ticket-runner (#100)");
+  });
+
+  it("titles a draft PR the hand-off opens with the title an earlier Run recorded", async () => {
+    released({ title: "feat: name the pipeline ticket-runner" });
+    runner.queue("verify", { ok: false, failure: "timed-out" });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off" });
+    expect(tracker.pullRequest(100).draft).toBe(true);
+    expect(tracker.pullRequest(100).title).toBe("feat: name the pipeline ticket-runner");
   });
 
   it("retitles the pull request the earlier Run opened with the recorded title", async () => {
