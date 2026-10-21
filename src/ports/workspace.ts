@@ -82,6 +82,13 @@ export interface TicketState {
    * when no Stage has answered one, and in State an earlier pipeline left.
    */
   title?: string;
+  /**
+   * Whether the Run that takes the Ticket up rebases its branch onto the Base
+   * branch before its Checks. Set by a Release over a failing Base branch, so
+   * a fix a human has landed there meanwhile reaches the branch; absent
+   * otherwise, and in State an earlier pipeline left.
+   */
+  rebaseFirst?: boolean;
   /** The Run that last wrote the State, and when — both for a human reading it. */
   runId: string;
   /**
@@ -229,13 +236,21 @@ export interface Workspace {
    */
   createWorktree(worktree: WorktreeRef, base: string): Promise<void>;
   /**
+   * Check `commit` out, detached, in a fresh worktree at `path`, where a Check
+   * can be run against what a Ticket's branch inherited. A worktree a killed
+   * Run left at `path` is replaced: nothing in one is worth keeping.
+   */
+  createDetachedWorktree(path: string, commit: string): Promise<void>;
+  /**
    * Remove the worktree and delete its branch; a detached worktree, which has
    * none, is only removed.
    */
   removeWorktree(worktree: { path: string; branch?: string }): Promise<void>;
   /**
    * Every `ticket-<n>` worktree of this repo under the Target's `.worktrees/`,
-   * whatever Ticket or Run made it, with what each holds that GitHub lacks.
+   * whatever Ticket or Run made it, with what each holds that GitHub lacks,
+   * and every `base-<commit>` worktree a Run killed mid-Check left there,
+   * which holds nothing worth keeping whatever the Check wrote into it.
    *
    * Asked by `ticket-runner remove` alone, which refuses to take out a
    * worktree holding work nothing else has.
@@ -287,6 +302,13 @@ export interface Workspace {
    * answers yes about.
    */
   hasBranch(branch: string): Promise<boolean>;
+  /**
+   * The commit the branch checked out at `cwd` inherited from `base`: their
+   * merge-base, with `base` as the remote holds it now. The checkout's own
+   * `base` may be behind what the branch was made from, and the remote's ahead
+   * of it, and neither changes what the branch inherited.
+   */
+  mergeBase(cwd: string, base: string): Promise<string>;
   /**
    * Subjects of the commits on `branch` that `base` does not have, oldest first.
    *

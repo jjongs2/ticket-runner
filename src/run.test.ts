@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Config } from "./config.js";
+import { BaseBranchChecks } from "./failing-base.js";
 import { Landing } from "./landing.js";
 import { StandingNotes } from "./notes.js";
 import type { Pipeline } from "./orchestrator.js";
@@ -96,6 +97,7 @@ function pipeline(lanes = 1): Pipeline {
     baseBranch: "main",
     landing: new Landing(),
     standingNotes: new StandingNotes(),
+    baseChecks: new BaseBranchChecks(),
     selfHosted: false,
     log: (line) => logged.push(line),
   };
@@ -416,6 +418,36 @@ describe("a Ticket a transient API failure released", () => {
 
     expect(result.stop).toEqual({ reason: "api-error" });
     expect(logged).toContain("#4 stopped the Run · API failure");
+  });
+});
+
+describe("a Ticket released over a failing Base branch", () => {
+  beforeEach(() => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    workspace.failCheck("npm test", "FAIL src/date.test.ts");
+    workspace.failBaseCheck("npm test", "FAIL src/date.test.ts");
+  });
+
+  it("ends the Run, which claims no further Ticket", async () => {
+    const result = await processRun(pipeline());
+
+    expect(processed()).toEqual([4]);
+    expect(result.outcomes).toEqual([
+      expect.objectContaining({ outcome: "released", ticket: 4, cause: "failing-base" }),
+    ]);
+    expect(workspace.calls).not.toContain("createWorktree:agent/5-ticket-5");
+  });
+
+  it("says the Base branch, the Check and the merge-base ended the Run", async () => {
+    const result = await processRun(pipeline());
+
+    expect(result.stop).toEqual({
+      reason: "failing-base",
+      baseBranch: "main",
+      commit: workspace.mergeBaseCommit,
+      command: "npm test",
+    });
+    expect(logged).toContain("#4 stopped the Run · failing Base branch");
   });
 });
 

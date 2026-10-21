@@ -35,6 +35,7 @@ const stateSchema = z.object({
   fixUsed: z.boolean(),
   pullRequest: z.number().int().positive().optional(),
   title: z.string().optional(),
+  rebaseFirst: z.boolean().optional(),
   runId: z.string(),
   version: z.string().optional(),
   updatedAt: z.string(),
@@ -79,13 +80,14 @@ export function readStateFile(contents: string, ticket: number): StateFile {
   // older pipeline never wrote, are keys that are not there rather than keys
   // holding nothing: the rest of the pipeline reads these with the same
   // distinction.
-  const { pullRequest, title, version, ...state } = parsed.data;
+  const { pullRequest, title, rebaseFirst, version, ...state } = parsed.data;
   return {
     readable: true,
     state: {
       ...state,
       ...(pullRequest === undefined ? {} : { pullRequest }),
       ...(title === undefined ? {} : { title }),
+      ...(rebaseFirst === undefined ? {} : { rebaseFirst }),
       ...(version === undefined ? {} : { version }),
     },
   };

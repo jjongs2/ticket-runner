@@ -524,6 +524,16 @@ export class FakeWorkspace implements Workspace {
   /** Outcomes for the next runs of a command; `checkOutcomes` answers once they run out. */
   checkQueue = new Map<string, CheckOutcome[]>();
   ranChecks: { command: string; cwd: string; timeoutMs: number }[] = [];
+  /**
+   * Check outcomes at a merge-base, per command, where a Check runs in a
+   * `base-<commit>` worktree; a command with none passes there, so a Check a
+   * test fails with {@link failCheck} is one the Ticket's branch brought.
+   */
+  baseCheckOutcomes = new Map<string, CheckOutcome>();
+  /** The merge-base every branch has with the Base branch, unless a test gives one per worktree. */
+  mergeBaseCommit = "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d";
+  /** The merge-base of the branch checked out at a worktree path, where it differs. */
+  mergeBases = new Map<string, string>();
   rebaseOutcome: RebaseOutcome = { ok: true };
   /** Outcomes for the next rebases, oldest first; `rebaseOutcome` answers once they run out. */
   rebaseQueue: RebaseOutcome[] = [];
@@ -630,6 +640,12 @@ export class FakeWorkspace implements Workspace {
     return this;
   }
 
+  /** Fail `command` at every merge-base: a Check the Base branch fails too. */
+  failBaseCheck(command: string, output: string): this {
+    this.baseCheckOutcomes.set(command, { ok: false, output, timedOut: false });
+    return this;
+  }
+
   /** Conflict on the next rebase only: a conflict the conflict Stage then resolves. */
   conflictOnce(conflict: string): this {
     this.rebaseQueue.push({ ok: false, conflict });
@@ -690,24 +706,36 @@ export class FakeWorkspace implements Workspace {
     return "made";
   }
 
+  async createDetachedWorktree(path: string, commit: string): Promise<void> {
+    this.called(`createDetachedWorktree:${commit}`);
+    this.worktrees.set(path, "");
+  }
+
   async removeWorktree({ path, branch }: { path: string; branch?: string }): Promise<void> {
     this.called(`removeWorktree:${branch ?? path}`);
     this.worktrees.delete(path);
     if (branch !== undefined) this.branches.delete(branch);
   }
 
-  /** The `ticket-<n>` worktrees among {@link worktrees}, in path order. */
+  /**
+   * The `ticket-<n>` and `base-<commit>` worktrees among {@link worktrees}, in
+   * path order. A `base-<commit>` one is detached and holds nothing.
+   */
   async ticketWorktrees(): Promise<TicketWorktree[]> {
     this.calls.push("ticketWorktrees");
     return [...this.worktrees.entries()]
-      .filter(([path]) => /\/\.worktrees\/ticket-\d+$/.test(path))
+      .filter(([path]) => /\/\.worktrees\/(ticket-\d+|base-[0-9a-f]+)$/.test(path))
       .sort(([first], [second]) => first.localeCompare(second))
-      .map(([path, branch]) => ({
-        path,
-        branch,
-        uncommitted: this.uncommittedIn.has(path),
-        unpushed: this.unpushedIn.has(path),
-      }));
+      .map(([path, branch]) =>
+        isBaseWorktree(path)
+          ? { path, uncommitted: false, unpushed: false }
+          : {
+              path,
+              branch,
+              uncommitted: this.uncommittedIn.has(path),
+              unpushed: this.unpushedIn.has(path),
+            },
+      );
   }
 
   async listBranches(prefix: string): Promise<string[]> {
@@ -731,6 +759,12 @@ export class FakeWorkspace implements Workspace {
     this.failing.delete(call);
     throw failure;
   }
+  /** Not in `calls`: a read, asked only of a Check or a CI that failed. */
+  async mergeBase(cwd: string, base: string): Promise<string> {
+    this.basesGiven.push(base);
+    return this.mergeBases.get(cwd) ?? this.mergeBaseCommit;
+  }
+
   async commitSubjects(branch: string, base: string): Promise<string[]> {
     this.calls.push(`commitSubjects:${branch}`);
     this.basesGiven.push(base);
@@ -746,6 +780,9 @@ export class FakeWorkspace implements Workspace {
   async runCheck(command: string, cwd: string, timeoutMs: number): Promise<CheckOutcome> {
     this.calls.push(`runCheck:${command}`);
     this.ranChecks.push({ command, cwd, timeoutMs });
+    if (isBaseWorktree(cwd)) {
+      return this.baseCheckOutcomes.get(command) ?? { ok: true, output: "" };
+    }
     return (
       this.checkQueue.get(command)?.shift() ??
       this.checkOutcomes.get(command) ?? { ok: true, output: "" }
@@ -890,4 +927,9 @@ export class FakeWorkspace implements Workspace {
     this.calls.push("releaseRunLock");
     this.lock = undefined;
   }
+}
+
+/** Whether `path` is a worktree at a merge-base, where a Check grades the Base branch. */
+function isBaseWorktree(path: string): boolean {
+  return /\/\.worktrees\/base-[0-9a-f]+$/.test(path);
 }

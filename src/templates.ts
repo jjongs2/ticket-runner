@@ -418,6 +418,63 @@ export function noteComment(subject: NoteSubject): string {
   return [NOTE_MARKER, noteProvenance(subject), "", paragraphs.join("\n\n"), ""].join("\n");
 }
 
+/** A Check the Base branch fails, as the pipeline's own Note reports it. */
+export interface FailingBaseNote {
+  /** The Ticket the failure released. */
+  origin: number;
+  /** Where the Ticket's branch failed: its Checks, or CI on its pull request. */
+  point: "checks" | "ci";
+  baseBranch: string;
+  /** The Ticket's branch, whose merge-base with the Base branch `commit` is. */
+  branch: string;
+  /** The merge-base, in full, so it can be checked out as it is. */
+  commit: string;
+  command: string;
+  output: string;
+  timedOut: boolean;
+}
+
+/** How much of what the Check printed the Note quotes, from the end. */
+const FAILING_BASE_TAIL = 40;
+
+/** The pipeline's Note's summary, which is also the Run summary's `noted` row. */
+export function failingBaseSummary(baseBranch: string, command: string): string {
+  return `The Base branch \`${baseBranch}\` fails \`${command}\`.`;
+}
+
+/**
+ * The one Note no Stage writes: a Ticket was released because the Base branch
+ * fails the Check its branch failed, so the defect is the Base branch's and a
+ * human has to mend it there.
+ *
+ * Signed and laid out as a Stage's Note is, so triage reads it the same way,
+ * with the provenance naming the pipeline rather than a Stage. The tail of the
+ * output is fenced with more backticks than any run of them inside it, so a
+ * fence the output prints cannot close it early.
+ */
+export function failingBaseNote(note: FailingBaseNote): string {
+  const { baseBranch, branch, commit, command } = note;
+  const tail = note.output.trimEnd().split("\n").slice(-FAILING_BASE_TAIL).join("\n");
+  const where = `\`${command}\` ${note.timedOut ? "timed out" : "failed"} in a clean worktree at ${commit}, the merge-base of \`${branch}\` with \`${baseBranch}\`.`;
+  const fence = "`".repeat(Math.max(3, ...[...tail.matchAll(/`+/g)].map(([run]) => run.length + 1)));
+  const evidence =
+    tail.trim() === ""
+      ? `**Evidence**: ${where} It printed nothing.`
+      : `**Evidence**: ${where} The tail of its output:\n\n${fence}\n${escapeCheckboxes(tail)}\n${fence}`;
+  return [
+    NOTE_MARKER,
+    `From the pipeline, releasing #${note.origin} at ${note.point}`,
+    "",
+    [
+      `**${failingBaseSummary(baseBranch, command)}**`,
+      evidence,
+      `**Impact**: every Ticket whose branch inherits ${commit} fails the same Check. #${note.origin} was released with its Fix budget as it was, and the Run claimed no more Tickets.`,
+      `**Next**: mend \`${command}\` on \`${baseBranch}\`. The next Run takes the released Tickets up again from their State files, rebased onto \`${baseBranch}\` before their Checks.`,
+    ].join("\n\n"),
+    "",
+  ].join("\n");
+}
+
 /** Whether an issue's body says it is the standing Notes issue. */
 export function isNotesIssue(body: string): boolean {
   return carriesMarker(body, NOTES_ISSUE_MARKER);
@@ -440,7 +497,8 @@ export function notesIssue(): { title: string; body: string } {
       "**Notes from the pipeline.** Every finding a Stage could not post on a " +
         "Ticket arrives here as a comment: one that named no Ticket, one whose " +
         "Ticket would have buried it, and one whose Ticket refused the comment. " +
-        "Each comment says which Ticket and Stage found it.",
+        "So does the pipeline's own Note about a Base branch that fails a Check. " +
+        "Each comment says which Ticket and Stage, or the pipeline, found it.",
       "",
       "Triage empties this issue by hand: promote what deserves a Ticket, record " +
         "the promotion in this body, and close the issue once the body accounts " +
@@ -469,11 +527,13 @@ export interface RunSummary {
 
 /**
  * What a Release is put down to, in the words the Run summary and the log
- * share: the subscription rate limit, or a transient API failure.
+ * share: the subscription rate limit, a transient API failure, or a Base
+ * branch that fails the Check the Ticket's branch failed.
  */
 export const RELEASE_WORDS: Record<ReleaseCause, string> = {
   "rate-limited": "rate limit",
   "api-error": "API failure",
+  "failing-base": "failing Base branch",
 };
 
 /** Every summary row is `<verb> #<n> <detail>`, so the numbers line up. */
@@ -482,8 +542,8 @@ const VERB_WIDTH = 9;
 /**
  * What a Run prints when it ends. One line per Ticket, then why the Run
  * stopped — the Frontier is empty, everything left on it is blocked, the rate
- * limit or a transient API failure released a Ticket and the Run went no
- * further, or a human stopped it.
+ * limit, a transient API failure or a failing Base branch released a Ticket and
+ * the Run went no further, or a human stopped it.
  */
 export function runSummary({
   version,
@@ -522,6 +582,8 @@ function lastLine(stop: RunStop): string {
         : `Rate limited · resets ${utcMinute(stop.resetsAt)}.`;
     case "api-error":
       return "API failure.";
+    case "failing-base":
+      return `Base branch \`${stop.baseBranch}\` fails \`${stop.command}\` at ${stop.commit.slice(0, 7)}.`;
     case "stopped":
       return `Stopped at ${clockTime(stop.at)} · ${holding(stop.busy)}.`;
     case "frontier":

@@ -8,6 +8,8 @@ import {
   NOTES_ISSUE_TITLE,
   NOTE_MARKER,
   draftPullRequestBody,
+  failingBaseNote,
+  failingBaseSummary,
   findMarkedComment,
   findMarkedComments,
   guardComment,
@@ -471,6 +473,45 @@ describe("runSummary", () => {
     expect(summary.trimEnd().split("\n").at(-1)).toBe("API failure.");
   });
 
+  it("says a failing Base branch released a Ticket, and names it, the command and the commit last", () => {
+    const summary = runSummary({
+      version: VERSION,
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [
+        {
+          ...released,
+          stage: "checks",
+          cause: "failing-base",
+          notes: [
+            {
+              origin: 6,
+              stage: "pipeline",
+              issue: 31,
+              opened: false,
+              summary: "The Base branch `main` fails `npm test`.",
+            },
+          ],
+        },
+      ],
+      stop: {
+        reason: "failing-base",
+        baseBranch: "main",
+        commit: "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d",
+        command: "npm test",
+      },
+    });
+
+    expect(summary.split("\n").slice(2, 4)).toEqual([
+      "  released #6 Rebase conflict resolution · failing Base branch at checks",
+      "  noted    #31 comment · from #6 pipeline · The Base branch `main` fails `npm test`.",
+    ]);
+    expect(summary).not.toContain("rate limit");
+    expect(summary.trimEnd().split("\n").at(-1)).toBe(
+      "Base branch `main` fails `npm test` at 1a2b3c4.",
+    );
+  });
+
   it("names the guard that passed a candidate over", () => {
     const summary = runSummary({
       version: VERSION,
@@ -727,6 +768,76 @@ describe("a Note that fell back to the standing Notes issue", () => {
 
     expect(comment).toContain("- \\[ \\] one");
     expect(new RegExp(UNCHECKED_BOX, "m").test(comment)).toBe(false);
+  });
+});
+
+describe("failingBaseNote", () => {
+  const subject = {
+    origin: 6,
+    point: "checks" as const,
+    baseBranch: "main",
+    branch: "agent/6-x",
+    commit: "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d",
+    command: "npm test",
+    output: "FAIL src/date.test.ts\n  expected 2026 to be 2025\n",
+    timedOut: false,
+  };
+
+  it("is the pipeline's Note: the failing Check, where it fails, and the tail of what it printed", () => {
+    expect(failingBaseNote(subject)).toBe(
+      [
+        NOTE_MARKER,
+        "From the pipeline, releasing #6 at checks",
+        "",
+        "**The Base branch `main` fails `npm test`.**",
+        "",
+        "**Evidence**: `npm test` failed in a clean worktree at 1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d, the merge-base of `agent/6-x` with `main`. The tail of its output:",
+        "",
+        "```",
+        "FAIL src/date.test.ts",
+        "  expected 2026 to be 2025",
+        "```",
+        "",
+        "**Impact**: every Ticket whose branch inherits 1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d fails the same Check. #6 was released with its Fix budget as it was, and the Run claimed no more Tickets.",
+        "",
+        "**Next**: mend `npm test` on `main`. The next Run takes the released Tickets up again from their State files, rebased onto `main` before their Checks.",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("summarises itself in the words its bold line carries", () => {
+    expect(failingBaseSummary("main", "npm test")).toBe("The Base branch `main` fails `npm test`.");
+  });
+
+  it("quotes only the last 40 lines, in a fence no backticks in them can close", () => {
+    const lines = Array.from({ length: 50 }, (_, index) => `line ${index + 1}`);
+    lines[45] = "```js";
+    const note = failingBaseNote({ ...subject, output: lines.join("\n") });
+
+    expect(note).not.toContain("line 10\n");
+    expect(note).toContain("````\nline 11\n");
+    expect(note).toContain("line 50\n````");
+  });
+
+  it("says a Check the limit killed timed out, and one that printed nothing printed nothing", () => {
+    const note = failingBaseNote({ ...subject, output: " \n", timedOut: true });
+
+    expect(note).toContain("`npm test` timed out in a clean worktree");
+    expect(note).toContain("`main`. It printed nothing.");
+    expect(note).not.toContain("```");
+  });
+
+  it("defuses a checkbox in the output it quotes", () => {
+    const note = failingBaseNote({ ...subject, output: "- [ ] todo\n" });
+
+    expect(new RegExp(UNCHECKED_BOX, "m").test(note)).toBe(false);
+  });
+
+  it("says CI was what failed when CI was", () => {
+    expect(failingBaseNote({ ...subject, point: "ci" }).split("\n")[1]).toBe(
+      "From the pipeline, releasing #6 at ci",
+    );
   });
 });
 

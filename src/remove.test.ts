@@ -349,6 +349,28 @@ describe("what remove leaves for the human", () => {
   });
 });
 
+describe("a worktree a Run left at a merge-base", () => {
+  it("is the pipeline's, removed with the rest even where the Check wrote into it", async () => {
+    await init();
+    await aRunWorkedHere();
+    const base = join(repoRoot, ".worktrees", "base-1a2b3c4d5e6f");
+    mkdirSync(worktree(12), { recursive: true });
+    write(".worktrees/base-1a2b3c4d5e6f/coverage.txt", "half a run\n");
+    workspace.worktrees.set(base, "");
+    workspace.uncommittedIn.add(base);
+    workspace.removeWorktree = async ({ path }) => {
+      rmSync(path, { recursive: true, force: true });
+      workspace.worktrees.delete(path);
+    };
+
+    const { out } = await remove();
+
+    expect(snapshot()).toEqual({});
+    expect(group(out, "Removed")).toContain("✓ .worktrees/base-1a2b3c4d5e6f");
+    expect(group(out, "Removed")).toContain("✓ .worktrees/, left empty");
+  });
+});
+
 describe("a removal that fails", () => {
   it("leaves the rest done, marks it, releases the lock and exits 1", async () => {
     await init();
