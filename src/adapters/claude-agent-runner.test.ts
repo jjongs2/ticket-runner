@@ -34,8 +34,12 @@ const SUCCESS = transcript(
   },
 );
 
-function runner(result: Execution | ((args: string[]) => Execution)) {
+function runner(
+  result: Execution | ((args: string[]) => Execution),
+  exists: (path: string) => boolean = () => true,
+) {
   return new ClaudeAgentRunner({
+    exists,
     run: async (command, args, options) => {
       calls.push({ command, args, options });
       const recorded = typeof result === "function" ? result(args) : result;
@@ -164,10 +168,52 @@ describe("the command line", () => {
 
   it("marks the child environment with the Stage, so it cannot start a nested Run", async () => {
     await runner(execution({ stdout: SUCCESS })).run(request());
-    expect(calls[0]?.options.extraEnv).toEqual({ TICKET_RUNNER_STAGE: "implement" });
+    expect(calls[0]?.options.extraEnv?.TICKET_RUNNER_STAGE).toBe("implement");
 
     await runner(execution({ stdout: SUCCESS })).run(request({ stage: "verify" }));
-    expect(calls[1]?.options.extraEnv).toEqual({ TICKET_RUNNER_STAGE: "verify" });
+    expect(calls[1]?.options.extraEnv?.TICKET_RUNNER_STAGE).toBe("verify");
+  });
+
+  it("starts the session with no MCP server, not even the account's connectors", async () => {
+    await runner(execution({ stdout: SUCCESS })).run(request());
+
+    expect(calls[0]?.args).toContain("--strict-mcp-config");
+    expect(calls[0]?.args).not.toContain("--mcp-config");
+  });
+
+  it("denies the tools that act beyond the worktree and the session", async () => {
+    await runner(execution({ stdout: SUCCESS })).run(request());
+
+    // The option takes every word up to the next one, so another option has
+    // to follow the list, or the next argument would be read as a tool.
+    expect(calls[0]?.args.join(" ")).toContain(
+      "--disallowedTools CronCreate CronDelete RemoteTrigger PushNotification ScheduleWakeup Workflow --",
+    );
+  });
+
+  it("turns off the Host user's auto memory", async () => {
+    await runner(execution({ stdout: SUCCESS })).run(request());
+
+    expect(calls[0]?.options.extraEnv?.CLAUDE_CODE_DISABLE_AUTO_MEMORY).toBe("1");
+  });
+
+  it("gives the session bash for its shell where the Host has it", async () => {
+    const asked: string[] = [];
+    const hasBash = (path: string) => {
+      asked.push(path);
+      return true;
+    };
+
+    await runner(execution({ stdout: SUCCESS }), hasBash).run(request());
+
+    expect(asked).toEqual(["/bin/bash"]);
+    expect(calls[0]?.options.extraEnv?.CLAUDE_CODE_SHELL).toBe("/bin/bash");
+  });
+
+  it("leaves the shell as it is where the Host has no bash", async () => {
+    await runner(execution({ stdout: SUCCESS }), () => false).run(request());
+
+    expect(calls[0]?.options.extraEnv).not.toHaveProperty("CLAUDE_CODE_SHELL");
   });
 
   it("passes the JSON schema only when the Stage asks for structured output", async () => {
@@ -184,7 +230,9 @@ describe("the command line", () => {
   it("reports the exact command line a human could paste", async () => {
     const result = await runner(execution({ stdout: SUCCESS })).run(request());
 
-    expect(result.commandLine).toMatch(/^TICKET_RUNNER_STAGE=implement claude --print/);
+    expect(result.commandLine).toMatch(
+      /^TICKET_RUNNER_STAGE=implement CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 CLAUDE_CODE_SHELL=\/bin\/bash claude --print/,
+    );
     expect(result.commandLine).toContain("'/mattpocock-skills:implement https://example.com/issues/2'");
   });
 });

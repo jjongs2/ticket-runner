@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { killTree } from "./process-tree.js";
 
 export interface Execution {
   exitCode: number;
@@ -19,6 +20,11 @@ export interface ExecOptions {
   /** Run through the shell, for user-supplied Check commands. */
   shell?: boolean;
   timeoutMs?: number;
+  /**
+   * How long a command killed at `timeoutMs` has between SIGTERM and SIGKILL.
+   * `KILL_GRACE_MS` unless a test needs it shorter.
+   */
+  killGraceMs?: number;
   /** Variables merged over the environment the child inherits, not replacing it. */
   extraEnv?: Record<string, string>;
   /**
@@ -44,6 +50,13 @@ export interface ExecOptions {
  * that always settles.
  */
 const DRAIN_MS = 100;
+
+/**
+ * How long a command killed at its time limit, and everything it started, has
+ * to end on SIGTERM before SIGKILL. Long enough for a session to write out what
+ * it holds, short enough that the Ticket is not held up waiting.
+ */
+const KILL_GRACE_MS = 5_000;
 
 /**
  * How a child process is run. Adapters take one so tests can hand them
@@ -78,6 +91,7 @@ export function exec(
     let settled = false;
     let limit: NodeJS.Timeout | undefined;
     let drain: NodeJS.Timeout | undefined;
+    let killing: Promise<void> | undefined;
 
     /** The child itself is gone. Only a descendant can still hold its pipes. */
     const hasExited = () =>
@@ -95,13 +109,17 @@ export function exec(
     const finish = () => {
       if (settled) return;
       stopWaiting();
-      resolve({
+      const execution = {
         exitCode: killed ? 124 : (child.exitCode ?? 1),
         stdout,
         stderr,
         output,
         timedOut: killed,
-      });
+      };
+      // A killed command is reported once what it started is gone too, so the
+      // caller never works beside what is left of it.
+      if (killing === undefined) resolve(execution);
+      else void killing.then(() => resolve(execution));
     };
 
     /** Keep reading for a moment, then stop waiting on the pipes for good. */
@@ -115,7 +133,8 @@ export function exec(
         // the drain, and its own exit code is the honest one to report.
         if (hasExited()) return;
         killed = true;
-        child.kill("SIGKILL");
+        if (child.pid === undefined) child.kill("SIGKILL");
+        else killing = killTree(child.pid, options.killGraceMs ?? KILL_GRACE_MS);
       }, options.timeoutMs);
     }
 

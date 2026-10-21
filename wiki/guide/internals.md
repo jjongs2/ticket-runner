@@ -59,12 +59,21 @@ The CLI is the only place that constructs adapters. Everything under `start.ts` 
 ```text
 claude --print <prompt> --output-format stream-json --verbose \
   --permission-prompts none --permission-mode … \
+  --strict-mcp-config \
+  --disallowedTools CronCreate CronDelete RemoteTrigger PushNotification ScheduleWakeup Workflow \
   --model … --effort … --max-turns … [--json-schema …]
 ```
 
-- It sets `TICKET_RUNNER_STAGE` in the child's environment.
+- `--strict-mcp-config` leaves the session no MCP server, the claude.ai connectors of the Host user's account included. `--disallowedTools` takes away the tools that act beyond the worktree and the session.
+- It sets the child's environment:
+
+  | Variable | Value | Why |
+  |---|---|---|
+  | `TICKET_RUNNER_STAGE` | the Stage | the [Stage mark](./ticket-to-merge.md) |
+  | `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | `1` | the Host user's memory is about their projects, not the Target |
+  | `CLAUDE_CODE_SHELL` | `/bin/bash`, only where it exists | a zsh shell aborts a command on a glob that matches nothing |
 - It writes `<stage>.command`, `.stdout`, `.stderr` and `.transcript.jsonl` from the moment the Stage starts.
-- It kills the child at `maxMinutes`, and classifies a failure as `rate-limited`, `timed-out`, `turn-capped`, `nonzero-exit` or `invalid-result`.
+- It kills the child at `maxMinutes`, with everything it started, and classifies a failure as `rate-limited`, `timed-out`, `turn-capped`, `nonzero-exit` or `invalid-result`.
 
 ### `GitWorkspace`
 
@@ -76,6 +85,7 @@ claude --print <prompt> --output-format stream-json --verbose \
 ### Smaller adapters
 
 - [`exec.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/exec.ts) spawns a child with a timeout and streaming sinks. It reports `timedOut` separately, because a command may exit 124 on its own.
+- [`process-tree.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/process-tree.ts) kills a command at its time limit together with its descendants and the process groups they lead: SIGTERM, then SIGKILL after 5 seconds. The command's own group would not do, since a Stage shares the Run's ([ADR-0006](#adr-0006)) and Claude Code runs each Bash command in a session of its own.
 - [`repo-root.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/repo-root.ts) finds the main checkout, even from inside a worktree, so the lock, `.worktrees/` and the logs land in one place per clone.
 - [`version.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts) reads which [Version](#versions) this copy is. It is an adapter because it runs git, though no port describes it.
 
