@@ -125,7 +125,7 @@ export interface Config {
 
 const STAGE_DEFAULTS = {
   implement: { maxTurns: 300, maxMinutes: 60 },
-  verify: { maxTurns: 80, maxMinutes: 20 },
+  verify: { maxTurns: 130, maxMinutes: 30 },
   fix: { maxTurns: 150, maxMinutes: 40 },
   // Resolving one rebase is narrower work than mending a defect, and the full
   // Checks are the pipeline's to run once it finishes.

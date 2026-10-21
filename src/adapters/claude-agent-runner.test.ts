@@ -638,6 +638,117 @@ describe("reading the outcome", () => {
     expect(result).toMatchObject({ ok: false, failure: "rate-limited" });
   });
 
+  it("says when the limit resets, from the rate_limit_event that rejected the request", async () => {
+    const stdout = transcript(
+      {
+        type: "rate_limit_event",
+        rate_limit_info: { status: "allowed_warning", resetsAt: 1789800000 },
+      },
+      {
+        type: "rate_limit_event",
+        rate_limit_info: { status: "rejected", resetsAt: 1789839600, rateLimitType: "five_hour" },
+      },
+      {
+        type: "result",
+        subtype: "success",
+        is_error: true,
+        terminal_reason: "api_error",
+        api_error_status: 429,
+        result: "You've hit your session limit · resets 2:40am (Asia/Seoul)",
+      },
+    );
+
+    const result = await runner(execution({ exitCode: 1, stdout })).run(request());
+
+    expect(result).toMatchObject({
+      ok: false,
+      failure: "rate-limited",
+      limitResetsAt: "2026-09-19T17:40:00.000Z",
+    });
+  });
+
+  it("names no reset time when no rejecting event carried one", async () => {
+    const stdout = transcript(
+      {
+        type: "rate_limit_event",
+        rate_limit_info: { status: "allowed_warning", resetsAt: 1789800000 },
+      },
+      {
+        type: "result",
+        subtype: "success",
+        is_error: true,
+        api_error_status: 429,
+        result: "You've hit your session limit",
+      },
+    );
+
+    const result = await runner(execution({ exitCode: 1, stdout })).run(request());
+
+    expect(result).toMatchObject({ ok: false, failure: "rate-limited" });
+    expect(result.limitResetsAt).toBeUndefined();
+  });
+
+  it("classifies an API error with a 5xx status as a transient API failure", async () => {
+    // What the CLI prints once it has given up retrying an overloaded API.
+    const stdout = transcript({
+      type: "result",
+      subtype: "success",
+      is_error: true,
+      terminal_reason: "api_error",
+      api_error_status: 529,
+      num_turns: 41,
+      result: "API Error: 529 Overloaded. This is a server-side issue, usually temporary.",
+    });
+
+    const result = await runner(execution({ exitCode: 1, stdout })).run(request());
+
+    expect(result).toMatchObject({ ok: false, failure: "api-error" });
+  });
+
+  it("classifies an API error with no status as a transient API failure", async () => {
+    const stdout = transcript({
+      type: "result",
+      subtype: "success",
+      is_error: true,
+      terminal_reason: "api_error",
+      api_error_status: null,
+      result: "API Error: No response from API (waited 3m, then 10m on the retry).",
+    });
+
+    const result = await runner(execution({ exitCode: 1, stdout })).run(request());
+
+    expect(result).toMatchObject({ ok: false, failure: "api-error" });
+  });
+
+  it("leaves an API error with a 4xx status other than 429 a non-zero exit", async () => {
+    const stdout = transcript({
+      type: "result",
+      subtype: "success",
+      is_error: true,
+      terminal_reason: "api_error",
+      api_error_status: 400,
+      result: "API Error: 400 The prompt is too long.",
+    });
+
+    const result = await runner(execution({ exitCode: 1, stdout })).run(request());
+
+    expect(result).toMatchObject({ ok: false, failure: "nonzero-exit" });
+  });
+
+  it("leaves a session that failed for another reason a non-zero exit, whatever its status", async () => {
+    const stdout = transcript({
+      type: "result",
+      subtype: "error_during_execution",
+      is_error: true,
+      api_error_status: 503,
+      result: "The tests did not compile.",
+    });
+
+    const result = await runner(execution({ exitCode: 1, stdout })).run(request());
+
+    expect(result).toMatchObject({ ok: false, failure: "nonzero-exit" });
+  });
+
   it("leaves a trace and fails when the session could not be started at all", async () => {
     const broken = new ClaudeAgentRunner({
       run: async () => {

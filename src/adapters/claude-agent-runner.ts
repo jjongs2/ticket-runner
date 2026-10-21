@@ -54,8 +54,16 @@ interface ResultEvent {
   num_turns?: number;
   result?: unknown;
   structured_output?: unknown;
-  /** The HTTP status of the API error that ended the session, when one did. */
-  api_error_status?: number;
+  /**
+   * Why the session's loop stopped. `api_error` is a request the API answered
+   * with an error, or never answered, after the CLI's own retries ran out.
+   */
+  terminal_reason?: string;
+  /**
+   * The HTTP status of the API error that ended the session, when one did. The
+   * CLI prints `null` for a request that never got an answer.
+   */
+  api_error_status?: number | null;
 }
 
 /**
@@ -64,7 +72,8 @@ interface ResultEvent {
  */
 interface RateLimitEvent {
   type: "rate_limit_event";
-  rate_limit_info?: { status?: string };
+  /** `resetsAt` is when the limit resets, in seconds since the epoch. */
+  rate_limit_info?: { status?: string; resetsAt?: number };
 }
 
 /**
@@ -147,6 +156,7 @@ export class ClaudeAgentRunner implements AgentRunner {
     const failure = classify(request, execution, events);
     const structured = request.jsonSchema === undefined ? undefined : structuredOutput(results);
     const turns = countTurns(results);
+    const resetsAt = failure === "rate-limited" ? limitResetsAt(events) : undefined;
 
     return {
       ok: failure === undefined,
@@ -155,6 +165,7 @@ export class ClaudeAgentRunner implements AgentRunner {
       commandLine,
       transcriptPath: log.transcriptPath,
       ...(turns === undefined ? {} : { turns }),
+      ...(resetsAt === undefined ? {} : { limitResetsAt: resetsAt }),
       // The clock is the runner's own. A session that woke for a background
       // agent reports one `duration_ms` per waking, and the time it spent
       // waiting for that agent belongs to none of them.
@@ -332,6 +343,7 @@ function classify(
   const failed = execution.exitCode !== 0 || result?.is_error === true || result === undefined;
   if (failed) {
     if (rateLimited(execution, events, result)) return "rate-limited";
+    if (transientApiFailure(result)) return "api-error";
     return "nonzero-exit";
   }
   // A schema the Stage answered with nothing is only a failure where the
@@ -364,11 +376,39 @@ function rateLimited(
   result: ResultEvent | undefined,
 ): boolean {
   if (result?.api_error_status === 429) return true;
-  const rejected = (event: unknown) =>
-    isRateLimitEvent(event) && event.rate_limit_info?.status === "rejected";
   if (events.some(rejected)) return true;
   const text = [result?.subtype ?? "", String(result?.result ?? ""), execution.stderr].join(" ");
   return /usage limit|session limit|rate limit|rate_limit/i.test(text);
+}
+
+/** A `rate_limit_event` that says the request was refused, not merely warned about. */
+function rejected(event: unknown): event is RateLimitEvent {
+  return isRateLimitEvent(event) && event.rate_limit_info?.status === "rejected";
+}
+
+/**
+ * When the limit that stopped a session resets, ISO-8601: the last rejecting
+ * event's word on it, or nothing when no rejecting event carried one.
+ */
+function limitResetsAt(events: unknown[]): string | undefined {
+  const resetsAt = events.filter(rejected).at(-1)?.rate_limit_info?.resetsAt;
+  if (typeof resetsAt !== "number" || !Number.isFinite(resetsAt)) return undefined;
+  return new Date(resetsAt * 1000).toISOString();
+}
+
+/**
+ * Whether a session that failed, and was not rate-limited, was stopped by the
+ * API failing on its own side: an overloaded or broken server, a 5xx, or a
+ * request that never got an answer at all, which the CLI reports without a
+ * status. Asked only after {@link rateLimited}, because a 429 ends the session
+ * with the same `terminal_reason`. The CLI has already retried each of these by
+ * the time it gives up, so the session is not worth retrying in place either.
+ * Any other status — a prompt the API refused, say — is the session's own.
+ */
+function transientApiFailure(result: ResultEvent | undefined): boolean {
+  if (result?.terminal_reason !== "api_error") return false;
+  const status = result.api_error_status;
+  return status === undefined || status === null || (status >= 500 && status <= 599);
 }
 
 /**
