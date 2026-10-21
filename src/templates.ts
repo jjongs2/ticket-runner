@@ -8,7 +8,7 @@ import type { GuardReason } from "./guards.js";
 import type { HostKind } from "./host.js";
 import type { FailurePoint } from "./lifecycle.js";
 import type { NoteText, NotingStage, RoutedNote } from "./notes.js";
-import type { TicketOutcome } from "./orchestrator.js";
+import type { ReleaseCause, TicketOutcome } from "./orchestrator.js";
 import type { IssueComment, SquashCommit } from "./ports/tracker.js";
 import type { KeptTranscripts } from "./ports/workspace.js";
 import type { RunStop } from "./run.js";
@@ -467,13 +467,23 @@ export interface RunSummary {
   stop: RunStop;
 }
 
+/**
+ * What a Release is put down to, in the words the Run summary and the log
+ * share: the subscription rate limit, or a transient API failure.
+ */
+export const RELEASE_WORDS: Record<ReleaseCause, string> = {
+  "rate-limited": "rate limit",
+  "api-error": "API failure",
+};
+
 /** Every summary row is `<verb> #<n> <detail>`, so the numbers line up. */
 const VERB_WIDTH = 9;
 
 /**
  * What a Run prints when it ends. One line per Ticket, then why the Run
  * stopped — the Frontier is empty, everything left on it is blocked, the rate
- * limit released a Ticket and the Run went no further, or a human stopped it.
+ * limit or a transient API failure released a Ticket and the Run went no
+ * further, or a human stopped it.
  */
 export function runSummary({
   version,
@@ -507,7 +517,11 @@ export function runSummary({
 function lastLine(stop: RunStop): string {
   switch (stop.reason) {
     case "rate-limited":
-      return "Rate limited.";
+      return stop.resetsAt === undefined
+        ? "Rate limited."
+        : `Rate limited · resets ${utcMinute(stop.resetsAt)}.`;
+    case "api-error":
+      return "API failure.";
     case "stopped":
       return `Stopped at ${clockTime(stop.at)} · ${holding(stop.busy)}.`;
     case "frontier":
@@ -521,6 +535,14 @@ function lastLine(stop: RunStop): string {
  */
 function clockTime(at: string): string {
   return at.slice(11, 16);
+}
+
+/**
+ * The date and minute a limit resets, in UTC like the Stop's clock time. The
+ * date is kept because a weekly limit can reset days after the Run stopped.
+ */
+function utcMinute(at: string): string {
+  return `${at.slice(0, 10)} ${at.slice(11, 16)} UTC`;
 }
 
 /** What the Lanes were holding when the Stop arrived, and what to call none. */
@@ -581,9 +603,13 @@ function ticketRow(outcome: TicketOutcome): string {
         `${outcome.title} · ${outcome.stage} · ${outcome.failure}`,
       );
     case "released":
-      // Nothing for a human to do, so the row says only where the limit landed
-      // and leaves the rest to the Run that resumes the Ticket.
-      return row("released", outcome.ticket, `${outcome.title} · rate limit at ${outcome.stage}`);
+      // Nothing for a human to do, so the row says only what stopped the Stage
+      // and where, and leaves the rest to the Run that resumes the Ticket.
+      return row(
+        "released",
+        outcome.ticket,
+        `${outcome.title} · ${RELEASE_WORDS[outcome.cause]} at ${outcome.stage}`,
+      );
     case "skipped":
       // The reason is the guard's own word for it, which is also the marker on
       // the warning comment the human is being pointed at.

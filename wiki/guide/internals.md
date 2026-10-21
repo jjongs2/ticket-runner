@@ -73,7 +73,7 @@ claude --print <prompt> --output-format stream-json --verbose \
   | `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | `1` | the Host user's memory is about their projects, not the Target |
   | `CLAUDE_CODE_SHELL` | `/bin/bash`, only where it exists | a zsh shell aborts a command on a glob that matches nothing |
 - It writes `<stage>.command`, `.stdout`, `.stderr` and `.transcript.jsonl` from the moment the Stage starts.
-- It kills the child at `maxMinutes`, with everything it started, and classifies a failure as `rate-limited`, `timed-out`, `turn-capped`, `nonzero-exit` or `invalid-result`.
+- It kills the child at `maxMinutes`, with everything it started, and classifies a failure as `rate-limited`, `api-error`, `timed-out`, `turn-capped`, `nonzero-exit` or `invalid-result`.
 
 ### `GitWorkspace`
 

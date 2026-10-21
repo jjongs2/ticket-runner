@@ -5,6 +5,7 @@ import type { RoutedNote } from "./notes.js";
 import { type Pipeline, type TicketOutcome, processTicket } from "./orchestrator.js";
 import { StopSignal, stopLine } from "./stop.js";
 import { holdsClaim, strandedTickets } from "./stranded.js";
+import { RELEASE_WORDS } from "./templates.js";
 
 /**
  * What a Run has to show for itself: every Ticket it took, in the order they
@@ -22,11 +23,12 @@ export interface RunResult {
 /**
  * Why a Run ended.
  *
- * A Run that drained the Frontier carries what was left held back; one the rate
- * limit stopped carries nothing, because it ended before it could say a
- * candidate was held back all Run; one a human stopped carries the moment it
- * was asked and what it still had in hand. That is why this is a choice rather
- * than a flag beside the list: the three stops do not report the same things.
+ * A Run that drained the Frontier carries what was left held back; one a
+ * Release stopped carries no candidates, because it ended before it could say
+ * one was held back all Run, and the rate limit carries when it resets, where a
+ * Stage was told; one a human stopped carries the moment it was asked and what
+ * it still had in hand. That is why this is a choice rather than a flag beside
+ * the list: the stops do not report the same things.
  */
 export type RunStop =
   | {
@@ -37,7 +39,12 @@ export type RunStop =
        */
       blocked: number[];
     }
-  | { reason: "rate-limited" }
+  | {
+      reason: "rate-limited";
+      /** When the limit resets, ISO-8601, absent where no Stage was told. */
+      resetsAt?: string;
+    }
+  | { reason: "api-error" }
   | {
       reason: "stopped";
       /** When the Stop reached the Run, ISO-8601. */
@@ -60,11 +67,13 @@ export type RunStop =
  * not cost the rest of the night.
  *
  * A Release stops the Run filling Lanes and nothing more. Nothing was wrong with
- * the Ticket — the subscription ran out of room — so the next one would be
- * stopped by the same limit, and claiming it would spend a Claim, a worktree and
- * a doomed Stage to learn what the first one already said. The Lanes still busy
- * finish what they hold, and the Run reports the limit once the last of them
- * comes back.
+ * the Ticket — the subscription ran out of room, or the API failed on its own
+ * side after the CLI had given up retrying it — so the next one would be stopped
+ * the same way, and claiming it would spend a Claim, a worktree and a doomed
+ * Stage to learn what the first one already said. The Lanes still busy finish
+ * what they hold, and the Run reports what stopped it once the last of them
+ * comes back. It does not wait for the limit to reset: a human or an Operator
+ * starts the next Run, and the summary says when the limit resets.
  *
  * A Stop is the same shape with a different reason: a human asked for no more
  * Tickets rather than the subscription, so the Lanes busy at that moment finish
@@ -162,9 +171,18 @@ export async function processRun(
       take(pipeline, ticket).then((outcome) => {
         busy.delete(ticket.number);
         outcomes.push(outcome);
-        if (outcome.outcome === "released" && runStop === undefined) {
-          runStop = { reason: "rate-limited" };
-          pipeline.log?.(`#${outcome.ticket} stopped the Run · rate limit`);
+        if (outcome.outcome !== "released") return;
+        if (runStop === undefined) {
+          runStop = releaseStop(outcome);
+          pipeline.log?.(`#${outcome.ticket} stopped the Run · ${RELEASE_WORDS[outcome.cause]}`);
+        } else if (
+          // A Lane the limit stopped after the one that stopped the Run may
+          // have been told when it resets where that one was not.
+          runStop.reason === "rate-limited" &&
+          runStop.resetsAt === undefined &&
+          outcome.limitResetsAt !== undefined
+        ) {
+          runStop = { reason: "rate-limited", resetsAt: outcome.limitResetsAt };
         }
       }),
     );
@@ -228,6 +246,15 @@ export async function processRun(
     }
   }
   return { outcomes, stop };
+}
+
+/** The stop a Release puts on the Run: what released it, and when a limit resets. */
+function releaseStop(outcome: Extract<TicketOutcome, { outcome: "released" }>): RunStop {
+  if (outcome.cause === "api-error") return { reason: "api-error" };
+  return {
+    reason: "rate-limited",
+    ...(outcome.limitResetsAt === undefined ? {} : { resetsAt: outcome.limitResetsAt }),
+  };
 }
 
 /**

@@ -32,7 +32,7 @@ describe("loadConfig", () => {
       maxMinutes: 60,
       extraPrompt: "",
     });
-    expect(config.stages.verify).toMatchObject({ maxTurns: 80, maxMinutes: 20 });
+    expect(config.stages.verify).toMatchObject({ maxTurns: 130, maxMinutes: 30 });
     expect(config.stages.fix).toMatchObject({ maxTurns: 150, maxMinutes: 40 });
     expect(config.stages.conflict).toMatchObject({ maxTurns: 120, maxMinutes: 30 });
     expect(config.labels).toEqual({
@@ -113,7 +113,7 @@ describe("loadConfig", () => {
     expect(config.stages.verify).toEqual({
       model: "claude-opus-5-5",
       effort: "high",
-      maxTurns: 80,
+      maxTurns: 130,
       maxMinutes: 5,
       extraPrompt: "",
     });

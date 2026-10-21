@@ -45,7 +45,7 @@ flowchart TD
 ```
 <!-- Sources: src/orchestrator.ts, src/lifecycle.ts -->
 
-Every edge to the fix Stage is taken at most once per Ticket. A second failure of any kind, or any failure the fix Stage cannot act on, is a Hand-off. A rate-limited Stage leaves this diagram entirely: it releases the Ticket (see [Stopping and resuming](./stopping-and-resuming.md)).
+Every edge to the fix Stage is taken at most once per Ticket. A second failure of any kind, or any failure the fix Stage cannot act on, is a Hand-off. A Stage the rate limit or a transient API failure stopped leaves this diagram entirely: it releases the Ticket (see [Stopping and resuming](./stopping-and-resuming.md)).
 
 ## The Claim
 
@@ -101,6 +101,7 @@ Every prompt then carries the Stage boundary guidance (never run `ticket-runner`
 | `timed-out` | `❌ timed out` | Killed at `maxMinutes` |
 | `turn-capped` | `❌ turn capped` | Reached `maxTurns` |
 | `rate-limited` | `⏸ rate limited` | A 429, a rejected `rate_limit_event`, or a message naming the limit. Releases the Ticket |
+| `api-error` | `⏸ API failure` | `terminal_reason: "api_error"` with a 5xx `api_error_status` or none, after the CLI's own retries. Releases the Ticket |
 | `nonzero-exit` | `❌ exited non-zero` | Any other failed session |
 | `invalid-result` | `❌ invalid result` | The verify Stage answered no Verdict at all |
 
@@ -159,11 +160,11 @@ Only a defect a fresh session could mend spends the budget:
 | Pushing or opening the pull request failed | pr | No, Hand-off |
 | CI timed out, found conflicting, or had no checks | ci | No, Hand-off |
 | The merge failed | merge | No, Hand-off |
-| A rate limit, anywhere | any | No, a Release |
+| A rate limit or a transient API failure, anywhere | any | No, a Release |
 
 After a fix Stage, the Ticket starts again at the Checks. Every gate grades the fix, the verify Stage included, so a fix is held to the same bar as the first attempt. A fix Stage whose branch did not grow is a Hand-off straight away: re-grading an untouched branch could only fail the same way. A squashed or amended branch counts as not grown. Its hand-off comment carries the evidence the fix Stage was sent in with, so an unmet criterion left for a human arrives with the question its evidence asks. A second failure of any kind is a Hand-off, and the hand-off comment says the budget was already used.
 
-The budget is recorded in the State file once the fix Stage comes back. A fix Stage stopped by the rate limit spends nothing. A Release carries a spent budget over to the next Run; a Hand-off gives it back, because the Ticket only returns through a human's hands.
+The budget is recorded in the State file once the fix Stage comes back. A fix Stage stopped by the rate limit or an API failure spends nothing. A Release carries a spent budget over to the next Run; a Hand-off gives it back, because the Ticket only returns through a human's hands.
 
 ## Lanes and the Frontier refill
 
@@ -222,8 +223,8 @@ A conflict is not a defect in the branch: the Base branch moved on underneath it
 
 | What the worktree shows | Result |
 |---|---|
-| Resolved, however the session ended (even rate-limited) | `✅ rebased`; push, then **the Checks again** |
-| Unresolved, session rate-limited | Abort the rebase, Release |
+| Resolved, however the session ended (even rate-limited or stopped by an API failure) | `✅ rebased`; push, then **the Checks again** |
+| Unresolved, session rate-limited or stopped by an API failure | Abort the rebase, Release |
 | Unresolved otherwise | `❌ unresolved`; abort the rebase, spend the Fix budget |
 | The Stage could not run, or git could not be asked | `❌ unknown`; abort the rebase, Hand-off |
 

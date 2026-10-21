@@ -59,14 +59,14 @@ flowchart TD
 
 - **Frontier는 Lane을 채울 때마다 다시 조회합니다.** 한 번 찍어 둔 목록을 쓰지 않습니다. 그래서 blocker를 닫는 merge가 일어나면, 그것 때문에 기다리던 Ticket이 같은 Run에 들어옵니다.
 - **실패한 Ticket은 Hand-off되고** 그 Lane은 다음 Ticket을 가져갑니다. 나쁜 Ticket 하나 때문에 밤 전체를 잃지는 않습니다.
-- **Release가 일어나면 채우기를 멈춥니다.** rate limit에 걸린 Ticket은 Release되고, 같은 한도가 다음 Stage도 막을 테니 Run은 더 claim하지 않습니다. 아직 바쁜 Lane은 쥔 것을 마저 끝냅니다.
+- **Release가 일어나면 채우기를 멈춥니다.** rate limit이나 일시적인 API 장애로 멈춘 Ticket은 Release되고, 같은 원인이 다음 Stage도 막을 테니 Run은 더 claim하지 않습니다. 아직 바쁜 Lane은 쥔 것을 마저 끝냅니다. Run은 한도가 풀리기를 기다리지 않습니다. 풀리는 시각을 알려 줄 뿐이고, 다음 Run은 사람이나 Operator가 시작합니다.
 - **Run이 끝나는 때**는 바쁜 Lane이 없고 가져갈 것도 남지 않았을 때입니다. Frontier가 비었거나, 남은 것이 모두 막혀 있을 때죠.
 
 Lane 안에서 Ticket 하나에 일어나는 일은 [Ticket 하나가 merge되기까지](./ticket-to-merge.md)에 있습니다. Stranded Ticket과 Release는 [멈추고 이어 하기](./stopping-and-resuming.md)에 있습니다.
 
 ### `--lanes` {#lanes}
 
-Lane이 하나면 Run은 Frontier에서 Ticket을 하나씩 가져갑니다. Ticket 하나에 드는 시간은 대부분 implement와 verify Stage인데, 최대 1시간 20분 동안 도는 이 세션들은 Frontier의 다른 Ticket과 부딪힐 일이 없습니다. 그런데도 차례로 줄을 서니, 서로 무관한 Ticket 여섯 개는 하나일 때의 여섯 배가 걸립니다. Frontier의 Ticket끼리는 서로 막지 않으니 Lane을 늘리면 여러 개를 한꺼번에 가져갈 수 있고, rebase부터 merge까지의 [Landing](./ticket-to-merge.md#the-landing)만 한 번에 Lane 하나씩 지나갑니다.
+Lane이 하나면 Run은 Frontier에서 Ticket을 하나씩 가져갑니다. Ticket 하나에 드는 시간은 대부분 implement와 verify Stage인데, 최대 1시간 30분 동안 도는 이 세션들은 Frontier의 다른 Ticket과 부딪힐 일이 없습니다. 그런데도 차례로 줄을 서니, 서로 무관한 Ticket 여섯 개는 하나일 때의 여섯 배가 걸립니다. Frontier의 Ticket끼리는 서로 막지 않으니 Lane을 늘리면 여러 개를 한꺼번에 가져갈 수 있고, rebase부터 merge까지의 [Landing](./ticket-to-merge.md#the-landing)만 한 번에 Lane 하나씩 지나갑니다.
 
 `--lanes <n>`은 이번 Run에만 Lane `n`개를 주고, `ticket-runner.json`의 [`lanes`](./configuration.md#lanes)보다 우선합니다. 머신 하나가 Ticket을 몇 개까지 동시에 감당할지는 저장소가 아니라 그 머신이 정할 일이라, 이 값만은 명령줄에서 덮어씁니다. Ticket 번호 앞에 둬도 뒤에 둬도 되고, 지정한 Ticket 수보다 큰 값도 거절하지 않습니다.
 
@@ -155,7 +155,7 @@ Frontier blocked.
 |---|---|
 | `merged` | merge됨. pull request 번호가 붙음 |
 | `handed` | 사람에게 Hand-off됨. 멈춘 Stage와 이유가 붙음 |
-| `released` | rate limit 때문에 해당 Stage에서 Release됨. 누구도 할 일이 없음 |
+| `released` | 해당 Stage에서 `rate limit`이나 `API failure`(CLI가 재시도를 포기한 5xx 또는 응답 없는 API 오류)로 Release됨. 누구도 할 일이 없음 |
 | `skipped` | 이유와 함께 넘어감([Guard](./planning.md#guards), 또는 위의 표) |
 | `noted` | 바로 윗줄이 남긴 [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)와 간 곳. 이미 있는 이슈(열려 있던 Notes 이슈 포함)면 `comment`, Notes 이슈를 새로 연 Note 하나만 `new` |
 
@@ -163,7 +163,8 @@ Frontier blocked.
 |---|---|
 | `Frontier empty.` | 가져갈 것이 남지 않음 |
 | `Frontier blocked.` | 남은 것에 모두 열린 blocker가 있음 |
-| `Rate limited.` | Release가 멈춤 |
+| `Rate limited · resets 2026-09-20 03:40 UTC.` | rate limit으로 Release되어 멈춤. 시각은 CLI가 알려 준, 한도가 풀리는 시각(UTC)이고, 알려 주지 않았으면 `Rate limited.`로 끝남 |
+| `API failure.` | 일시적인 API 장애로 Release되어 멈춤 |
 | `Stopped at 22:07 · finishing #4 #9.` | 그 시각(UTC)에 Stop이 왔고, 그때 그 Ticket들이 Lane에 있었음 |
 
 Stop이나 Release로 끝난 Run은 Frontier 끝까지 가 보지 못했으니 `blocked` 줄을 출력하지 않습니다.

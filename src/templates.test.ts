@@ -382,6 +382,7 @@ describe("runSummary", () => {
     title: "Rebase conflict resolution",
     branch: "agent/6-rebase-conflict-resolution",
     stage: "implement" as const,
+    cause: "rate-limited" as const,
     notes: [],
   };
 
@@ -456,6 +457,20 @@ describe("runSummary", () => {
     expect(summary).toContain("  released #6 Rebase conflict resolution · rate limit at implement");
   });
 
+  it("says a transient API failure, not the rate limit, released a Ticket it stopped", () => {
+    const summary = runSummary({
+      version: VERSION,
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [{ ...released, stage: "verify", cause: "api-error" }],
+      stop: { reason: "api-error" },
+    });
+
+    expect(summary).toContain("  released #6 Rebase conflict resolution · API failure at verify");
+    expect(summary).not.toContain("rate limit");
+    expect(summary.trimEnd().split("\n").at(-1)).toBe("API failure.");
+  });
+
   it("names the guard that passed a candidate over", () => {
     const summary = runSummary({
       version: VERSION,
@@ -505,6 +520,20 @@ describe("runSummary", () => {
     });
 
     expect(summary.trimEnd().split("\n").at(-1)).toBe("Rate limited.");
+  });
+
+  it("says when the limit resets, in UTC to the minute, where the CLI said", () => {
+    const summary = runSummary({
+      version: VERSION,
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [released],
+      stop: { reason: "rate-limited", resetsAt: "2026-09-19T17:40:59.000Z" },
+    });
+
+    expect(summary.trimEnd().split("\n").at(-1)).toBe(
+      "Rate limited · resets 2026-09-19 17:40 UTC.",
+    );
   });
 
   it("reports nothing but the released Ticket when the rate limit stopped the Run", () => {

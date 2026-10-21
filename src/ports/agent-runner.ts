@@ -25,11 +25,14 @@ export const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"] as const;
 export type Effort = (typeof EFFORT_LEVELS)[number];
 
 /**
- * Why a Stage did not finish cleanly. `rate-limited` is singled out because the
- * pipeline releases a claim rather than blaming the Ticket for it.
+ * Why a Stage did not finish cleanly. `rate-limited` and `api-error` are singled
+ * out because the pipeline releases a claim rather than blaming the Ticket for
+ * either: one is the subscription running out of room, the other the API failing
+ * on its side after the CLI had given up retrying it.
  */
 export type StageFailure =
   | "rate-limited"
+  | "api-error"
   | "timed-out"
   | "turn-capped"
   | "nonzero-exit"
@@ -71,6 +74,12 @@ export interface StageResult {
   transcriptPath: string;
   turns?: number;
   durationMs: number;
+  /**
+   * When the subscription rate limit resets, ISO-8601, as the event that
+   * rejected the request said. Present only on a `rate-limited` Stage, and only
+   * when the CLI said.
+   */
+  limitResetsAt?: string;
 }
 
 /**

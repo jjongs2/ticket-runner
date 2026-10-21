@@ -45,7 +45,7 @@ flowchart TD
 ```
 <!-- Sources: src/orchestrator.ts, src/lifecycle.ts -->
 
-fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종류와 상관없이 두 번째 실패, 또는 fix Stage가 손쓸 수 없는 실패는 Hand-off입니다. rate limit에 걸린 Stage는 이 그림을 아예 벗어나 Ticket을 release합니다([멈추고 이어 하기](./stopping-and-resuming.md) 참고).
+fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종류와 상관없이 두 번째 실패, 또는 fix Stage가 손쓸 수 없는 실패는 Hand-off입니다. rate limit이나 일시적인 API 장애로 멈춘 Stage는 이 그림을 아예 벗어나 Ticket을 release합니다([멈추고 이어 하기](./stopping-and-resuming.md) 참고).
 
 ## Claim {#the-claim}
 
@@ -101,6 +101,7 @@ fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종�
 | `timed-out` | `❌ timed out` | `maxMinutes`에서 kill됨 |
 | `turn-capped` | `❌ turn capped` | `maxTurns`에 도달함 |
 | `rate-limited` | `⏸ rate limited` | 429, 거절된 `rate_limit_event`, 또는 한도를 언급한 메시지. Ticket을 release함 |
+| `api-error` | `⏸ API failure` | CLI가 재시도를 마친 뒤 `terminal_reason: "api_error"`로 끝나고 `api_error_status`가 5xx이거나 없음. Ticket을 release함 |
 | `nonzero-exit` | `❌ exited non-zero` | 그 밖에 실패한 세션 |
 | `invalid-result` | `❌ invalid result` | verify Stage가 Verdict를 아예 내놓지 않음 |
 
@@ -159,11 +160,11 @@ merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 �
 | push나 pull request 열기가 실패 | pr | 아니요, Hand-off |
 | CI 시간 초과, conflicting, check 없음 | ci | 아니요, Hand-off |
 | merge 실패 | merge | 아니요, Hand-off |
-| 어디서든 rate limit | 어디든 | 아니요, Release |
+| 어디서든 rate limit이나 일시적인 API 장애 | 어디든 | 아니요, Release |
 
 fix Stage가 끝나면 Ticket은 Check부터 다시 시작합니다. verify Stage를 포함해 모든 관문이 수정본을 다시 채점하므로, 수정본도 처음 구현과 같은 기준을 통과해야 합니다. fix Stage 후 branch가 자라지 않았다면 곧바로 Hand-off입니다. 아무도 건드리지 않은 branch를 다시 채점해 봐야 똑같이 실패할 뿐이기 때문입니다. squash나 amend로 짧아진 branch도 자라지 않은 것으로 봅니다. 이때 hand-off 코멘트에는 fix Stage가 받았던 evidence가 실리므로, 사람에게 넘어간 `unmet` 기준은 그 evidence가 묻는 질문과 함께 도착합니다. 종류와 상관없이 두 번째 실패는 Hand-off이고, hand-off 코멘트에 budget을 이미 썼다고 적힙니다.
 
-budget 사용 여부는 fix Stage가 돌아온 뒤 State file에 기록됩니다. rate limit으로 멈춘 fix Stage는 아무것도 쓰지 않습니다. Release는 이미 쓴 budget을 다음 Run으로 그대로 넘기고, Hand-off는 budget을 되돌려 줍니다. Ticket은 사람 손을 거쳐야만 돌아오기 때문입니다.
+budget 사용 여부는 fix Stage가 돌아온 뒤 State file에 기록됩니다. rate limit이나 API 장애로 멈춘 fix Stage는 아무것도 쓰지 않습니다. Release는 이미 쓴 budget을 다음 Run으로 그대로 넘기고, Hand-off는 budget을 되돌려 줍니다. Ticket은 사람 손을 거쳐야만 돌아오기 때문입니다.
 
 ## Lane과 Frontier 다시 채우기 {#lanes-and-the-frontier-refill}
 
@@ -222,8 +223,8 @@ Ticket은 fix Stage, Hand-off, Release 때도 Landing을 나가므로, 누구도
 
 | worktree 상태 | 결과 |
 |---|---|
-| 해결됨, 세션이 어떻게 끝났든(rate limit이어도) | `✅ rebased`. push한 뒤 **Check를 다시 돌림** |
-| 해결 안 됨, 세션이 rate limit에 걸림 | rebase를 abort하고 Release |
+| 해결됨, 세션이 어떻게 끝났든(rate limit이나 API 장애여도) | `✅ rebased`. push한 뒤 **Check를 다시 돌림** |
+| 해결 안 됨, 세션이 rate limit이나 API 장애로 멈춤 | rebase를 abort하고 Release |
 | 그 밖의 이유로 해결 안 됨 | `❌ unresolved`. rebase를 abort하고 Fix budget을 씀 |
 | Stage를 띄우지 못했거나 git에 물을 수 없음 | `❌ unknown`. rebase를 abort하고 Hand-off |
 

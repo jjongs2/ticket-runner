@@ -38,6 +38,7 @@ import {
 import { retryLogDir, stageLogDir } from "./run-log.js";
 import { holdsClaim } from "./stranded.js";
 import {
+  RELEASE_WORDS,
   draftPullRequestBody,
   guardComment,
   handoffComment,
@@ -81,8 +82,15 @@ export type TicketOutcome =
       ticket: number;
       title: string;
       branch: string;
-      /** Where the rate limit landed, which is all the summary says about it. */
+      /** Where the Stage was stopped, which is most of what the summary says about it. */
       stage: FailurePoint;
+      /** What stopped it, which is the rest. */
+      cause: ReleaseCause;
+      /**
+       * When the rate limit resets, ISO-8601, where the Stage it stopped was
+       * told. Absent for an API failure, which says nothing of when it ends.
+       */
+      limitResetsAt?: string;
       notes: RoutedNote[];
     }
   | {
@@ -157,21 +165,36 @@ class TicketFailure extends Error {
 }
 
 /**
- * A Stage the subscription rate limit stopped.
+ * The Stage failures that say nothing about the Ticket: the subscription rate
+ * limit, and a transient API failure — the API overloaded, broken or silent on
+ * its own side after the CLI had already retried it.
+ */
+export type ReleaseCause = Extract<StageFailure, "rate-limited" | "api-error">;
+
+function releaseCause(result: StageResult): ReleaseCause | undefined {
+  return result.failure === "rate-limited" || result.failure === "api-error"
+    ? result.failure
+    : undefined;
+}
+
+/**
+ * A Stage something other than the Ticket stopped, on its way to a Release.
  *
- * The one Stage failure that says nothing about the Ticket, so it is the one
- * that neither ends it nor spends its Fix budget: the Claim is released and a
- * State file is left for the next Run to resume from (ADR-0004). It is not a
+ * The Stage failures that say nothing about the Ticket are the ones that
+ * neither end it nor spend its Fix budget: the Claim is released and a State
+ * file is left for the next Run to resume from (ADR-0004). It is not a
  * {@link TicketFailure} because every path that handles one of those would
  * either hand the Ticket off or buy it a fix Stage, and this is neither.
  */
-class RateLimited extends Error {
+class Releasing extends Error {
   constructor(
     readonly point: FailurePoint,
     /** The state the Ticket reached, which is where a later Run picks it up. */
     readonly state: ReachedState,
+    readonly reason: ReleaseCause,
+    readonly limitResetsAt?: string,
   ) {
-    super(`the ${point} Stage hit the subscription rate limit`);
+    super(`the ${point} Stage was stopped · ${RELEASE_WORDS[reason]}`);
   }
 }
 
@@ -194,9 +217,10 @@ function asTicketFailure(error: unknown, point: FailurePoint): TicketFailure {
  * Nothing ends in a merge that has not been through a green pass of the whole
  * gauntlet.
  *
- * A Stage the subscription rate limit stopped ends none of that: the Ticket is
- * released, and a Run started once the limit has reset resumes it from the state
- * it had reached rather than from the top. A hand-off keeps that state too, so a
+ * A Stage the subscription rate limit or a transient API failure stopped ends
+ * none of that: the Ticket is released, and a Run started once the limit has
+ * reset, or the API recovered, resumes it from the state it had reached rather
+ * than from the top. A hand-off keeps that state too, so a
  * human who relabels the Ticket `ready-for-agent` hands it back and the next Run
  * carries on from what it reached rather than paying for the implement Stage a
  * second time.
@@ -455,9 +479,9 @@ async function takeTicket(
         await requireGreenCi(pipeline, pullRequest, progress);
         break;
       } catch (error) {
-        // A rate limit is nobody's defect, so the fix budget does not answer
-        // for it: the Ticket is released, whole, further up.
-        if (error instanceof RateLimited) throw error;
+        // A rate limit or an API failure is nobody's defect, so the fix budget
+        // does not answer for it: the Ticket is released, whole, further up.
+        if (error instanceof Releasing) throw error;
         const failure = asTicketFailure(error, point);
         if (fixUsed || failure.kind === undefined) throw failure;
         fixUsed = true;
@@ -480,8 +504,8 @@ async function takeTicket(
           record,
         );
         // Recorded once the Stage has come back, not when the budget was
-        // committed: a fix Stage the rate limit stopped before it ran spends
-        // nothing, and the release below says so.
+        // committed: a fix Stage the rate limit or an API failure stopped
+        // before it ran spends nothing, and the release below says so.
         await record.advance({ fixUsed: true });
       }
     }
@@ -497,15 +521,15 @@ async function takeTicket(
     // pull request and a Release's labels are nothing for the next Ticket to
     // wait behind, and a Ticket that never reached the rebase gives up nothing.
     landing.leave();
-    if (error instanceof RateLimited) {
+    if (error instanceof Releasing) {
       return release(pipeline, {
         issue,
         user,
         branch,
-        limit: error,
+        stopped: error,
         record,
-        // A fix Stage the limit stopped before it ran spends nothing: the
-        // budget is still there for the Run that resumes the Ticket.
+        // A fix Stage stopped before it ran spends nothing: the budget is
+        // still there for the Run that resumes the Ticket.
         fixUsed: fixUsed && error.point !== "fix",
         notes,
       });
@@ -855,7 +879,8 @@ function runStage(
 }
 
 /**
- * Report a Stage the rate limit stopped, and raise the Ticket's release.
+ * Report a Stage the rate limit or an API failure stopped, and raise the
+ * Ticket's release.
  *
  * The one place the pause is composed, because the conflict Stage reaches it by
  * another road: the row reads as a pause rather than a cross, and the error
@@ -868,26 +893,34 @@ async function releasedStage(
   stage: StageName,
   point: FailurePoint,
   result: StageResult,
-): Promise<RateLimited> {
-  await progress.record(stageRow(stage, result, "⏸ rate limited"));
-  return new RateLimited(point, stage === "implement" ? "claimed" : "implemented");
+  cause: ReleaseCause,
+): Promise<Releasing> {
+  await progress.record(stageRow(stage, result, `⏸ ${STAGE_FAILURES[cause].cell}`));
+  return new Releasing(
+    point,
+    stage === "implement" ? "claimed" : "implemented",
+    cause,
+    result.limitResetsAt,
+  );
 }
 
 /**
  * Report a Stage that did not come back, and say what it costs the Ticket.
  *
- * The rate limit is the one Stage failure the Ticket did nothing to earn, so it
- * releases the Ticket instead of ending it. Every other failure is the Stage's
- * own, and its caller decides whether the fix budget can buy another.
+ * The rate limit and a transient API failure are the Stage failures the Ticket
+ * did nothing to earn, so they release the Ticket instead of ending it. Every
+ * other failure is the Stage's own, and its caller decides whether the fix
+ * budget can buy another.
  */
 async function stageDidNotFinish(
   pipeline: Pipeline,
   progress: Progress,
   stage: "implement" | "verify" | "fix",
   result: StageResult,
-): Promise<TicketFailure | RateLimited> {
-  if (result.failure === "rate-limited") {
-    return await releasedStage(progress, stage, stage, result);
+): Promise<TicketFailure | Releasing> {
+  const cause = releaseCause(result);
+  if (cause !== undefined) {
+    return await releasedStage(progress, stage, stage, result, cause);
   }
 
   await progress.record(stageRow(stage, result, `❌ ${stageFailureCell(result)}`));
@@ -1021,15 +1054,15 @@ async function implement(
   await recordTitle(result, record);
 
   // Pushed whatever became of the Stage, like its Notes: a session that
-  // committed and then ran into the rate limit still committed, and the Host
-  // that resumes the Ticket may be another one.
+  // committed and then was stopped by the rate limit or an API failure still
+  // committed, and the Host that resumes the Ticket may be another one.
   const commits = await commitCount(pipeline, branch);
   if (commits > 0) await pushCommitted(pipeline, issue.number, worktree, branch);
   if (!result.ok) throw await stageDidNotFinish(pipeline, progress, "implement", result);
 
   // An agent that gave up silently leaves a clean branch behind. That is a
   // failure, not something to verify. A resumed Ticket's branch is not clean —
-  // it carries what the Stage the rate limit stopped had committed — so this
+  // it carries what the Stage a Release stopped had committed — so this
   // asks the same question there: is there anything at all to grade. Whether it
   // is enough is the Verdict's business, not this guard's.
   if (commits === 0) {
@@ -1049,7 +1082,7 @@ async function implement(
  * Nothing is discarded here: a fix Stage sent in for it decides what belongs
  * to the Ticket, and a hand-off leaves the changes where a human can find them.
  * The summary names no Stage, because a resumed Ticket cannot say which one
- * left them: a fix Stage the rate limit stopped spent no budget.
+ * left them: a fix Stage a Release stopped spent no budget.
  */
 async function requireCommitted(
   pipeline: Pipeline,
@@ -1279,9 +1312,10 @@ async function fix(
  * came back clean because it quietly abandoned the rebase has not, and only the
  * worktree can tell the difference.
  *
- * A Stage the rate limit stopped is read the same way, and only then released:
- * one that had already finished the rebase leaves nothing that needs an agent
- * session, so the Ticket carries on to the Checks, the pull request and CI.
+ * A Stage the rate limit or an API failure stopped is read the same way, and
+ * only then released: one that had already finished the rebase leaves nothing
+ * that needs an agent session, so the Ticket carries on to the Checks, the pull
+ * request and CI.
  */
 async function resolveConflict(
   pipeline: Pipeline,
@@ -1328,7 +1362,7 @@ async function conflictStage(
   logDir: string,
   conflict: string,
   progress: Progress,
-): Promise<TicketFailure | RateLimited | undefined> {
+): Promise<TicketFailure | Releasing | undefined> {
   const stage = pipeline.config.stages.conflict;
   try {
     const result = await runStage(pipeline, "conflict", {
@@ -1347,8 +1381,8 @@ async function conflictStage(
     const state = await pipeline.workspace.rebaseState(worktree, pipeline.baseBranch);
     if (state.resolved) {
       // The worktree decides the row, as it decides the outcome: a Stage that
-      // ran out of turns, or into the rate limit, after finishing the rebase
-      // did the job it was sent to do.
+      // ran out of turns, or into the rate limit or an API failure, after
+      // finishing the rebase did the job it was sent to do.
       await progress.record(stageRow("conflict", result, "✅ rebased"));
       // The rebase rewrote the branch, and the resolution is a commit of the
       // Stage's like any other.
@@ -1356,11 +1390,13 @@ async function conflictStage(
       return undefined;
     }
 
-    // A rate limit left the conflict exactly as it found it: nothing for a fix
-    // Stage to mend and nothing to blame the Ticket for. The caller still owes
-    // the worktree its abort, so the branch the resumed Run rebases is clean.
-    if (result.failure === "rate-limited") {
-      return await releasedStage(progress, "conflict", "rebase", result);
+    // A rate limit or an API failure left the conflict exactly as it found it:
+    // nothing for a fix Stage to mend and nothing to blame the Ticket for. The
+    // caller still owes the worktree its abort, so the branch the resumed Run
+    // rebases is clean.
+    const cause = releaseCause(result);
+    if (cause !== undefined) {
+      return await releasedStage(progress, "conflict", "rebase", result, cause);
     }
 
     await progress.record(stageRow("conflict", result, "❌ unresolved"));
@@ -1493,7 +1529,7 @@ interface Release {
   issue: Issue;
   user: string;
   branch: string;
-  limit: RateLimited;
+  stopped: Releasing;
   /** The Ticket's State file, which the release brings up to date and leaves. */
   record: ResumeRecord;
   /** Whether the Fix budget was spent by a failure of the Ticket's own. */
@@ -1512,23 +1548,34 @@ interface Release {
  */
 async function release(
   pipeline: Pipeline,
-  { issue, user, branch, limit, record, fixUsed, notes }: Release,
+  { issue, user, branch, stopped, record, fixUsed, notes }: Release,
 ): Promise<TicketOutcome> {
   const { tracker, config } = pipeline;
   const ticket = issue.number;
 
   // Brought up to date before the Claim comes off: a Ticket back on the Frontier
   // whose state is out of date is one the next Run would redo Stages for.
-  await record.advance({ state: limit.state, fixUsed });
+  await record.advance({ state: stopped.state, fixUsed });
 
   // The claim, undone in the order it was made, so the assignee — which is what
   // another Run reads to tell a taken Ticket from a free one — comes off last.
   await tracker.addLabel(ticket, config.labels.readyForAgent);
   await tracker.removeLabel(ticket, config.labels.inProgress);
   await tracker.unassign(ticket, user);
-  pipeline.log?.(`#${ticket} released at ${limit.point} · rate limit · ${branch}`);
+  pipeline.log?.(
+    `#${ticket} released at ${stopped.point} · ${RELEASE_WORDS[stopped.reason]} · ${branch}`,
+  );
 
-  return { outcome: "released", ticket, title: issue.title, branch, stage: limit.point, notes };
+  return {
+    outcome: "released",
+    ticket,
+    title: issue.title,
+    branch,
+    stage: stopped.point,
+    cause: stopped.reason,
+    ...(stopped.limitResetsAt === undefined ? {} : { limitResetsAt: stopped.limitResetsAt }),
+    notes,
+  };
 }
 
 /** The worktree a hand-off has to hand, which is not always one of this Run's. */
@@ -1799,6 +1846,11 @@ const STAGE_FAILURES: Record<
     // The sentence is kept true rather than dropped, because the table is one
     // entry per failure and the next path to need it must not have to invent it.
     sentence: () => "hit the subscription rate limit",
+  },
+  // Released like the rate limit, so its sentence is kept for the same reason.
+  "api-error": {
+    cell: "API failure",
+    sentence: () => "was stopped by an API failure the CLI had given up retrying",
   },
   "timed-out": {
     cell: "timed out",

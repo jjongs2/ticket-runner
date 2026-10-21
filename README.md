@@ -24,8 +24,9 @@ every such issue whose blockers have closed, it:
 
 One failure buys one fix session and a second pass. Anything it still cannot finish goes back
 to you, labelled `ready-for-human`, with a draft pull request and a comment saying what failed.
-A session stopped by your subscription's rate limit costs nothing: the issue goes back on the
-board, and the next Run carries on from where it stopped.
+A session stopped by your subscription's rate limit, or by the API failing on its side, costs
+nothing: the issue goes back on the board, the Run says when the limit resets, and the next Run
+carries on from where it stopped.
 
 ## Is it for you?
 

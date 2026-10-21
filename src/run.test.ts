@@ -371,6 +371,54 @@ describe("a Ticket another Host left", () => {
   });
 });
 
+describe("the time a rate-limited Run says the limit resets", () => {
+  const RESETS_AT = "2026-09-19T17:40:00.000Z";
+
+  it("is the one the Stage the limit stopped was told", async () => {
+    tracker.addIssue({ number: 4 });
+    runner.queue("implement", { ok: false, failure: "rate-limited", limitResetsAt: RESETS_AT });
+
+    const result = await processRun(pipeline());
+
+    expect(result.stop).toEqual({ reason: "rate-limited", resetsAt: RESETS_AT });
+  });
+
+  it("is taken from a later Lane the limit stopped when the first was told none", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    runner.queue("implement", { ok: false, failure: "rate-limited" });
+    runner.queue("implement", { ok: false, failure: "rate-limited", limitResetsAt: RESETS_AT });
+
+    const result = await processRun(pipeline(2));
+
+    expect(result.stop).toEqual({ reason: "rate-limited", resetsAt: RESETS_AT });
+    expect(logged.filter((line) => line.includes("stopped the Run"))).toHaveLength(1);
+  });
+});
+
+describe("a Ticket a transient API failure released", () => {
+  beforeEach(() => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    runner.queue("implement", { ok: false, failure: "api-error" });
+  });
+
+  it("ends the Run, which claims no further Ticket", async () => {
+    const result = await processRun(pipeline());
+
+    expect(processed()).toEqual([4]);
+    expect(result.outcomes).toEqual([
+      expect.objectContaining({ outcome: "released", ticket: 4, cause: "api-error" }),
+    ]);
+    expect(workspace.calls).not.toContain("createWorktree:agent/5-ticket-5");
+  });
+
+  it("says an API failure ended the Run, not the rate limit", async () => {
+    const result = await processRun(pipeline());
+
+    expect(result.stop).toEqual({ reason: "api-error" });
+    expect(logged).toContain("#4 stopped the Run · API failure");
+  });
+});
+
 describe("a Ticket the rate limit released", () => {
   beforeEach(() => {
     for (const number of [4, 5]) tracker.addIssue({ number });

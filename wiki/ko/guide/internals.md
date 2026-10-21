@@ -73,7 +73,7 @@ claude --print <prompt> --output-format stream-json --verbose \
   | `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | `1` | Host 사용자의 memory는 Target이 아닌 그 사람의 프로젝트에 관한 것 |
   | `CLAUDE_CODE_SHELL` | `/bin/bash`, 있을 때만 | zsh는 아무것도 맞지 않는 glob 하나에 명령 전체를 멈춤 |
 - Stage가 시작되는 순간부터 `<stage>.command`, `.stdout`, `.stderr`, `.transcript.jsonl`을 씁니다.
-- `maxMinutes`가 지나면 자식과 자식이 띄운 프로세스를 모두 죽이고, 실패를 `rate-limited`, `timed-out`, `turn-capped`, `nonzero-exit`, `invalid-result`로 분류합니다.
+- `maxMinutes`가 지나면 자식과 자식이 띄운 프로세스를 모두 죽이고, 실패를 `rate-limited`, `api-error`, `timed-out`, `turn-capped`, `nonzero-exit`, `invalid-result`로 분류합니다.
 
 ### `GitWorkspace` {#gitworkspace}
 

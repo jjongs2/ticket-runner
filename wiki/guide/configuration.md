@@ -100,7 +100,7 @@ Each Stage is one `claude -p` session. `stages` takes an object per Stage, and e
 | Stage | What it does | `maxTurns` | `maxMinutes` |
 |---|---|---|---|
 | `implement` | Drives `/mattpocock-skills:implement` on the Ticket | `300` | `60` |
-| `verify` | Tries to prove the Acceptance Criteria are not met, and returns a Verdict | `80` | `20` |
+| `verify` | Tries to prove the Acceptance Criteria are not met, and returns a Verdict | `130` | `30` |
 | `fix` | Mends the one failure that spent the Fix budget | `150` | `40` |
 | `conflict` | Resolves the conflict where a rebase stopped | `120` | `30` |
 

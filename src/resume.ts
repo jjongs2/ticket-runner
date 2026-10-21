@@ -11,10 +11,10 @@ import { REACHED_STATES, type StateFile, type TicketState } from "./ports/worksp
  * resuming, so it is written as part of the Claim and rewritten whenever the
  * Ticket reaches something a later Run should not pay for again. Three Runs read
  * it, and what the board says decides which. One finds a Ticket the subscription
- * rate limit released: nothing was wrong with it, so the Claim came off and this
- * file says where to carry on from. One finds a Ticket still claimed — the Run
- * that claimed it was killed and never released anything — and resumes it in
- * place. One finds a Ticket a human was handed and has relabelled
+ * rate limit or a transient API failure released: nothing was wrong with it, so
+ * the Claim came off and this file says where to carry on from. One finds a
+ * Ticket still claimed — the Run that claimed it was killed and never released
+ * anything — and resumes it in place. One finds a Ticket a human was handed and has relabelled
  * `ready-for-agent`, which is the human handing it back. A Ticket still sitting
  * in `ready-for-human` is none of them: its file is inert until a human moves
  * the label or the issue closes.

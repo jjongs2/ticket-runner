@@ -1930,7 +1930,22 @@ describe("releasing a rate-limited Ticket", () => {
       title: "Skeleton: one Ticket end to end",
       branch: BRANCH,
       stage: "implement",
+      cause: "rate-limited",
       notes: [],
+    });
+  });
+
+  it("carries the time the limit resets, when the Stage said", async () => {
+    runner.queue("verify", {
+      ok: false,
+      failure: "rate-limited",
+      limitResetsAt: "2026-09-19T17:40:00.000Z",
+    });
+
+    expect(await run()).toMatchObject({
+      outcome: "released",
+      cause: "rate-limited",
+      limitResetsAt: "2026-09-19T17:40:00.000Z",
     });
   });
 
@@ -2078,6 +2093,77 @@ describe("releasing a rate-limited Ticket", () => {
   it("leaves no State file behind when the Ticket merges", async () => {
     expect(await run()).toMatchObject({ outcome: "merged" });
     expect(state()).toBeUndefined();
+  });
+});
+
+describe("releasing a Ticket a transient API failure stopped", () => {
+  const state = () => workspace.state(TICKET);
+  const apiError = { ok: false, failure: "api-error" } as const;
+
+  it("releases the Ticket as a rate limit does, naming the API failure", async () => {
+    runner.queue("implement", apiError);
+
+    const outcome = await run();
+
+    expect(outcome).toEqual({
+      outcome: "released",
+      ticket: TICKET,
+      title: "Skeleton: one Ticket end to end",
+      branch: BRANCH,
+      stage: "implement",
+      cause: "api-error",
+      notes: [],
+    });
+    expect(tracker.issue(TICKET).labels).toEqual(["ready-for-agent"]);
+    expect(tracker.issue(TICKET).assignees).toEqual([]);
+    expect(notices()).toEqual([]);
+    expect(tracker.pullRequests).toEqual([]);
+    expect(workspace.worktrees.get(worktree)).toBe(BRANCH);
+    expect(workspace.calls).not.toContain(`deleteRemoteBranch:${BRANCH}`);
+    expect(state()).toMatchObject({ state: "claimed", fixUsed: false });
+    expect(progressTable()).toContain("| implement | ⏸ API failure | 7 | 0m |");
+  });
+
+  it("releases a verify Stage it stopped with the implement Stage's work recorded", async () => {
+    runner.queue("verify", apiError);
+
+    expect(await run()).toMatchObject({ outcome: "released", stage: "verify", cause: "api-error" });
+    expect(state()).toMatchObject({ state: "implemented", fixUsed: false });
+    expect(progressTable()).toContain("| verify | ⏸ API failure |");
+  });
+
+  it("gives back the fix budget a fix Stage it stopped never spent", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    runner.queue("fix", apiError);
+
+    expect(await run()).toMatchObject({ outcome: "released", stage: "fix", cause: "api-error" });
+    expect(state()).toMatchObject({ state: "implemented", fixUsed: false });
+    expect(progressTable()).toContain("| fix | ⏸ API failure |");
+  });
+
+  it("keeps a fix budget an earlier pass of this Run spent", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    runner.queue("verify", apiError);
+
+    expect(await run()).toMatchObject({ outcome: "released", stage: "verify" });
+    expect(state()).toMatchObject({ fixUsed: true });
+  });
+
+  it("aborts the rebase a conflict Stage it stopped left behind", async () => {
+    workspace.rebaseOutcome = { ok: false, conflict: CONFLICT };
+    workspace.rebaseStateAfterStage = UNRESOLVED;
+    runner.queue("conflict", apiError);
+
+    expect(await run()).toMatchObject({ outcome: "released", stage: "rebase", cause: "api-error" });
+    expect(runner.stages()).toEqual(["implement", "verify", "conflict"]);
+    expect(workspace.aborts).toBe(1);
+    expect(progressTable()).toContain("| conflict | ⏸ API failure |");
+  });
+
+  it("still hands off a Stage that ended on any other error", async () => {
+    runner.queue("implement", { ok: false, failure: "nonzero-exit" });
+
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "implement" });
   });
 });
 

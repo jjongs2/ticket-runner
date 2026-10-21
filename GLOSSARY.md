@@ -119,7 +119,7 @@ Giving a Ticket to a human, which is how every ending that is not a merge or a R
 _Avoid_: handover, escalation, bail-out, failure (a Ticket is handed off for reasons that are nobody's defect too)
 
 **Release**:
-What a rate-limited Stage does to a Ticket: the Claim is undone, `ready-for-agent` goes back on, and the branch and the State file stay on the Target's remote. The label is the difference from a Hand-off — the pipeline itself takes the next turn, so nothing is commented, nobody is notified and no Fix budget is spent, the Ticket having done nothing wrong. Alone among the endings it also stops the Run that made it claiming any more Tickets, because the limit that stopped one Stage will stop the next; the Lanes still busy finish what they hold.
+What a Stage the subscription rate limit or a transient API failure stopped does to a Ticket: the Claim is undone, `ready-for-agent` goes back on, and the branch and the State file stay on the Target's remote. A transient API failure is a Stage ending on an API error with a 5xx status or none, after the CLI had already given up retrying it, so the Stage is not retried in place either. The label is the difference from a Hand-off — the pipeline itself takes the next turn, so nothing is commented, nobody is notified and no Fix budget is spent, the Ticket having done nothing wrong. Alone among the endings it also stops the Run that made it claiming any more Tickets, because what stopped one Stage will stop the next; the Lanes still busy finish what they hold. The Run does not wait for the limit to reset: its summary says when it resets, where the CLI said, and a human or an Operator starts the next Run.
 _Avoid_: pause, defer, requeue, unclaim
 
 **Stop**:
@@ -142,7 +142,7 @@ _Avoid_: handoff, finding, TODO, side note
 
 **Version**:
 A number `main` carries as a tag and an installed copy of the pipeline reports. What a Target's conventions document, a Ticket's State file and a Run's transcripts are stamped with, so each can be traced to the pipeline that wrote it. The conventions document's stamp is also the Version an Operator installs on a cloud Host whose own setup installed none; a Host whose setup did install one runs that one, whatever the stamp says. A development checkout reports the last Version and the commit it actually runs, because between two Versions the number alone says nothing.
-_Avoid_: release (a Release is what a rate-limited Stage does to a Ticket), build, revision, tag (the tag is where a Version lives, not what it is)
+_Avoid_: release (a Release is what a Stage the rate limit or a transient API failure stopped does to a Ticket), build, revision, tag (the tag is where a Version lives, not what it is)
 
 **Version PR**:
 The pull request that raises the number and carries the Version notes; its merge is what cuts a Version. Opened by a human with an agent's help: the agent proposes the number by the rule and drafts the notes, and the human's review and merge are the decision, because when a Version is cut is a Planning decision, not something the pipeline infers from what merged.
