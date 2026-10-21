@@ -193,7 +193,6 @@ async function spawnFailure(error: unknown): Promise<Execution> {
   return { exitCode: 1, stdout: "", stderr: message, output: message, timedOut: false };
 }
 
-
 function buildArgs(request: StageRequest): string[] {
   const args = [
     "--print",

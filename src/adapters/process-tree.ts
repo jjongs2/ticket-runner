@@ -21,8 +21,8 @@ interface ProcessRow {
   pgid: number;
 }
 
-/** What one kill signals. */
-interface Targets {
+/** A command's processes as one kill signals them. */
+interface Tree {
   pids: Set<number>;
   /** Process groups led by one of the pids, never the Run's own. */
   groups: Set<number>;
@@ -34,26 +34,26 @@ interface Targets {
  * left, or once the SIGKILL is sent.
  */
 export async function killTree(root: number, graceMs: number): Promise<void> {
-  const targets = find([root]);
-  signal(targets, "SIGTERM");
+  const tree = treeOf([root]);
+  signal(tree, "SIGTERM");
 
   const deadline = Date.now() + graceMs;
   while (Date.now() < deadline) {
-    if (!anyAlive(targets)) return;
+    if (!anyAlive(tree)) return;
     await new Promise((resolve) => setTimeout(resolve, POLL_MS));
   }
 
   // Walked again from what survived: a process can start another in the grace.
-  const stragglers = find([...targets.pids].filter((pid) => alive(pid)));
-  for (const group of targets.groups) stragglers.groups.add(group);
+  const stragglers = treeOf([...tree.pids].filter((pid) => alive(pid)));
+  for (const group of tree.groups) stragglers.groups.add(group);
   signal(stragglers, "SIGKILL");
 }
 
 /**
  * The roots, their descendants and the groups those lead. Without `ps` to ask,
- * it is the roots alone, which is what a kill was before it took descendants.
+ * it is the roots alone.
  */
-function find(roots: number[]): Targets {
+function treeOf(roots: number[]): Tree {
   const table = processTable();
   if (table === undefined) return { pids: new Set(roots), groups: new Set() };
 
@@ -90,13 +90,13 @@ function processTable(): ProcessRow[] | undefined {
   });
 }
 
-function signal(targets: Targets, name: NodeJS.Signals): void {
-  for (const group of targets.groups) send(-group, name);
-  for (const pid of targets.pids) send(pid, name);
+function signal(tree: Tree, name: NodeJS.Signals): void {
+  for (const group of tree.groups) send(-group, name);
+  for (const pid of tree.pids) send(pid, name);
 }
 
-function anyAlive(targets: Targets): boolean {
-  return [...targets.groups].some((group) => alive(-group)) || [...targets.pids].some(alive);
+function anyAlive(tree: Tree): boolean {
+  return [...tree.groups].some((group) => alive(-group)) || [...tree.pids].some(alive);
 }
 
 /** A negative id is a process group. */

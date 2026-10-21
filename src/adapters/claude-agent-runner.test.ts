@@ -184,6 +184,8 @@ describe("the command line", () => {
   it("denies the tools that act beyond the worktree and the session", async () => {
     await runner(execution({ stdout: SUCCESS })).run(request());
 
+    // The option takes every word up to the next one, so another option has
+    // to follow the list, or the next argument would be read as a tool.
     expect(calls[0]?.args.join(" ")).toContain(
       "--disallowedTools CronCreate CronDelete RemoteTrigger PushNotification ScheduleWakeup Workflow --",
     );

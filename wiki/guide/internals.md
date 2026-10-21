@@ -64,7 +64,7 @@ claude --print <prompt> --output-format stream-json --verbose \
   --model … --effort … --max-turns … [--json-schema …]
 ```
 
-- It gives the session no MCP server, so none of the claude.ai connectors of the Host user's account, and none of the tools that act beyond the worktree and the session.
+- `--strict-mcp-config` leaves the session no MCP server, the claude.ai connectors of the Host user's account included. `--disallowedTools` takes away the tools that act beyond the worktree and the session.
 - It sets the child's environment:
 
   | Variable | Value | Why |
@@ -85,7 +85,7 @@ claude --print <prompt> --output-format stream-json --verbose \
 ### Smaller adapters
 
 - [`exec.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/exec.ts) spawns a child with a timeout and streaming sinks. It reports `timedOut` separately, because a command may exit 124 on its own.
-- [`process-tree.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/process-tree.ts) kills a command at its time limit together with its descendants and the process groups they lead: SIGTERM, then SIGKILL after 5 seconds. The command's own group would not do, since a Stage shares the Run's ([ADR-0006](#adr-0006)) and Claude Code runs each Bash command in a group of its own.
+- [`process-tree.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/process-tree.ts) kills a command at its time limit together with its descendants and the process groups they lead: SIGTERM, then SIGKILL after 5 seconds. The command's own group would not do, since a Stage shares the Run's ([ADR-0006](#adr-0006)) and Claude Code runs each Bash command in a session of its own.
 - [`repo-root.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/repo-root.ts) finds the main checkout, even from inside a worktree, so the lock, `.worktrees/` and the logs land in one place per clone.
 - [`version.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts) reads which [Version](#versions) this copy is. It is an adapter because it runs git, though no port describes it.
 
