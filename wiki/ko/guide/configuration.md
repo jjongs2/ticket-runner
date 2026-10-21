@@ -100,7 +100,7 @@ Stage 하나는 `claude -p` 세션 하나입니다. `stages`는 Stage마다 객�
 | Stage | 하는 일 | `maxTurns` | `maxMinutes` |
 |---|---|---|---|
 | `implement` | Ticket에 `/mattpocock-skills:implement`를 돌림 | `300` | `60` |
-| `verify` | Acceptance Criteria가 충족되지 않았음을 증명하려 하고, Verdict를 돌려줌 | `80` | `20` |
+| `verify` | Acceptance Criteria가 충족되지 않았음을 증명하려 하고, Verdict를 돌려줌 | `130` | `30` |
 | `fix` | Fix budget을 쓰게 만든 실패 하나를 고침 | `150` | `40` |
 | `conflict` | rebase가 멈춘 자리에서 충돌을 해결함 | `120` | `30` |
 

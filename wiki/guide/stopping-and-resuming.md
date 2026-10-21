@@ -15,7 +15,7 @@ This page covers what each ending leaves behind, and how the pipeline gets back 
 |---|---|---|
 | Merge | a green pass through every gate | a closed issue; branch and State file gone |
 | [Hand-off](#hand-off) | a failure the Fix budget cannot cover | `ready-for-human`, a comment, a draft pull request; work and State kept |
-| [Release](#release-on-a-rate-limit) | the subscription rate limit | `ready-for-agent`, no comment; work and State kept |
+| [Release](#release-on-a-rate-limit) | the subscription rate limit, or a transient API failure | `ready-for-agent`, no comment; work and State kept |
 | [Stop](#stop-and-kill) | `ticket-runner stop` (SIGTERM) | nothing new |
 | [Kill](#stop-and-kill) | Ctrl+C, SIGKILL, a vanished Host | the Claim; work as last pushed, and State |
 
@@ -113,9 +113,9 @@ Until the relabel, the State file is inert. No Frontier offers a `ready-for-huma
 
 Why a Hand-off keeps the State at all: the Run once misread the rate limit as an ordinary failure and handed off every Ticket it reached. Each of those cost a human a deleted branch. With the State kept, each costs one relabel ([ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md), second amendment).
 
-## Release on a rate limit
+## Release on a rate limit or an API failure {#release-on-a-rate-limit}
 
-A Stage that hits the subscription rate limit has failed at nothing. Handing the Ticket off would make a human relabel a Ticket nothing was wrong with, and a fix Stage would only meet the same limit. So the Ticket is [released](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) instead: it goes back on the board, and the next Run resumes it from the last Stage it finished, with its Fix budget as it was.
+A Stage that hits the subscription rate limit has failed at nothing, and neither has one the API stopped on its own side. Handing the Ticket off would make a human relabel a Ticket nothing was wrong with, and a fix Stage would only meet the same limit or the same outage. So the Ticket is [released](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) instead: it goes back on the board, and the next Run resumes it from the last Stage it finished, with its Fix budget as it was.
 
 The pipeline decides this only for a session that failed. Any one of three signs is enough:
 
@@ -127,16 +127,18 @@ The pipeline decides this only for a session that failed. Any one of three signs
 
 A session that succeeds is never rate-limited, however often it mentions rate limits.
 
+A session that failed and is not rate-limited is a transient API failure when its `result` event ends with `terminal_reason: "api_error"` and an `api_error_status` that is a 5xx or absent: `529 Overloaded`, say, or "No response from API". The CLI has already retried the request by the time it gives up, so the Stage is not retried in place. Any other status, and any other error, is the Stage's own and goes to the Fix budget or a Hand-off as before.
+
 What the Release does:
 
-- writes a `⏸ rate limited` row in the Progress comment, which is the whole report
-- brings the State file up to date: `claimed` if the implement Stage was stopped, `implemented` if a later Stage was. The Fix budget stays as it was, except that a fix Stage stopped by the limit spends nothing.
+- writes a `⏸ rate limited` or `⏸ API failure` row in the Progress comment, which is the whole report
+- brings the State file up to date: `claimed` if the implement Stage was stopped, `implemented` if a later Stage was. The Fix budget stays as it was, except that a fix Stage stopped this way spends nothing.
 - undoes the Claim: adds `ready-for-agent`, removes `in-progress`, then unassigns. The assignee comes off last because it is what another Run reads to tell a taken Ticket from a free one.
 - posts no comment and opens no draft pull request
 
-The Run then claims nothing more, because the limit that stopped one Stage would stop the next. The Lanes already busy finish their own Tickets, and the Run ends when the last one comes back. It does not wait for the limit to reset. The summary ends `Rate limited.`. A released Ticket counts as taken, so the exit code is `0` unless something was handed off.
+The Run then claims nothing more, because what stopped one Stage would stop the next. The Lanes already busy finish their own Tickets, and the Run ends when the last one comes back. It does not wait for the limit to reset. The summary ends `Rate limited · resets 2026-09-20 03:40 UTC.`, the time the rejecting `rate_limit_event` gave, or `Rate limited.` when none gave one, and `API failure.` after an API failure. A released Ticket counts as taken, so the exit code is `0` unless something was handed off.
 
-Start a Run once the limit has reset and the Ticket is back on the Frontier, resumed from its State file.
+Start a Run once the limit has reset, or the API has recovered, and the Ticket is back on the Frontier, resumed from its State file.
 
 ## Stop and kill
 

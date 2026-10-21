@@ -68,7 +68,7 @@ flowchart LR
     L -. red CI .-> X
     X --> K
     X -. fails again .-> H["Hand-off: ready-for-human"]
-    I -. rate limit .-> RL["Release: ready-for-agent"]
+    I -. rate limit, API failure .-> RL["Release: ready-for-agent"]
   end
   R --> F
   M -. unblocks .-> F
@@ -77,7 +77,7 @@ flowchart LR
 ```
 <!-- Sources: src/run.ts, src/orchestrator.ts, src/frontier.ts, src/guards.ts -->
 
-Any Stage can be rate-limited, not only implement; every one of them ends in a Release. [From Ticket to merge](./guide/ticket-to-merge.md) walks the Execution half one step at a time.
+Any Stage can be stopped by the rate limit or a transient API failure, not only implement; every one of them ends in a Release. [From Ticket to merge](./guide/ticket-to-merge.md) walks the Execution half one step at a time.
 
 ## The guide
 

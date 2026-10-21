@@ -68,7 +68,7 @@ flowchart LR
     L -. CI 실패 .-> X
     X --> K
     X -. 또 실패 .-> H["Hand-off: ready-for-human"]
-    I -. rate limit .-> RL["Release: ready-for-agent"]
+    I -. rate limit, API 장애 .-> RL["Release: ready-for-agent"]
   end
   R --> F
   M -. 막힘을 풂 .-> F
@@ -77,7 +77,7 @@ flowchart LR
 ```
 <!-- Sources: src/run.ts, src/orchestrator.ts, src/frontier.ts, src/guards.ts -->
 
-rate limit은 implement만이 아니라 어느 Stage에서든 걸릴 수 있고, 어디서 걸리든 Release로 끝납니다. 실행 쪽 절반은 [Ticket 하나가 merge되기까지](./guide/ticket-to-merge.md)에서 한 단계씩 따라가 봅니다.
+rate limit이나 일시적인 API 장애는 implement만이 아니라 어느 Stage에서든 일어날 수 있고, 어디서 일어나든 Release로 끝납니다. 실행 쪽 절반은 [Ticket 하나가 merge되기까지](./guide/ticket-to-merge.md)에서 한 단계씩 따라가 봅니다.
 
 ## 가이드 {#the-guide}
 

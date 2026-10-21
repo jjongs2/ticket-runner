@@ -269,7 +269,7 @@ function opening(runId: string, work: Work, lanes: number): string {
 /**
  * A hand-off is what the exit code reports first, because it is the one outcome
  * that asks a human for something. A released Ticket was taken all the same:
- * the rate limit resets and a later Run resumes it.
+ * the rate limit resets, or the API recovers, and a later Run resumes it.
  *
  * A narrowed Run that took none of the Tickets it was given — every one
  * skipped, blocked, or a mix — took nothing at all, which is the same nothing a

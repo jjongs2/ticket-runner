@@ -207,7 +207,8 @@ export interface Tracker {
    * Release, named `owner/name`, or nothing where GitHub could not be asked.
    *
    * Named for the tag rather than for the Release, because a Release in this
-   * codebase is what a rate-limited Stage does to a Ticket (GLOSSARY.md). A
+   * codebase is what a Stage the rate limit or an API failure stopped does to
+   * a Ticket (GLOSSARY.md). A
    * published GitHub Release is what makes a tag a Version anybody can install,
    * which is why it is the question rather than the tag alone.
    *

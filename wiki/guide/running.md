@@ -59,14 +59,14 @@ flowchart TD
 
 - **The Frontier is listed again at every refill**, never snapshotted. A merge that closes a blocker puts the Ticket it unblocked into the same Run.
 - **A Ticket that fails is handed off** and its Lane takes the next one; one bad Ticket does not cost the rest of the night.
-- **A Release stops the filling.** A Ticket the rate limit stopped is released, and the Run claims nothing else, since the same limit would stop the next Stage too. The Lanes still busy finish what they hold.
+- **A Release stops the filling.** A Ticket the rate limit or a transient API failure stopped is released, and the Run claims nothing else, since the same cause would stop the next Stage too. The Lanes still busy finish what they hold. The Run does not wait for the limit to reset; it says when it resets, and a human or an Operator starts the next Run.
 - **The Run ends** when no Lane is busy and nothing is left to take: the Frontier is empty, or everything on it is blocked.
 
 What happens to each Ticket inside a Lane is on [From Ticket to merge](./ticket-to-merge.md). Stranded Tickets and Releases are on [Stopping and resuming](./stopping-and-resuming.md).
 
 ### `--lanes`
 
-With one Lane a Run takes the Frontier one Ticket at a time. Most of a Ticket's time is its implement and verify Stages, up to an hour and twenty minutes of sessions that no other Ticket on the Frontier would collide with, so six independent Tickets take six times as long as one. Tickets on the Frontier do not block one another, so more Lanes can take several at once; only the [Landing](./ticket-to-merge.md#the-landing), from the rebase to the merge, takes one Lane at a time.
+With one Lane a Run takes the Frontier one Ticket at a time. Most of a Ticket's time is its implement and verify Stages, up to an hour and a half of sessions that no other Ticket on the Frontier would collide with, so six independent Tickets take six times as long as one. Tickets on the Frontier do not block one another, so more Lanes can take several at once; only the [Landing](./ticket-to-merge.md#the-landing), from the rebase to the merge, takes one Lane at a time.
 
 `--lanes <n>` gives this one Run `n` Lanes, over whatever [`lanes`](./configuration.md#lanes) in `ticket-runner.json` says. How many Tickets a machine can carry at once is that machine's business, not the repository's, so the override lives on the command line. It may go before or after Ticket numbers, and a count above the number of Tickets named is not refused.
 
@@ -155,7 +155,7 @@ A newer-Version line, when there is one, comes above the header ([Install and re
 |---|---|
 | `merged` | Merged; the pull request is named |
 | `handed` | Handed off to a human: the Stage it stopped at, and why |
-| `released` | Released by the rate limit, at the named Stage. Nobody has to do anything |
+| `released` | Released at the named Stage by the `rate limit` or an `API failure`, a 5xx or unanswered API error the CLI had given up retrying. Nobody has to do anything |
 | `skipped` | Passed over, with the reason ([Guards](./planning.md#guards), or the table above) |
 | `noted` | A [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) the row above made, and where it went: `comment` on an issue already there, the Notes issue included, or `new` for the one Note that opened the Notes issue |
 
@@ -163,7 +163,8 @@ A newer-Version line, when there is one, comes above the header ([Install and re
 |---|---|
 | `Frontier empty.` | Nothing left to take |
 | `Frontier blocked.` | Everything left has an open blocker |
-| `Rate limited.` | A Release stopped it |
+| `Rate limited · resets 2026-09-20 03:40 UTC.` | A Release by the rate limit stopped it. The time is the one the CLI gave for the limit's reset, in UTC; a Run it gave none ends `Rate limited.` |
+| `API failure.` | A Release by a transient API failure stopped it |
 | `Stopped at 22:07 · finishing #4 #9.` | A Stop arrived at that time (UTC), while those Tickets were in its Lanes |
 
 A Run a Stop or a Release ended prints no `blocked` rows, since it never reached the end of the Frontier.
