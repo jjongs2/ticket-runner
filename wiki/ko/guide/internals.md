@@ -59,12 +59,21 @@ adapter를 만드는 곳은 CLI 하나뿐입니다. `start.ts`부터 아래는 �
 ```text
 claude --print <prompt> --output-format stream-json --verbose \
   --permission-prompts none --permission-mode … \
+  --strict-mcp-config \
+  --disallowedTools CronCreate CronDelete RemoteTrigger PushNotification ScheduleWakeup Workflow \
   --model … --effort … --max-turns … [--json-schema …]
 ```
 
-- 자식의 환경에 `TICKET_RUNNER_STAGE`를 설정합니다.
+- 세션에 MCP server를 하나도 주지 않습니다. Host 사용자 계정의 claude.ai connector도, worktree와 세션 밖에서 일하는 도구도 없습니다.
+- 자식의 환경을 이렇게 설정합니다.
+
+  | 변수 | 값 | 이유 |
+  |---|---|---|
+  | `TICKET_RUNNER_STAGE` | Stage 이름 | [Stage mark](./ticket-to-merge.md) |
+  | `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | `1` | Host 사용자의 memory는 Target이 아니라 그 사람의 프로젝트 이야기 |
+  | `CLAUDE_CODE_SHELL` | `/bin/bash`, 있을 때만 | zsh는 아무것도 맞지 않는 glob 하나에 명령 전체를 멈춤 |
 - Stage가 시작되는 순간부터 `<stage>.command`, `.stdout`, `.stderr`, `.transcript.jsonl`을 씁니다.
-- `maxMinutes`가 지나면 자식을 죽이고, 실패를 `rate-limited`, `timed-out`, `turn-capped`, `nonzero-exit`, `invalid-result`로 분류합니다.
+- `maxMinutes`가 지나면 자식을 그것이 띄운 프로세스와 함께 죽이고, 실패를 `rate-limited`, `timed-out`, `turn-capped`, `nonzero-exit`, `invalid-result`로 분류합니다.
 
 ### `GitWorkspace` {#gitworkspace}
 
@@ -76,6 +85,7 @@ claude --print <prompt> --output-format stream-json --verbose \
 ### 작은 adapter들 {#smaller-adapters}
 
 - [`exec.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/exec.ts)는 timeout과 스트리밍 sink를 붙여 자식 프로세스를 띄웁니다. 명령이 스스로 124로 끝날 수도 있으니 `timedOut`을 따로 알려 줍니다.
+- [`process-tree.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/process-tree.ts)는 시간 한도에 걸린 명령을 그 하위 프로세스, 그들이 이끄는 process group과 함께 죽입니다. SIGTERM을 보내고, 5초 뒤에도 남은 것은 SIGKILL로 끝냅니다. 명령 자신의 group만으로는 부족합니다. Stage는 Run의 group을 같이 쓰고([ADR-0006](#adr-0006)), Claude Code는 Bash 명령마다 group을 따로 만듭니다.
 - [`repo-root.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/repo-root.ts)는 worktree 안에서 실행해도 main checkout을 찾습니다. 그래서 lock, `.worktrees/`, 로그가 clone마다 한 곳에 모입니다.
 - [`version.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts)는 이 사본이 어느 [Version](#versions)인지 읽습니다. 설명하는 port는 없지만 git을 실행하니 adapter에 둡니다.
 

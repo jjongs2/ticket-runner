@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   type AgentPreflight,
@@ -14,7 +14,30 @@ import { type Execution, type RunProcess, exec } from "./exec.js";
 export interface ClaudeAgentRunnerOptions {
   binary?: string;
   run?: RunProcess;
+  /** Whether a file is on the Host, asked of the Stage's shell. */
+  exists?: (path: string) => boolean;
 }
+
+/**
+ * The shell a Stage's commands run in. The Host user's own may be zsh, which
+ * aborts the whole command line on a glob that matches nothing or a word that
+ * starts with `=`, so the session would spend turns finding out why.
+ */
+const STAGE_SHELL = "/bin/bash";
+
+/**
+ * The tools that act beyond a Stage's worktree and its session: a cloud
+ * routine, a scheduled prompt, a notification, a wakeup after the Stage has
+ * ended, a workflow of further agents. Nothing a Stage is asked to do needs one.
+ */
+const DISALLOWED_TOOLS = [
+  "CronCreate",
+  "CronDelete",
+  "RemoteTrigger",
+  "PushNotification",
+  "ScheduleWakeup",
+  "Workflow",
+];
 
 /**
  * How long one preflight question may take. Generous for a CLI printing its
@@ -53,10 +76,12 @@ interface RateLimitEvent {
 export class ClaudeAgentRunner implements AgentRunner {
   private readonly binary: string;
   private readonly runProcess: RunProcess;
+  private readonly exists: (path: string) => boolean;
 
   constructor(options: ClaudeAgentRunnerOptions = {}) {
     this.binary = options.binary ?? "claude";
     this.runProcess = options.run ?? exec;
+    this.exists = options.exists ?? existsSync;
   }
 
   /**
@@ -88,14 +113,14 @@ export class ClaudeAgentRunner implements AgentRunner {
   private async spawn(
     request: StageRequest,
     args: string[],
+    env: Record<string, string>,
     log: StageLog,
   ): Promise<Execution> {
     try {
       return await this.runProcess(this.binary, args, {
         cwd: request.cwd,
         timeoutMs: request.maxMinutes * 60_000,
-        // The Stage mark the CLI refuses on, so the session cannot nest a Run.
-        extraEnv: stageEnv(request),
+        extraEnv: env,
         onStdout: log.appendStdout,
         onStderr: log.appendStderr,
       });
@@ -106,13 +131,14 @@ export class ClaudeAgentRunner implements AgentRunner {
 
   async run(request: StageRequest): Promise<StageResult> {
     const args = buildArgs(request);
-    const commandLine = quoteCommand(stageEnv(request), this.binary, args);
+    const env = this.stageEnv(request);
+    const commandLine = quoteCommand(env, this.binary, args);
     const startedAt = Date.now();
 
     // Started before the child, so a Run killed mid-Stage still leaves the
     // command line and everything printed so far behind.
     const log = startStageLog(request, commandLine);
-    const execution = await this.spawn(request, args, log);
+    const execution = await this.spawn(request, args, env, log);
 
     const events = parseEvents(execution.stdout);
     log.close(execution, events);
@@ -135,6 +161,18 @@ export class ClaudeAgentRunner implements AgentRunner {
       durationMs: Date.now() - startedAt,
     };
   }
+
+  /** What a Stage's environment carries beyond the one it inherits. */
+  private stageEnv(request: StageRequest): Record<string, string> {
+    return {
+      // The Stage mark the CLI refuses on, so the session cannot nest a Run.
+      [STAGE_ENV_VAR]: request.stage,
+      // The Host user's memory is about their own projects, not the Target.
+      CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1",
+      // Where the Host has no bash, its own shell is still better than none.
+      ...(this.exists(STAGE_SHELL) ? { CLAUDE_CODE_SHELL: STAGE_SHELL } : {}),
+    };
+  }
 }
 
 /**
@@ -155,10 +193,6 @@ async function spawnFailure(error: unknown): Promise<Execution> {
   return { exitCode: 1, stdout: "", stderr: message, output: message, timedOut: false };
 }
 
-/** What a Stage's shell carries beyond the environment it inherits. */
-function stageEnv(request: StageRequest): Record<string, string> {
-  return { [STAGE_ENV_VAR]: request.stage };
-}
 
 function buildArgs(request: StageRequest): string[] {
   const args = [
@@ -172,6 +206,11 @@ function buildArgs(request: StageRequest): string[] {
     "none",
     "--permission-mode",
     request.permissionMode,
+    // Without `--mcp-config`, this leaves the session no MCP server at all,
+    // the claude.ai connectors of the Host user's account included.
+    "--strict-mcp-config",
+    "--disallowedTools",
+    ...DISALLOWED_TOOLS,
     "--model",
     request.model,
     // Always passed, like the model: a Stage's logged command line is what a
