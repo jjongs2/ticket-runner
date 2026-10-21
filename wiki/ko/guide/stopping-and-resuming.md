@@ -15,7 +15,7 @@ Run은 아무도 지켜보지 않는 사이에 돌아가니, 일이 틀어졌을
 |---|---|---|
 | merge | 모든 관문을 초록으로 통과 | 닫힌 issue. branch와 State file은 사라짐 |
 | [Hand-off](#hand-off) | Fix budget으로 감당할 수 없는 실패 | `ready-for-human`, 코멘트, draft pull request. 작업과 State 유지 |
-| [Release](#release-on-a-rate-limit) | 구독 rate limit, 또는 일시적인 API 장애 | `ready-for-agent`, 코멘트 없음. 작업과 State 유지 |
+| [Release](#release-on-a-rate-limit) | 구독 rate limit, 일시적인 API 장애, 또는 [Base branch 실패](#release-over-a-failing-base-branch) | `ready-for-agent`, Ticket에 코멘트 없음. 작업과 State 유지 |
 | [Stop](#stop-and-kill) | `ticket-runner stop`(SIGTERM) | 새로 남는 것 없음 |
 | [Kill](#stop-and-kill) | Ctrl+C, SIGKILL, 사라진 Host | Claim, 마지막 push 시점의 작업, State |
 
@@ -140,6 +140,19 @@ Release가 하는 일:
 
 한도가 풀리거나 API가 회복된 뒤 Run을 시작하면 그 Ticket이 Frontier에 돌아와 있고, State file에서 이어 갑니다.
 
+## Base branch가 실패할 때의 Release {#release-over-a-failing-base-branch}
+
+Ticket의 branch에서 실패한 Check, 또는 pull request에서 실패한 CI는 branch가 물려받은 실패일 수 있습니다. Base branch의 테스트가 현재 시각에 기대고 있다면 모든 branch에서 한꺼번에 실패합니다. 파이프라인은 branch와 Base branch의 merge-base에서 Check 명령을 돌려 보고([Ticket 하나가 merge되기까지](./ticket-to-merge.md#a-failure-the-base-branch-shares) 참고), 거기서도 실패하면 rate limit 때처럼 Ticket을 Release합니다. 다른 점은 이렇습니다.
+
+- Progress의 `checks`나 `ci` 줄에 ``⏸ `<command>` fails on the Base branch``라고 적습니다.
+- State file에 `rebaseFirst`를 남겨, 다음 Run이 Check 전에 branch를 Base branch 위로 rebase하게 합니다.
+- standing Notes 이슈에 Run마다 merge-base마다 Note 하나를 올립니다. 명령 이름과 출력의 끝부분을 담습니다. Ticket 자체에는 코멘트를 달지 않습니다.
+- 요약은 ``Base branch `main` fails `npm test` at 1a2b3c4.``로 끝납니다.
+
+Fix budget은 썼든 안 썼든 그대로입니다. budget을 이미 쓴 Ticket도 Hand-off가 아니라 Release됩니다. 열려 있던 pull request는 그대로 두고, 다음 Run이 갱신합니다.
+
+Base branch에서 Check를 고친 뒤 Run을 시작하세요. Release된 Ticket은 Frontier로 돌아와, 고친 Base branch 위로 rebase되고(잠깐 Landing을 거칩니다) Check로 갑니다. rebase가 충돌하면 그 자리에서 Conflict Stage로 보내고, 해결하지 못하면 Landing에서처럼 Fix budget을 씁니다. 충돌을 그냥 두면 branch는 실패하는 merge-base를 그대로 물고 있어 다시 Release될 뿐입니다. Base branch를 고치기 전에 Run을 시작하면 Ticket은 다시 Release되고, 실패하는 Check 한 번 값만 듭니다.
+
 ## Stop과 kill {#stop-and-kill}
 
 Run을 일찍 끝내는 방법은 두 가지이고, 남기는 것은 정반대입니다([ADR-0006](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md)).
@@ -215,6 +228,7 @@ Ticket이 어디까지 갔는지 기록이 없으면, Release되거나 stranded�
   "fixUsed": false,
   "pullRequest": 31,
   "title": "feat: release a rate-limited Ticket (#8)",
+  "rebaseFirst": true,
   "runId": "2026-09-17T09-00-00-000",
   "version": "0.5.2",
   "updatedAt": "2026-09-17T10:14:02.511Z"
@@ -229,6 +243,7 @@ Ticket이 어디까지 갔는지 기록이 없으면, Release되거나 stranded�
 | `fixUsed` | Fix budget을 썼는지. 이어받는다고 기회가 한 번 더 생기지는 않음. 단, Hand-off 뒤는 예외 |
 | `pullRequest` | 이미 열린 pull request. 이어받은 Run이 하나를 더 열지 않도록 |
 | `title` | implement나 fix Stage가 branch 전체에 대해 마지막으로 준 제목. pull request 제목이 됨 |
+| `rebaseFirst` | Base branch 실패로 Release된 뒤에만 있음. Check 전에 Base branch 위로 rebase할 것 |
 | `runId`, `version`, `updatedAt` | 어느 Run과 어느 [Version](./internals.md#versions)이 언제 썼는지 |
 
 상태는 둘뿐입니다. implement Stage 다음의 모든 것(Check, Verify, rebase, pull request, CI, merge)은 `implemented`에서 이어받은 Run이 Check부터 다시 돌립니다. 이 가운데 중간에 멈춰 섰다가 이어받을 만한 단계는 없습니다.
@@ -240,7 +255,8 @@ Ticket이 어디까지 갔는지 기록이 없으면, Release되거나 stranded�
 | code Stage가 제목을 줌 | `title` |
 | pull request가 열림 | `pullRequest` |
 | fix Stage가 돌아옴 | `fixUsed: true` |
-| Release, Hand-off | 위에서 말한 대로 갱신 |
+| Release, Hand-off | 위에서 말한 대로 갱신. Base branch 실패로 인한 Release는 `rebaseFirst`를 더함 |
+| `rebaseFirst`가 요구한 rebase를 마침 | `rebaseFirst`를 뺌 |
 | merge, sweep이 닫힌 issue를 봄, branch가 여기 worktree에도 remote에도 없음, 앞을 막은 branch로 인한 Hand-off | 삭제 |
 
 첫 번째를 뺀 쓰기는 실패해도 로그만 남깁니다. 그러면 remote에는 같은 Ticket의 조금 이전 상태가 남는데, 더 앞에서부터 이어 가면 Stage 하나를 더 치를 뿐 틀린 결과가 되지는 않습니다.
@@ -337,7 +353,8 @@ push는 `--force-with-lease`를 쓰니, rebase가 branch를 다시 쓸 수는 �
 
 ## 참고 {#references}
 
-- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `takeTicket`, `resumable`, `ResumeRecord`, `release`, `handOff`
+- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `takeTicket`, `resumable`, `ResumeRecord`, `rebaseFirst`, `release`, `noteFailingBase`, `handOff`
+- [`src/failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts): `BaseBranchChecks`
 - [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts): `processRun`
 - [`src/stranded.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stranded.ts): `strandedTickets`, `holdsClaim`
 - [`src/resume.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/resume.ts): `readStateFile`, `STATE_BRANCH`, `localStateTickets`

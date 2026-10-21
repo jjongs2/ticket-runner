@@ -26,8 +26,9 @@ export interface RunResult {
  * A Run that drained the Frontier carries what was left held back; one a
  * Release stopped carries no candidates, because it ended before it could say
  * one was held back all Run, and the rate limit carries when it resets, where a
- * Stage was told; one a human stopped carries the moment it was asked and what
- * it still had in hand. That is why this is a choice rather than a flag beside
+ * Stage was told, and a failing Base branch the Check it fails and where; one
+ * a human stopped carries the moment it was asked and what it still had in
+ * hand. That is why this is a choice rather than a flag beside
  * the list: the stops do not report the same things.
  */
 export type RunStop =
@@ -45,6 +46,14 @@ export type RunStop =
       resetsAt?: string;
     }
   | { reason: "api-error" }
+  | {
+      reason: "failing-base";
+      baseBranch: string;
+      /** The merge-base the Check failed at, in full. */
+      commit: string;
+      /** The Check command it failed. */
+      command: string;
+    }
   | {
       reason: "stopped";
       /** When the Stop reached the Run, ISO-8601. */
@@ -173,7 +182,7 @@ export async function processRun(
         outcomes.push(outcome);
         if (outcome.outcome !== "released") return;
         if (runStop === undefined) {
-          runStop = releaseStop(outcome);
+          runStop = releaseStop(outcome, pipeline.baseBranch);
           pipeline.log?.(`#${outcome.ticket} stopped the Run · ${RELEASE_WORDS[outcome.cause]}`);
         } else if (
           // A Lane the limit stopped after the one that stopped the Run may
@@ -248,9 +257,18 @@ export async function processRun(
   return { outcomes, stop };
 }
 
-/** The stop a Release puts on the Run: what released it, and when a limit resets. */
-function releaseStop(outcome: Extract<TicketOutcome, { outcome: "released" }>): RunStop {
+/**
+ * The stop a Release puts on the Run: what released it, when a limit resets,
+ * and which Check the Base branch fails.
+ */
+function releaseStop(
+  outcome: Extract<TicketOutcome, { outcome: "released" }>,
+  baseBranch: string,
+): RunStop {
   if (outcome.cause === "api-error") return { reason: "api-error" };
+  if (outcome.failingBase !== undefined) {
+    return { reason: "failing-base", baseBranch, ...outcome.failingBase };
+  }
   return {
     reason: "rate-limited",
     ...(outcome.limitResetsAt === undefined ? {} : { resetsAt: outcome.limitResetsAt }),

@@ -57,9 +57,13 @@ export interface Note extends NoteText {
 
 /** A Note that reached GitHub, which is what a Run summary reports. */
 export interface RoutedNote {
-  /** The Ticket whose Stage made the finding. */
+  /** The Ticket whose Stage made the finding, or whose Release did. */
   origin: number;
-  stage: NotingStage;
+  /**
+   * The Stage that made it, or the pipeline itself: the one Note no Stage
+   * writes is the pipeline's, about a Base branch failing a Check.
+   */
+  stage: NotingStage | "pipeline";
   /** The issue the Note reached: the Ticket it named, or the standing Notes issue. */
   issue: number;
   /**

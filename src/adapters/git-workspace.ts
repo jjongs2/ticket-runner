@@ -54,6 +54,9 @@ export { STATE_BRANCH };
 /** The name every Ticket's worktree has under `.worktrees/`. */
 const TICKET_WORKTREE = /^ticket-\d+$/;
 
+/** The name a worktree at a merge-base has there, which a Check runs in. */
+const BASE_WORKTREE = /^base-[0-9a-f]+$/;
+
 /**
  * How many times a change to the state branch is tried, read again from the
  * remote each time, before its push failing is an error. Meant for a remote
@@ -160,6 +163,12 @@ export class GitWorkspace implements Workspace {
     await this.git(["worktree", "add", "--no-track", "-b", branch, path, from]);
   }
 
+  async createDetachedWorktree(path: string, commit: string): Promise<void> {
+    if (existsSync(path)) await this.tryGit(["worktree", "remove", "--force", path]);
+    rmSync(path, { recursive: true, force: true });
+    await this.addWorktree(["--detach", path, commit]);
+  }
+
   async removeWorktree({ path, branch }: { path: string; branch?: string }): Promise<void> {
     await this.git(["worktree", "remove", "--force", path]);
     // A worktree directory left behind would block the next Run on this Ticket.
@@ -182,8 +191,14 @@ export class GitWorkspace implements Workspace {
       const listed = lines.find((line) => line.startsWith("worktree "))?.slice(9);
       if (listed === undefined) continue;
       const path = resolve(listed);
-      if (dirname(path) !== worktrees || !TICKET_WORKTREE.test(basename(path))) continue;
-      if (!existsSync(path)) continue;
+      if (dirname(path) !== worktrees || !existsSync(path)) continue;
+      // A checkout of a commit the remote already has, and whatever a Check
+      // printed into it: nothing there is anybody's work.
+      if (BASE_WORKTREE.test(basename(path))) {
+        found.push({ path, uncommitted: false, unpushed: false });
+        continue;
+      }
+      if (!TICKET_WORKTREE.test(basename(path))) continue;
 
       const branch = lines
         .find((line) => line.startsWith("branch refs/heads/"))
@@ -372,6 +387,12 @@ export class GitWorkspace implements Workspace {
       `refs/heads/${branch}`,
     ]);
     return result.exitCode === 0;
+  }
+
+  async mergeBase(cwd: string, base: string): Promise<string> {
+    const from = (await this.fetchBranch(base)) ?? base;
+    const { stdout } = await execOrThrow("git", ["merge-base", "HEAD", from], { cwd });
+    return stdout.trim();
   }
 
   async commitSubjects(branch: string, base: string): Promise<string[]> {

@@ -45,7 +45,7 @@ flowchart TD
 ```
 <!-- Sources: src/orchestrator.ts, src/lifecycle.ts -->
 
-fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종류와 상관없이 두 번째 실패, 또는 fix Stage가 손쓸 수 없는 실패는 Hand-off입니다. rate limit이나 일시적인 API 장애로 멈춘 Stage는 이 그림을 아예 벗어나 Ticket을 release합니다([멈추고 이어 하기](./stopping-and-resuming.md) 참고).
+fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종류와 상관없이 두 번째 실패, 또는 fix Stage가 손쓸 수 없는 실패는 Hand-off입니다. rate limit이나 일시적인 API 장애로 멈춘 Stage는 이 그림을 아예 벗어나 Ticket을 release합니다([멈추고 이어 하기](./stopping-and-resuming.md) 참고). Base branch에서도 똑같이 실패하는 Check나 빨간 CI도 마찬가지입니다([아래](#a-failure-the-base-branch-shares)).
 
 ## Claim {#the-claim}
 
@@ -124,6 +124,25 @@ implement skill이 Ticket을 읽고, 만들고, 리뷰합니다. 세션이 끝�
 
 두 실패 모두 Fix budget을 씁니다. Check는 branch 자신의 코드를 돌리므로, 멈춰 버리는 것도 그 코드의 결함이고, 바로 fix Stage가 할 일이기 때문입니다.
 
+### Base branch도 함께 실패할 때 {#a-failure-the-base-branch-shares}
+
+Base branch의 테스트가 이를테면 현재 시각에 기대다가 실패하기 시작하면, 모든 branch에서 한꺼번에 실패합니다. 이를 Ticket마다 물리면 모두가 Fix budget을 잃고, fix Stage마다 자기 pull request에서 제각각 고칩니다. 그래서 실패를 물리기 전에, branch가 들여온 실패인지 물려받은 실패인지 확인합니다.
+
+| 실패한 것 | merge-base에서 돌리는 것 |
+|---|---|
+| Check 명령 | 그 명령 |
+| pull request의 CI | 모든 Check 명령. 처음 실패하는 데서 멈춤 |
+
+merge-base는 branch와, remote에 있는 Base branch 사이의 것입니다. 어느 checkout이 뒤처져 있든 branch가 실제로 물려받은 commit입니다. 그 commit을 `.worktrees/base-<commit>`에 깨끗하게 checkout하고, 같은 `checkTimeoutMinutes`로 명령을 돌린 뒤 worktree를 지웁니다. 거기에는 아무것도 설치하지 않습니다. 명령은 Ticket의 worktree처럼 main checkout에서 의존성을 찾으므로, 자기만의 install이나 build 단계가 필요한 명령은 거기서도 실패하고, 그 이유는 Note의 출력에 드러납니다. 명령은 Run마다 merge-base마다 한 번만 돌리므로, 여러 Lane의 Ticket이 함께 실패해도 한 번 값만 치릅니다. Base branch에 대한 CI 자신의 실행 기록으로는 판단할 수 없습니다. pull request에서만 도는 workflow는 squash commit에 아무 기록도 남기지 않고, 시계 때문에 생긴 실패는 마지막 green 실행 뒤에 시작되기 때문입니다.
+
+| merge-base 결과 | Progress 칸 | 결과 |
+|---|---|---|
+| 통과 | ``❌ `<command>` failed``, 또는 CI의 `❌ failed` | 위와 같이 Fix budget을 씀 |
+| 함께 실패 | ``⏸ `<command>` fails on the Base branch`` | Release. budget은 썼든 안 썼든 그대로 |
+| checkout하거나 돌리지 못함 | 통과한 것으로 봄 | Fix budget을 쓰고, 이유는 Run 로그에 남김 |
+
+Release는 standing Notes 이슈에 파이프라인 자신의 Note를 올립니다. Run마다 merge-base마다 한 번이고, 명령 이름과 그 명령이 마지막으로 찍은 40줄을 담습니다. Run은 더 claim하지 않고, 다음 Run은 Check 전에 Ticket을 Base branch 위로 rebase합니다. 그 사이 사람이 Base branch에 넣은 수정이 branch에 닿게 하려는 것입니다.
+
 ## verify Stage와 Verdict {#the-verify-stage-and-its-verdict}
 
 merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 그 코드가 제대로 도는지 물어보기에 가장 믿기 어려운 상대입니다. 그래서 plugin skill 없이 새로 띄운 세션이 각 Acceptance Criterion이 충족되지 **않았음**을 증명하려고 합니다. 이 세션은 본문과 코멘트에서 기준을 읽고, 코드를 돌려 보고, 버릴 테스트를 써도 되지만 commit은 하면 안 됩니다. 문서로 남은 결정이나 다른 기준을 뒤집지 않고는 충족할 수 없는 기준은 `unmet`으로 두고, evidence에 사람의 결정이 필요하다고 적습니다. 끝나면 파이프라인이 worktree에서 `git reset --hard`와 `git clean -fd`를 실행해, 임시 파일이 pull request에 섞이지 않게 합니다. 그 정리로 임시 작업이 사라지니, Note는 그보다 먼저 보냅니다.
@@ -149,9 +168,11 @@ merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 �
 |---|---|---|
 | 어떤 commit에도 없는 변경 | checks | 예 |
 | Check가 실패하거나 시간 초과 | checks | 예 |
+| 실패한 Check가 merge-base에서도 실패 | checks | 아니요, Release |
 | `unmet` 기준 | verify | 예 |
 | Conflict Stage가 rebase를 끝내지 못함 | rebase | 예 |
 | pull request check 실패 | ci | 예 |
+| pull request check 실패, merge-base도 Check에 실패 | ci | 아니요, Release |
 | 끝까지 가지 못한 Stage(시간 초과, turn 한도, non-zero, invalid result) | 해당 Stage | 아니요, Hand-off |
 | implement가 commit을 남기지 않음 | implement | 아니요, Hand-off |
 | evidence가 없는 Verdict, 또는 Verdict 없음 | verify | 아니요, Hand-off |
@@ -252,6 +273,7 @@ rebase로 branch가 다시 쓰였으니 `--force-with-lease`로 push합니다. B
 |---|---|---|
 | 모든 check가 통과하거나 skip됨 | `✅ passed` | merge |
 | check가 실패, 취소, 시간 초과, action 필요, 시작 실패 중 하나 | `❌ failed` | Fix budget을 씀 |
+| 위와 같고, merge-base도 Check 명령에 실패 | ``⏸ `<command>` fails on the Base branch`` | Release([위](#a-failure-the-base-branch-shares) 참고) |
 | 시간 초과 시점에 check가 아직 pending | `❌ timed out` | Hand-off |
 | check가 없고 GitHub가 pull request를 conflicting으로 판단 | `❌ conflicting` | 곧바로 Hand-off |
 | 유예 시간이 지나도 check 없음, `gates.ci` 켬 | `❌ no checks` | Hand-off |
@@ -329,6 +351,8 @@ Note에는 `summary`(필수)와 선택 항목 `evidence`, `impact`, `next`, `tic
 
 Note 코멘트는 출처(`From #<origin> <stage>`)로 시작하고, 이어서 굵은 요약과 항목별 라벨이 붙은 내용이 옵니다. 줄 머리의 `- [ ]`는 escape되므로, Note가 Acceptance Criteria로 읽히는 일은 없습니다. 올리지 못한 Note는 그 Note 하나만 잃을 뿐, Ticket에는 영향을 주지 않습니다. Run 요약에는 각 Note가 그것을 만든 Ticket 아래 `noted` 행으로 나옵니다.
 
+Stage가 아니라 파이프라인이 남기는 Note도 하나 있습니다. Base branch가 실패해서 Release할 때입니다. 이 Note는 `From the pipeline, releasing #<n> at <checks|ci>`로 시작하고, 언제나 standing Notes 이슈로 갑니다.
+
 ## 관련 페이지 {#related-pages}
 
 - [계획하기](./planning.md): Claim 전에 도는 Guard, verify가 채점할 수 있는 Acceptance Criteria 쓰는 법.
@@ -340,6 +364,7 @@ Note 코멘트는 출처(`From #<origin> <stage>`)로 시작하고, 이어서 �
 ## 참고 자료 {#references}
 
 - [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `processTicket`, `takeTicket`, `verify`, `fix`, `resolveConflict`, `requireGreenCi`
+- [`src/failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts): merge-base에서 Run마다 한 번 돌리는 Check
 - [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts), [`src/frontier.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts), [`src/landing.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/landing.ts)
 - [`src/prompts.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/prompts.ts), [`src/self-hosting.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/self-hosting.ts), [`src/verdict.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/verdict.ts), [`src/title.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/title.ts), [`src/note-schema.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/note-schema.ts), [`src/lifecycle.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lifecycle.ts)
 - [`src/progress.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/progress.ts), [`src/criteria.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/criteria.ts), [`src/notes.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/notes.ts), [`src/templates.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts), [`src/handoff.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/handoff.ts)

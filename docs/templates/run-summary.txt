@@ -62,6 +62,19 @@ transient API failure stopped says which it was and nothing of when:
 
 API failure.
 
+A Ticket whose failing Check or red CI the Base branch fails too is released
+the same way, its Fix budget as it was: the pipeline ran the Check commands at
+the branch's merge-base with the Base branch, and one of them failed there. Its
+row says so in place of the rate limit, and the last line names the Base
+branch, the command and the merge-base, shortened to seven characters. The Note
+the pipeline posted about it on the standing Notes issue follows the row, as a
+Stage's Note does, from the `pipeline`:
+
+  released #6 Rebase conflict resolution · failing Base branch at checks
+  noted    #31 comment · from #6 pipeline · The Base branch `main` fails `npm test`.
+
+Base branch `main` fails `npm test` at 1a2b3c4.
+
 A Ticket a Run resumed has no row of its own, released or stranded: it merges,
 is handed off, or is released again like any other, and the header already names
 the Run that took it.
@@ -95,7 +108,8 @@ Run ended, whatever that blocker is; one another named Ticket blocked is taken
 once that Ticket merges. The Tickets it was not given have no row at all: the
 Run left them as it found them.
 
-`noted` is a Note a Stage made, and follows the row of the Ticket whose Stage
+`noted` is a Note a Stage made, or the one the pipeline makes about a failing
+Base branch, and follows the row of the Ticket whose Stage, or whose Release,
 made it. Its number is where the Note went, not where it came from: `comment`
 for a Note that reached an issue already there — the Ticket it named, or a
 standing Notes issue already open — and `new` for the one Note of a Run that
@@ -105,8 +119,9 @@ row shows the Note's summary trimmed to one line; the whole Note is on GitHub.
 
 The last line says why the Run stopped: `Frontier empty.` when nothing is left,
 `Frontier blocked.` when every remaining candidate has an open blocker,
-`Rate limited.`, with the reset time where the CLI gave one, or `API failure.`
-when a Release ended the Run, and `Stopped at <hh:mm> · ...`
+`Rate limited.`, with the reset time where the CLI gave one, `API failure.`, or
+``Base branch `<base>` fails `<command>` at <commit>.`` when a Release ended the
+Run, and `Stopped at <hh:mm> · ...`
 when a human stopped it.
 
 A Run a Release stopped prints no `skipped  #<n> blocked` rows and no rows for

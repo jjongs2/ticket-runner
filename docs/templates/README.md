@@ -11,7 +11,7 @@ Humans read all of these, so each stays short: one line of status, details folde
 | `progress-comment.md` | first Stage of a Ticket; edited in place afterwards | `<!-- ticket-runner:progress -->` |
 | `handoff-comment.md` | a Ticket is handed to a human; marked as history when the Ticket is claimed again | `<!-- ticket-runner:handoff -->` |
 | `guard-comment.md` | a candidate is skipped by a guard | `<!-- ticket-runner:guard:<reason> -->` |
-| `note-comment.md` | a Stage makes a Note, wherever it is routed | `<!-- ticket-runner:note -->` |
+| `note-comment.md` | a Stage makes a Note, wherever it is routed, or a Ticket is released over a failing Base branch | `<!-- ticket-runner:note -->` |
 | `notes-issue.md` | a Note cannot reach a Ticket and no standing Notes issue is open | `<!-- ticket-runner:notes-issue -->` (issue body) |
 | `pr-body.md` | the PR is opened | none (PR body) |
 | `draft-pr-body.md` | a hand-off opens the PR as a draft, or makes an open one a draft; written again once the transcripts are kept | none (PR body) |

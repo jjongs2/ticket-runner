@@ -111,6 +111,62 @@ describe("worktrees", () => {
   });
 });
 
+describe("the merge-base and the worktree at it", () => {
+  /** Another clone of the remote, which pushes to main as a human would. */
+  function anotherClone(): string {
+    const other = mkdtempSync(join(tmpdir(), "ticket-runner-other-"));
+    created.push(other);
+    git(other, "clone", remote, ".");
+    git(other, "config", "user.email", "human@example.com");
+    git(other, "config", "user.name", "human");
+    return other;
+  }
+
+  it("names the commit the branch inherited from the remote's Base branch, whichever checkout is behind", async () => {
+    const other = anotherClone();
+    commit(other, "first.txt", "x\n", "feat: first (#1)");
+    git(other, "push", "origin", "main");
+    const inherited = git(other, "rev-parse", "HEAD");
+
+    // Branched from the remote's main, one commit past the checkout's.
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
+    commit(path, "a.txt", "a\n", "feat: a (#2)");
+    // And the remote moves on past what the branch inherited.
+    commit(other, "second.txt", "y\n", "feat: second (#1)");
+    git(other, "push", "origin", "main");
+
+    expect(await workspace.mergeBase(path, "main")).toBe(inherited);
+  });
+
+  it("checks a commit out, detached, in a worktree of its own, and removes it alone", async () => {
+    const commitId = git(repo, "rev-parse", "main");
+    commit(repo, "later.txt", "z\n", "feat: later (#1)");
+    const path = join(repo, ".worktrees", `base-${commitId.slice(0, 12)}`);
+
+    await workspace.createDetachedWorktree(path, commitId);
+
+    expect(git(path, "rev-parse", "HEAD")).toBe(commitId);
+    expect(existsSync(join(path, "later.txt"))).toBe(false);
+    expect(() => git(path, "symbolic-ref", "HEAD")).toThrow();
+
+    await workspace.removeWorktree({ path });
+
+    expect(existsSync(path)).toBe(false);
+  });
+
+  it("checks the commit out over a worktree a killed Run left there", async () => {
+    const commitId = git(repo, "rev-parse", "main");
+    const path = join(repo, ".worktrees", `base-${commitId.slice(0, 12)}`);
+    await workspace.createDetachedWorktree(path, commitId);
+    writeFileSync(join(path, "README.md"), "half a run\n");
+
+    await workspace.createDetachedWorktree(path, commitId);
+
+    expect(readFileSync(join(path, "README.md"), "utf8")).toBe("hello\n");
+  });
+});
+
 describe("what remove finds and takes out", () => {
   /** A `ticket-<n>` worktree on its own branch, fresh from main. */
   async function ticketWorktree(ticket: number): Promise<string> {
@@ -172,6 +228,18 @@ describe("what remove finds and takes out", () => {
 
     expect(existsSync(path)).toBe(false);
     expect(git(repo, "branch", "--list", "agent/2-x")).not.toBe("");
+  });
+
+  it("lists a worktree at a merge-base as the pipeline's, holding nothing worth keeping", async () => {
+    const commitId = git(repo, "rev-parse", "main");
+    const path = join(repo, ".worktrees", `base-${commitId.slice(0, 12)}`);
+    await workspace.createDetachedWorktree(path, commitId);
+    // What a Check a killed Run was running there left behind.
+    writeFileSync(join(path, "coverage.txt"), "half a run\n");
+
+    expect(await workspace.ticketWorktrees()).toEqual([
+      { path, uncommitted: false, unpushed: false },
+    ]);
   });
 
   it("lists local and remote branches under a prefix, and deletes a local one", async () => {

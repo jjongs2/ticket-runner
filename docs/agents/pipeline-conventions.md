@@ -29,6 +29,7 @@ A Ticket is one issue the pipeline can implement in a single session. It is refu
 ## Checks
 
 - The Checks of different Tickets may run at the same time, each in its own worktree, because a Run has as many Lanes as `lanes` says. A Target whose Checks need a port, a database or anything else they would have to share keeps `lanes` at one, or makes them independent of each other.
+- A Check that fails on a Ticket's branch, or CI that fails on its pull request, is graded again at what the branch inherited: the pipeline runs the Check commands in a clean worktree at the branch's merge-base with the Base branch. One that fails there too is the Base branch's, not the Ticket's, so the Ticket is released without spending its Fix budget, the Run claims no more Tickets, and the pipeline posts a Note on the standing Notes issue naming the Check. The next Run rebases the Ticket onto the Base branch before its Checks, so mending the Base branch is what frees it. Nothing is installed in the worktree at the merge-base: its Checks find their dependencies in the main checkout, as a Ticket's worktree does, so Checks that need an install or a build step of their own fail there and release the Ticket, and the Note's output shows it.
 
 ## The Operator's skill
 
@@ -38,5 +39,5 @@ A Ticket is one issue the pipeline can implement in a single session. It is refu
 
 Both are `ticket-runner`'s own, both are gitignored by `ticket-runner init`, and neither is ever committed.
 
-- `.worktrees/ticket-<n>/` — one git worktree per claimed Ticket, where its Stages run.
+- `.worktrees/ticket-<n>/` — one git worktree per claimed Ticket, where its Stages run. Beside them, `.worktrees/base-<commit>/` is a clean worktree at a merge-base with the Base branch, made to run a failing Check there once and removed when it has run.
 - `.ticket-runner/` — the Run's logs and Stage transcripts. The Run lock and the State a Ticket keeps while its branch has work worth resuming are not here but on the Target's remote, so that a Run on any Host sees which Run holds the Target, and carries on from where a killed Run, or a handed-off Ticket relabelled `ready-for-agent`, stopped.

@@ -4,6 +4,7 @@ import { UNCHECKED_BOX } from "./acceptance-criteria.js";
 import { resolveBaseBranch } from "./base-branch.js";
 import type { Config } from "./config.js";
 import type { HostKind } from "./host.js";
+import { BaseBranchChecks } from "./failing-base.js";
 import { Landing } from "./landing.js";
 import { StandingNotes } from "./notes.js";
 import { processTicket } from "./orchestrator.js";
@@ -108,6 +109,13 @@ const titled = (title: string) => stageResult({ result: { title, notes: [] } });
  */
 const notices = () => tracker.comments.filter(({ body }) => !body.startsWith(PROGRESS_MARKER));
 
+/**
+ * The Checks run on the Ticket's branch, in order, leaving out those run at its
+ * merge-base to ask whether the Base branch fails them too.
+ */
+const checksOnBranch = () =>
+  workspace.ranChecks.filter((check) => check.cwd === worktree).map((check) => check.command);
+
 let tracker: FakeTracker;
 let runner: FakeAgentRunner;
 let workspace: FakeWorkspace;
@@ -172,6 +180,7 @@ async function run(
       baseBranch: await resolveBaseBranch(tracker, settings),
       landing: new Landing(),
       standingNotes: new StandingNotes(),
+      baseChecks: new BaseBranchChecks(),
       selfHosted: false,
       log: (line) => logged.push(line),
     },
@@ -662,7 +671,7 @@ describe("Checks", () => {
     expect(outcome).toMatchObject({ outcome: "handed-off", stage: "checks" });
     // Neither the first pass nor the one behind the fix Stage reached the
     // typecheck: the Checks stop at the first command that fails.
-    expect(workspace.ranChecks.map((c) => c.command)).toEqual(["npm test", "npm test"]);
+    expect(checksOnBranch()).toEqual(["npm test", "npm test"]);
     expect(handoffBody()).toContain("FAIL src/a.test.ts");
     expect(runner.stages()).toEqual(["implement", "fix"]);
   });
@@ -1424,7 +1433,7 @@ describe("the fix Stage", () => {
 
     await run();
 
-    expect(workspace.ranChecks.map((check) => check.command)).toEqual([
+    expect(checksOnBranch()).toEqual([
       "npm test",
       "npm test",
       "npm run typecheck",
@@ -1625,7 +1634,7 @@ describe("a fix Stage that committed nothing", () => {
 
     // The Check that bought the fix Stage ran once, not twice, and neither the
     // Verdict nor CI was asked about a branch the fix Stage left alone.
-    expect(workspace.ranChecks.map((check) => check.command)).toEqual(["npm test"]);
+    expect(checksOnBranch()).toEqual(["npm test"]);
     expect(runner.stages()).toEqual(["implement", "fix"]);
     expect(tracker.ciWaits).toEqual([]);
   });
@@ -1776,7 +1785,7 @@ describe("uncommitted work", () => {
 
     expect(outcome).toMatchObject({ outcome: "handed-off", stage: "checks" });
     expect(runner.stages()).toEqual(["implement", "fix"]);
-    expect(workspace.ranChecks.map((check) => check.command)).toEqual(["npm test"]);
+    expect(checksOnBranch()).toEqual(["npm test"]);
     expect(handoffBody()).toContain("the worktree holds changes no commit carries");
     expect(handoffBody()).toContain("src/cli.ts");
     expect(handoffBody()).toContain("after the fix budget was used");
@@ -2176,6 +2185,296 @@ describe("releasing a Ticket a transient API failure stopped", () => {
     runner.queue("implement", { ok: false, failure: "nonzero-exit" });
 
     expect(await run()).toMatchObject({ outcome: "handed-off", stage: "implement" });
+  });
+});
+
+describe("a Check the Base branch fails too", () => {
+  const state = () => workspace.state(TICKET);
+  const MERGE_BASE = "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d";
+  const baseWorktree = join(repoRoot, ".worktrees", "base-1a2b3c4d5e6f");
+  /** The Checks the pipeline ran at the merge-base, in order. */
+  const atBase = () =>
+    workspace.ranChecks.filter((check) => check.cwd === baseWorktree).map((check) => check.command);
+  /** The pipeline's own Notes, wherever they went. */
+  const pipelineNotes = () =>
+    tracker.comments.filter(({ body }) => body.includes("\nFrom the pipeline, releasing #"));
+
+  it("releases the Ticket with its Fix budget unspent when the merge-base fails the same Check", async () => {
+    workspace.failCheck("npm test", "FAIL src/date.test.ts");
+    workspace.failBaseCheck("npm test", "FAIL src/date.test.ts");
+
+    const outcome = await run();
+
+    expect(outcome).toEqual({
+      outcome: "released",
+      ticket: TICKET,
+      title: "Skeleton: one Ticket end to end",
+      branch: BRANCH,
+      stage: "checks",
+      cause: "failing-base",
+      failingBase: { commit: MERGE_BASE, command: "npm test" },
+      notes: [
+        {
+          origin: TICKET,
+          stage: "pipeline",
+          issue: 200,
+          opened: true,
+          summary: "The Base branch `main` fails `npm test`.",
+        },
+      ],
+    });
+    expect(runner.stages()).toEqual(["implement"]);
+    expect(atBase()).toEqual(["npm test"]);
+    expect(workspace.calls).toContain(`createDetachedWorktree:${MERGE_BASE}`);
+    expect(workspace.calls).toContain(`removeWorktree:${baseWorktree}`);
+    expect(workspace.worktrees.has(baseWorktree)).toBe(false);
+    expect(tracker.issue(TICKET).labels).toEqual(["ready-for-agent"]);
+    expect(tracker.issue(TICKET).assignees).toEqual([]);
+    expect(state()).toMatchObject({ state: "implemented", fixUsed: false, rebaseFirst: true });
+    expect(progressTable()).toContain("| checks | ⏸ `npm test` fails on the Base branch |");
+    expect(tracker.pullRequests).toEqual([]);
+  });
+
+  it("posts one Note on the standing Notes issue, naming the Check and quoting its output", async () => {
+    workspace.failCheck("npm test", "FAIL src/date.test.ts");
+    workspace.failBaseCheck("npm test", "FAIL src/date.test.ts\n  expected 2026 to be 2025");
+
+    await run();
+
+    const [note, ...more] = pipelineNotes();
+    expect(more).toEqual([]);
+    expect(note?.issue).toBe(200);
+    expect(note?.body).toContain("**The Base branch `main` fails `npm test`.**");
+    expect(note?.body).toContain(`at ${MERGE_BASE}, the merge-base of \`${BRANCH}\` with \`main\``);
+    expect(note?.body).toContain("```\nFAIL src/date.test.ts\n  expected 2026 to be 2025\n```");
+    // Nobody's Ticket is commented on: the Ticket did nothing wrong.
+    expect(notices().filter(({ issue }) => issue === TICKET)).toEqual([]);
+  });
+
+  it("keeps a Fix budget an earlier failure spent, as it was", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    workspace.failCheck("npm run typecheck", "error TS2345");
+    workspace.failBaseCheck("npm run typecheck", "error TS2345");
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "released", stage: "checks", cause: "failing-base" });
+    expect(runner.stages()).toEqual(["implement", "fix"]);
+    expect(state()).toMatchObject({ fixUsed: true, rebaseFirst: true });
+  });
+
+  it("releases rather than hands off a Ticket whose budget was already spent", async () => {
+    workspace.recordState({
+      ticket: TICKET,
+      branch: BRANCH,
+      state: "implemented",
+      fixUsed: true,
+      runId: "run-0",
+      updatedAt: "2026-09-17T09:00:00.000Z",
+    });
+    workspace.worktrees.set(worktree, BRANCH);
+    workspace.branches.add(BRANCH);
+    workspace.failCheck("npm test", "FAIL src/date.test.ts");
+    workspace.failBaseCheck("npm test", "FAIL src/date.test.ts");
+
+    expect(await run()).toMatchObject({ outcome: "released", cause: "failing-base" });
+    expect(state()).toMatchObject({ fixUsed: true });
+  });
+
+  it("spends the Fix budget as it always did when the merge-base passes the Check", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(atBase()).toEqual(["npm test"]);
+    expect(runner.stages()).toEqual(["implement", "fix", "verify"]);
+    expect(progressTable()).toContain("| checks | ❌ `npm test` failed |");
+    expect(pipelineNotes()).toEqual([]);
+  });
+
+  it("spends the Fix budget when the merge-base could not be checked out", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    workspace.failing.set(`createDetachedWorktree:${MERGE_BASE}`, new Error("disk full"));
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).toEqual(["implement", "fix", "verify"]);
+    expect(logged.some((line) => line.includes("disk full"))).toBe(true);
+  });
+
+  it("releases a Ticket whose CI failed when the merge-base fails one of the Check commands", async () => {
+    tracker.ci = { state: "failed", summary: "checks/typecheck failed", excerpt: "" };
+    workspace.failBaseCheck("npm run typecheck", "error TS2345");
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({
+      outcome: "released",
+      stage: "ci",
+      cause: "failing-base",
+      failingBase: { commit: MERGE_BASE, command: "npm run typecheck" },
+    });
+    // Every Check command until the first the merge-base fails.
+    expect(atBase()).toEqual(["npm test", "npm run typecheck"]);
+    expect(runner.stages()).toEqual(["implement", "verify"]);
+    expect(progressTable()).toContain("| ci | ⏸ `npm run typecheck` fails on the Base branch |");
+    expect(pipelineNotes()[0]?.body).toContain("From the pipeline, releasing #2 at ci");
+    expect(state()).toMatchObject({ fixUsed: false, pullRequest: 100, rebaseFirst: true });
+    expect(tracker.pullRequest(100).merged).toBe(false);
+  });
+
+  it("gives the Landing up before it runs the Checks at the merge-base for a red CI", async () => {
+    tracker.ci = { state: "failed", summary: "checks/typecheck failed", excerpt: "" };
+    workspace.failBaseCheck("npm test", "FAIL");
+    const landing = new Landing();
+    const entered: boolean[] = [];
+    const runCheck = workspace.runCheck.bind(workspace);
+    workspace.runCheck = async (command, cwd, timeoutMs) => {
+      if (cwd === baseWorktree) {
+        const other = landing.turn();
+        let inside = false;
+        void other.enter().then(() => {
+          inside = true;
+        });
+        await settle();
+        entered.push(inside);
+        other.leave();
+      }
+      return runCheck(command, cwd, timeoutMs);
+    };
+    const settings = config();
+
+    const outcome = await processTicket(
+      {
+        tracker,
+        runner,
+        workspace,
+        config: settings,
+        repoRoot,
+        runId: "run-1",
+        version: VERSION,
+        host: "workstation",
+        baseBranch: "main",
+        landing,
+        standingNotes: new StandingNotes(),
+        baseChecks: new BaseBranchChecks(),
+        selfHosted: false,
+      },
+      TICKET,
+    );
+
+    expect(outcome).toMatchObject({ outcome: "released", stage: "ci" });
+    expect(entered).toEqual([true]);
+  });
+
+  it("spends the Fix budget on a red CI the merge-base passes every Check of", async () => {
+    tracker.queueCi({ state: "failed", summary: "checks/build failed", excerpt: "" });
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(atBase()).toEqual(["npm test", "npm run typecheck"]);
+    expect(runner.stages()).toEqual(["implement", "verify", "fix", "verify"]);
+  });
+});
+
+describe("Tickets in several Lanes failing against one merge-base", () => {
+  const SECOND = 3;
+
+  it("run the Check there once between them and post one Note", async () => {
+    tracker.addIssue({ number: SECOND, title: "The second Ticket" });
+    workspace.failCheck("npm test", "FAIL src/date.test.ts");
+    workspace.failBaseCheck("npm test", "FAIL src/date.test.ts");
+    const settings = config({ lanes: 2 });
+    const shared: Pipeline = {
+      tracker,
+      runner,
+      workspace,
+      config: settings,
+      repoRoot,
+      runId: "run-1",
+      version: VERSION,
+      host: "workstation",
+      baseBranch: "main",
+      landing: new Landing(),
+      standingNotes: new StandingNotes(),
+      baseChecks: new BaseBranchChecks(),
+      selfHosted: false,
+    };
+
+    const outcomes = await Promise.all([processTicket(shared, TICKET), processTicket(shared, SECOND)]);
+
+    expect(outcomes.map((outcome) => outcome.outcome)).toEqual(["released", "released"]);
+    const atBase = workspace.ranChecks.filter((check) => check.cwd.includes("/base-"));
+    expect(atBase.map((check) => check.command)).toEqual(["npm test"]);
+    const notes = tracker.comments.filter(({ body }) => body.includes("From the pipeline"));
+    expect(notes).toHaveLength(1);
+    expect(outcomes.flatMap((outcome) => ("notes" in outcome ? outcome.notes : []))).toHaveLength(1);
+  });
+});
+
+describe("resuming a Ticket released over a failing Base branch", () => {
+  function releasedOverBase(): void {
+    workspace.recordState({
+      ticket: TICKET,
+      branch: BRANCH,
+      state: "implemented",
+      fixUsed: false,
+      rebaseFirst: true,
+      runId: "run-0",
+      updatedAt: "2026-09-17T09:00:00.000Z",
+    });
+    workspace.worktrees.set(worktree, BRANCH);
+    workspace.branches.add(BRANCH);
+  }
+
+  it("rebases onto the Base branch, as the remote holds it, before its Checks", async () => {
+    releasedOverBase();
+    const seen = stateAtEachStage();
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+
+    const firstCheck = workspace.calls.indexOf("runCheck:npm test");
+    expect(workspace.calls.slice(0, firstCheck)).toEqual(
+      expect.arrayContaining(["pullBase", "rebase", `push:${BRANCH}`]),
+    );
+    expect(workspace.calls.indexOf("pullBase")).toBeLessThan(workspace.calls.indexOf("rebase"));
+    // Once: the rebase is not owed again by a Run that resumes after this one.
+    expect(seen[0]?.state).not.toHaveProperty("rebaseFirst");
+  });
+
+  it("sends a conflicting rebase to the Conflict Stage before its Checks, so it is not released over the same commit again", async () => {
+    releasedOverBase();
+    workspace.conflictOnce(CONFLICT);
+    const seen = stateAtEachStage();
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+
+    expect(runner.stages()).toEqual(["conflict", "verify"]);
+    expect(workspace.calls.indexOf("rebaseState")).toBeLessThan(
+      workspace.calls.indexOf("runCheck:npm test"),
+    );
+    expect(seen[0]?.state).toMatchObject({ rebaseFirst: true });
+    expect(seen[1]?.state).not.toHaveProperty("rebaseFirst");
+  });
+
+  it("spends the Fix budget on a conflict the Conflict Stage could not resolve, as at the Landing", async () => {
+    releasedOverBase();
+    workspace.conflictOnce(CONFLICT);
+    workspace.rebaseStateAfterStage = UNRESOLVED;
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+
+    expect(runner.stages()).toEqual(["conflict", "fix", "verify"]);
+    expect(runner.prompts("fix")[0]).toContain(CONFLICT);
+  });
+
+  it("is not rebased first when it was released for any other reason", async () => {
+    releasedOverBase();
+    workspace.recordState({ ...(workspace.state(TICKET) as TicketState), rebaseFirst: false });
+
+    await run();
+
+    const firstCheck = workspace.calls.indexOf("runCheck:npm test");
+    expect(workspace.calls.slice(0, firstCheck)).not.toContain("rebase");
   });
 });
 
@@ -3978,6 +4277,7 @@ describe("the Landing", () => {
       baseBranch: await resolveBaseBranch(tracker, settings),
       landing: new Landing(),
       standingNotes: new StandingNotes(),
+      baseChecks: new BaseBranchChecks(),
       selfHosted: false,
       log: (line) => logged.push(line),
     };

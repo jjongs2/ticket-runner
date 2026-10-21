@@ -77,7 +77,7 @@ claude --print <prompt> --output-format stream-json --verbose \
 
 ### `GitWorkspace` {#gitworkspace}
 
-[`GitWorkspace`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts)는 `.worktrees/` 아래의 worktree를 맡고, Check를 돌리고, rebase와 push를 하고, `ticket-runner/state`와 `ticket-runner/lock` branch를 관리합니다([멈추고 이어 하기](./stopping-and-resuming.md)).
+[`GitWorkspace`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts)는 `.worktrees/` 아래의 worktree(Ticket의 것과, 실패한 Check를 merge-base에서 다시 돌리는 detached worktree)를 맡고, Check를 돌리고, rebase와 push를 하고, `ticket-runner/state`와 `ticket-runner/lock` branch를 관리합니다([멈추고 이어 하기](./stopping-and-resuming.md)).
 
 - git은 ref나 index lock이 잡혀 있으면 기다리지 않고 실패하므로, main checkout에서의 명령은 한 번에 하나씩 돌립니다.
 - worktree 안의 명령은 병렬로 둡니다.
@@ -113,8 +113,9 @@ claude --print <prompt> --output-format stream-json --verbose \
 | [`guards.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/guards.ts) | 후보를 건너뛰는 이유: Guard와 거절 |
 | [`landing.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/landing.ts) | Landing: rebase부터 pull까지 한 번에 한 Lane, 도착 순서대로 |
 | [`lifecycle.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lifecycle.ts) | Ticket이 어디서 실패했는지, fix Stage가 고칠 수 있는 실패는 무엇인지 |
+| [`failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts) | 실패한 Check를 merge-base에서 Run마다 commit마다 한 번 돌리고, 그 Note를 한 번 올림 |
 | [`base-branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/base-branch.ts) | Run마다 한 번 Base branch를 정함 |
-| [`branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/branch.ts) | `agent/<n>-<slug>`와 `.worktrees/ticket-<n>` |
+| [`branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/branch.ts) | `agent/<n>-<slug>`, `.worktrees/ticket-<n>`, `.worktrees/base-<commit>` |
 | [`stranded.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stranded.ts) | Stranded Ticket을 찾는 sweep |
 | [`resume.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/resume.ts) | State file의 모양과 이름 |
 | [`handoff.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/handoff.ts) | Ticket을 다시 가져갈 때 예전 hand-off 코멘트를 지난 일로 표시 |

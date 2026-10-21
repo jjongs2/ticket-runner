@@ -31,3 +31,11 @@ export function branchName(ticket: number, title: string): string {
 export function worktreePath(repoRoot: string, ticket: number): string {
   return join(repoRoot, ".worktrees", `ticket-${ticket}`);
 }
+
+/**
+ * The gitignored worktree a Check runs in at a merge-base with the Base branch,
+ * beside the Tickets' own: named for the commit, shortened as git shortens one.
+ */
+export function baseWorktreePath(repoRoot: string, commit: string): string {
+  return join(repoRoot, ".worktrees", `base-${commit.slice(0, 12)}`);
+}
