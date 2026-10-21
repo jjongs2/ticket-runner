@@ -20,6 +20,9 @@
  * reading the whole Note, and tells one that waits on a decision from one that
  * only needs a Ticket by its `next`. `next` alone is optional, because a Stage
  * that knows neither a fix nor the decision in the way has nothing to put there.
+ *
+ * This is the list as the verify Stage reads it. The Stages that write code read
+ * {@link CODE_STAGE_NOTES_LIST_SCHEMA}, the same list with one more sentence.
  */
 export const NOTES_LIST_SCHEMA = {
   type: "array",
@@ -55,4 +58,16 @@ export const NOTES_LIST_SCHEMA = {
     required: ["summary", "evidence", "impact"],
     additionalProperties: false,
   },
+} as const;
+
+/**
+ * The list as the implement and fix Stages read it: a defect their own branch
+ * introduced is theirs to fix, not to list. verify keeps the list without it,
+ * because it fixes nothing and grades the Acceptance Criteria alone, so a
+ * regression it demonstrates beside them still has only a Note to go in.
+ */
+export const CODE_STAGE_NOTES_LIST_SCHEMA = {
+  ...NOTES_LIST_SCHEMA,
+  description:
+    "Defects that belong to another Ticket, or to no Ticket yet. A defect this branch introduced, one that behaves correctly on the Base branch and wrongly here, or one in code this branch added, belongs to this Ticket: fix it, and do not list it here. Empty when you found none, which is the ordinary case.",
 } as const;

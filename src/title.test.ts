@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NOTES_LIST_SCHEMA } from "./note-schema.js";
+import { CODE_STAGE_NOTES_LIST_SCHEMA } from "./note-schema.js";
 import { CODE_STAGE_JSON_SCHEMA, parseTitle, pullRequestTitle } from "./title.js";
 
 const TICKET_TITLE = "A pull request is titled after its first commit";
@@ -8,7 +8,7 @@ describe("CODE_STAGE_JSON_SCHEMA", () => {
   it("requires a title and the Notes list, and nothing else", () => {
     expect(CODE_STAGE_JSON_SCHEMA.required).toEqual(["title", "notes"]);
     expect(CODE_STAGE_JSON_SCHEMA.properties.title.type).toBe("string");
-    expect(CODE_STAGE_JSON_SCHEMA.properties.notes).toBe(NOTES_LIST_SCHEMA);
+    expect(CODE_STAGE_JSON_SCHEMA.properties.notes).toBe(CODE_STAGE_NOTES_LIST_SCHEMA);
     expect(CODE_STAGE_JSON_SCHEMA.additionalProperties).toBe(false);
   });
 

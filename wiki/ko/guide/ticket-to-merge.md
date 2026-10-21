@@ -82,6 +82,14 @@ fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종�
 
 모든 프롬프트에는 Stage 경계 안내(저장소나 GitHub을 대상으로 `ticket-runner`를 실행하지 말 것, Stage가 띄우지 않은 프로세스를 kill하지 말 것, Stage mark가 있는 동안 CLI가 거절하는 건 예상된 일임)가 붙습니다. Target이 파이프라인 자신의 저장소라면, checkout이 곧 파이프라인이니 테스트와 fake로만 돌려 보라는 안내가 더 붙습니다. 마지막에는 설정의 Stage별 `extraPrompt`가 붙습니다. implement 프롬프트에는 무인 세션에서 skill의 약점을 피해 가는 안내가 더 붙습니다. 리뷰 전에 먼저 commit할 것, `/mattpocock-skills:code-review`를 전체 이름으로 부를 것, 리뷰 sub-agent를 foreground로 돌릴 것, worktree를 깨끗이 남길 것 등입니다.
 
+**프롬프트 속 Check.** implement, fix, conflict가 끝나면 파이프라인이 곧바로 Check를 직접 돌리고, verify는 막 Check를 통과한 commit을 채점합니다. 그래서 `checks`에 명령이 있으면 모든 프롬프트가 그 명령과 다룰 방법을 함께 알려 줍니다. 명령이 없으면 어느 프롬프트도 언급하지 않습니다.
+
+| Stage | Check에 대해 듣는 말 |
+|---|---|
+| implement, fix | 작업 중에는 변경이 닿는 테스트만 돌린다. commit한 뒤 전체 Check를 foreground로 한 번 돌린다. implement는 리뷰 수정을 commit한 다음에 돌린다 |
+| verify | 이 commit에서 이미 통과했다. 다시 돌리지 말고, Check만 요구하는 기준은 그 사실로 채점한다 |
+| conflict | 전체 suite 대신 type checker와 해결한 파일을 다루는 테스트만 돌린다 |
+
 **Stage mark.** 모든 Stage의 셸에는 `TICKET_RUNNER_STAGE=<stage>`가 설정되고, 이 변수가 있으면 CLI는 시작을 거부합니다. 그래서 Stage가 실수로 Ticket을 claim하거나 중첩 Run을 띄울 수 없습니다. 다만 sandbox가 아니라 걸림줄일 뿐이라, 변수를 지운 세션은 통과합니다. 그래서 프롬프트에서도 같은 내용을 말로 한 번 더 전합니다.
 
 **Transcript.** Stage마다 `.ticket-runner/runs/<runId>/<n>/` 아래에 `<stage>.command`, `.stdout`, `.stderr`, `.transcript.jsonl`을 씁니다. 명령줄은 프로세스가 시작하기 전에, 출력은 도착하는 대로 쓰기 때문에 Run이 kill되어도 파일은 남습니다. fix Stage와 그 덕에 얻은 한 바퀴는 `<n>/retry/`에 쓰므로, 실패한 바퀴의 파일도 보존됩니다. 읽는 법은 [실행하기](./running.md)를 보세요.
@@ -117,7 +125,7 @@ implement skill이 Ticket을 읽고, 만들고, 리뷰합니다. 세션이 끝�
 
 ## verify Stage와 Verdict {#the-verify-stage-and-its-verdict}
 
-merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 그 코드가 제대로 도는지 물어보기에 가장 믿기 어려운 상대입니다. 그래서 plugin skill 없이 새로 띄운 세션이 각 Acceptance Criterion이 충족되지 **않았음**을 증명하려고 합니다. 이 세션은 본문과 코멘트에서 기준을 읽고, 코드를 돌려 보고, 버릴 테스트를 써도 되지만 commit은 하면 안 됩니다. 끝나면 파이프라인이 worktree에서 `git reset --hard`와 `git clean -fd`를 실행해, 임시 파일이 pull request에 섞이지 않게 합니다. 그 정리로 임시 작업이 사라지니, Note는 그보다 먼저 보냅니다.
+merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 그 코드가 제대로 도는지 물어보기에 가장 믿기 어려운 상대입니다. 그래서 plugin skill 없이 새로 띄운 세션이 각 Acceptance Criterion이 충족되지 **않았음**을 증명하려고 합니다. 이 세션은 본문과 코멘트에서 기준을 읽고, 코드를 돌려 보고, 버릴 테스트를 써도 되지만 commit은 하면 안 됩니다. 문서로 남은 결정이나 다른 기준을 뒤집지 않고는 충족할 수 없는 기준은 `unmet`으로 두고, evidence에 사람의 결정이 필요하다고 적습니다. 끝나면 파이프라인이 worktree에서 `git reset --hard`와 `git clean -fd`를 실행해, 임시 파일이 pull request에 섞이지 않게 합니다. 그 정리로 임시 작업이 사라지니, Note는 그보다 먼저 보냅니다.
 
 **Verdict**는 기준마다 `text`, `status`(`met`, `unmet`, `unverifiable`), `evidence`를 담고, 에이전트 자신의 `pass`도 담습니다. 에이전트의 `pass`는 참고일 뿐이고, 파이프라인이 직접 판단합니다. 기준은 **`unmet`이 하나도 없고 `met`이 하나 이상**일 것입니다.
 
@@ -128,9 +136,11 @@ merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 �
 | 전부 `unverifiable` | `❌ no evidence` | Hand-off. merge할 근거가 없음 |
 | 없거나 형식이 틀림 | `❌ no Verdict` | Hand-off |
 
+`unmet` 기준 때문에 fix를 거친 뒤의 verify는 첫 Verdict의 `unmet` 기준과 그 evidence를 받습니다. 그 반례가 사라지고 기준 전체가 성립해야만 충족이라는 말도 함께 듣습니다. Release 뒤 다음 Run이 이어받은 재시도 verify는 아무것도 받지 않습니다. State file에 Verdict가 남지 않기 때문입니다.
+
 ## fix Stage와 Fix budget {#the-fix-stage-and-the-fix-budget}
 
-횟수에 제한이 없으면, 무인 파이프라인은 풀 수 없는 Ticket 하나를 붙잡고 돌 때마다 세션 비용을 치르며 끝없이 맴돌 수 있습니다. 그래서 [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사람에게 넘어갑니다. fix Stage는 같은 branch에서 plugin skill 없이 새로 띄운 세션입니다. implement skill을 쓰면 Ticket을 다시 읽고 처음부터 시작해 버리는데, 여기서 바라는 건 구체적인 결함 하나를 고치는 것이기 때문입니다. 프롬프트에는 실패의 종류, 한 줄 요약, 그리고 코드 블록에 담긴 evidence가 들어갑니다. 실패를 재현하고, 원인을 고치고, 충족되지 않은 기준에는 회귀 테스트를 더하고, Ticket 범위를 벗어나지 말라고 요청합니다.
+횟수에 제한이 없으면, 무인 파이프라인은 풀 수 없는 Ticket 하나를 붙잡고 돌 때마다 세션 비용을 치르며 끝없이 맴돌 수 있습니다. 그래서 [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사람에게 넘어갑니다. fix Stage는 같은 branch에서 plugin skill 없이 새로 띄운 세션입니다. implement skill을 쓰면 Ticket을 다시 읽고 처음부터 시작해 버리는데, 여기서 바라는 건 구체적인 결함 하나를 고치는 것이기 때문입니다. 프롬프트에는 실패의 종류, 한 줄 요약, 그리고 코드 블록에 담긴 evidence가 들어갑니다. 실패를 재현하고, 원인을 고치고, 충족되지 않은 기준에는 회귀 테스트를 더하고, Ticket 범위와 이 branch가 만든 결함 밖으로 나가지 말라고 요청합니다. `unmet` 기준 때문에 불려 왔는데 그중 하나라도 문서로 남은 결정이나 다른 기준을 뒤집어야만 충족된다면, 아무것도 commit하지 말고 이유를 밝히라고 합니다. 그러면 Ticket이 사람에게 넘어갑니다.
 
 새 세션이 고칠 수 있는 결함만 budget을 씁니다.
 
@@ -151,7 +161,7 @@ merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 �
 | merge 실패 | merge | 아니요, Hand-off |
 | 어디서든 rate limit | 어디든 | 아니요, Release |
 
-fix Stage가 끝나면 Ticket은 Check부터 다시 시작합니다. verify Stage를 포함해 모든 관문이 수정본을 다시 채점하므로, 수정본도 처음 구현과 같은 기준을 통과해야 합니다. fix Stage 후 branch가 자라지 않았다면 곧바로 Hand-off입니다. 아무도 건드리지 않은 branch를 다시 채점해 봐야 똑같이 실패할 뿐이기 때문입니다. squash나 amend로 짧아진 branch도 자라지 않은 것으로 봅니다. 종류와 상관없이 두 번째 실패는 Hand-off이고, hand-off 코멘트에 budget을 이미 썼다고 적힙니다.
+fix Stage가 끝나면 Ticket은 Check부터 다시 시작합니다. verify Stage를 포함해 모든 관문이 수정본을 다시 채점하므로, 수정본도 처음 구현과 같은 기준을 통과해야 합니다. fix Stage 후 branch가 자라지 않았다면 곧바로 Hand-off입니다. 아무도 건드리지 않은 branch를 다시 채점해 봐야 똑같이 실패할 뿐이기 때문입니다. squash나 amend로 짧아진 branch도 자라지 않은 것으로 봅니다. 이때 hand-off 코멘트에는 fix Stage가 받았던 evidence가 실리므로, 사람에게 넘어간 `unmet` 기준은 그 evidence가 묻는 질문과 함께 도착합니다. 종류와 상관없이 두 번째 실패는 Hand-off이고, hand-off 코멘트에 budget을 이미 썼다고 적힙니다.
 
 budget 사용 여부는 fix Stage가 돌아온 뒤 State file에 기록됩니다. rate limit으로 멈춘 fix Stage는 아무것도 쓰지 않습니다. Release는 이미 쓴 budget을 다음 Run으로 그대로 넘기고, Hand-off는 budget을 되돌려 줍니다. Ticket은 사람 손을 거쳐야만 돌아오기 때문입니다.
 
@@ -200,7 +210,7 @@ Ticket은 fix Stage, Hand-off, Release 때도 Landing을 나가므로, 누구도
 
 ### Conflict Stage {#the-conflict-stage}
 
-충돌은 branch의 결함이 아닙니다. 그 아래에서 Base branch가 앞으로 나간 것뿐입니다. 그래서 멈춘 rebase 안에서 [Conflict Stage](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 하나가 플러그인 skill 없이 git 출력을 받아 돌고, **Fix budget은 쓰지 않습니다.** 이 Stage에는 rebase를 끝까지 마치고 절대 abort하지 말 것, 양쪽이 양립하면 두 의도를 모두 살리고 아니면 Ticket 쪽을 따를 것, 충돌하지 않은 파일은 건드리지 말 것을 요청합니다.
+충돌은 branch의 결함이 아닙니다. 그 아래에서 Base branch가 앞으로 나간 것뿐입니다. 그래서 멈춘 rebase 안에서 [Conflict Stage](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 하나가 플러그인 skill 없이 git 출력을 받아 돌고, **Fix budget은 쓰지 않습니다.** 이 Stage에는 rebase를 끝까지 마치고 절대 abort하지 말 것, 양쪽이 양립하면 두 의도를 모두 살리고 아니면 Ticket 쪽을 따를 것, 충돌하지 않은 파일은 merge가 망가뜨린 것을 고칠 때만 손댈 것을 요청합니다. 바뀐 이름이나 옮겨진 field 같은 것들입니다. 새로 구현하는 것은 없고, 기준이 다루는 동작도 바꾸지 않습니다.
 
 **판단은 세션의 종료 상태가 아니라 worktree가 합니다.** 다음을 모두 만족해야 rebase가 해결된 것으로 봅니다.
 
@@ -303,7 +313,7 @@ Ticket은 이미 merge됐으니 여기서부터는 Hand-off될 수 없습니다.
 
 ## Note {#notes}
 
-Stage는 자기 Ticket과 상관없는 결함을 자주 만납니다. 고치면 verify가 채점하는 범위를 넘어 Ticket이 넓어지고, 무시하면 transcript 속에 묻혀 버립니다. 그래서 implement, verify, fix Stage는 [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 목록을 남기며 끝나고, 파이프라인은 각 Note를 사람이 볼 만한 곳에 올립니다. Note는 결함이어야 하고, 취향이나 리팩터링, 있으면 좋을 테스트는 Note가 아닙니다. 지금 Ticket 안에서 손대지도 않습니다. verify의 경우, 기준에 대한 판단은 Note가 아니라 Verdict에 들어갑니다.
+Stage는 자기 Ticket과 상관없는 결함을 자주 만납니다. 고치면 verify가 채점하는 범위를 넘어 Ticket이 넓어지고, 무시하면 transcript 속에 묻혀 버립니다. 그래서 implement, verify, fix Stage는 [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 목록을 남기며 끝나고, 파이프라인은 각 Note를 사람이 볼 만한 곳에 올립니다. Note는 결함이어야 하고, 취향이나 리팩터링, 있으면 좋을 테스트는 Note가 아닙니다. 지금 Ticket 안에서 손대지도 않습니다. 단, branch 스스로 만든 결함은 Note가 아닙니다. Base branch에서는 제대로 돌고 branch에서는 틀리게 도는 결함, 또는 branch가 추가한 코드의 결함은 그 Ticket의 것이고, implement와 fix는 이를 고치라고 지시받습니다. verify의 경우, 기준에 대한 판단은 Note가 아니라 Verdict에 들어갑니다.
 
 Note에는 `summary`(필수)와 선택 항목 `evidence`, `impact`, `next`, `ticket`이 있습니다. Note는 Stage 자체의 결과를 판정하기 전에 보내므로, turn이 바닥난 Stage도 알아챈 것은 전합니다.
 

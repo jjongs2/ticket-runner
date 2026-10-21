@@ -10,7 +10,7 @@
  * rewriting it.
  */
 
-import { NOTES_LIST_SCHEMA } from "./note-schema.js";
+import { CODE_STAGE_NOTES_LIST_SCHEMA } from "./note-schema.js";
 
 /**
  * What a title is asked to be, in the words both the schema and the prompts of
@@ -41,7 +41,7 @@ export const CODE_STAGE_JSON_SCHEMA = {
       type: "string",
       description: `Write ${BRANCH_TITLE}: \`<type>(<scope>): <summary>\`, without the \`(#<n>)\`. It titles the pull request and the squash commit that lands.`,
     },
-    notes: NOTES_LIST_SCHEMA,
+    notes: CODE_STAGE_NOTES_LIST_SCHEMA,
   },
   required: ["title", "notes"],
   additionalProperties: false,
