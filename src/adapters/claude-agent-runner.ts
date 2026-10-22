@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -10,6 +11,7 @@ import {
 } from "../ports/agent-runner.js";
 import { STAGE_ENV_VAR } from "../stage-guard.js";
 import { type Execution, type RunProcess, exec } from "./exec.js";
+import type { Mark } from "./process-tree.js";
 
 export interface ClaudeAgentRunnerOptions {
   binary?: string;
@@ -24,6 +26,14 @@ export interface ClaudeAgentRunnerOptions {
  * starts with `=`, so the session would spend turns finding out why.
  */
 const STAGE_SHELL = "/bin/bash";
+
+/**
+ * The Session mark: a variable every Stage carries at a value no other Stage
+ * session shares, and every process it starts inherits. A Stage killed at its
+ * time limit is killed with every process still carrying its value, whoever
+ * their parent is by then.
+ */
+const SESSION_ENV_VAR = "TICKET_RUNNER_SESSION";
 
 /**
  * The tools that act beyond a Stage's worktree and its session: a cloud
@@ -123,6 +133,7 @@ export class ClaudeAgentRunner implements AgentRunner {
     request: StageRequest,
     args: string[],
     env: Record<string, string>,
+    session: Mark,
     log: StageLog,
   ): Promise<Execution> {
     try {
@@ -130,6 +141,7 @@ export class ClaudeAgentRunner implements AgentRunner {
         cwd: request.cwd,
         timeoutMs: request.maxMinutes * 60_000,
         extraEnv: env,
+        mark: session,
         onStdout: log.appendStdout,
         onStderr: log.appendStderr,
       });
@@ -140,14 +152,15 @@ export class ClaudeAgentRunner implements AgentRunner {
 
   async run(request: StageRequest): Promise<StageResult> {
     const args = buildArgs(request);
-    const env = this.stageEnv(request);
+    const session = { name: SESSION_ENV_VAR, value: randomUUID() };
+    const env = this.stageEnv(request, session);
     const commandLine = quoteCommand(env, this.binary, args);
     const startedAt = Date.now();
 
     // Started before the child, so a Run killed mid-Stage still leaves the
     // command line and everything printed so far behind.
     const log = startStageLog(request, commandLine);
-    const execution = await this.spawn(request, args, env, log);
+    const execution = await this.spawn(request, args, env, session, log);
 
     const events = parseEvents(execution.stdout);
     log.close(execution, events);
@@ -174,10 +187,12 @@ export class ClaudeAgentRunner implements AgentRunner {
   }
 
   /** What a Stage's environment carries beyond the one it inherits. */
-  private stageEnv(request: StageRequest): Record<string, string> {
+  private stageEnv(request: StageRequest, session: Mark): Record<string, string> {
     return {
       // The Stage mark the CLI refuses on, so the session cannot nest a Run.
       [STAGE_ENV_VAR]: request.stage,
+      // Two Lanes in the same Stage share the Stage mark, never this one.
+      [session.name]: session.value,
       // The Host user's memory is about their own projects, not the Target.
       CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1",
       // Where the Host has no bash, its own shell is still better than none.

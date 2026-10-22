@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { exec } from "./exec.js";
 
@@ -181,6 +182,95 @@ describe("the kill at the wall-clock limit", () => {
 
     expect(result.timedOut).toBe(true);
     expect(await goneSoon(pid)).toBe(true);
+  });
+
+  /**
+   * Prints its own pid, then starts a shell detached the way Claude Code starts
+   * a Bash command, which puts `sleep` in the background, prints its pid and
+   * exits at once: `sleep` is left with neither a parent nor a group leader in
+   * the command's tree.
+   */
+  const ORPHAN_SLEEP = `
+    const { spawn } = require("node:child_process");
+    process.stdout.write(process.pid + "\\n");
+    const shell = spawn("/bin/sh", ["-c", "sleep 30 & echo $!"], { detached: true, stdio: ["ignore", "pipe", "ignore"] });
+    shell.stdout.on("data", (chunk) => process.stdout.write(chunk));
+    setTimeout(() => {}, 30_000);
+  `;
+
+  /** The command's own pid and its orphaned `sleep`'s, once both are printed. */
+  function pidsOf(stdout: string): { command: number; sleep: number } | undefined {
+    const [command, sleep] = stdout.trim().split("\n").map(Number);
+    if (command === undefined || sleep === undefined || Number.isNaN(sleep)) return undefined;
+    return { command, sleep };
+  }
+
+  it("takes a marked background process whose shell has already exited", async () => {
+    const result = await exec("node", ["-e", ORPHAN_SLEEP], {
+      timeoutMs: 500,
+      mark: { name: "TEST_MARK", value: `killed-${process.pid}` },
+    });
+    const pids = pidsOf(result.stdout);
+
+    expect(result.timedOut).toBe(true);
+    expect(pids).toBeDefined();
+    expect(await goneSoon(pids?.sleep ?? 0)).toBe(true);
+  });
+
+  it("leaves a command carrying another mark, and what it started, alone", async () => {
+    let printed = "";
+    let started!: (pids: { command: number; sleep: number }) => void;
+    const otherPids = new Promise<{ command: number; sleep: number }>((resolve) => {
+      started = resolve;
+    });
+    const other = exec("node", ["-e", ORPHAN_SLEEP], {
+      timeoutMs: 30_000,
+      mark: { name: "TEST_MARK", value: `kept-${process.pid}` },
+      onStdout: (chunk) => {
+        printed += chunk;
+        const pids = pidsOf(printed);
+        if (pids !== undefined) started(pids);
+      },
+    });
+    const kept = await otherPids;
+
+    const killed = await exec("node", ["-e", ORPHAN_SLEEP], {
+      timeoutMs: 500,
+      mark: { name: "TEST_MARK", value: `killed-${process.pid}` },
+    });
+
+    expect(killed.timedOut).toBe(true);
+    expect(await goneSoon(pidsOf(killed.stdout)?.sleep ?? 0)).toBe(true);
+    expect(alive(kept.command)).toBe(true);
+    expect(alive(kept.sleep)).toBe(true);
+
+    process.kill(kept.sleep, "SIGKILL");
+    process.kill(kept.command, "SIGKILL");
+    await other;
+  });
+
+  it("never signals a process that carries no mark and was not started by the command", async () => {
+    const bystander = spawn(
+      "node",
+      ["-e", `process.on("SIGTERM", () => process.stdout.write("signalled")); setTimeout(() => {}, 30_000);`],
+      { detached: true, stdio: ["ignore", "pipe", "ignore"] },
+    );
+    let heard = "";
+    bystander.stdout.on("data", (chunk: Buffer) => {
+      heard += chunk.toString();
+    });
+
+    const killed = await exec("node", ["-e", ORPHAN_SLEEP], {
+      timeoutMs: 500,
+      killGraceMs: 300,
+      mark: { name: "TEST_MARK", value: `killed-${process.pid}` },
+    });
+
+    expect(killed.timedOut).toBe(true);
+    expect(await goneSoon(pidsOf(killed.stdout)?.sleep ?? 0)).toBe(true);
+    expect(heard).toBe("");
+    expect(alive(bystander.pid ?? 0)).toBe(true);
+    bystander.kill("SIGKILL");
   });
 
   it("kills what ignores SIGTERM once the grace is over", async () => {
