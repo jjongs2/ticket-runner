@@ -4,6 +4,44 @@ One section per Version, newest first, written in the Version PR that cut it and
 published as the body of that Version's GitHub Release (ADR-0007). The shape is
 `docs/templates/version-notes.md`.
 
+## 0.6.2 (2026-10-22)
+
+Stages run leaner, with the Checks left to the pipeline, and a Run releases a Ticket when the Base branch or the API failed it, not the Ticket's own work.
+
+### Stages
+
+- A Stage starts without the account's connectors, scheduling tools or memory ([#231])
+- A Stage leaves the Checks to the pipeline, and a design conflict goes to a human ([#232])
+- A timed-out Stage's background processes are killed, even when their shell has exited ([#231], [#240])
+- The verify Stage's default limit is 130 turns and 30 minutes, up from 80 and 20 ([#233])
+
+### Runs
+
+- A Ticket whose failing Check the Base branch fails too is released, with a Note on the Notes issue ([#235], [#244])
+- A transient API failure releases the Ticket, and a rate-limited Run says when the limit resets ([#233])
+- A Run ends on the rate limit even when an API failure released a Ticket first ([#241])
+- A hand-off's draft pull request carries the branch's title ([#234])
+
+### Docs
+
+- The glossary is `GLOSSARY.md`, as `mattpocock-skills` 1.3.1 names it ([#224])
+- The Korean wiki keeps literal strings untranslated ([#243])
+
+### After upgrading
+
+Run `ticket-runner init` in each Target: the conventions document gained the Base-branch Checks rule, and carries this Version.
+
+[#224]: https://github.com/jjongs2/ticket-runner/pull/224
+[#231]: https://github.com/jjongs2/ticket-runner/pull/231
+[#232]: https://github.com/jjongs2/ticket-runner/pull/232
+[#233]: https://github.com/jjongs2/ticket-runner/pull/233
+[#234]: https://github.com/jjongs2/ticket-runner/pull/234
+[#235]: https://github.com/jjongs2/ticket-runner/pull/235
+[#240]: https://github.com/jjongs2/ticket-runner/pull/240
+[#241]: https://github.com/jjongs2/ticket-runner/pull/241
+[#243]: https://github.com/jjongs2/ticket-runner/pull/243
+[#244]: https://github.com/jjongs2/ticket-runner/pull/244
+
 ## 0.6.1 (2026-10-06)
 
 Each Version now reaches npm and installs with `npm install -g ticket-runner`, and the conflict Stage works with `mattpocock-skills` 1.3.1.
