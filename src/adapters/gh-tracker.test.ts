@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { execution, failedExecution } from "../testing/executions.js";
 import type { HostKind } from "../host.js";
+import { failingBaseNote } from "../templates.js";
 import { GhTracker, type GhTrackerOptions } from "./gh-tracker.js";
 import type { ExecOptions, Execution, RunProcess } from "./exec.js";
 
@@ -1288,6 +1289,28 @@ describe("waiting for CI", () => {
     expect(excerpt).toContain("(the start of this line omitted)");
     expect(excerpt).toMatch(/assertion failed$/);
     expect(excerpt.length).toBeLessThan(4_100);
+  });
+
+  it.each([
+    ["fits both caps", "FAIL src/date.test.ts\n  expected 2026 to be 2025"],
+    ["runs past the line cap", log(60)],
+    ["runs past the character cap", Array.from({ length: 60 }, (_, i) => `${i} ${"y".repeat(2_100)}`).join("\n")],
+    ["is one line too long to carry whole", `${"x".repeat(5_000)}assertion failed`],
+  ])("keeps the tail a failing Base branch's Note quotes, for a log that %s", async (_, output) => {
+    const outcome = await ci({}, [checks("fail")], { "100": ok(output) }).waitForCi(12, 60_000);
+    const note = failingBaseNote({
+      origin: 6,
+      point: "ci",
+      baseBranch: "main",
+      branch: "agent/6-x",
+      commit: "1a2b3c4d",
+      command: "npm test",
+      output,
+      timedOut: false,
+    });
+
+    const excerptTail = excerptOf(outcome).replace(/^check-0\n/, "");
+    expect(note).toContain(`\n\`\`\`\n${excerptTail}\n\`\`\`\n`);
   });
 
   it("caps how many failing jobs it fetches a log for", async () => {
