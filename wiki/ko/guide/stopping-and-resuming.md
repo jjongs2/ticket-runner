@@ -136,7 +136,7 @@ Release가 하는 일:
 - Claim을 되돌립니다. `ready-for-agent`를 붙이고, `in-progress`를 떼고, 마지막으로 담당자를 해제합니다. 다른 Run은 담당자를 보고 가져간 Ticket인지 판단하니, 담당자를 맨 마지막에 뗍니다.
 - 코멘트를 달지 않고, draft pull request도 열지 않습니다.
 
-그 뒤로 Run은 더 claim하지 않습니다. 한 Stage를 멈춘 원인은 다음 Stage도 멈출 테니까요. 이미 바쁜 Lane은 자기 Ticket을 끝까지 마치고, 마지막 Lane이 돌아오면 Run이 끝납니다. 한도가 풀리기를 기다리지는 않습니다. 요약의 마지막 줄은 `Rate limited · resets 2026-09-20 03:40 UTC.`처럼, 요청을 거절한 `rate_limit_event`가 알려 준 시각을 담습니다. 시각을 알려 준 이벤트가 없으면 `Rate limited.`이고, API 장애였으면 `API failure.`입니다. Release된 Ticket도 가져간 것으로 치니, Hand-off가 없으면 exit code는 `0`입니다.
+그 뒤로 Run은 더 claim하지 않습니다. 한 Stage를 멈춘 원인은 다음 Stage도 멈출 테니까요. 이미 바쁜 Lane은 자기 Ticket을 끝까지 마치고, 마지막 Lane이 돌아오면 Run이 끝납니다. 한도가 풀리기를 기다리지는 않습니다. 요약의 마지막 줄은 `Rate limited · resets 2026-09-20 03:40 UTC.`처럼, 요청을 거절한 `rate_limit_event`가 알려 준 시각을 담습니다. 시각을 알려 준 이벤트가 없으면 `Rate limited.`이고, API 장애였으면 `API failure.`입니다. 다만 그 뒤에 바쁜 Lane이 rate limit으로 Release되면 rate limit이 API 장애보다 앞섭니다. 다음 Run을 언제 시작할지 알려 주는 쪽이니 요약은 rate limit 줄로 끝나고, 각 Ticket 줄은 저마다의 원인을 그대로 보여 줍니다. Release된 Ticket도 가져간 것으로 치니, Hand-off가 없으면 exit code는 `0`입니다.
 
 한도가 풀리거나 API가 회복된 뒤 Run을 시작하면 그 Ticket이 Frontier에 돌아와 있고, State file에서 이어 갑니다.
 
