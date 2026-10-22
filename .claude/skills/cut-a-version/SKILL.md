@@ -24,21 +24,23 @@ last=$(git tag --list 'v*' --sort=-v:refname | head -1)
 git log "$last"..origin/main --format='%s'
 ```
 
-Every subject in the span is a pull request that landed. Done when each one is
-accounted for: it earns a line of the notes, it belongs in a line another
-subject already earned, or it is a dependency bump that earns none.
+Every subject in the span is a pull request that landed.
 
 A dependency bump (`chore(deps): …`, `chore(deps-dev): …`, `ci(deps): …`) that
 leaves the `dependencies` ranges in `package.json` unchanged earns no line:
 that covers lock-file-only bumps, `devDependencies`, `wiki/` and Actions. npm
 does not publish the lock file, so these change nothing a user installs. A bump
-that changes a `dependencies` range earns a line. Only a subject this lists
-can have changed one:
+that changes a `dependencies` range earns a line. Only a commit that touched
+`package.json` can have changed one:
 
 ```bash
 git log "$last"..origin/main --format='%h %s' -- package.json
 git show <hash> -- package.json
 ```
+
+Done when each subject is accounted for: it earns a line of the notes, it
+belongs in a line another subject already earned, or it is a dependency bump
+that earns none.
 
 ## 2. Propose the number
 
