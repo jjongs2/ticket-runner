@@ -281,7 +281,7 @@ rebase로 branch가 다시 쓰였으니 `--force-with-lease`로 push합니다. B
 
 check가 실패하면 실패한 Actions job 최대 세 개의 로그 끝부분을 evidence로 fix Stage에 넘깁니다. conflicting인 pull request는 기다리지 않고 바로 Hand-off합니다. GitHub가 거기에는 check를 돌리지 않기 때문인데, 그사이 사람이 merge한 경우에만 생깁니다.
 
-**유예 시간.** pull request가 막 열린 직후에는 workflow의 check run이 생기기 전까지 GitHub가 한동안 'check 없음'이라고 답합니다. 3분 넘게 걸린 적도 있습니다. 그래서 "no checks"는 `ciGraceMinutes`(기본 5분, CI 시간 한도보다 길어지지 않음)가 지난 뒤에야 인정합니다. CI workflow가 없는 Target은 Landing마다 이 시간을 한 번씩 치릅니다.
+**유예 시간.** pull request가 막 열린 직후에는 workflow의 check run이 생기기 전까지 GitHub가 한동안 check가 없다고 답합니다. 3분 넘게 걸린 적도 있습니다. 그래서 "no checks"는 `ciGraceMinutes`(기본 5분, CI 시간 한도보다 길어지지 않음)가 지난 뒤에야 인정합니다. CI workflow가 없는 Target은 Landing마다 이 시간을 한 번씩 치릅니다.
 
 ### squash merge와 commit 메시지 {#squash-merge-and-its-commit}
 
