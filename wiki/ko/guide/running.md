@@ -164,7 +164,7 @@ Frontier blocked.
 | `Frontier empty.` | 가져갈 것이 남지 않음 |
 | `Frontier blocked.` | 남은 것에 모두 열린 blocker가 있음 |
 | `Rate limited · resets 2026-09-20 03:40 UTC.` | rate limit으로 Release되어 멈춤. 시각은 CLI가 알려 준, 한도가 풀리는 시각(UTC)이고, 알려 주지 않았으면 `Rate limited.`로 끝남 |
-| `API failure.` | 일시적인 API 장애로 Release되어 멈춤 |
+| `API failure.` | 일시적인 API 장애로 Release되어 멈췄고, 그 뒤 rate limit으로 Release된 Ticket이 없음. 마지막 줄에서는 rate limit이 API 장애보다 앞섬 |
 | ``Base branch `main` fails `npm test` at 1a2b3c4.`` | Base branch 실패로 Release되어 멈춤. 실패한 Check와 merge-base를 알려 줌. Base branch에서 고치면 되고, 출력은 standing Notes 이슈의 Note에 있음 |
 | `Stopped at 22:07 · finishing #4 #9.` | 그 시각(UTC)에 Stop이 왔고, 그때 그 Ticket들이 Lane에 있었음 |
 

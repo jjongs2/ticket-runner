@@ -62,6 +62,12 @@ transient API failure stopped says which it was and nothing of when:
 
 API failure.
 
+When a Ticket a busy Lane held is released too, the rate limit outranks an
+API failure: a Ticket the limit released afterwards puts its own last line in
+place of `API failure.`, with the reset time where a Stage was told one,
+because that is the line that says when the next Run can start. Each
+`released` row keeps its own cause.
+
 A Ticket whose failing Check or red CI the Base branch fails too is released
 the same way, its Fix budget as it was: the pipeline ran the Check commands at
 the branch's merge-base with the Base branch, and one of them failed there. Its
@@ -122,7 +128,8 @@ The last line says why the Run stopped: `Frontier empty.` when nothing is left,
 `Rate limited.`, with the reset time where the CLI gave one, `API failure.`, or
 ``Base branch `<base>` fails `<command>` at <commit>.`` when a Release ended the
 Run, and `Stopped at <hh:mm> · ...`
-when a human stopped it.
+when a human stopped it. Where Releases differ, the first one's last line
+stands, except that the rate limit outranks an API failure.
 
 A Run a Release stopped prints no `skipped  #<n> blocked` rows and no rows for
 the Frontier Tickets it never reached: it stopped before it could say a

@@ -6,7 +6,7 @@ import { Landing } from "./landing.js";
 import { StandingNotes } from "./notes.js";
 import type { Pipeline } from "./orchestrator.js";
 import type { TicketState } from "./ports/workspace.js";
-import { processRun } from "./run.js";
+import { type RunResult, processRun } from "./run.js";
 import { StopSignal } from "./stop.js";
 import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./testing/fakes.js";
 import { settle } from "./testing/settle.js";
@@ -394,6 +394,103 @@ describe("the time a rate-limited Run says the limit resets", () => {
 
     expect(result.stop).toEqual({ reason: "rate-limited", resetsAt: RESETS_AT });
     expect(logged.filter((line) => line.includes("stopped the Run"))).toHaveLength(1);
+  });
+});
+
+describe("which Release a Run ends on when its Releases differ", () => {
+  const RESETS_AT = "2026-09-19T17:40:00.000Z";
+
+  /** Each released Ticket's number with the cause its own row carries. */
+  function causes(outcomes: RunResult["outcomes"]) {
+    return outcomes.map((outcome) => [
+      outcome.ticket,
+      outcome.outcome === "released" ? outcome.cause : outcome.outcome,
+    ]);
+  }
+
+  it("ends on the rate limit and when it resets, each Ticket keeping its own cause", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    runner.queue("implement", { ok: false, failure: "api-error" });
+    runner.queue("implement", { ok: false, failure: "rate-limited", limitResetsAt: RESETS_AT });
+
+    const result = await processRun(pipeline(2));
+
+    expect(result.stop).toEqual({ reason: "rate-limited", resetsAt: RESETS_AT });
+    expect(causes(result.outcomes)).toEqual([
+      [4, "api-error"],
+      [5, "rate-limited"],
+    ]);
+    // The line stays with the Release that first stopped the Run.
+    expect(logged.filter((line) => line.includes("stopped the Run"))).toEqual([
+      "#4 stopped the Run · API failure",
+    ]);
+  });
+
+  it("ends on the rate limit with no reset time where the Stage was told none", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    runner.queue("implement", { ok: false, failure: "api-error" });
+    runner.queue("implement", { ok: false, failure: "rate-limited" });
+
+    const result = await processRun(pipeline(2));
+
+    expect(result.stop).toEqual({ reason: "rate-limited" });
+  });
+
+  it("takes the reset time from a still later Lane the limit stopped", async () => {
+    for (const number of [4, 5, 6]) tracker.addIssue({ number });
+    runner.queue("implement", { ok: false, failure: "api-error" });
+    runner.queue("implement", { ok: false, failure: "rate-limited" });
+    runner.queue("implement", { ok: false, failure: "rate-limited", limitResetsAt: RESETS_AT });
+
+    const result = await processRun(pipeline(3));
+
+    expect(causes(result.outcomes)).toEqual([
+      [4, "api-error"],
+      [5, "rate-limited"],
+      [6, "rate-limited"],
+    ]);
+    expect(result.stop).toEqual({ reason: "rate-limited", resetsAt: RESETS_AT });
+  });
+
+  it("stays on the rate limit when the API failure came second", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    runner.queue("implement", { ok: false, failure: "rate-limited", limitResetsAt: RESETS_AT });
+    runner.queue("implement", { ok: false, failure: "api-error" });
+
+    const result = await processRun(pipeline(2));
+
+    expect(causes(result.outcomes)).toEqual([
+      [4, "rate-limited"],
+      [5, "api-error"],
+    ]);
+    expect(result.stop).toEqual({ reason: "rate-limited", resetsAt: RESETS_AT });
+  });
+
+  it("stays on a failing Base branch when the rate limit came second", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    // #4's Check fails on its branch and at the merge-base alike; #5's passes
+    // and waits at verify until #4 has stopped the Run.
+    workspace.failCheckOnce("npm test", "FAIL src/date.test.ts");
+    workspace.failBaseCheck("npm test", "FAIL src/date.test.ts");
+    runner.queue("verify", { ok: false, failure: "rate-limited", limitResetsAt: RESETS_AT });
+    const verifying = runner.holds("verify");
+
+    const run = processRun(pipeline(2));
+    await verifying.started();
+    await settle();
+    verifying.release();
+    const result = await run;
+
+    expect(causes(result.outcomes)).toEqual([
+      [4, "failing-base"],
+      [5, "rate-limited"],
+    ]);
+    expect(result.stop).toEqual({
+      reason: "failing-base",
+      baseBranch: "main",
+      commit: workspace.mergeBaseCommit,
+      command: "npm test",
+    });
   });
 });
 

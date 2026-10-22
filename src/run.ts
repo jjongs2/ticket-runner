@@ -125,10 +125,11 @@ export async function processRun(
   // Lane unblocked on the way is not one the Run was still held up by.
   let blocked: number[] = [];
   // Why this Run stopped, which is also what it reports. Set by whichever of
-  // the Release and the Stop came first and never overwritten: a Stop that
-  // arrives after a Release asked for what was already happening, and a Release
-  // afterwards stopped nothing that was not stopped already. Undefined is a Run
-  // still taking Tickets, which is why it doubles as the guard at every refill.
+  // the Release and the Stop came first: a Stop that arrives after a Release
+  // asked for what was already happening, and a Release afterwards stopped
+  // nothing that was not stopped already. Only a later rate limit overwrites
+  // it, and only where limitOutranks says so. Undefined is a Run still taking
+  // Tickets, which is why it doubles as the guard at every refill.
   let runStop: RunStop | undefined;
   // A Frontier the tracker refused to list, kept until the Lanes still busy are
   // back. A Run must not walk away from a Ticket mid-Stage to report that `gh`
@@ -165,13 +166,14 @@ export async function processRun(
    * Put a Ticket in a Lane, and record what came back when it ends.
    *
    * The line about the Run stopping is logged by the Release that stopped it and
-   * by no other. The Ticket's own release is already logged where it happened;
-   * this says the Run goes no further, so a transcript shows the Frontier was
-   * left alone rather than found empty, and a Release into a Run that an earlier
-   * Release or a Stop had stopped already claims to have stopped nothing. It
-   * leads with the Ticket's number all the same: a transcript of interleaved
-   * Lanes must not lose the line that explains why one Lane was the last to be
-   * filled.
+   * by no other, even where a later rate limit replaces the API failure it
+   * stopped the Run with. The Ticket's own release is already logged where it
+   * happened; this says the Run goes no further, so a transcript shows the
+   * Frontier was left alone rather than found empty, and a Release into a Run
+   * that an earlier Release or a Stop had stopped already claims to have
+   * stopped nothing. It leads with the Ticket's number all the same: a
+   * transcript of interleaved Lanes must not lose the line that explains why
+   * one Lane was the last to be filled.
    */
   function fillLane(ticket: Taken): void {
     taken.add(ticket.number);
@@ -184,14 +186,8 @@ export async function processRun(
         if (runStop === undefined) {
           runStop = releaseStop(outcome, pipeline.baseBranch);
           pipeline.log?.(`#${outcome.ticket} stopped the Run · ${RELEASE_WORDS[outcome.cause]}`);
-        } else if (
-          // A Lane the limit stopped after the one that stopped the Run may
-          // have been told when it resets where that one was not.
-          runStop.reason === "rate-limited" &&
-          runStop.resetsAt === undefined &&
-          outcome.limitResetsAt !== undefined
-        ) {
-          runStop = { reason: "rate-limited", resetsAt: outcome.limitResetsAt };
+        } else if (outcome.cause === "rate-limited" && limitOutranks(runStop)) {
+          runStop = releaseStop(outcome, pipeline.baseBranch);
         }
       }),
     );
@@ -273,6 +269,17 @@ function releaseStop(
     reason: "rate-limited",
     ...(outcome.limitResetsAt === undefined ? {} : { resetsAt: outcome.limitResetsAt }),
   };
+}
+
+/**
+ * Whether a Ticket the rate limit released after `stop` puts the limit in its
+ * place. An API failure says nothing of when the next Run can start, so the
+ * limit outranks it; a limit nobody was told the end of is outranked by one a
+ * Stage was told. A failing Base branch and a Stop stay whatever comes after
+ * them, and so does a limit already told when it resets.
+ */
+function limitOutranks(stop: RunStop): boolean {
+  return stop.reason === "api-error" || (stop.reason === "rate-limited" && stop.resetsAt === undefined);
 }
 
 /**
