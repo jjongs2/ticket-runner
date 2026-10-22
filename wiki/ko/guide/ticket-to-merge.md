@@ -253,7 +253,7 @@ Check를 다시 돌리는 건 해결 내용이 어떤 관문도 본 적 없는 �
 
 ### pull request {#pull-request}
 
-rebase로 branch가 다시 쓰였으니 `--force-with-lease`로 push합니다. Base branch를 향한 ready(draft 아님) pull request를 새로 열거나, 이미 있는 것을 갱신합니다. 갱신할 때는 제목과 본문을 새로 쓰고 draft에서 꺼냅니다. draft에서는 workflow가 아예 돌지 않는 경우가 많아서, Hand-off 때 남은 draft를 그대로 두면 'check 없음'으로 읽히기 때문입니다.
+rebase로 branch가 다시 쓰였으니 `--force-with-lease`로 push합니다. Base branch를 향한 ready(draft 아님) pull request를 새로 열거나, 이미 있는 것을 갱신합니다. 갱신할 때는 제목과 본문을 새로 쓰고 draft에서 꺼냅니다. draft에서는 workflow가 아예 돌지 않는 경우가 많아서, Hand-off 때 남은 draft를 그대로 두면 "no checks"로 읽히기 때문입니다.
 
 **제목**은 다음 중 commit 컨벤션 모양 `<type>(<scope>): <summary>`에 맞는 한 줄짜리 첫 번째 후보입니다(끝의 `(#<n>)`는 떼어 냄).
 
@@ -281,7 +281,7 @@ rebase로 branch가 다시 쓰였으니 `--force-with-lease`로 push합니다. B
 
 check가 실패하면 실패한 Actions job 최대 세 개의 로그 끝부분을 evidence로 fix Stage에 넘깁니다. conflicting인 pull request는 기다리지 않고 바로 Hand-off합니다. GitHub가 거기에는 check를 돌리지 않기 때문인데, 그사이 사람이 merge한 경우에만 생깁니다.
 
-**유예 시간.** pull request가 막 열린 직후에는 workflow의 check run이 생기기 전까지 GitHub가 한동안 'check 없음'이라고 답합니다. 3분 넘게 걸린 적도 있습니다. 그래서 'check 없음'은 `ciGraceMinutes`(기본 5분, CI 시간 한도보다 길어지지 않음)가 지난 뒤에야 인정합니다. CI workflow가 없는 Target은 Landing마다 이 시간을 한 번씩 치릅니다.
+**유예 시간.** pull request가 막 열린 직후에는 workflow의 check run이 생기기 전까지 GitHub가 한동안 check가 없다고 답합니다. 3분 넘게 걸린 적도 있습니다. 그래서 "no checks"는 `ciGraceMinutes`(기본 5분, CI 시간 한도보다 길어지지 않음)가 지난 뒤에야 인정합니다. CI workflow가 없는 Target은 Landing마다 이 시간을 한 번씩 치릅니다.
 
 ### squash merge와 commit 메시지 {#squash-merge-and-its-commit}
 
@@ -347,7 +347,7 @@ Note에는 `summary`(필수)와 선택 항목 `evidence`, `impact`, `next`, `tic
 | 닫혔거나, claim됐거나(`in-progress`), Spec인 이슈 | standing Notes 이슈. 원래 어느 Ticket 몫이었고 왜 그쪽으로 가지 않았는지 함께 적음 |
 | 코멘트를 받지 않는 번호(지어낸 번호, 잠긴 이슈) | standing Notes 이슈. 원래 가려던 번호와 함께 |
 
-**standing Notes 이슈**는 Note를 코멘트로 모으는, 열린 `needs-triage` 이슈 하나입니다. 제목은 "Notes from the 파이프라인"입니다. 제목이 아니라 본문의 마커로 찾으므로, 이름을 바꿔도 두 번째 이슈가 생기지 않습니다. 필요한 첫 Note가 열고, Run의 모든 Lane이 함께 씁니다. triage가 손으로 비운 뒤 닫으면, 다음 Note가 새로 엽니다. 열려 있는 동안에는 Note를 쓰는 Stage의 프롬프트에 그 번호가 들어가, 이미 보고된 내용을 읽고 읽는 사람의 판단을 바꿀 만한 것만 더하게 합니다.
+**standing Notes 이슈**는 Note를 코멘트로 모으는, 열린 `needs-triage` 이슈 하나입니다. 제목은 "Notes from the pipeline"입니다. 제목이 아니라 본문의 마커로 찾으므로, 이름을 바꿔도 두 번째 이슈가 생기지 않습니다. 필요한 첫 Note가 열고, Run의 모든 Lane이 함께 씁니다. triage가 손으로 비운 뒤 닫으면, 다음 Note가 새로 엽니다. 열려 있는 동안에는 Note를 쓰는 Stage의 프롬프트에 그 번호가 들어가, 이미 보고된 내용을 읽고 읽는 사람의 판단을 바꿀 만한 것만 더하게 합니다.
 
 Note 코멘트는 출처(`From #<origin> <stage>`)로 시작하고, 이어서 굵은 요약과 항목별 라벨이 붙은 내용이 옵니다. 줄 머리의 `- [ ]`는 escape되므로, Note가 Acceptance Criteria로 읽히는 일은 없습니다. 올리지 못한 Note는 그 Note 하나만 잃을 뿐, Ticket에는 영향을 주지 않습니다. Run 요약에는 각 Note가 그것을 만든 Ticket 아래 `noted` 행으로 나옵니다.
 

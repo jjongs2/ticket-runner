@@ -105,7 +105,7 @@ Ticket을 파이프라인에 돌려주려면 라벨을 `ready-for-human`에서 `
 넘겼던 Run 때와 달라지는 점이 몇 가지 있습니다.
 
 - **Fix budget**: 새로 채워집니다. Ticket이 사람 손을 거쳤으니, 그 사람이 한 일에 새 budget을 쓰라는 뜻입니다. 예전 코멘트에는 budget을 썼다고 그대로 남습니다. 실제로 썼으니까요.
-- **Draft pull request**: CI를 기다리기 전에 draft를 풉니다. draft에서는 workflow가 아예 돌지 않는 일이 많아서, 그대로 기다리면 "check 없음"으로 읽히기 때문입니다. 사람이 닫아 버린 pull request처럼 draft가 풀리지 않으면 `pr`에서 Hand-off합니다. 닫았다는 건 이어 가지 말라는 뜻이니까요.
+- **Draft pull request**: CI를 기다리기 전에 draft를 풉니다. draft에서는 workflow가 아예 돌지 않는 일이 많아서, 그대로 기다리면 "no checks"로 읽히기 때문입니다. 사람이 닫아 버린 pull request처럼 draft가 풀리지 않으면 `pr`에서 Hand-off합니다. 닫았다는 건 이어 가지 말라는 뜻이니까요.
 - **Hand-off 코멘트**: 각 코멘트의 marker 바로 아래에 `_Taken again by a later Run; this hand-off is history._`가 붙습니다. 수정이라서 알림은 가지 않습니다.
 - **Progress comment**: 새로 하나 답니다. 사람이 읽었던 코멘트는 읽은 모습 그대로 둡니다.
 
@@ -348,7 +348,7 @@ push는 `--force-with-lease`를 쓰니, rebase가 branch를 다시 쓸 수는 �
 
 - [Ticket 하나가 merge되기까지](./ticket-to-merge.md): 이 끝맺음들이 끊고 들어가는 lifecycle, Fix budget, Landing
 - [실행하기](./running.md): `run`, `stop`, 번호를 지정한 Run, 요약과 exit code, cloud Host의 Operator
-- [설정](./configuration.md): Stage가 "끝나지 않았다"를 정하는 Stage 한도와 timeout
+- [설정](./configuration.md): Stage가 언제 "did not finish"인지 정하는 Stage 한도와 timeout
 - [내부 구조](./internals.md): State와 lock을 맡는 `Workspace` port, 그리고 이 페이지 뒤의 ADR
 
 ## 참고 {#references}
