@@ -7,6 +7,12 @@ Conventions for humans and agents working in this repo. Vocabulary is defined in
 - `main` receives squash merges from pull requests only. Nobody commits to it directly. Bootstrap exception: Planning documents written before the first Ticket merged landed on `main` directly, because no CI existed to gate a PR.
 - `agent/<n>-<slug>` belongs to the pipeline, as the conventions document states. `<slug>` is the Ticket title in lowercase kebab-case, at most 40 characters.
 - `version/<number>` carries a Version PR and nothing else.
+- `dependabot/…` belongs to Dependabot, which `.github/dependabot.yml` configures and which rebases the branch itself. Nobody commits to it: a commit by hand stops Dependabot from rebasing it.
+  - One exception: when the lock file diff changes the version of a package an `allowScripts` field names (today `esbuild`, in both `package.json` and `wiki/package.json`), the same pull request updates that entry, for example with `npm install-scripts approve <package>`. CI's npm ignores `allowScripts`, so CI passes either way, and a local npm 12 or later then blocks that package's install script with only a warning, so nothing else catches it.
+  - Its commits and pull request carry no Ticket number, its body no `Closes`, and its title stays as Dependabot wrote it, even past 72 characters. Like the Version PR, it is work no Ticket asked for.
+  - A human squash-merges it once CI is green, as any pull request. There is no auto-merge.
+  - A major is merged once CI is green and its release notes show nothing CI cannot see, such as a runtime behaviour change or a new Node requirement. A major that fails CI is closed: Dependabot drops that version, a later release comes back to be judged again, and an upgrade that needs work becomes a Ticket.
+  - A dependency or update never wanted goes into `ignore` in `dependabot.yml`, never an `@dependabot ignore` comment, which keeps the choice outside the repository. An `ignore` entry silences that dependency's security updates too.
 - `human/<n>-<slug>` for attended work on a Ticket, `human/<slug>` for attended work without one. Create it before running `/implement`, which commits to whatever branch is checked out.
 - Branches are updated by rebasing on `main`. Merge commits do not appear in history.
 - A branch is deleted when its PR merges. A handed-off Ticket keeps its branch and worktree until a human finishes or abandons it.
@@ -15,7 +21,7 @@ Conventions for humans and agents working in this repo. Vocabulary is defined in
 
 - Subject shape, and the Ticket number every commit carries: the conventions document. That reference is also how code-review finds the Ticket to grade against. On top of the shape, here: imperative mood, at most 72 characters.
 - Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`.
-- Scopes: `cli`, `orchestrator`, `config`, `tracker`, `agent-runner`, `workspace`. Omit the scope when a change spans several.
+- Scopes: `cli`, `orchestrator`, `config`, `tracker`, `agent-runner`, `workspace`, and `deps` and `deps-dev`, which Dependabot writes. Omit the scope when a change spans several.
 - Commit early and often on the branch; the PR squashes, so branch history is scratch. Commit work in progress instead of stashing: `refs/stash` is shared across worktrees.
 - Keep any `Co-Authored-By` trailers the tooling adds.
 

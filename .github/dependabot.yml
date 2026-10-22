@@ -1,0 +1,56 @@
+version: 2
+
+# Monthly spaces out version updates only: a security update opens as soon as
+# its alert does, and ignores the cooldown too. The cooldown proposes a release
+# only after a week on the registry, by when a compromised one is usually
+# pulled. Minor and patch updates share one pull request per entry, and each
+# major gets its own, to be judged alone. How a Dependabot pull request is
+# handled: CONTRIBUTING.md.
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    # A bump inside a range changes only the lock file, and a major replaces
+    # the range. `auto` would judge the published package a library and widen
+    # it instead, to `^4.20.6 || ^5.0.0`.
+    versioning-strategy: increase-if-necessary
+    ignore:
+      # `engines` is `>=22` and CI runs Node 22, so newer types would let code
+      # that calls APIs Node 22 lacks pass the typecheck.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+    groups:
+      minor-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: npm
+    directory: /wiki
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      minor-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      minor-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: ci
+      include: scope
