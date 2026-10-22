@@ -14,7 +14,7 @@ jobs:
   version-tag:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Every tag, so a push that cuts no Version is recognised as one.
           fetch-depth: 0
