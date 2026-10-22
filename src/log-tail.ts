@@ -14,13 +14,16 @@ export const MAX_TAIL_LINES = 40;
 export const MAX_TAIL_CHARS = 4_000;
 
 /**
- * The end of a log, under a fixed cap, saying what it left out.
+ * The end of a log, under a fixed cap, saying what it left out, or nothing when
+ * the log holds nothing but blank space.
  *
  * The tail is the part worth carrying: a runner prints the assertion or the
  * stack that ended the job last, under however much setup noise came first.
+ * Both callers pass the output as it came, so one output gives one tail
+ * wherever it is quoted.
  */
 export function logTail(log: string): string {
-  const lines = log.split("\n");
+  const lines = throughLastError(log).trim().split("\n");
   let kept = lines.slice(-MAX_TAIL_LINES);
   while (kept.length > 1 && kept.join("\n").length > MAX_TAIL_CHARS) kept = kept.slice(1);
 
@@ -34,4 +37,15 @@ export function logTail(log: string): string {
     return `… (${earlier} omitted)\n${text.slice(-MAX_TAIL_CHARS)}`;
   }
   return omitted > 0 ? `… (${omitted} earlier lines omitted)\n${text}` : text;
+}
+
+/**
+ * Everything up to the last line an Actions runner marked `##[error]`, or all
+ * of it. What the post-job cleanup prints after the failure would otherwise be
+ * the tail that is kept; output with no such line is left whole.
+ */
+function throughLastError(log: string): string {
+  const lines = log.split("\n");
+  const last = lines.findLastIndex((line) => line.includes("##[error]"));
+  return last === -1 ? log : lines.slice(0, last + 1).join("\n");
 }

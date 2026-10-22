@@ -453,11 +453,11 @@ export function failingBaseSummary(baseBranch: string, command: string): string 
  */
 export function failingBaseNote(note: FailingBaseNote): string {
   const { baseBranch, branch, commit, command } = note;
-  const tail = logTail(note.output.trimEnd());
+  const tail = logTail(note.output);
   const where = `\`${command}\` ${note.timedOut ? "timed out" : "failed"} in a clean worktree at ${commit}, the merge-base of \`${branch}\` with \`${baseBranch}\`.`;
   const fence = "`".repeat(Math.max(3, ...[...tail.matchAll(/`+/g)].map(([run]) => run.length + 1)));
   const evidence =
-    tail.trim() === ""
+    tail === ""
       ? `**Evidence**: ${where} It printed nothing.`
       : `**Evidence**: ${where} The tail of its output:\n\n${fence}\n${escapeCheckboxes(tail)}\n${fence}`;
   return [

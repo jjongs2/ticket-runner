@@ -1296,6 +1296,10 @@ describe("waiting for CI", () => {
     ["runs past the line cap", log(60)],
     ["runs past the character cap", Array.from({ length: 60 }, (_, i) => `${i} ${"y".repeat(2_100)}`).join("\n")],
     ["is one line too long to carry whole", `${"x".repeat(5_000)}assertion failed`],
+    ["starts with a blank line", `\n${log(60)}`],
+    ["starts with a newline, as vitest's does", "\n RUN  v3.2.7 /repo\n\n FAIL src/date.test.ts"],
+    ["starts indented", "   indented first line\nsecond"],
+    ["has cleanup after an Actions error", "Run npm test\n##[error]Process completed with exit code 1.\nPost job cleanup."],
   ])("keeps the tail a failing Base branch's Note quotes, for a log that %s", async (_, output) => {
     const outcome = await ci({}, [checks("fail")], { "100": ok(output) }).waitForCi(12, 60_000);
     const note = failingBaseNote({

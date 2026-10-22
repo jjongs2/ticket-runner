@@ -588,31 +588,30 @@ export class GhTracker implements Tracker {
     const logs: string[] = [];
     for (const { name, job, link } of jobs.slice(0, MAX_LOG_JOBS)) {
       const log = await this.jobLog(job);
+      const tail = log === undefined ? "" : logTail(log);
       logs.push(
-        log === undefined
+        tail === ""
           ? `${name}\n(the log was unavailable; the job is at ${link})`
-          : `${name}\n${logTail(log)}`,
+          : `${name}\n${tail}`,
       );
     }
     return logs.join("\n\n");
   }
 
   /**
-   * One Actions job's log through REST, up to the last line the runner marked
-   * as an error, or nothing when there is no log to be had.
+   * One Actions job's whole log through REST, or nothing when there is no log
+   * to be had.
    *
    * REST gives the whole job where `gh run view --log-failed` gave the failed
-   * steps, so what the post-job cleanup printed after the failure is cut off:
-   * otherwise it would be the tail that is kept.
+   * steps, so {@link logTail} cuts what the post-job cleanup printed after the
+   * failure.
    */
   private async jobLog(job: string): Promise<string | undefined> {
     try {
       const result = await this.gh(["api", `repos/{owner}/{repo}/actions/jobs/${job}/logs`], {
         allowFailure: true,
       });
-      if (result.exitCode !== 0) return undefined;
-      const log = throughLastError(result.stdout).trim();
-      return log === "" ? undefined : log;
+      return result.exitCode === 0 ? result.stdout : undefined;
     } catch {
       // `gh` itself could not be run. The failure still stands; the log does not.
       return undefined;
@@ -907,13 +906,6 @@ function statusBucket(state: string): Bucket {
 /** A check's link, left out rather than empty when GitHub reported none. */
 function linked(url: string | null | undefined): { link?: string } {
   return url ? { link: url } : {};
-}
-
-/** Everything up to the last line an Actions runner marked `##[error]`, or all of it. */
-function throughLastError(log: string): string {
-  const lines = log.split("\n");
-  const last = lines.findLastIndex((line) => line.includes("##[error]"));
-  return last === -1 ? log : lines.slice(0, last + 1).join("\n");
 }
 
 /**
