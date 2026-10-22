@@ -198,8 +198,14 @@ describe("the kill at the wall-clock limit", () => {
     setTimeout(() => {}, 30_000);
   `;
 
-  /** The command's own pid and its orphaned `sleep`'s, once both are printed. */
-  function pidsOf(stdout: string): { command: number; sleep: number } | undefined {
+  /** The command's own pid and its orphaned `sleep`'s. */
+  interface OrphanPids {
+    command: number;
+    sleep: number;
+  }
+
+  /** The pids `ORPHAN_SLEEP` prints, once both are printed. */
+  function pidsOf(stdout: string): OrphanPids | undefined {
     const [command, sleep] = stdout.trim().split("\n").map(Number);
     if (command === undefined || sleep === undefined || Number.isNaN(sleep)) return undefined;
     return { command, sleep };
@@ -219,8 +225,8 @@ describe("the kill at the wall-clock limit", () => {
 
   it("leaves a command carrying another mark, and what it started, alone", async () => {
     let printed = "";
-    let started!: (pids: { command: number; sleep: number }) => void;
-    const otherPids = new Promise<{ command: number; sleep: number }>((resolve) => {
+    let started!: (pids: OrphanPids) => void;
+    const otherPids = new Promise<OrphanPids>((resolve) => {
       started = resolve;
     });
     const other = exec("node", ["-e", ORPHAN_SLEEP], {
@@ -247,6 +253,29 @@ describe("the kill at the wall-clock limit", () => {
     process.kill(kept.sleep, "SIGKILL");
     process.kill(kept.command, "SIGKILL");
     await other;
+  });
+
+  it("takes a marked process started during the grace by one that then ended", async () => {
+    // The command answers SIGTERM by leaving a detached shell behind, which
+    // backgrounds a `sleep` and exits, then exits itself.
+    const script = `
+      const { spawn } = require("node:child_process");
+      process.on("SIGTERM", () => {
+        spawn("/bin/sh", ["-c", "sleep 30 & echo $!"], { detached: true, stdio: ["ignore", "inherit", "ignore"] });
+        setTimeout(() => process.exit(0), 200);
+      });
+      setTimeout(() => {}, 30_000);
+    `;
+
+    const result = await exec("node", ["-e", script], {
+      timeoutMs: 300,
+      mark: { name: "TEST_MARK", value: `grace-${process.pid}` },
+    });
+    const pid = backgroundPid(result.stdout);
+
+    expect(result.timedOut).toBe(true);
+    expect(pid).toBeGreaterThan(0);
+    expect(await goneSoon(pid)).toBe(true);
   });
 
   it("never signals a process that carries no mark and was not started by the command", async () => {

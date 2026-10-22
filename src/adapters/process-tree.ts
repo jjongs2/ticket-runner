@@ -73,7 +73,15 @@ export async function killTree(
 
   const deadline = Date.now() + graceMs;
   while (Date.now() < deadline) {
-    if (!anyAlive(tree)) return;
+    if (!anyAlive(tree)) {
+      // What it signalled is gone, but one of them may have started another
+      // as it went: that one still carries the mark.
+      const late = treeOf(marked().filter((pid) => alive(pid)));
+      if (late.pids.size === 0) return;
+      signal(late, "SIGTERM");
+      for (const pid of late.pids) tree.pids.add(pid);
+      for (const group of late.groups) tree.groups.add(group);
+    }
     await new Promise((resolve) => setTimeout(resolve, POLL_MS));
   }
 
@@ -131,7 +139,7 @@ export function processesMarked(mark: Mark): number[] {
   const entries = procEntries();
   if (entries === undefined) return markedInPs(psWithEnvironment(), mark);
 
-  const wanted = `${mark.name}=${mark.value}`;
+  const wanted = asEntry(mark);
   return entries.flatMap((pid) => {
     try {
       const environ = readFileSync(`/proc/${pid}/environ`, "utf8");
@@ -141,6 +149,11 @@ export function processesMarked(mark: Mark): number[] {
       return [];
     }
   });
+}
+
+/** The mark as an environment holds it. */
+function asEntry(mark: Mark): string {
+  return `${mark.name}=${mark.value}`;
 }
 
 /** The pids under `/proc`, or nothing on a Host without one. */
@@ -169,7 +182,7 @@ function psWithEnvironment(): string {
  * one whitespace-separated `NAME=value` word in their line.
  */
 export function markedInPs(output: string, mark: Mark): number[] {
-  const wanted = `${mark.name}=${mark.value}`;
+  const wanted = asEntry(mark);
   return output.split("\n").flatMap((line) => {
     const [pid, ...words] = line.trim().split(/\s+/);
     if (pid === undefined || !/^\d+$/.test(pid)) return [];
