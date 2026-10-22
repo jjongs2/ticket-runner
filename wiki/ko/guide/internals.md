@@ -70,6 +70,7 @@ claude --print <prompt> --output-format stream-json --verbose \
   | 변수 | 값 | 이유 |
   |---|---|---|
   | `TICKET_RUNNER_STAGE` | Stage 이름 | [Stage mark](./ticket-to-merge.md) |
+  | `TICKET_RUNNER_SESSION` | Stage 세션마다 다른 UUID | [`maxMinutes`의 kill](#smaller-adapters)이 찾는 Session mark |
   | `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | `1` | Host 사용자의 memory는 Target이 아닌 그 사람의 프로젝트에 관한 것 |
   | `CLAUDE_CODE_SHELL` | `/bin/bash`, 있을 때만 | zsh는 아무것도 맞지 않는 glob 하나에 명령 전체를 멈춤 |
 - Stage가 시작되는 순간부터 `<stage>.command`, `.stdout`, `.stderr`, `.transcript.jsonl`을 씁니다.
@@ -85,7 +86,7 @@ claude --print <prompt> --output-format stream-json --verbose \
 ### 작은 adapter들 {#smaller-adapters}
 
 - [`exec.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/exec.ts)는 timeout과 스트리밍 sink를 붙여 자식 프로세스를 띄웁니다. 명령이 스스로 124로 끝날 수도 있으니 `timedOut`을 따로 알려 줍니다.
-- [`process-tree.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/process-tree.ts)는 시간 한도에 걸린 명령을 하위 프로세스 전부, 그리고 이들이 leader인 process group과 함께 죽입니다. 먼저 SIGTERM을 보내고, 5초 뒤에도 남은 것은 SIGKILL로 끝냅니다. 명령 자신의 group만 죽여서는 안 됩니다. Stage는 Run의 group을 같이 쓰고([ADR-0006](#adr-0006)), Claude Code는 Bash 명령마다 session을 따로 만듭니다.
+- [`process-tree.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/process-tree.ts)는 시간 한도에 걸린 명령을 하위 프로세스 전부, 그리고 이들이 leader인 process group과 함께 죽입니다. 먼저 SIGTERM을 보내고, 5초 뒤에도 남은 것은 SIGKILL로 끝냅니다. 명령 자신의 group만 죽여서는 안 됩니다. Stage는 Run의 group을 같이 쓰고([ADR-0006](#adr-0006)), Claude Code는 Bash 명령마다 session을 따로 만듭니다. 셸이 이미 끝난 background 프로세스는 부모를 따라가도 Stage에 닿지 않으므로, Stage의 Session mark를 가진 프로세스도 모두 함께 죽입니다. 환경은 Linux에서는 `/proc/<pid>/environ`, macOS에서는 `ps -wwE`로 읽습니다. 환경을 읽을 수 없는 프로세스는 부모를 따라서만 닿습니다.
 - [`repo-root.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/repo-root.ts)는 worktree 안에서 실행해도 main checkout을 찾습니다. 그래서 lock, `.worktrees/`, 로그가 clone마다 한 곳에 모입니다.
 - [`version.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts)는 이 사본이 어느 [Version](#versions)인지 읽습니다. 설명하는 port는 없지만 git을 실행하니 adapter에 둡니다.
 

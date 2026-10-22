@@ -82,6 +82,10 @@ _Avoid_: step, phase, task
 The `TICKET_RUNNER_STAGE` variable a Run sets in every Stage's shell. The pipeline refuses to start while it is present, so a Stage cannot start a nested Run. A tripwire, not a sandbox, where the Run lock stops two humans.
 _Avoid_: flag, sandbox, guard variable
 
+**Session mark**:
+The `TICKET_RUNNER_SESSION` variable a Run sets in every Stage's shell, at a value no other Stage session shares, which every process the Stage starts inherits. A Stage killed at its time limit is killed with every process still carrying its value, besides those it reaches by parentage, so a background process whose shell has already exited goes too. Kept apart from the Stage mark, which two Lanes in the same Stage share.
+_Avoid_: session id, kill tag, Stage mark (that names the Stage)
+
 **Progress comment**:
 The one comment a Ticket's Stages share, found by its hidden marker and edited in place so only the first Stage notifies anyone. Carries a section per Run that worked the Ticket, oldest first, each a row per Stage, and nothing a human has to act on.
 _Avoid_: status comment, progress update, run comment
