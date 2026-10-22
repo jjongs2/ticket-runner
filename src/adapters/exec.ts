@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { killTree } from "./process-tree.js";
+import { type Mark, killTree } from "./process-tree.js";
 
 export interface Execution {
   exitCode: number;
@@ -27,6 +27,12 @@ export interface ExecOptions {
   killGraceMs?: number;
   /** Variables merged over the environment the child inherits, not replacing it. */
   extraEnv?: Record<string, string>;
+  /**
+   * A variable set over `extraEnv`, whose value nothing else on the Host
+   * carries. A kill at `timeoutMs` also takes every process still carrying it,
+   * which reaches what the child started after its parent has exited.
+   */
+  mark?: Mark;
   /**
    * Called with each chunk the child prints on that stream, as it arrives, so
    * a caller that saves the output has it before the child exits. A sink runs
@@ -75,11 +81,12 @@ export function exec(
   options: ExecOptions = {},
 ): Promise<Execution> {
   return new Promise((resolve, reject) => {
+    const { mark } = options;
+    const extraEnv =
+      mark === undefined ? options.extraEnv : { ...options.extraEnv, [mark.name]: mark.value };
     const child = spawn(command, args, {
       ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
-      ...(options.extraEnv === undefined
-        ? {}
-        : { env: { ...process.env, ...options.extraEnv } }),
+      ...(extraEnv === undefined ? {} : { env: { ...process.env, ...extraEnv } }),
       shell: options.shell ?? false,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -134,7 +141,10 @@ export function exec(
         if (hasExited()) return;
         killed = true;
         if (child.pid === undefined) child.kill("SIGKILL");
-        else killing = killTree(child.pid, options.killGraceMs ?? KILL_GRACE_MS);
+        else {
+          const graceMs = options.killGraceMs ?? KILL_GRACE_MS;
+          killing = killTree(child.pid, graceMs, mark === undefined ? {} : { mark });
+        }
       }, options.timeoutMs);
     }
 

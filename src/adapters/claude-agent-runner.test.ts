@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { StageRequest } from "../ports/agent-runner.js";
+import { nestedRunRefusal } from "../stage-guard.js";
 import { execution, failedExecution } from "../testing/executions.js";
 import { ClaudeAgentRunner } from "./claude-agent-runner.js";
 import type { ExecOptions, Execution } from "./exec.js";
@@ -174,6 +175,28 @@ describe("the command line", () => {
     expect(calls[1]?.options.extraEnv?.TICKET_RUNNER_STAGE).toBe("verify");
   });
 
+  it("gives the child an environment the CLI refuses in, naming the Stage", async () => {
+    await runner(execution({ stdout: SUCCESS })).run(request({ stage: "verify" }));
+
+    expect(nestedRunRefusal(calls[0]?.options.extraEnv ?? {})).toMatch(
+      /^Refusing to start: TICKET_RUNNER_STAGE is set to `verify`, so this shell belongs to the verify Stage/,
+    );
+  });
+
+  it("marks each Stage session with a value of its own, which its kill looks for", async () => {
+    await runner(execution({ stdout: SUCCESS })).run(request());
+    await runner(execution({ stdout: SUCCESS })).run(request());
+
+    const [first, second] = calls.map((call) => call.options);
+    expect(first?.extraEnv?.TICKET_RUNNER_SESSION).toMatch(/^[0-9a-f-]{36}$/);
+    expect(first?.mark).toEqual({
+      name: "TICKET_RUNNER_SESSION",
+      value: first?.extraEnv?.TICKET_RUNNER_SESSION,
+    });
+    expect(second?.extraEnv?.TICKET_RUNNER_SESSION).not.toBe(first?.extraEnv?.TICKET_RUNNER_SESSION);
+    expect(second?.mark?.value).toBe(second?.extraEnv?.TICKET_RUNNER_SESSION);
+  });
+
   it("starts the session with no MCP server, not even the account's connectors", async () => {
     await runner(execution({ stdout: SUCCESS })).run(request());
 
@@ -231,7 +254,7 @@ describe("the command line", () => {
     const result = await runner(execution({ stdout: SUCCESS })).run(request());
 
     expect(result.commandLine).toMatch(
-      /^TICKET_RUNNER_STAGE=implement CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 CLAUDE_CODE_SHELL=\/bin\/bash claude --print/,
+      /^TICKET_RUNNER_STAGE=implement TICKET_RUNNER_SESSION=[0-9a-f-]{36} CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 CLAUDE_CODE_SHELL=\/bin\/bash claude --print/,
     );
     expect(result.commandLine).toContain("'/mattpocock-skills:implement https://example.com/issues/2'");
   });
