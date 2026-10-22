@@ -127,11 +127,9 @@ export async function processRun(
   // Why this Run stopped, which is also what it reports. Set by whichever of
   // the Release and the Stop came first: a Stop that arrives after a Release
   // asked for what was already happening, and a Release afterwards stopped
-  // nothing that was not stopped already. The rate limit alone overwrites it,
-  // where the stop is an API failure or a limit nobody was told the end of
-  // (see limitOutranks), so the last line says when the next Run can start.
-  // Undefined is a Run still taking Tickets, which is why it doubles as the
-  // guard at every refill.
+  // nothing that was not stopped already. Only a later rate limit overwrites
+  // it, and only where limitOutranks says so. Undefined is a Run still taking
+  // Tickets, which is why it doubles as the guard at every refill.
   let runStop: RunStop | undefined;
   // A Frontier the tracker refused to list, kept until the Lanes still busy are
   // back. A Run must not walk away from a Ticket mid-Stage to report that `gh`
@@ -274,7 +272,7 @@ function releaseStop(
 }
 
 /**
- * Whether a Lane the rate limit released after `stop` puts the limit in its
+ * Whether a Ticket the rate limit released after `stop` puts the limit in its
  * place. An API failure says nothing of when the next Run can start, so the
  * limit outranks it; a limit nobody was told the end of is outranked by one a
  * Stage was told. A failing Base branch and a Stop stay whatever comes after

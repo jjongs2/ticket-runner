@@ -6,7 +6,7 @@ import { Landing } from "./landing.js";
 import { StandingNotes } from "./notes.js";
 import type { Pipeline } from "./orchestrator.js";
 import type { TicketState } from "./ports/workspace.js";
-import { processRun } from "./run.js";
+import { type RunResult, processRun } from "./run.js";
 import { StopSignal } from "./stop.js";
 import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./testing/fakes.js";
 import { settle } from "./testing/settle.js";
@@ -397,11 +397,11 @@ describe("the time a rate-limited Run says the limit resets", () => {
   });
 });
 
-describe("a Run an API failure released before the rate limit did", () => {
+describe("which Release a Run ends on when its Releases differ", () => {
   const RESETS_AT = "2026-09-19T17:40:00.000Z";
 
   /** Each released Ticket's number with the cause its own row carries. */
-  function causes(outcomes: Awaited<ReturnType<typeof processRun>>["outcomes"]) {
+  function causes(outcomes: RunResult["outcomes"]) {
     return outcomes.map((outcome) => [
       outcome.ticket,
       outcome.outcome === "released" ? outcome.cause : outcome.outcome,

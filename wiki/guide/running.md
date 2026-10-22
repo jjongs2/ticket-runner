@@ -164,7 +164,7 @@ A newer-Version line, when there is one, comes above the header ([Install and re
 | `Frontier empty.` | Nothing left to take |
 | `Frontier blocked.` | Everything left has an open blocker |
 | `Rate limited · resets 2026-09-20 03:40 UTC.` | A Release by the rate limit stopped it. The time is the one the CLI gave for the limit's reset, in UTC; a Run it gave none ends `Rate limited.` |
-| `API failure.` | A Release by a transient API failure stopped it, and no Lane was released by the rate limit after it: the rate limit outranks an API failure on the last line |
+| `API failure.` | A Release by a transient API failure stopped it, and the rate limit released no Ticket after it: the rate limit outranks an API failure on the last line |
 | ``Base branch `main` fails `npm test` at 1a2b3c4.`` | A Release over a failing Base branch stopped it: the Check, and the merge-base it failed at. Mend it on the Base branch; the Note on the standing Notes issue has its output |
 | `Stopped at 22:07 · finishing #4 #9.` | A Stop arrived at that time (UTC), while those Tickets were in its Lanes |
 

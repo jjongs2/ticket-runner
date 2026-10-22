@@ -62,11 +62,11 @@ transient API failure stopped says which it was and nothing of when:
 
 API failure.
 
-When the Lanes still busy are released too, the rate limit outranks an API
-failure: a Lane the limit released afterwards puts its own last line in place
-of `API failure.`, with the reset time where its Stage was told one, because
-that is the line that says when the next Run can start. Each `released` row
-keeps its own cause.
+When a Ticket a busy Lane held is released too, the rate limit outranks an
+API failure: a Ticket the limit released afterwards puts its own last line in
+place of `API failure.`, with the reset time where a Stage was told one,
+because that is the line that says when the next Run can start. Each
+`released` row keeps its own cause.
 
 A Ticket whose failing Check or red CI the Base branch fails too is released
 the same way, its Fix budget as it was: the pipeline ran the Check commands at
