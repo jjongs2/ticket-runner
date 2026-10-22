@@ -16,6 +16,7 @@ import type {
 } from "../ports/tracker.js";
 import { DEFAULT_CI_GRACE_MINUTES } from "../config.js";
 import { type HostKind, hostKind } from "../host.js";
+import { MAX_TAIL_LINES, logTail } from "../log-tail.js";
 import { highestVersion } from "../version-number.js";
 import { type Execution, type RunProcess, exec, throwOnFailure } from "./exec.js";
 
@@ -587,31 +588,30 @@ export class GhTracker implements Tracker {
     const logs: string[] = [];
     for (const { name, job, link } of jobs.slice(0, MAX_LOG_JOBS)) {
       const log = await this.jobLog(job);
+      const tail = log === undefined ? "" : logTail(log);
       logs.push(
-        log === undefined
+        tail === ""
           ? `${name}\n(the log was unavailable; the job is at ${link})`
-          : `${name}\n${tail(log)}`,
+          : `${name}\n${tail}`,
       );
     }
     return logs.join("\n\n");
   }
 
   /**
-   * One Actions job's log through REST, up to the last line the runner marked
-   * as an error, or nothing when there is no log to be had.
+   * One Actions job's whole log through REST, or nothing when there is no log
+   * to be had.
    *
    * REST gives the whole job where `gh run view --log-failed` gave the failed
-   * steps, so what the post-job cleanup printed after the failure is cut off:
-   * otherwise it would be the tail that is kept.
+   * steps, so {@link logTail} cuts what the post-job cleanup printed after the
+   * failure.
    */
   private async jobLog(job: string): Promise<string | undefined> {
     try {
       const result = await this.gh(["api", `repos/{owner}/{repo}/actions/jobs/${job}/logs`], {
         allowFailure: true,
       });
-      if (result.exitCode !== 0) return undefined;
-      const log = throughLastError(result.stdout).trim();
-      return log === "" ? undefined : log;
+      return result.exitCode === 0 ? result.stdout : undefined;
     } catch {
       // `gh` itself could not be run. The failure still stands; the log does not.
       return undefined;
@@ -806,15 +806,9 @@ const ACTIONS_JOB_URL = /\/actions\/runs\/\d+\/job\/(\d+)(?:[?#]|$)/;
  *
  * A matrix build fails a leg at a time with the same log each time, and the
  * prompt and the hand-off comment both have to stay readable, so the excerpt
- * is bounded by this times {@link MAX_LOG_LINES} rather than by the build.
+ * is bounded by this times {@link MAX_TAIL_LINES} rather than by the build.
  */
 const MAX_LOG_JOBS = 3;
-
-/** Lines kept from the tail of one job's log. */
-const MAX_LOG_LINES = 40;
-
-/** Characters kept from the tail of one job's log, for lines long enough to need it. */
-const MAX_LOG_CHARS = 4_000;
 
 /**
  * A comment's id, as the string {@link Tracker.updateComment} takes, or nothing
@@ -914,13 +908,6 @@ function linked(url: string | null | undefined): { link?: string } {
   return url ? { link: url } : {};
 }
 
-/** Everything up to the last line an Actions runner marked `##[error]`, or all of it. */
-function throughLastError(log: string): string {
-  const lines = log.split("\n");
-  const last = lines.findLastIndex((line) => line.includes("##[error]"));
-  return last === -1 ? log : lines.slice(0, last + 1).join("\n");
-}
-
 /**
  * The Actions job id behind a check's link, or nothing when the check does not
  * report from one. An external app's check has a link of its own shape and no
@@ -929,27 +916,4 @@ function throughLastError(log: string): string {
 function actionsJobId(link: string | undefined): string | undefined {
   const match = link === undefined ? null : ACTIONS_JOB_URL.exec(link);
   return match ? (match[1] as string) : undefined;
-}
-
-/**
- * The end of a log, under a fixed cap, saying what it left out.
- *
- * The tail is the part worth carrying: a runner prints the assertion or the
- * stack that ended the job last, under however much setup noise came first.
- */
-function tail(log: string): string {
-  const lines = log.split("\n");
-  let kept = lines.slice(-MAX_LOG_LINES);
-  while (kept.length > 1 && kept.join("\n").length > MAX_LOG_CHARS) kept = kept.slice(1);
-
-  const text = kept.join("\n");
-  const omitted = lines.length - kept.length;
-
-  // A single line longer than the whole cap keeps its own tail: the error is at
-  // the end of it. Its own start is cut too, which the count alone would not say.
-  if (text.length > MAX_LOG_CHARS) {
-    const earlier = omitted > 0 ? `${omitted} earlier lines and the start of this one` : "the start of this line";
-    return `… (${earlier} omitted)\n${text.slice(-MAX_LOG_CHARS)}`;
-  }
-  return omitted > 0 ? `… (${omitted} earlier lines omitted)\n${text}` : text;
 }

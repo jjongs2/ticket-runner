@@ -7,6 +7,7 @@ import { UNCHECKED_BOX } from "./acceptance-criteria.js";
 import type { GuardReason } from "./guards.js";
 import type { HostKind } from "./host.js";
 import type { FailurePoint } from "./lifecycle.js";
+import { logTail } from "./log-tail.js";
 import type { NoteText, NotingStage, RoutedNote } from "./notes.js";
 import type { ReleaseCause, TicketOutcome } from "./orchestrator.js";
 import type { IssueComment, SquashCommit } from "./ports/tracker.js";
@@ -434,9 +435,6 @@ export interface FailingBaseNote {
   timedOut: boolean;
 }
 
-/** How much of what the Check printed the Note quotes, from the end. */
-const FAILING_BASE_TAIL = 40;
-
 /** The pipeline's Note's summary, which is also the Run summary's `noted` row. */
 export function failingBaseSummary(baseBranch: string, command: string): string {
   return `The Base branch \`${baseBranch}\` fails \`${command}\`.`;
@@ -449,16 +447,17 @@ export function failingBaseSummary(baseBranch: string, command: string): string 
  *
  * Signed and laid out as a Stage's Note is, so triage reads it the same way,
  * with the provenance naming the pipeline rather than a Stage. The tail of the
- * output is fenced with more backticks than any run of them inside it, so a
- * fence the output prints cannot close it early.
+ * output is the one a CI log excerpt keeps, so long lines cannot push the Note
+ * past what GitHub takes in a comment. It is fenced with more backticks than
+ * any run of them inside it, so a fence the output prints cannot close it early.
  */
 export function failingBaseNote(note: FailingBaseNote): string {
   const { baseBranch, branch, commit, command } = note;
-  const tail = note.output.trimEnd().split("\n").slice(-FAILING_BASE_TAIL).join("\n");
+  const tail = logTail(note.output);
   const where = `\`${command}\` ${note.timedOut ? "timed out" : "failed"} in a clean worktree at ${commit}, the merge-base of \`${branch}\` with \`${baseBranch}\`.`;
   const fence = "`".repeat(Math.max(3, ...[...tail.matchAll(/`+/g)].map(([run]) => run.length + 1)));
   const evidence =
-    tail.trim() === ""
+    tail === ""
       ? `**Evidence**: ${where} It printed nothing.`
       : `**Evidence**: ${where} The tail of its output:\n\n${fence}\n${escapeCheckboxes(tail)}\n${fence}`;
   return [

@@ -92,10 +92,15 @@ From the pipeline, releasing #<origin> at <checks|ci>
 `<checks|ci>` is `checks` when the Check failed on the branch and `ci` when CI
 did.
 `<commit>` is the full commit, so it can be checked out as it is. The tail is
-the last 40 lines the command printed, in a fence longer than any run of
-backticks in them; it is the pipeline's own words around it, so only the tail
-has its checkboxes escaped. A command that printed nothing has no fence, and
-its Evidence ends `It printed nothing.` where the tail would be introduced.
+the one a CI log excerpt keeps: the last 40 lines the command printed, and no
+more than their last 4,000 characters, so long lines cannot push the Note past
+what GitHub takes in a comment. When it leaves anything out, its first line
+says what, such as `… (20 earlier lines omitted)` or, for one line longer than
+the cap, `… (the start of this line omitted)`. It sits in a fence longer than
+any run of backticks in it; it is the pipeline's own words around it, so only
+the tail has its checkboxes escaped. A command that printed nothing has no
+fence, and its Evidence ends `It printed nothing.` where the tail would be
+introduced.
 
 Every part of a Stage's Note is the Stage's own words, with one edit: a `- [ ]`
 at the start of a list item is escaped to `- \[ \]`. An unescaped one would read as an Acceptance

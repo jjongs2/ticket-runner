@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { UNCHECKED_BOX } from "./acceptance-criteria.js";
+import { MAX_TAIL_CHARS } from "./log-tail.js";
 import type { RunStop } from "./run.js";
 import {
   HANDOFF_MARKER,
@@ -816,8 +817,33 @@ describe("failingBaseNote", () => {
     const note = failingBaseNote({ ...subject, output: lines.join("\n") });
 
     expect(note).not.toContain("line 10\n");
-    expect(note).toContain("````\nline 11\n");
+    expect(note).toContain("````\n… (10 earlier lines omitted)\nline 11\n");
     expect(note).toContain("line 50\n````");
+  });
+
+  /** What the Note quotes between its fences. */
+  const quoted = (note: string) => (/^```\n([\s\S]*)\n```$/m.exec(note) as RegExpExecArray)[1] as string;
+
+  it("quotes no more characters than the cap, saying what it left out, when the lines are long", () => {
+    const error = `src/x.ts(1,1): error TS2322: Type '${"{ a: string; }".repeat(150)}' is not assignable.`;
+    const output = Array.from({ length: 60 }, (_, index) => `${index + 1} ${error}`).join("\n");
+    const note = failingBaseNote({ ...subject, output });
+
+    const [omission, ...kept] = quoted(note).split("\n");
+    expect(error.length).toBeGreaterThan(2_000);
+    expect(omission).toBe("… (59 earlier lines omitted)");
+    expect(kept.join("\n").length).toBeLessThanOrEqual(MAX_TAIL_CHARS);
+    expect(kept.join("\n")).toMatch(/^60 src/);
+    expect(note.length).toBeLessThan(65_536);
+  });
+
+  it("keeps the end of one line too long to quote whole, saying its start was cut", () => {
+    const output = `${"x".repeat(5_000)}assertion failed`;
+    const note = failingBaseNote({ ...subject, output });
+
+    const [omission, ...kept] = quoted(note).split("\n");
+    expect(omission).toBe("… (the start of this line omitted)");
+    expect(kept.join("\n")).toBe(output.slice(-MAX_TAIL_CHARS));
   });
 
   it("says a Check the limit killed timed out, and one that printed nothing printed nothing", () => {
