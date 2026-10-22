@@ -141,7 +141,7 @@ merge-base는 branch와, remote에 있는 Base branch 사이의 것입니다. �
 | 함께 실패 | ``⏸ `<command>` fails on the Base branch`` | Release. budget은 썼든 안 썼든 그대로 |
 | checkout하거나 돌리지 못함 | 통과한 것으로 봄 | Fix budget을 쓰고, 이유는 Run 로그에 남김 |
 
-Release는 standing Notes 이슈에 파이프라인 자신의 Note를 올립니다. Run마다 merge-base마다 한 번이고, 명령 이름과 그 명령이 마지막으로 찍은 40줄을 담되, 끝에서 4,000자까지만 남기고 뺀 부분이 있으면 그렇다고 적습니다. Run은 더 claim하지 않고, 다음 Run은 Check 전에 Ticket을 Base branch 위로 rebase합니다. 그 사이 사람이 Base branch에 넣은 수정이 branch에 닿게 하려는 것입니다.
+Release는 standing Notes 이슈에 파이프라인 자신의 Note를 올립니다. Run마다 merge-base마다 한 번이고, 명령 이름과 그 명령이 마지막으로 찍은 40줄을 4,000자 이내로 담고, 뺀 부분이 있으면 그렇다고 적습니다. Run은 더 claim하지 않고, 다음 Run은 Check 전에 Ticket을 Base branch 위로 rebase합니다. 그 사이 사람이 Base branch에 넣은 수정이 branch에 닿게 하려는 것입니다.
 
 ## verify Stage와 Verdict {#the-verify-stage-and-its-verdict}
 

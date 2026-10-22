@@ -141,7 +141,7 @@ The merge-base is the branch's with the Base branch as the remote holds it, whic
 | fails too | ``⏸ `<command>` fails on the Base branch`` | A Release; the budget stays as it was, spent or not |
 | could not be checked out or run | as if it passed | Spends the Fix budget, and the Run log says why |
 
-The Release posts the pipeline's own Note on the standing Notes issue, once per Run per merge-base, naming the command and quoting the last 40 lines it printed, cut to their last 4,000 characters and saying what it left out. The Run claims no more Tickets, and the next Run rebases the Ticket onto the Base branch before its Checks, so a fix a human has landed there reaches it.
+The Release posts the pipeline's own Note on the standing Notes issue, once per Run per merge-base, naming the command and quoting the last 40 lines it printed, kept under 4,000 characters, and saying what it left out. The Run claims no more Tickets, and the next Run rebases the Ticket onto the Base branch before its Checks, so a fix a human has landed there reaches it.
 
 ## The verify Stage and its Verdict
 

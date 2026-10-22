@@ -136,6 +136,7 @@ claude --print <prompt> --output-format stream-json --verbose \
 | [`acceptance-criteria.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/acceptance-criteria.ts), [`criteria.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/criteria.ts) | criterion의 모양, merge 뒤 `met`인 것에 체크 |
 | [`progress.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/progress.ts) | Ticket마다 하나인 Progress comment를 제자리에서 고침 |
 | [`templates.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts) | GitHub에 쓰는 모든 모양과 Run 요약. 원본은 `docs/templates/` |
+| [`log-tail.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/log-tail.ts) | CI excerpt와 실패한 Base branch의 Note가 함께 인용하는 로그 끝부분. 40줄, 4,000자 이내 |
 | [`run-log.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run-log.ts) | `.ticket-runner/runs/<runId>/`와, Hand-off가 그중 무엇을 남기는지 |
 
 **Target 준비**

@@ -98,8 +98,9 @@ what GitHub takes in a comment. When it leaves anything out, its first line
 says what, such as `… (20 earlier lines omitted)` or, for one line longer than
 the cap, `… (the start of this line omitted)`. It sits in a fence longer than
 any run of backticks in it; it is the pipeline's own words around it, so only
-the tail has its checkboxes escaped. A command that printed nothing has no fence, and
-its Evidence ends `It printed nothing.` where the tail would be introduced.
+the tail has its checkboxes escaped. A command that printed nothing has no
+fence, and its Evidence ends `It printed nothing.` where the tail would be
+introduced.
 
 Every part of a Stage's Note is the Stage's own words, with one edit: a `- [ ]`
 at the start of a list item is escaped to `- \[ \]`. An unescaped one would read as an Acceptance
