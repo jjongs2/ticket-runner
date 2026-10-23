@@ -171,7 +171,7 @@ export class ClaudeAgentRunner implements AgentRunner {
 
     // Started before the child, so a Run killed mid-Stage still leaves the
     // command line and everything printed so far behind.
-    const log = startStageLog(request, commandLine);
+    const log = startStageLog(request, commandLine, process.env[API_KEY_ENV_VAR]);
     const execution = await this.spawn(request, args, env, session, log);
 
     const events = parseEvents(execution.stdout);
@@ -275,15 +275,29 @@ interface StageLog {
 }
 
 /**
+ * What stands in a Stage's files for the Host's API key, wherever the session
+ * printed it: an `--api-key` Stage that runs `env` would otherwise put the key
+ * in a transcript, which reaches the Target's remote with a hand-off.
+ */
+const REDACTED_KEY = `<${API_KEY_ENV_VAR}>`;
+
+/**
  * Put the Stage's command line on disk and empty its output files, before
  * anything is spawned. Chunks are appended as they arrive rather than saved at
  * the end, so the files hold what the session printed even when nobody is left
  * alive to write them (#12). The transcript is the one derivation that has to
  * wait: it is parsed out of the stdout the session has finished printing.
  */
-function startStageLog(request: StageRequest, commandLine: string): StageLog {
+function startStageLog(
+  request: StageRequest,
+  commandLine: string,
+  /** The Host's API key, whose value no file of the Stage may carry. */
+  key: string | undefined,
+): StageLog {
   mkdirSync(request.logDir, { recursive: true });
   const path = (suffix: string) => join(request.logDir, `${request.stage}.${suffix}`);
+  const redact = (text: string) =>
+    key === undefined || key === "" ? text : text.replaceAll(key, REDACTED_KEY);
 
   writeFileSync(path("command"), `${commandLine}\n`);
   // Emptied up front, so a Stage never appends to output from an earlier one.
@@ -295,7 +309,7 @@ function startStageLog(request: StageRequest, commandLine: string): StageLog {
   // take the whole Run down. A write that fails is left to `close` to redo.
   const append = (suffix: "stdout" | "stderr") => (chunk: string) => {
     try {
-      appendFileSync(path(suffix), chunk);
+      appendFileSync(path(suffix), redact(chunk));
       appended[suffix] += chunk.length;
     } catch {
       // Nothing is lost: the chunk is still part of the Execution.
@@ -309,16 +323,21 @@ function startStageLog(request: StageRequest, commandLine: string): StageLog {
     close: (execution, events) => {
       // Whatever the appends missed — a failed write, or a process runner that
       // delivered no chunks at all — is written back whole here, so a Stage
-      // that ran to the end always has its full output on disk.
-      if (appended.stdout !== execution.stdout.length) {
-        writeFileSync(path("stdout"), execution.stdout);
+      // that ran to the end always has its full output on disk. Where the
+      // Host has a key, both are written back whole whatever was appended,
+      // since a key split across two chunks is redacted in neither.
+      const keyed = key !== undefined && key !== "";
+      if (keyed || appended.stdout !== execution.stdout.length) {
+        writeFileSync(path("stdout"), redact(execution.stdout));
       }
-      if (appended.stderr !== execution.stderr.length) {
-        writeFileSync(path("stderr"), execution.stderr);
+      if (keyed || appended.stderr !== execution.stderr.length) {
+        writeFileSync(path("stderr"), redact(execution.stderr));
       }
       writeFileSync(
         path("transcript.jsonl"),
-        events.map((event) => JSON.stringify(event)).join("\n") + (events.length ? "\n" : ""),
+        redact(
+          events.map((event) => JSON.stringify(event)).join("\n") + (events.length ? "\n" : ""),
+        ),
       );
     },
   };

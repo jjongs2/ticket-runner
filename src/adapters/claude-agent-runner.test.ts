@@ -311,6 +311,26 @@ describe("the credential a Stage runs on", () => {
     }
   });
 
+  it("writes no file with the key's value in it, even where the session printed it", async () => {
+    // A session that ran `env` in its shell, as an implement Stage may.
+    const stdout = transcript(
+      { type: "user", message: { content: [{ type: "tool_result", content: `ANTHROPIC_API_KEY=${KEY}` }] } },
+      { type: "result", subtype: "success", is_error: false, num_turns: 1, result: `done ${KEY}` },
+    );
+
+    const result = await runner(execution({ stdout, stderr: `warning: ${KEY}\n` })).run(
+      request({ credential: "api-key" }),
+    );
+
+    expect(result.ok).toBe(true);
+    for (const file of readdirSync(logDir)) {
+      expect(readFileSync(join(logDir, file), "utf8")).not.toContain(KEY);
+    }
+    expect(readFileSync(stageFile("transcript.jsonl"), "utf8")).toContain(
+      "ANTHROPIC_API_KEY=<ANTHROPIC_API_KEY>",
+    );
+  });
+
   it("reports what the session said it ran on, from its init event", async () => {
     const stdout = transcript(
       { type: "system", subtype: "init", apiKeySource: "apiKeyHelper" },

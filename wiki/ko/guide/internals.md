@@ -75,7 +75,7 @@ claude --print <prompt> --output-format stream-json --verbose \
   | `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | `1` | Host 사용자의 memory는 Target이 아닌 그 사람의 프로젝트에 관한 것 |
   | `CLAUDE_CODE_SHELL` | `/bin/bash`, 있을 때만 | zsh는 아무것도 맞지 않는 glob 하나에 명령 전체를 멈춤 |
   `ANTHROPIC_AUTH_TOKEN`을 비롯한 다른 변수는 그대로 물려받습니다.
-- Stage가 시작되는 순간부터 `<stage>.command`, `.stdout`, `.stderr`, `.transcript.jsonl`을 씁니다. 명령 파일은 키 없이 돈 Stage면 `env -u ANTHROPIC_API_KEY`로, 키로 돈 Stage면 `ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"`로 시작하고 키 값은 적지 않습니다. 명령 파일은 Hand-off 때 Target의 원격으로 가기 때문입니다.
+- Stage가 시작되는 순간부터 `<stage>.command`, `.stdout`, `.stderr`, `.transcript.jsonl`을 씁니다. 명령 파일은 키 없이 돈 Stage면 `env -u ANTHROPIC_API_KEY`로, 키로 돈 Stage면 `ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"`로 시작하고 키 값은 적지 않습니다. 명령 파일은 Hand-off 때 Target의 원격으로 가기 때문입니다. 같은 이유로, 세션이 키 값을 출력한 곳에서는 그 값을 `<ANTHROPIC_API_KEY>`로 바꿔 적습니다.
 - 세션의 `system/init` 이벤트에서 `apiKeySource`를 읽고, orchestrator가 이를 Run의 과금처와 맞춰 봅니다.
 - `maxMinutes`가 지나면 자식과 자식이 띄운 프로세스를 모두 죽이고, 실패를 `rate-limited`, `api-error`, `out-of-budget`, `timed-out`, `turn-capped`, `nonzero-exit`, `invalid-result`로 분류합니다.
 

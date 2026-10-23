@@ -212,7 +212,7 @@ Everything a Stage did goes to disk, under the Target's gitignored `.ticket-runn
 | `<n>/<stage>.transcript.jsonl` | The session's stream-json events |
 | `<n>/retry/` | The fix Stage and the pass it bought, so the failing pass's files survive beside them |
 
-The command line is written before the Stage starts and output as it arrives, so a Run killed mid-Stage still leaves what it had reached. A Ticket that is handed off also keeps its Stages' command lines and transcripts, with `version.txt`, on the Target's remote, under `ticket-<n>/<runId>/` on the `ticket-runner/state` branch, because the Host that wrote them may be gone by the time a human looks. The hand-off comment names that directory ([Stopping and resuming](./stopping-and-resuming.md)).
+The command line is written before the Stage starts and output as it arrives, so a Run killed mid-Stage still leaves what it had reached. Wherever a Stage printed the `ANTHROPIC_API_KEY` your shell exports, its files say `<ANTHROPIC_API_KEY>` instead. A Ticket that is handed off also keeps its Stages' command lines and transcripts, with `version.txt`, on the Target's remote, under `ticket-<n>/<runId>/` on the `ticket-runner/state` branch, because the Host that wrote them may be gone by the time a human looks. The hand-off comment names that directory ([Stopping and resuming](./stopping-and-resuming.md)).
 
 ## From the Claude app
 

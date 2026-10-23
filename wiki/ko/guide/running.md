@@ -212,7 +212,7 @@ Stage가 한 일은 모두 Target의 gitignore된 `.ticket-runner/` 아래 디�
 | `<n>/<stage>.transcript.jsonl` | 세션의 stream-json 이벤트 |
 | `<n>/retry/` | fix Stage와, 그 덕에 한 번 더 도는 시도. 실패한 시도의 파일은 옆에 그대로 남음 |
 
-명령줄은 Stage가 시작되기 전에, 출력은 나오는 대로 쓰니, Stage 도중에 kill된 Run도 거기까지 한 것은 남깁니다. Hand-off된 Ticket은 Stage들의 명령줄과 transcript, 그리고 `version.txt`를 Target의 원격에도 남깁니다. `ticket-runner/state` branch의 `ticket-<n>/<runId>/` 아래입니다. 그걸 쓴 Host는 사람이 들여다볼 즈음이면 없을 수도 있기 때문입니다. Hand-off 코멘트가 그 디렉터리를 알려 줍니다([멈추고 이어 하기](./stopping-and-resuming.md)).
+명령줄은 Stage가 시작되기 전에, 출력은 나오는 대로 쓰니, Stage 도중에 kill된 Run도 거기까지 한 것은 남깁니다. Stage가 셸이 export한 `ANTHROPIC_API_KEY`를 출력한 곳에서는 파일에 그 값 대신 `<ANTHROPIC_API_KEY>`가 적힙니다. Hand-off된 Ticket은 Stage들의 명령줄과 transcript, 그리고 `version.txt`를 Target의 원격에도 남깁니다. `ticket-runner/state` branch의 `ticket-<n>/<runId>/` 아래입니다. 그걸 쓴 Host는 사람이 들여다볼 즈음이면 없을 수도 있기 때문입니다. Hand-off 코멘트가 그 디렉터리를 알려 줍니다([멈추고 이어 하기](./stopping-and-resuming.md)).
 
 ## Claude 앱에서 실행하기 {#from-the-claude-app}
 

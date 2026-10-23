@@ -75,7 +75,7 @@ claude --print <prompt> --output-format stream-json --verbose \
   | `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | `1` | the Host user's memory is about their projects, not the Target |
   | `CLAUDE_CODE_SHELL` | `/bin/bash`, only where it exists | a zsh shell aborts a command on a glob that matches nothing |
   `ANTHROPIC_AUTH_TOKEN` and every other variable are inherited as they are.
-- It writes `<stage>.command`, `.stdout`, `.stderr` and `.transcript.jsonl` from the moment the Stage starts. The command file opens with `env -u ANTHROPIC_API_KEY` for a Stage run without the key, or `ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"` for one run on it, never the value: command files reach the Target's remote with a Hand-off.
+- It writes `<stage>.command`, `.stdout`, `.stderr` and `.transcript.jsonl` from the moment the Stage starts. The command file opens with `env -u ANTHROPIC_API_KEY` for a Stage run without the key, or `ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"` for one run on it, never the value: command files reach the Target's remote with a Hand-off. For the same reason the key's value is replaced by `<ANTHROPIC_API_KEY>` wherever the session printed it.
 - It reads the `apiKeySource` of the session's `system/init` event, which the orchestrator sets against the Run's credential.
 - It kills the child at `maxMinutes`, with everything it started, and classifies a failure as `rate-limited`, `api-error`, `out-of-budget`, `timed-out`, `turn-capped`, `nonzero-exit` or `invalid-result`.
 
