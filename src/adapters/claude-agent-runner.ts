@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { API_KEY_ENV_VAR, type Credential } from "../credential.js";
 import {
   type AgentPreflight,
   type AgentRunner,
@@ -77,6 +78,16 @@ interface ResultEvent {
 }
 
 /**
+ * The `system/init` event a stream-json run opens with, as far as we rely on
+ * it: what the session says it is billed to.
+ */
+interface InitEvent {
+  type: "system";
+  subtype?: string;
+  apiKeySource?: unknown;
+}
+
+/**
  * A `rate_limit_event` of a stream-json run: the CLI's own word on where the
  * subscription stands, printed as each request's answer comes back.
  */
@@ -141,6 +152,7 @@ export class ClaudeAgentRunner implements AgentRunner {
         cwd: request.cwd,
         timeoutMs: request.maxMinutes * 60_000,
         extraEnv: env,
+        ...(request.credential === "subscription" ? { unsetEnv: [API_KEY_ENV_VAR] } : {}),
         mark: session,
         onStdout: log.appendStdout,
         onStderr: log.appendStderr,
@@ -154,12 +166,12 @@ export class ClaudeAgentRunner implements AgentRunner {
     const args = buildArgs(request);
     const session = { name: SESSION_ENV_VAR, value: randomUUID() };
     const env = this.stageEnv(request, session);
-    const commandLine = quoteCommand(env, this.binary, args);
+    const commandLine = quoteCommand(request.credential, env, this.binary, args);
     const startedAt = Date.now();
 
     // Started before the child, so a Run killed mid-Stage still leaves the
     // command line and everything printed so far behind.
-    const log = startStageLog(request, commandLine);
+    const log = startStageLog(request, commandLine, process.env[API_KEY_ENV_VAR]);
     const execution = await this.spawn(request, args, env, session, log);
 
     const events = parseEvents(execution.stdout);
@@ -170,6 +182,7 @@ export class ClaudeAgentRunner implements AgentRunner {
     const structured = request.jsonSchema === undefined ? undefined : structuredOutput(results);
     const turns = countTurns(results);
     const resetsAt = failure === "rate-limited" ? limitResetsAt(events) : undefined;
+    const apiKeySource = keySource(events);
 
     return {
       ok: failure === undefined,
@@ -179,6 +192,7 @@ export class ClaudeAgentRunner implements AgentRunner {
       transcriptPath: log.transcriptPath,
       ...(turns === undefined ? {} : { turns }),
       ...(resetsAt === undefined ? {} : { limitResetsAt: resetsAt }),
+      ...(apiKeySource === undefined ? {} : { apiKeySource }),
       // The clock is the runner's own. A session that woke for a background
       // agent reports one `duration_ms` per waking, and the time it spent
       // waiting for that agent belongs to none of them.
@@ -261,15 +275,29 @@ interface StageLog {
 }
 
 /**
+ * What stands in a Stage's files for the Host's API key, wherever the session
+ * printed it: an `--api-key` Stage that runs `env` would otherwise put the key
+ * in a transcript, which reaches the Target's remote with a hand-off.
+ */
+const REDACTED_KEY = `<${API_KEY_ENV_VAR}>`;
+
+/**
  * Put the Stage's command line on disk and empty its output files, before
  * anything is spawned. Chunks are appended as they arrive rather than saved at
  * the end, so the files hold what the session printed even when nobody is left
  * alive to write them (#12). The transcript is the one derivation that has to
  * wait: it is parsed out of the stdout the session has finished printing.
  */
-function startStageLog(request: StageRequest, commandLine: string): StageLog {
+function startStageLog(
+  request: StageRequest,
+  commandLine: string,
+  /** The Host's API key, whose value no file of the Stage may carry. */
+  key: string | undefined,
+): StageLog {
   mkdirSync(request.logDir, { recursive: true });
   const path = (suffix: string) => join(request.logDir, `${request.stage}.${suffix}`);
+  const redact = (text: string) =>
+    key === undefined || key === "" ? text : text.replaceAll(key, REDACTED_KEY);
 
   writeFileSync(path("command"), `${commandLine}\n`);
   // Emptied up front, so a Stage never appends to output from an earlier one.
@@ -277,11 +305,18 @@ function startStageLog(request: StageRequest, commandLine: string): StageLog {
   writeFileSync(path("stderr"), "");
 
   const appended = { stdout: 0, stderr: 0 };
+  // The tail of each stream that may be the start of a key the next chunk
+  // finishes. It stays off disk until that chunk shows it is not, so a Run
+  // killed between the two chunks leaves no part of the key behind.
+  const heldBack = { stdout: "", stderr: "" };
   // Appending happens inside the child's stream handler, where a throw would
   // take the whole Run down. A write that fails is left to `close` to redo.
   const append = (suffix: "stdout" | "stderr") => (chunk: string) => {
     try {
-      appendFileSync(path(suffix), chunk);
+      const text = redact(heldBack[suffix] + chunk);
+      const held = keyPrefixAtEnd(text, key);
+      heldBack[suffix] = text.slice(text.length - held);
+      appendFileSync(path(suffix), text.slice(0, text.length - held));
       appended[suffix] += chunk.length;
     } catch {
       // Nothing is lost: the chunk is still part of the Execution.
@@ -295,19 +330,36 @@ function startStageLog(request: StageRequest, commandLine: string): StageLog {
     close: (execution, events) => {
       // Whatever the appends missed — a failed write, or a process runner that
       // delivered no chunks at all — is written back whole here, so a Stage
-      // that ran to the end always has its full output on disk.
-      if (appended.stdout !== execution.stdout.length) {
-        writeFileSync(path("stdout"), execution.stdout);
+      // that ran to the end always has its full output on disk. Where the
+      // Host has a key, both are written back whole whatever was appended,
+      // which also puts the tail held back from the last chunk on disk.
+      const keyed = key !== undefined && key !== "";
+      if (keyed || appended.stdout !== execution.stdout.length) {
+        writeFileSync(path("stdout"), redact(execution.stdout));
       }
-      if (appended.stderr !== execution.stderr.length) {
-        writeFileSync(path("stderr"), execution.stderr);
+      if (keyed || appended.stderr !== execution.stderr.length) {
+        writeFileSync(path("stderr"), redact(execution.stderr));
       }
       writeFileSync(
         path("transcript.jsonl"),
-        events.map((event) => JSON.stringify(event)).join("\n") + (events.length ? "\n" : ""),
+        redact(
+          events.map((event) => JSON.stringify(event)).join("\n") + (events.length ? "\n" : ""),
+        ),
       );
     },
   };
+}
+
+/**
+ * How many characters at the end of `text` could be the start of `key`, so a
+ * key split across two chunks is redacted once the second arrives.
+ */
+function keyPrefixAtEnd(text: string, key: string | undefined): number {
+  if (key === undefined || key === "") return 0;
+  for (let length = Math.min(key.length - 1, text.length); length > 0; length--) {
+    if (text.endsWith(key.slice(0, length))) return length;
+  }
+  return 0;
 }
 
 function parseEvents(stdout: string): unknown[] {
@@ -326,6 +378,19 @@ function parseEvents(stdout: string): unknown[] {
 
 function isResultEvent(event: unknown): event is ResultEvent {
   return isEvent(event, "result");
+}
+
+function isInitEvent(event: unknown): event is InitEvent {
+  return isEvent(event, "system") && (event as InitEvent).subtype === "init";
+}
+
+/**
+ * What the session said it was billed to: the first init event's word on it.
+ * A waking for a background agent is the same session on the same credential.
+ */
+function keySource(events: unknown[]): string | undefined {
+  const source = events.find(isInitEvent)?.apiKeySource;
+  return typeof source === "string" ? source : undefined;
 }
 
 function isRateLimitEvent(event: unknown): event is RateLimitEvent {
@@ -357,6 +422,8 @@ function classify(
   // still succeeds.
   const failed = execution.exitCode !== 0 || result?.is_error === true || result === undefined;
   if (failed) {
+    // Before the rate limit, whose wording the spend limit's message matches.
+    if (outOfBudget(result)) return "out-of-budget";
     if (rateLimited(execution, events, result)) return "rate-limited";
     if (transientApiFailure(result)) return "api-error";
     return "nonzero-exit";
@@ -374,7 +441,20 @@ function classify(
 }
 
 /**
- * Whether a session that failed was stopped by the subscription rate limit.
+ * Whether a session that failed was refused because its API key's organization
+ * is out of credit, or its workspace reached the spend limit set in the
+ * Console. Both are a 400, as a malformed request is, and the spend limit's
+ * `error` is `unknown`, so the message is what tells them apart: either
+ * wording of the credit balance, or the workspace's usage limits.
+ */
+function outOfBudget(result: ResultEvent | undefined): boolean {
+  if (result?.api_error_status !== 400) return false;
+  return /credit balance is too low|workspace API usage limits/i.test(String(result.result ?? ""));
+}
+
+/**
+ * Whether a session that failed was stopped by the rate limit: the
+ * subscription's, or the API's on a Stage run on a key.
  *
  * The CLI says so in three places, and any one of them is enough: the `result`
  * event carries the API's 429, a `rate_limit_event` reports the request
@@ -469,14 +549,25 @@ function structuredOutputOf(result: ResultEvent): unknown {
 /**
  * Shell-quote the command so a human can paste it back into a terminal, with
  * the Stage's environment in front of it so the reproduction is exact.
+ *
+ * How the environment differed from the Host's leads it: a subscription Stage
+ * ran without the Host's key, which `env -u` removes again, and an API-key
+ * Stage ran on it, which is named and left for the shell to fill in. Its value
+ * is never written: command files reach the Target's remote with a hand-off.
  */
 function quoteCommand(
+  credential: Credential,
   extraEnv: Record<string, string>,
   binary: string,
   args: string[],
 ): string {
   const assignments = Object.entries(extraEnv).map(([name, value]) => `${name}=${value}`);
-  return [...assignments, binary, ...args]
+  const differed =
+    credential === "subscription"
+      ? `env -u ${API_KEY_ENV_VAR}`
+      : `${API_KEY_ENV_VAR}="$${API_KEY_ENV_VAR}"`;
+  const quoted = [...assignments, binary, ...args]
     .map((part) => (/^[\w./:=-]+$/.test(part) ? part : `'${part.replaceAll("'", `'\\''`)}'`))
     .join(" ");
+  return `${differed} ${quoted}`;
 }

@@ -27,6 +27,8 @@ export interface ExecOptions {
   killGraceMs?: number;
   /** Variables merged over the environment the child inherits, not replacing it. */
   extraEnv?: Record<string, string>;
+  /** Variables the child does not inherit, whatever this process carries. */
+  unsetEnv?: string[];
   /**
    * A variable set over `extraEnv`, whose value nothing else on the Host
    * carries. A kill at `timeoutMs` also takes every process still carrying it,
@@ -84,9 +86,10 @@ export function exec(
     const { mark } = options;
     const extraEnv =
       mark === undefined ? options.extraEnv : { ...options.extraEnv, [mark.name]: mark.value };
+    const env = childEnv(extraEnv, options.unsetEnv);
     const child = spawn(command, args, {
       ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
-      ...(extraEnv === undefined ? {} : { env: { ...process.env, ...extraEnv } }),
+      ...(env === undefined ? {} : { env }),
       shell: options.shell ?? false,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -195,4 +198,18 @@ export function throwOnFailure(
     );
   }
   return result;
+}
+
+/**
+ * The environment a child is given, or nothing where it inherits this
+ * process's own untouched.
+ */
+function childEnv(
+  extraEnv: Record<string, string> | undefined,
+  unsetEnv: string[] | undefined,
+): NodeJS.ProcessEnv | undefined {
+  if (extraEnv === undefined && (unsetEnv === undefined || unsetEnv.length === 0)) return undefined;
+  const env: NodeJS.ProcessEnv = { ...process.env, ...extraEnv };
+  for (const name of unsetEnv ?? []) delete env[name];
+  return env;
 }

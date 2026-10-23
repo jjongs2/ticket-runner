@@ -4,6 +4,7 @@
  */
 
 import { UNCHECKED_BOX } from "./acceptance-criteria.js";
+import { CREDENTIAL_WORDS, type Credential, type StrayStage } from "./credential.js";
 import type { GuardReason } from "./guards.js";
 import type { HostKind } from "./host.js";
 import type { FailurePoint } from "./lifecycle.js";
@@ -513,7 +514,14 @@ export interface RunSummary {
   version: string;
   runId: string;
   durationMs: number;
+  /** What the Run's Stages were billed to, which its header names. */
+  credential: Credential;
   outcomes: TicketOutcome[];
+  /**
+   * Every Stage that said it ran on something else, each named in a row after
+   * its own Ticket's.
+   */
+  strayStages?: readonly StrayStage[];
   /**
    * The line saying a newer Version is out, where one is. Above the header
    * rather than below it: the Run already said this hours ago, at the top of a
@@ -526,14 +534,27 @@ export interface RunSummary {
 
 /**
  * What a Release is put down to, in the words the Run summary and the log
- * share: the subscription rate limit, a transient API failure, or a Base
- * branch that fails the Check the Ticket's branch failed.
+ * share: the rate limit, a transient API failure, an API key out of credit or
+ * past its spend limit, or a Base branch that fails the Check the Ticket's
+ * branch failed.
  */
 export const RELEASE_WORDS: Record<ReleaseCause, string> = {
   "rate-limited": "rate limit",
   "api-error": "API failure",
+  "out-of-budget": "out of API budget",
   "failing-base": "failing Base branch",
 };
+
+/**
+ * The same words, for a Run on `credential`. A rate limit on an `--api-key`
+ * Run is the API's, not the subscription's, and is named so: what the human
+ * looks at about it is the Console, not their plan.
+ */
+export function releaseWords(cause: ReleaseCause, credential: Credential): string {
+  return cause === "rate-limited" && credential === "api-key"
+    ? "API rate limit"
+    : RELEASE_WORDS[cause];
+}
 
 /** Every summary row is `<verb> #<n> <detail>`, so the numbers line up. */
 const VERB_WIDTH = 9;
@@ -541,19 +562,26 @@ const VERB_WIDTH = 9;
 /**
  * What a Run prints when it ends. One line per Ticket, then why the Run
  * stopped — the Frontier is empty, everything left on it is blocked, the rate
- * limit, a transient API failure or a failing Base branch released a Ticket and
- * the Run went no further, or a human stopped it.
+ * limit, a transient API failure, the API key's budget or a failing Base branch
+ * released a Ticket and the Run went no further, or a human stopped it.
  */
 export function runSummary({
   version,
   runId,
   durationMs,
+  credential,
   outcomes,
+  strayStages = [],
   newer,
   stop,
 }: RunSummary): string {
   const rows = [
-    ...outcomes.flatMap(ticketRows),
+    ...outcomes.flatMap((outcome) => [
+      ...ticketRows(outcome, credential),
+      ...strayStages
+        .filter((stray) => stray.ticket === outcome.ticket)
+        .map((stray) => row("billed", stray.ticket, `${stray.stage} · apiKeySource ${stray.apiKeySource}`)),
+    ]),
     // Only a Run that reached the end of the Frontier can name what was held
     // back all Run, so only that stop carries candidates to skip.
     ...(stop.reason === "frontier"
@@ -563,24 +591,28 @@ export function runSummary({
 
   return [
     ...(newer === undefined ? [] : [newer]),
-    `ticket-runner ${version} run ${runId} · ${Math.round(durationMs / 60_000)}m`,
+    `ticket-runner ${version} run ${runId} · ${Math.round(durationMs / 60_000)}m · ${CREDENTIAL_WORDS[credential]}`,
     "",
     ...(rows.length === 0 ? ["  nothing to do"] : rows),
     "",
-    lastLine(stop),
+    lastLine(stop, credential),
     "",
   ].join("\n");
 }
 
 /** The one line that says why the Run stopped. */
-function lastLine(stop: RunStop): string {
+function lastLine(stop: RunStop, credential: Credential): string {
   switch (stop.reason) {
-    case "rate-limited":
+    case "rate-limited": {
+      const limited = credential === "api-key" ? "API rate limited" : "Rate limited";
       return stop.resetsAt === undefined
-        ? "Rate limited."
-        : `Rate limited · resets ${utcMinute(stop.resetsAt)}.`;
+        ? `${limited}.`
+        : `${limited} · resets ${utcMinute(stop.resetsAt)}.`;
+    }
     case "api-error":
       return "API failure.";
+    case "out-of-budget":
+      return "Out of API budget.";
     case "failing-base":
       return `Base branch \`${stop.baseBranch}\` fails \`${stop.command}\` at ${stop.commit.slice(0, 7)}.`;
     case "stopped":
@@ -618,9 +650,9 @@ function holding(busy: number[]): string {
  * The Notes follow their own Ticket rather than being gathered at the end, so a
  * Run that took six Tickets still says which one noticed what.
  */
-function ticketRows(outcome: TicketOutcome): string[] {
+function ticketRows(outcome: TicketOutcome, credential: Credential): string[] {
   return [
-    ticketRow(outcome),
+    ticketRow(outcome, credential),
     ...(outcome.outcome === "skipped" ? [] : outcome.notes.map(noteRow)),
   ];
 }
@@ -653,7 +685,7 @@ function noteRow({ origin, stage, issue, opened, summary }: RoutedNote): string 
 }
 
 /** One Ticket's line in a summary: what happened to it, and where to look. */
-function ticketRow(outcome: TicketOutcome): string {
+function ticketRow(outcome: TicketOutcome, credential: Credential): string {
   switch (outcome.outcome) {
     case "merged":
       return row("merged", outcome.ticket, `${outcome.title} (PR #${outcome.pullRequest})`);
@@ -669,7 +701,7 @@ function ticketRow(outcome: TicketOutcome): string {
       return row(
         "released",
         outcome.ticket,
-        `${outcome.title} · ${RELEASE_WORDS[outcome.cause]} at ${outcome.stage}`,
+        `${outcome.title} · ${releaseWords(outcome.cause, credential)} at ${outcome.stage}`,
       );
     case "skipped":
       // The reason is the guard's own word for it, which is also the marker on

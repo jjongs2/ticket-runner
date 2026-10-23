@@ -5,7 +5,7 @@ description: What a Hand-off, a Release, a Stop and a kill each leave behind, an
 
 # Stopping and resuming
 
-Nobody watches a Run, so it has to end well when something goes wrong: a Ticket it cannot finish, a subscription that runs out, a human who wants it to stop, a machine that disappears. Each of these leaves the Ticket where a later Run can pick it up, on this Host or another. That Run does not pay again for Stages already done, and no human has to unpick labels first.
+Nobody watches a Run, so it has to end well when something goes wrong: a Ticket it cannot finish, a subscription or an API key that runs out, a human who wants it to stop, a machine that disappears. Each of these leaves the Ticket where a later Run can pick it up, on this Host or another. That Run does not pay again for Stages already done, and no human has to unpick labels first.
 
 This page covers what each ending leaves behind, and how the pipeline gets back from it.
 
@@ -15,7 +15,7 @@ This page covers what each ending leaves behind, and how the pipeline gets back 
 |---|---|---|
 | Merge | a green pass through every gate | a closed issue; branch and State file gone |
 | [Hand-off](#hand-off) | a failure the Fix budget cannot cover | `ready-for-human`, a comment, a draft pull request; work and State kept |
-| [Release](#release-on-a-rate-limit) | the subscription rate limit, a transient API failure, or a [failing Base branch](#release-over-a-failing-base-branch) | `ready-for-agent`, no comment on the Ticket; work and State kept |
+| [Release](#release-on-a-rate-limit) | the subscription or API rate limit, a transient API failure, an [API key out of budget](#release-out-of-api-budget), or a [failing Base branch](#release-over-a-failing-base-branch) | `ready-for-agent`, no comment on the Ticket; work and State kept |
 | [Stop](#stop-and-kill) | `ticket-runner stop` (SIGTERM) | nothing new |
 | [Kill](#stop-and-kill) | Ctrl+C, SIGKILL, a vanished Host | the Claim; work as last pushed, and State |
 
@@ -115,7 +115,7 @@ Why a Hand-off keeps the State at all: the Run once misread the rate limit as an
 
 ## Release on a rate limit or an API failure {#release-on-a-rate-limit}
 
-A Stage that hits the subscription rate limit has failed at nothing, and neither has one the API stopped on its own side. Handing the Ticket off would make a human relabel a Ticket nothing was wrong with, and a fix Stage would only meet the same limit or the same outage. So the Ticket is [released](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) instead: it goes back on the board, and the next Run resumes it from the last Stage it finished, with its Fix budget as it was.
+A Stage that hits the rate limit has failed at nothing, and neither has one the API stopped on its own side. Handing the Ticket off would make a human relabel a Ticket nothing was wrong with, and a fix Stage would only meet the same limit or the same outage. So the Ticket is [released](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) instead: it goes back on the board, and the next Run resumes it from the last Stage it finished, with its Fix budget as it was.
 
 Both are read only off a session that failed. It was rate-limited on any one of three signs:
 
@@ -125,7 +125,7 @@ Both are read only off a session that failed. It was rate-limited on any one of 
 | a `rate_limit_event` whose status is `rejected` | a warning-only event is not a stop: a session near the limit prints those and finishes |
 | the result or stderr says `usage limit`, `session limit`, `rate limit` or `rate_limit` | read last because its wording has changed before |
 
-A session that succeeds is never rate-limited, however often it mentions rate limits.
+A session that succeeds is never rate-limited, however often it mentions rate limits. On a Run started without `--api-key` the limit is the subscription's; on one started with it, the API's, and the summary row reads `API rate limit` and its last line `API rate limited.`.
 
 A session that failed and is not rate-limited is a transient API failure when its `result` event ends with `terminal_reason: "api_error"` and an `api_error_status` that is a 5xx or absent: `529 Overloaded`, say, or "No response from API". The CLI has already retried the request by the time it gives up, so the Stage is not retried in place. Any other status, and any other error, is the Stage's own and goes to the Fix budget or a Hand-off.
 
@@ -139,6 +139,14 @@ What the Release does:
 The Run then claims nothing more, because what stopped one Stage would stop the next. The Lanes already busy finish their own Tickets, and the Run ends when the last one comes back. It does not wait for the limit to reset. The summary ends `Rate limited · resets 2026-09-20 03:40 UTC.`, the time the rejecting `rate_limit_event` gave, or `Rate limited.` when none gave one, and `API failure.` after an API failure. When the rate limit then releases a Ticket a busy Lane held, the rate limit outranks the API failure: the summary ends on the limit instead, since that line says when the next Run can start, and each Ticket's row keeps its own cause. A released Ticket counts as taken, so the exit code is `0` unless something was handed off.
 
 Start a Run once the limit has reset, or the API has recovered, and the Ticket is back on the Frontier, resumed from its State file.
+
+## Release out of API budget {#release-out-of-api-budget}
+
+A Stage of a Run started with [`--api-key`](./running.md#api-key) can be refused because the key's organization is out of credit, or because its workspace reached the spend limit set in the Console. Neither is the Ticket's doing, so the Ticket is released as on a rate limit, with these differences:
+
+- It is read off a failed session whose `result` carries `api_error_status: 400` and a message naming `credit balance is too low` or `workspace API usage limits`. Any other 400 is the Stage's own, as before. The spend limit's message also names a usage limit, but it is read as the budget, not the rate limit.
+- The Progress row is `⏸ out of API budget`, the summary row `out of API budget at <stage>`, and the last line `Out of API budget.`. It outranks the rate limit and an API failure on the last line, since it alone needs you.
+- The summary does not say when access returns, though the spend limit's message does: look at the Console, then start the next Run.
 
 ## Release over a failing Base branch {#release-over-a-failing-base-branch}
 
@@ -362,7 +370,7 @@ Pushes use `--force-with-lease`, so a rebase can rewrite the branch but can neve
 - [`src/stop.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stop.ts): `requestStop`, `StopSignal`, `listenForStop`
 - [`src/lock.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lock.ts), [`src/host.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/host.ts), [`src/start.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts): `startRun`
 - [`src/adapters/git-workspace.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts): `worktreeFromRemote`, `changeState`, `acquireLock`, `keepTranscripts`
-- [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts): `rateLimited`
+- [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts): `rateLimited`, `outOfBudget`
 - [`src/run-log.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run-log.ts): `transcriptFiles`
 - [`docs/templates/handoff-comment.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/handoff-comment.md), [`docs/templates/draft-pr-body.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/draft-pr-body.md), [`docs/templates/stop-report.txt`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/stop-report.txt)
 - [ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md), [ADR-0006](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md), [ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)

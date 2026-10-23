@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StageRequest } from "../ports/agent-runner.js";
 import { nestedRunRefusal } from "../stage-guard.js";
 import { execution, failedExecution } from "../testing/executions.js";
@@ -62,6 +62,7 @@ function request(overrides: Partial<StageRequest> = {}): StageRequest {
     maxTurns: 300,
     maxMinutes: 60,
     permissionMode: "auto",
+    credential: "subscription",
     logDir,
     ...overrides,
   };
@@ -254,9 +255,119 @@ describe("the command line", () => {
     const result = await runner(execution({ stdout: SUCCESS })).run(request());
 
     expect(result.commandLine).toMatch(
-      /^TICKET_RUNNER_STAGE=implement TICKET_RUNNER_SESSION=[0-9a-f-]{36} CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 CLAUDE_CODE_SHELL=\/bin\/bash claude --print/,
+      /^env -u ANTHROPIC_API_KEY TICKET_RUNNER_STAGE=implement TICKET_RUNNER_SESSION=[0-9a-f-]{36} CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 CLAUDE_CODE_SHELL=\/bin\/bash claude --print/,
     );
     expect(result.commandLine).toContain("'/mattpocock-skills:implement https://example.com/issues/2'");
+  });
+});
+
+describe("the credential a Stage runs on", () => {
+  /** What a Host with a key in its profile exports. */
+  const KEY = "sk-ant-api03-host-key-value";
+
+  beforeEach(() => {
+    vi.stubEnv("ANTHROPIC_API_KEY", KEY);
+    vi.stubEnv("ANTHROPIC_AUTH_TOKEN", "gateway-token");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("starts a subscription Stage without the Host's key, and with its auth token", async () => {
+    await runner(execution({ stdout: SUCCESS })).run(request({ credential: "subscription" }));
+
+    expect(calls[0]?.options.unsetEnv).toEqual(["ANTHROPIC_API_KEY"]);
+    expect(calls[0]?.options.extraEnv).not.toHaveProperty("ANTHROPIC_API_KEY");
+    expect(calls[0]?.options.unsetEnv).not.toContain("ANTHROPIC_AUTH_TOKEN");
+    expect(calls[0]?.options.extraEnv).not.toHaveProperty("ANTHROPIC_AUTH_TOKEN");
+  });
+
+  it("starts an API-key Stage on the Host's key, which it inherits rather than is handed", async () => {
+    await runner(execution({ stdout: SUCCESS })).run(request({ credential: "api-key" }));
+
+    expect(calls[0]?.options.unsetEnv ?? []).toEqual([]);
+    expect(calls[0]?.options.extraEnv).not.toHaveProperty("ANTHROPIC_API_KEY");
+  });
+
+  it("says in a subscription Stage's command file that the key was removed", async () => {
+    await runner(execution({ stdout: SUCCESS })).run(request({ credential: "subscription" }));
+
+    const command = readFileSync(stageFile("command"), "utf8");
+    expect(command).toMatch(/^env -u ANTHROPIC_API_KEY TICKET_RUNNER_STAGE=implement /);
+    expect(command).not.toContain(KEY);
+  });
+
+  it("names the key in an API-key Stage's command file, never its value", async () => {
+    const result = await runner(execution({ stdout: SUCCESS })).run(
+      request({ credential: "api-key" }),
+    );
+
+    const command = readFileSync(stageFile("command"), "utf8");
+    expect(command).toMatch(/^ANTHROPIC_API_KEY="\$ANTHROPIC_API_KEY" TICKET_RUNNER_STAGE=implement /);
+    expect(result.commandLine).toBe(command.trimEnd());
+    for (const file of readdirSync(logDir)) {
+      expect(readFileSync(join(logDir, file), "utf8")).not.toContain(KEY);
+    }
+  });
+
+  it("writes no file with the key's value in it, even where the session printed it", async () => {
+    // A session that ran `env` in its shell, as an implement Stage may.
+    const stdout = transcript(
+      { type: "user", message: { content: [{ type: "tool_result", content: `ANTHROPIC_API_KEY=${KEY}` }] } },
+      { type: "result", subtype: "success", is_error: false, num_turns: 1, result: `done ${KEY}` },
+    );
+
+    const result = await runner(execution({ stdout, stderr: `warning: ${KEY}\n` })).run(
+      request({ credential: "api-key" }),
+    );
+
+    expect(result.ok).toBe(true);
+    for (const file of readdirSync(logDir)) {
+      expect(readFileSync(join(logDir, file), "utf8")).not.toContain(KEY);
+    }
+    expect(readFileSync(stageFile("transcript.jsonl"), "utf8")).toContain(
+      "ANTHROPIC_API_KEY=<ANTHROPIC_API_KEY>",
+    );
+  });
+
+  it("leaves no part of a key split across two chunks on disk between them", async () => {
+    const split = Math.floor(KEY.length / 2);
+    const stdout = `ANTHROPIC_API_KEY=${KEY}\n${SUCCESS}`;
+    const between: string[] = [];
+    const printing = new ClaudeAgentRunner({
+      run: async (_command, _args, options) => {
+        // A Run killed here would leave the disk as it is now.
+        options.onStdout?.(`ANTHROPIC_API_KEY=${KEY.slice(0, split)}`);
+        between.push(readFileSync(stageFile("stdout"), "utf8"));
+        options.onStdout?.(`${KEY.slice(split)}\n${SUCCESS}`);
+        between.push(readFileSync(stageFile("stdout"), "utf8"));
+        return execution({ stdout });
+      },
+    });
+
+    await printing.run(request({ credential: "api-key" }));
+
+    expect(between[0]).toBe("ANTHROPIC_API_KEY=");
+    expect(between[1]).toBe(`ANTHROPIC_API_KEY=<ANTHROPIC_API_KEY>\n${SUCCESS}`);
+    expect(readFileSync(stageFile("stdout"), "utf8")).toBe(between[1]);
+  });
+
+  it("reports what the session said it ran on, from its init event", async () => {
+    const stdout = transcript(
+      { type: "system", subtype: "init", apiKeySource: "apiKeyHelper" },
+      { type: "result", subtype: "success", is_error: false, num_turns: 1, result: "done" },
+    );
+
+    const result = await runner(execution({ stdout })).run(request());
+
+    expect(result.apiKeySource).toBe("apiKeyHelper");
+  });
+
+  it("reports nothing it was not told", async () => {
+    const result = await runner(execution({ stdout: SUCCESS })).run(request());
+
+    expect(result).not.toHaveProperty("apiKeySource");
   });
 });
 
@@ -736,6 +847,77 @@ describe("reading the outcome", () => {
       terminal_reason: "api_error",
       api_error_status: null,
       result: "API Error: No response from API (waited 3m, then 10m on the retry).",
+    });
+
+    const result = await runner(execution({ exitCode: 1, stdout })).run(request());
+
+    expect(result).toMatchObject({ ok: false, failure: "api-error" });
+  });
+
+  /** The spend limit's refusal as CLI 2.1.309 printed it, trimmed to what is read. */
+  const SPEND_LIMIT = transcript(
+    { type: "system", subtype: "init", apiKeySource: "ANTHROPIC_API_KEY" },
+    {
+      type: "assistant",
+      message: {
+        model: "<synthetic>",
+        content: [
+          {
+            type: "text",
+            text: "API Error: 400 You have reached your specified workspace API usage limits. You will regain access on 2026-11-01 at 00:00 UTC.",
+          },
+        ],
+      },
+      error: "unknown",
+      is_api_error_message: true,
+      api_error_status: 400,
+    },
+    {
+      type: "result",
+      subtype: "success",
+      is_error: true,
+      terminal_reason: "api_error",
+      api_error_status: 400,
+      result:
+        "API Error: 400 You have reached your specified workspace API usage limits. You will regain access on 2026-11-01 at 00:00 UTC.",
+      total_cost_usd: 0,
+    },
+  );
+
+  it("classifies a workspace past its spend limit as out of API budget, not the rate limit", async () => {
+    const result = await runner(execution({ exitCode: 1, stdout: SPEND_LIMIT })).run(request());
+
+    expect(result).toMatchObject({ ok: false, failure: "out-of-budget" });
+    expect(result).not.toHaveProperty("limitResetsAt");
+  });
+
+  it.each([
+    "Credit balance is too low",
+    "API Error: 400 Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.",
+  ])("classifies an organization out of credit as out of API budget: %s", async (message) => {
+    // Assumed to have the spend limit's shape, which no `-p` run has shown yet.
+    const stdout = transcript({
+      type: "result",
+      subtype: "success",
+      is_error: true,
+      terminal_reason: "api_error",
+      api_error_status: 400,
+      result: message,
+    });
+
+    const result = await runner(execution({ exitCode: 1, stdout })).run(request());
+
+    expect(result).toMatchObject({ ok: false, failure: "out-of-budget" });
+  });
+
+  it("does not read the budget's words off an API error with another status", async () => {
+    const stdout = transcript({
+      type: "result",
+      subtype: "success",
+      is_error: true,
+      terminal_reason: "api_error",
+      api_error_status: 500,
+      result: "API Error: 500 while the credit balance is too low test ran",
     });
 
     const result = await runner(execution({ exitCode: 1, stdout })).run(request());

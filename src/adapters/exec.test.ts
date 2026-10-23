@@ -59,6 +59,21 @@ describe("the child environment", () => {
 
     expect({ ...process.env }).toEqual(before);
   });
+
+  it("keeps a variable it was told to unset from the child, and only that one", async () => {
+    process.env.TICKET_RUNNER_TEST_KEY = "secret";
+    try {
+      const [command, args] = printEnv("TICKET_RUNNER_TEST_KEY");
+      const unset = await exec(command, args, { unsetEnv: ["TICKET_RUNNER_TEST_KEY"] });
+      const kept = await exec(...printEnv("PATH"), { unsetEnv: ["TICKET_RUNNER_TEST_KEY"] });
+
+      expect(unset.stdout).toBe("undefined");
+      expect(kept.stdout).toBe(process.env.PATH);
+      expect(process.env.TICKET_RUNNER_TEST_KEY).toBe("secret");
+    } finally {
+      delete process.env.TICKET_RUNNER_TEST_KEY;
+    }
+  });
 });
 
 describe("streaming the child's output", () => {

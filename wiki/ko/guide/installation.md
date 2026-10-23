@@ -23,6 +23,7 @@ Run은 무인으로 돌기 때문에, 빠진 게 있다면 Ticket 도중이 아�
 | `git` | Ticket마다 worktree와 branch를 따로 만듦 | – |
 | Target에 인증된 [`gh`](https://cli.github.com/) | GitHub 호출은 모두 `gh api`로 감 | `init`이 알려 주고, `gh`가 없는 Host에서는 `run`이 거절 |
 | `mattpocock-skills` 플러그인 1.2.3 이상 버전이 설치된 `claude` | Stage 하나하나가 `claude -p` 세션이고, implement Stage가 이 플러그인의 스킬을 부림 ([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)) | 둘 다 `init`이 알려 줌 |
+| Claude 요금제로 로그인한 `claude` | Run을 [`--api-key`](./running.md#api-key)로 시작하지 않는 한, Stage는 그 로그인으로 돌고 셸이 export한 `ANTHROPIC_API_KEY`를 보지 못함 | – |
 | Ticket이 계획되어 있는 GitHub 저장소 | Ticket은 보드에서 옴. [계획](./planning.md) 참고 | – |
 | 저장소에서 GitHub Issues를 tracker로 한 번 돌려 둔 `/setup-matt-pocock-skills` | 이 설정이 있어야 계획용 skill이 Spec과 Ticket을 GitHub 이슈로 만듦 | – |
 | `.github/workflows`의 CI 워크플로 | check가 하나도 없는 pull request는 merge되지 않음. [`gates.ci`](./configuration.md#gates)를 끄면 예외 | `init`이 알려 줌 |
@@ -166,6 +167,8 @@ warning: This Target's `docs/agents/pipeline-conventions.md` was left by 0.4.0, 
 ```
 
 문서가 더 새 Version에서 온 것이라면 경고는 `ticket-runner`를 업그레이드하라고 말합니다.
+
+readiness보다 먼저 오는 거절이 하나 있습니다. 클라우드 Host에서, 또는 `ANTHROPIC_API_KEY`를 export하지 않은 채 준 [`--api-key`](./running.md#api-key)입니다.
 
 readiness 다음에 거절이 두 가지 더 있습니다.
 

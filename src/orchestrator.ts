@@ -1,5 +1,11 @@
 import { branchName, worktreePath } from "./branch.js";
 import type { Config } from "./config.js";
+import {
+  CREDENTIAL_WORDS,
+  type Credential,
+  type StrayStage,
+  expectedKeySource,
+} from "./credential.js";
 import { tickMetCriteria } from "./criteria.js";
 import type { BaseBranchChecks, FailingBase } from "./failing-base.js";
 import { type SkipReason, isGuardReason, skipReason } from "./guards.js";
@@ -41,6 +47,7 @@ import { retryLogDir, stageLogDir } from "./run-log.js";
 import { holdsClaim } from "./stranded.js";
 import {
   RELEASE_WORDS,
+  releaseWords,
   draftPullRequestBody,
   failingBaseNote,
   failingBaseSummary,
@@ -127,6 +134,17 @@ export interface Pipeline {
    */
   host: HostKind;
   /**
+   * What every Stage of this Run is billed to, chosen once when it started:
+   * the subscription, or the Host's API key for a Run started with `--api-key`.
+   */
+  credential: Credential;
+  /**
+   * Every Stage of this Run that said it ran on something other than
+   * {@link credential}, in the order they came back, shared by every Ticket so
+   * the Run summary can name them all.
+   */
+  strayStages: StrayStage[];
+  /**
    * The branch every Ticket of this Run branches from, rebases onto, merges
    * into and pulls, resolved once before the Run started
    * ({@link import("./base-branch.js").resolveBaseBranch}).
@@ -177,18 +195,21 @@ class TicketFailure extends Error {
 }
 
 /**
- * What stops a Ticket that says nothing about it: the subscription rate limit,
- * a transient API failure — the API overloaded, broken or silent on its own
- * side after the CLI had already retried it — and a Base branch that fails the
- * Check the Ticket's branch failed.
+ * What stops a Ticket that says nothing about it: the rate limit, a transient
+ * API failure — the API overloaded, broken or silent on its own side after the
+ * CLI had already retried it — the API key of an `--api-key` Run out of credit
+ * or past its workspace's spend limit, and a Base branch that fails the Check
+ * the Ticket's branch failed.
  */
 export type ReleaseCause = StageReleaseCause | "failing-base";
 
 /** The Stage failures among them. */
-type StageReleaseCause = Extract<StageFailure, "rate-limited" | "api-error">;
+type StageReleaseCause = Extract<StageFailure, "rate-limited" | "api-error" | "out-of-budget">;
 
 function releaseCause(result: StageResult): StageReleaseCause | undefined {
-  return result.failure === "rate-limited" || result.failure === "api-error"
+  return result.failure === "rate-limited" ||
+    result.failure === "api-error" ||
+    result.failure === "out-of-budget"
     ? result.failure
     : undefined;
 }
@@ -883,11 +904,16 @@ async function passOver(
  * Start one Stage under the model, effort, turn and wall-clock limits its own
  * config names. Everything a Stage differs in is the prompt, where it runs and
  * where it logs; the limits come from one place so no Stage can quietly skip them.
+ *
+ * The credential is the Run's too, and what the Stage says it actually ran on
+ * is checked here for the same reason: a Stage billed somewhere the Run did not
+ * choose is named whichever Stage it was.
  */
-function runStage(
+async function runStage(
   pipeline: Pipeline,
   stage: StageName,
   request: {
+    ticket: number;
     prompt: string;
     cwd: string;
     logDir: string;
@@ -896,12 +922,13 @@ function runStage(
   },
 ): Promise<StageResult> {
   const limits = pipeline.config.stages[stage];
-  return pipeline.runner.run({
+  const result = await pipeline.runner.run({
     stage,
     prompt: request.prompt,
     cwd: request.cwd,
     logDir: request.logDir,
     permissionMode: pipeline.config.permissionMode,
+    credential: pipeline.credential,
     model: limits.model,
     effort: limits.effort,
     maxTurns: limits.maxTurns,
@@ -911,6 +938,30 @@ function runStage(
       ? {}
       : { resultRequired: request.resultRequired }),
   });
+  noteStrayCredential(pipeline, request.ticket, stage, result);
+  return result;
+}
+
+/**
+ * Name a Stage whose `system/init` event reported another `apiKeySource` than
+ * the Run's credential expects, in the log now and in the summary at the end.
+ * A Stage that reported none, one that never started, is not named: there is
+ * nothing it said to set against the Run's choice.
+ */
+function noteStrayCredential(
+  pipeline: Pipeline,
+  ticket: number,
+  stage: StageName,
+  result: StageResult,
+): void {
+  const { apiKeySource } = result;
+  const expected = expectedKeySource(pipeline.credential);
+  if (apiKeySource === undefined || apiKeySource === expected) return;
+  pipeline.strayStages.push({ ticket, stage, apiKeySource });
+  pipeline.log?.(
+    `#${ticket} ${stage} ran on apiKeySource ${apiKeySource}, ` +
+      `not the ${CREDENTIAL_WORDS[pipeline.credential]} (${expected})`,
+  );
 }
 
 /**
@@ -924,13 +975,16 @@ function runStage(
  * work that is already on the branch.
  */
 async function releasedStage(
+  pipeline: Pipeline,
   progress: Progress,
   stage: StageName,
   point: FailurePoint,
   result: StageResult,
   cause: StageReleaseCause,
 ): Promise<Releasing> {
-  await progress.record(stageRow(stage, result, `⏸ ${STAGE_FAILURES[cause].cell}`));
+  await progress.record(
+    stageRow(stage, result, `⏸ ${stageFailureCell(result, pipeline.credential)}`),
+  );
   return new Releasing(
     point,
     stage === "implement" ? "claimed" : "implemented",
@@ -955,13 +1009,15 @@ async function stageDidNotFinish(
 ): Promise<TicketFailure | Releasing> {
   const cause = releaseCause(result);
   if (cause !== undefined) {
-    return await releasedStage(progress, stage, stage, result, cause);
+    return await releasedStage(pipeline, progress, stage, stage, result, cause);
   }
 
-  await progress.record(stageRow(stage, result, `❌ ${stageFailureCell(result)}`));
+  await progress.record(
+    stageRow(stage, result, `❌ ${stageFailureCell(result, pipeline.credential)}`),
+  );
   return new TicketFailure(
     stage,
-    describeStageFailure(stage, pipeline.config.stages[stage], result),
+    describeStageFailure(stage, pipeline.config.stages[stage], result, pipeline.credential),
   );
 }
 
@@ -1069,6 +1125,7 @@ async function implement(
 ): Promise<void> {
   const stage = pipeline.config.stages.implement;
   const result = await runStage(pipeline, "implement", {
+    ticket: issue.number,
     prompt: implementPrompt(
       issue.url,
       pipeline.baseBranch,
@@ -1314,6 +1371,7 @@ async function verify(
 ): Promise<Verdict> {
   const stage = pipeline.config.stages.verify;
   const result = await runStage(pipeline, "verify", {
+    ticket: issue.number,
     prompt: verifyPrompt(
       issue.url,
       stage.extraPrompt,
@@ -1406,6 +1464,7 @@ async function fix(
   const commitsBefore = await commitCount(pipeline, branch);
 
   const result = await runStage(pipeline, "fix", {
+    ticket: issue.number,
     prompt: fixPrompt(
       issue.url,
       failure,
@@ -1520,6 +1579,7 @@ async function conflictStage(
   const stage = pipeline.config.stages.conflict;
   try {
     const result = await runStage(pipeline, "conflict", {
+      ticket: issue.number,
       prompt: conflictPrompt(
         issue.url,
         conflict,
@@ -1550,7 +1610,7 @@ async function conflictStage(
     // rebases is clean.
     const cause = releaseCause(result);
     if (cause !== undefined) {
-      return await releasedStage(progress, "conflict", "rebase", result, cause);
+      return await releasedStage(pipeline, progress, "conflict", "rebase", result, cause);
     }
 
     await progress.record(stageRow("conflict", result, "❌ unresolved"));
@@ -1558,7 +1618,7 @@ async function conflictStage(
       "rebase",
       result.ok
         ? `the conflict Stage did not finish the rebase onto ${pipeline.baseBranch}`
-        : describeStageFailure("conflict", stage, result),
+        : describeStageFailure("conflict", stage, result, pipeline.credential),
       [conflict, state.unresolved].join("\n\n"),
       "unresolved-conflict",
     );
@@ -1744,7 +1804,7 @@ async function release(
   await tracker.removeLabel(ticket, config.labels.inProgress);
   await tracker.unassign(ticket, user);
   pipeline.log?.(
-    `#${ticket} released at ${stopped.point} · ${RELEASE_WORDS[stopped.reason]} · ${branch}`,
+    `#${ticket} released at ${stopped.point} · ${releaseWords(stopped.reason, pipeline.credential)} · ${branch}`,
   );
 
   return {
@@ -2099,6 +2159,11 @@ const STAGE_FAILURES: Record<
     cell: "API failure",
     sentence: () => "was stopped by an API failure the CLI had given up retrying",
   },
+  // And so is this one.
+  "out-of-budget": {
+    cell: "out of API budget",
+    sentence: () => "ran out of API budget: the key's credit or its workspace's spend limit",
+  },
   "timed-out": {
     cell: "timed out",
     sentence: (limits) => `ran past its ${limits.maxMinutes} minute limit`,
@@ -2117,7 +2182,14 @@ const STAGE_FAILURES: Record<
 /** A Stage that came back without saying why gets the one word that is true. */
 const UNEXPLAINED = { cell: "failed", sentence: () => "failed" } as const;
 
-function stageFailure(result: StageResult) {
+/**
+ * The rate limit of an `--api-key` Run, which is the API's own rather than the
+ * subscription's, and is named so wherever the subscription's would be.
+ */
+const API_RATE_LIMIT = { cell: "API rate limited", sentence: () => "hit the API rate limit" } as const;
+
+function stageFailure(result: StageResult, credential: Credential) {
+  if (result.failure === "rate-limited" && credential === "api-key") return API_RATE_LIMIT;
   return result.failure ? STAGE_FAILURES[result.failure] : UNEXPLAINED;
 }
 
@@ -2125,11 +2197,12 @@ function describeStageFailure(
   stage: string,
   limits: StageLimits,
   result: StageResult,
+  credential: Credential,
 ): string {
-  return `the ${stage} Stage ${stageFailure(result).sentence(limits)}`;
+  return `the ${stage} Stage ${stageFailure(result, credential).sentence(limits)}`;
 }
 
 /** The same failure, short enough for a table cell. */
-function stageFailureCell(result: StageResult): string {
-  return stageFailure(result).cell;
+function stageFailureCell(result: StageResult, credential: Credential): string {
+  return stageFailure(result, credential).cell;
 }

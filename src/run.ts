@@ -5,7 +5,7 @@ import type { RoutedNote } from "./notes.js";
 import { type Pipeline, type TicketOutcome, processTicket } from "./orchestrator.js";
 import { StopSignal, stopLine } from "./stop.js";
 import { holdsClaim, strandedTickets } from "./stranded.js";
-import { RELEASE_WORDS } from "./templates.js";
+import { releaseWords } from "./templates.js";
 
 /**
  * What a Run has to show for itself: every Ticket it took, in the order they
@@ -46,6 +46,7 @@ export type RunStop =
       resetsAt?: string;
     }
   | { reason: "api-error" }
+  | { reason: "out-of-budget" }
   | {
       reason: "failing-base";
       baseBranch: string;
@@ -76,10 +77,10 @@ export type RunStop =
  * not cost the rest of the night.
  *
  * A Release stops the Run filling Lanes and nothing more. Nothing was wrong with
- * the Ticket — the subscription ran out of room, or the API failed on its own
- * side after the CLI had given up retrying it — so the next one would be stopped
- * the same way, and claiming it would spend a Claim, a worktree and a doomed
- * Stage to learn what the first one already said. The Lanes still busy finish
+ * the Ticket — the subscription or the API key ran out of room, or the API
+ * failed on its own side after the CLI had given up retrying it — so the next
+ * one would be stopped the same way, and claiming it would spend a Claim, a
+ * worktree and a doomed Stage to learn what the first one already said. The Lanes still busy finish
  * what they hold, and the Run reports what stopped it once the last of them
  * comes back. It does not wait for the limit to reset: a human or an Operator
  * starts the next Run, and the summary says when the limit resets.
@@ -127,8 +128,8 @@ export async function processRun(
   // Why this Run stopped, which is also what it reports. Set by whichever of
   // the Release and the Stop came first: a Stop that arrives after a Release
   // asked for what was already happening, and a Release afterwards stopped
-  // nothing that was not stopped already. Only a later rate limit overwrites
-  // it, and only where limitOutranks says so. Undefined is a Run still taking
+  // nothing that was not stopped already. Only a later API budget or rate
+  // limit overwrites it, and only where `outranks` says so. Undefined is a Run still taking
   // Tickets, which is why it doubles as the guard at every refill.
   let runStop: RunStop | undefined;
   // A Frontier the tracker refused to list, kept until the Lanes still busy are
@@ -166,14 +167,13 @@ export async function processRun(
    * Put a Ticket in a Lane, and record what came back when it ends.
    *
    * The line about the Run stopping is logged by the Release that stopped it and
-   * by no other, even where a later rate limit replaces the API failure it
-   * stopped the Run with. The Ticket's own release is already logged where it
-   * happened; this says the Run goes no further, so a transcript shows the
-   * Frontier was left alone rather than found empty, and a Release into a Run
-   * that an earlier Release or a Stop had stopped already claims to have
-   * stopped nothing. It leads with the Ticket's number all the same: a
-   * transcript of interleaved Lanes must not lose the line that explains why
-   * one Lane was the last to be filled.
+   * by no other, even where a later Release outranks it on the last line. The
+   * Ticket's own release is already logged where it happened; this says the Run
+   * goes no further, so a transcript shows the Frontier was left alone rather
+   * than found empty, and a Release into a Run that an earlier Release or a
+   * Stop had stopped already claims to have stopped nothing. It leads with the
+   * Ticket's number all the same: a transcript of interleaved Lanes must not
+   * lose the line that explains why one Lane was the last to be filled.
    */
   function fillLane(ticket: Taken): void {
     taken.add(ticket.number);
@@ -185,8 +185,10 @@ export async function processRun(
         if (outcome.outcome !== "released") return;
         if (runStop === undefined) {
           runStop = releaseStop(outcome, pipeline.baseBranch);
-          pipeline.log?.(`#${outcome.ticket} stopped the Run · ${RELEASE_WORDS[outcome.cause]}`);
-        } else if (outcome.cause === "rate-limited" && limitOutranks(runStop)) {
+          pipeline.log?.(
+            `#${outcome.ticket} stopped the Run · ${releaseWords(outcome.cause, pipeline.credential)}`,
+          );
+        } else if (outranks(outcome, runStop)) {
           runStop = releaseStop(outcome, pipeline.baseBranch);
         }
       }),
@@ -262,6 +264,7 @@ function releaseStop(
   baseBranch: string,
 ): RunStop {
   if (outcome.cause === "api-error") return { reason: "api-error" };
+  if (outcome.cause === "out-of-budget") return { reason: "out-of-budget" };
   if (outcome.failingBase !== undefined) {
     return { reason: "failing-base", baseBranch, ...outcome.failingBase };
   }
@@ -272,14 +275,30 @@ function releaseStop(
 }
 
 /**
- * Whether a Ticket the rate limit released after `stop` puts the limit in its
- * place. An API failure says nothing of when the next Run can start, so the
- * limit outranks it; a limit nobody was told the end of is outranked by one a
+ * Whether a Ticket released after `stop` puts its own stop in its place.
+ *
+ * An API key out of budget outranks the rate limit and an API failure, since
+ * it alone needs the human to act: no wait mends it, only the Console. The
+ * rate limit outranks an API failure, which says nothing of when the next Run
+ * can start, and a limit nobody was told the end of is outranked by one a
  * Stage was told. A failing Base branch and a Stop stay whatever comes after
- * them, and so does a limit already told when it resets.
+ * them, and so does an API budget, and a limit already told when it resets.
  */
-function limitOutranks(stop: RunStop): boolean {
-  return stop.reason === "api-error" || (stop.reason === "rate-limited" && stop.resetsAt === undefined);
+function outranks(
+  outcome: Extract<TicketOutcome, { outcome: "released" }>,
+  stop: RunStop,
+): boolean {
+  switch (outcome.cause) {
+    case "out-of-budget":
+      return stop.reason === "rate-limited" || stop.reason === "api-error";
+    case "rate-limited":
+      return (
+        stop.reason === "api-error" ||
+        (stop.reason === "rate-limited" && stop.resetsAt === undefined)
+      );
+    default:
+      return false;
+  }
 }
 
 /**

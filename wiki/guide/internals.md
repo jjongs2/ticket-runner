@@ -69,12 +69,15 @@ claude --print <prompt> --output-format stream-json --verbose \
 
   | Variable | Value | Why |
   |---|---|---|
+  | `ANTHROPIC_API_KEY` | removed, unless the Run was started with `--api-key` | under `-p` a key outranks the Claude login without asking, so a stray one would be billed |
   | `TICKET_RUNNER_STAGE` | the Stage | the [Stage mark](./ticket-to-merge.md) |
   | `TICKET_RUNNER_SESSION` | a UUID per Stage session | the Session mark the [kill at `maxMinutes`](#smaller-adapters) looks for |
   | `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | `1` | the Host user's memory is about their projects, not the Target |
   | `CLAUDE_CODE_SHELL` | `/bin/bash`, only where it exists | a zsh shell aborts a command on a glob that matches nothing |
-- It writes `<stage>.command`, `.stdout`, `.stderr` and `.transcript.jsonl` from the moment the Stage starts.
-- It kills the child at `maxMinutes`, with everything it started, and classifies a failure as `rate-limited`, `api-error`, `timed-out`, `turn-capped`, `nonzero-exit` or `invalid-result`.
+  `ANTHROPIC_AUTH_TOKEN` and every other variable are inherited as they are.
+- It writes `<stage>.command`, `.stdout`, `.stderr` and `.transcript.jsonl` from the moment the Stage starts. The command file opens with `env -u ANTHROPIC_API_KEY` for a Stage run without the key, or `ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"` for one run on it, never the value: command files reach the Target's remote with a Hand-off. For the same reason the key's value is replaced by `<ANTHROPIC_API_KEY>` wherever the session printed it.
+- It reads the `apiKeySource` of the session's `system/init` event, which the orchestrator sets against the Run's credential.
+- It kills the child at `maxMinutes`, with everything it started, and classifies a failure as `rate-limited`, `api-error`, `out-of-budget`, `timed-out`, `turn-capped`, `nonzero-exit` or `invalid-result`.
 
 ### `GitWorkspace`
 
@@ -123,6 +126,7 @@ Tests sit beside each module as `*.test.ts`.
 | [`stop.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stop.ts) | `ticket-runner stop`, and the Run's end of SIGTERM |
 | [`lock.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lock.ts) | what the Run lock file says, and whether its holder is alive |
 | [`host.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/host.ts) | workstation or cloud, and which one |
+| [`credential.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/credential.ts) | the subscription or the API key, what each Stage should report, and when `--api-key` is refused |
 
 **What Stages are told and what they answer**
 

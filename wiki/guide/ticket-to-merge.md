@@ -45,7 +45,7 @@ flowchart TD
 ```
 <!-- Sources: src/orchestrator.ts, src/lifecycle.ts -->
 
-Every edge to the fix Stage is taken at most once per Ticket. A second failure of any kind, or any failure the fix Stage cannot act on, is a Hand-off. A Stage the rate limit or a transient API failure stopped leaves this diagram entirely: it releases the Ticket (see [Stopping and resuming](./stopping-and-resuming.md)). So does a failing Check or red CI that the Base branch fails too ([below](#a-failure-the-base-branch-shares)).
+Every edge to the fix Stage is taken at most once per Ticket. A second failure of any kind, or any failure the fix Stage cannot act on, is a Hand-off. A Stage the rate limit, a transient API failure or an API key out of budget stopped leaves this diagram entirely: it releases the Ticket (see [Stopping and resuming](./stopping-and-resuming.md)). So does a failing Check or red CI that the Base branch fails too ([below](#a-failure-the-base-branch-shares)).
 
 ## The Claim
 
@@ -92,6 +92,8 @@ Every prompt then carries the Stage boundary guidance (never run `ticket-runner`
 
 **The Stage mark.** Every Stage's shell carries `TICKET_RUNNER_STAGE=<stage>`, and the CLI refuses to start while it is set. A Stage therefore cannot claim a Ticket or start a nested Run by mistake. It is a tripwire, not a sandbox: a session that unsets the variable gets through, which is why the prompt says the same thing in words.
 
+**The credential.** A Stage runs on the Claude login, with the Host's `ANTHROPIC_API_KEY` taken out of its environment, unless the Run was started with [`--api-key`](./running.md#api-key), when it runs on that key. When the session's `apiKeySource` says otherwise, the Run's log and summary name the Stage.
+
 **Transcripts.** Each Stage writes `<stage>.command`, `.stdout`, `.stderr` and `.transcript.jsonl` under `.ticket-runner/runs/<runId>/<n>/`. The command line is written before the process starts, and the output as it arrives, so a killed Run still leaves them. The fix Stage and the pass it buys write to `<n>/retry/`, so the failing pass keeps its files. See [Running](./running.md) for reading them.
 
 **How a Stage can end.** The runner reads the session's last `result` event, never what the session talked about:
@@ -100,7 +102,8 @@ Every prompt then carries the Stage boundary guidance (never run `ticket-runner`
 |---|---|---|
 | `timed-out` | `❌ timed out` | Killed at `maxMinutes` |
 | `turn-capped` | `❌ turn capped` | Reached `maxTurns` |
-| `rate-limited` | `⏸ rate limited` | A 429, a rejected `rate_limit_event`, or a message naming the limit. Releases the Ticket |
+| `out-of-budget` | `⏸ out of API budget` | A 400 whose message names the credit balance or the workspace's API usage limits, which only a Stage billed to a key meets. Releases the Ticket |
+| `rate-limited` | `⏸ rate limited`, `⏸ API rate limited` on an `--api-key` Run | A 429, a rejected `rate_limit_event`, or a message naming the limit. Releases the Ticket |
 | `api-error` | `⏸ API failure` | `terminal_reason: "api_error"` with a 5xx `api_error_status` or none, after the CLI's own retries. Releases the Ticket |
 | `nonzero-exit` | `❌ exited non-zero` | Any other failed session |
 | `invalid-result` | `❌ invalid result` | The verify Stage answered no Verdict at all |
@@ -181,11 +184,11 @@ Only a defect a fresh session could mend spends the budget:
 | Pushing or opening the pull request failed | pr | No, Hand-off |
 | CI timed out, found conflicting, or had no checks | ci | No, Hand-off |
 | The merge failed | merge | No, Hand-off |
-| A rate limit or a transient API failure, anywhere | any | No, a Release |
+| A rate limit, a transient API failure or an API key out of budget, anywhere | any | No, a Release |
 
 After a fix Stage, the Ticket starts again at the Checks. Every gate grades the fix, the verify Stage included, so a fix is held to the same bar as the first attempt. A fix Stage whose branch did not grow is a Hand-off straight away: re-grading an untouched branch could only fail the same way. A squashed or amended branch counts as not grown. Its hand-off comment carries the evidence the fix Stage was sent in with, so an unmet criterion left for a human arrives with the question its evidence asks. A second failure of any kind is a Hand-off, and the hand-off comment says the budget was already used.
 
-The budget is recorded in the State file once the fix Stage comes back. A fix Stage stopped by the rate limit or an API failure spends nothing. A Release carries a spent budget over to the next Run; a Hand-off gives it back, because the Ticket only returns through a human's hands.
+The budget is recorded in the State file once the fix Stage comes back. A fix Stage stopped by the rate limit, an API failure or the API budget spends nothing. A Release carries a spent budget over to the next Run; a Hand-off gives it back, because the Ticket only returns through a human's hands.
 
 ## Lanes and the Frontier refill
 
@@ -245,7 +248,7 @@ A conflict is not a defect in the branch: the Base branch moved on underneath it
 | What the worktree shows | Result |
 |---|---|
 | Resolved, however the session ended (even rate-limited or stopped by an API failure) | `✅ rebased`; push, then **the Checks again** |
-| Unresolved, session rate-limited or stopped by an API failure | Abort the rebase, Release |
+| Unresolved, session rate-limited or stopped by an API failure or the API budget | Abort the rebase, Release |
 | Unresolved otherwise | `❌ unresolved`; abort the rebase, spend the Fix budget |
 | The Stage could not run, or git could not be asked | `❌ unknown`; abort the rebase, Hand-off |
 
@@ -356,7 +359,7 @@ One Note comes from the pipeline rather than a Stage: a Release over a failing B
 ## Related pages
 
 - [Planning](./planning.md): the Guards that run before the Claim, and how to write Acceptance Criteria verify can grade.
-- [Running](./running.md): starting a Run, `--lanes`, a narrowed Run, the summary, exit codes and transcripts.
+- [Running](./running.md): starting a Run, `--lanes`, `--api-key`, a narrowed Run, the summary, exit codes and transcripts.
 - [Configuration](./configuration.md): `checks`, `gates`, the Stage limits, `ciTimeoutMinutes`, `ciGraceMinutes`.
 - [Stopping and resuming](./stopping-and-resuming.md): Hand-off, Release, Stop, Stranded Tickets and handing a Ticket back.
 - [Internals](./internals.md): the ports and adapters behind each step.

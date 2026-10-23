@@ -5,7 +5,7 @@ description: Every field of ticket-runner.json, its default, and what it changes
 
 # Configuration
 
-A Target should work with no settings at all, so every field is optional and `init` writes the file as `{}`. The file exists for what only the Target can know: which commands prove its code works, how long its CI takes, whether its Checks can share a machine, and what it calls its labels. How many Tickets a machine carries at once is the machine's business, so [`--lanes`](./running.md#lanes) overrides the one setting that is really about the Host.
+A Target should work with no settings at all, so every field is optional and `init` writes the file as `{}`. The file exists for what only the Target can know: which commands prove its code works, how long its CI takes, whether its Checks can share a machine, and what it calls its labels. How many Tickets a machine carries at once is the machine's business, so [`--lanes`](./running.md#lanes) overrides the one setting that is really about the Host. Whose money a Run spends is the Host's business too, so it is the [`--api-key`](./running.md#api-key) flag and no field at all.
 
 The file is `ticket-runner.json` at the Target's root. It is plain JSON, read with `JSON.parse`, so it cannot hold comments.
 

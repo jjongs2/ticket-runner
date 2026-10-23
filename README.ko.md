@@ -23,9 +23,11 @@ Acceptance Criteria 체크리스트가 달리고, blocker가 연결됩니다. **
 5. rebase하고, pull request를 열고, CI를 기다린 뒤 squash merge합니다.
 
 한 번 실패하면 고치는 세션 한 번과 두 번째 검사를 받습니다. 그래도 끝내지 못한 일은 사람에게 돌아옵니다.
-`ready-for-human` 라벨과 draft pull request, 무엇이 실패했는지 적은 코멘트가 함께 남습니다. 구독의
-rate limit이나 일시적인 API 장애로 멈춘 세션은 아무것도 잃지 않습니다. 이슈는 보드로 돌아가고, Run은 한도가
-풀리는 시각을 알려 주며, 다음 Run이 멈춘 곳부터 이어 합니다.
+`ready-for-human` 라벨과 draft pull request, 무엇이 실패했는지 적은 코멘트가 함께 남습니다.
+세션은 Claude 요금제로 돌고, 셸이 export한 `ANTHROPIC_API_KEY`는 세션에 넘기지 않습니다. `run --api-key`로
+시작하면 대신 그 키로 과금합니다. rate limit이나 일시적인 API 장애, 키의 크레딧 소진이나 사용 한도 도달로
+멈춘 세션은 아무것도 잃지 않습니다. 이슈는 보드로 돌아가고, Run은 무엇이 멈췄는지와 알 수 있으면 한도가 풀리는
+시각을 알려 주며, 다음 Run이 멈춘 곳부터 이어 합니다.
 
 ## 나에게 맞을까?
 
@@ -65,12 +67,13 @@ npm install -g ticket-runner
 | `ticket-runner run` | 준비된 이슈를 하나씩 모두 처리합니다 |
 | `ticket-runner run 12 14` | 같은 일을 하되 #12와 #14만 맡습니다 |
 | `ticket-runner run --lanes 2` | 이슈 두 개를 동시에 처리합니다 |
+| `ticket-runner run --api-key` | 모든 세션을 Claude 요금제 대신 `ANTHROPIC_API_KEY`로 과금합니다 |
 | `ticket-runner stop` | 진행 중인 Run에게 맡은 것만 끝내고 더 맡지 말라고 합니다 |
 | `ticket-runner remove` | 이 저장소에서 파이프라인을 걷어 냅니다 |
 | `ticket-runner -v` | Version을 출력합니다 |
 
 Claude 앱에서도 Run을 시작할 수 있습니다. Target에서 Claude Code 클라우드 세션을 열고 "run it"이라고
-말하면 됩니다.
+말하면 됩니다. 클라우드 세션은 늘 요금제로 돌기 때문에 `--api-key`를 거절합니다.
 
 ## 다시 걷어 내기
 

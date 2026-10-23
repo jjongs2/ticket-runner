@@ -24,9 +24,11 @@ every such issue whose blockers have closed, it:
 
 One failure buys one fix session and a second pass. Anything it still cannot finish goes back
 to you, labelled `ready-for-human`, with a draft pull request and a comment saying what failed.
-A session stopped by your subscription's rate limit, or by the API failing on its side, costs
-nothing: the issue goes back on the board, the Run says when the limit resets, and the next Run
-carries on from where it stopped.
+Sessions run on your Claude plan, and an `ANTHROPIC_API_KEY` your shell exports is kept from
+them; `run --api-key` bills them to that key instead. A session stopped by the rate limit, by the
+API failing on its side, or by the key running out of credit or into its spend limit costs
+nothing: the issue goes back on the board, the Run says what stopped it, and when the limit
+resets where it can, and the next Run carries on from where it stopped.
 
 ## Is it for you?
 
@@ -67,12 +69,13 @@ npm install -g ticket-runner
 | `ticket-runner run` | Work through every ready issue, one at a time |
 | `ticket-runner run 12 14` | The same, taking only #12 and #14 |
 | `ticket-runner run --lanes 2` | Two issues at once |
+| `ticket-runner run --api-key` | Bill every session to your `ANTHROPIC_API_KEY`, not your Claude plan |
 | `ticket-runner stop` | Ask the Run in progress to finish what it holds and take no more |
 | `ticket-runner remove` | Take the pipeline out of this repository |
 | `ticket-runner -v` | Print the Version |
 
 A Run can also be started from the Claude app, in a Claude Code cloud session on the Target:
-say "run it".
+say "run it". A cloud session always runs on your plan, so it refuses `--api-key`.
 
 ## Take it out again
 

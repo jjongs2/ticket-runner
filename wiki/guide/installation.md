@@ -23,6 +23,7 @@ A Run works unattended, so anything missing has to be caught before it starts, n
 | `git` | Every Ticket gets its own worktree and branch | – |
 | [`gh`](https://cli.github.com/), authenticated for the Target | Every GitHub call goes through `gh api` | `init` reports it; `run` refuses a Host without `gh` |
 | `claude`, with the `mattpocock-skills` plugin, version 1.2.3 or later | Each Stage is a `claude -p` session, and the implement Stage drives the plugin's skills ([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)) | `init` reports both |
+| `claude` logged in with your Claude plan | A Stage runs on that login and never sees the `ANTHROPIC_API_KEY` your shell exports, unless the Run is started with [`--api-key`](./running.md#api-key) | – |
 | A GitHub repository with Tickets planned for it | The board is where Tickets come from; see [Planning](./planning.md) | – |
 | `/setup-matt-pocock-skills`, run once in the repository with GitHub Issues as the tracker | The planning skills file Specs and Tickets as GitHub issues because of it | – |
 | A CI workflow in `.github/workflows` | A pull request with no checks is never merged, unless [`gates.ci`](./configuration.md#gates) is off | `init` reports it |
@@ -167,7 +168,9 @@ warning: This Target's `docs/agents/pipeline-conventions.md` was left by 0.4.0, 
 
 When the document is from a newer Version, the warning says to upgrade `ticket-runner` instead.
 
-Two more refusals come after readiness:
+One refusal comes before readiness: [`--api-key`](./running.md#api-key) on a cloud Host, or with no `ANTHROPIC_API_KEY` exported.
+
+Two more come after it:
 
 - **State files in the checkout.** An early pipeline kept a Ticket's resume state under `.ticket-runner/state/`; it now lives on the Target's remote, and nothing migrates it. A Run refuses while that directory holds State files and names their Tickets. Finish those Tickets with the Version that wrote them, or hand them to a human, then delete the directory.
 - **No Check.** With the [Checks gate](./configuration.md#gates) on and no Check command configured or inferable, a Run refuses rather than merge unchecked code.

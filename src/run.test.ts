@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Config } from "./config.js";
+import type { Credential } from "./credential.js";
 import { BaseBranchChecks } from "./failing-base.js";
 import { Landing } from "./landing.js";
 import { StandingNotes } from "./notes.js";
@@ -83,8 +84,11 @@ beforeEach(() => {
   logged = [];
 });
 
-/** A Run with `lanes` Lanes, which is one unless the test is about the others. */
-function pipeline(lanes = 1): Pipeline {
+/**
+ * A Run with `lanes` Lanes, which is one unless the test is about the others,
+ * on the subscription unless the test is about the API key.
+ */
+function pipeline(lanes = 1, credential: Credential = "subscription"): Pipeline {
   return {
     tracker,
     runner,
@@ -94,6 +98,8 @@ function pipeline(lanes = 1): Pipeline {
     runId: "run-1",
     version: VERSION,
     host: "workstation",
+    credential,
+    strayStages: [],
     baseBranch: "main",
     landing: new Landing(),
     standingNotes: new StandingNotes(),
@@ -515,6 +521,87 @@ describe("a Ticket a transient API failure released", () => {
 
     expect(result.stop).toEqual({ reason: "api-error" });
     expect(logged).toContain("#4 stopped the Run · API failure");
+  });
+});
+
+describe("a Ticket whose API key ran out of budget", () => {
+  const RESETS_AT = "2026-09-19T17:40:00.000Z";
+
+  /** Each Ticket's number with the cause its own row carries. */
+  function causes(outcomes: RunResult["outcomes"]) {
+    return outcomes.map((outcome) => [
+      outcome.ticket,
+      outcome.outcome === "released" ? outcome.cause : outcome.outcome,
+    ]);
+  }
+
+  it("ends the Run, which claims no further Ticket", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    runner.queue("implement", { ok: false, failure: "out-of-budget" });
+
+    const result = await processRun(pipeline(1, "api-key"));
+
+    expect(processed()).toEqual([4]);
+    expect(result.stop).toEqual({ reason: "out-of-budget" });
+    expect(logged).toContain("#4 stopped the Run · out of API budget");
+  });
+
+  it.each([
+    ["the rate limit", { failure: "rate-limited", limitResetsAt: RESETS_AT }],
+    ["an API failure", { failure: "api-error" }],
+  ] as const)("outranks %s that came first", async (_, first) => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    runner.queue("implement", { ok: false, ...first });
+    runner.queue("implement", { ok: false, failure: "out-of-budget" });
+
+    const result = await processRun(pipeline(2, "api-key"));
+
+    expect(causes(result.outcomes)).toEqual([
+      [4, first.failure],
+      [5, "out-of-budget"],
+    ]);
+    expect(result.stop).toEqual({ reason: "out-of-budget" });
+  });
+
+  it("is not outranked by a rate limit that came second, even one told when it resets", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    runner.queue("implement", { ok: false, failure: "out-of-budget" });
+    runner.queue("implement", { ok: false, failure: "rate-limited", limitResetsAt: RESETS_AT });
+
+    const result = await processRun(pipeline(2, "api-key"));
+
+    expect(result.stop).toEqual({ reason: "out-of-budget" });
+  });
+
+  it("leaves a failing Base branch that came first where it is", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    workspace.failCheckOnce("npm test", "FAIL src/date.test.ts");
+    workspace.failBaseCheck("npm test", "FAIL src/date.test.ts");
+    runner.queue("verify", { ok: false, failure: "out-of-budget" });
+    const verifying = runner.holds("verify");
+
+    const run = processRun(pipeline(2, "api-key"));
+    await verifying.started();
+    await settle();
+    verifying.release();
+    const result = await run;
+
+    expect(causes(result.outcomes)).toEqual([
+      [4, "failing-base"],
+      [5, "out-of-budget"],
+    ]);
+    expect(result.stop).toMatchObject({ reason: "failing-base" });
+  });
+});
+
+describe("a Ticket the rate limit released on a Run on the API key", () => {
+  it("says the API's rate limit stopped the Run", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    runner.queue("implement", { ok: false, failure: "rate-limited" });
+
+    await processRun(pipeline(1, "api-key"));
+
+    expect(logged).toContain("#4 stopped the Run · API rate limit");
   });
 });
 

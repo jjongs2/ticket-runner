@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { UNCHECKED_BOX } from "./acceptance-criteria.js";
 import { resolveBaseBranch } from "./base-branch.js";
 import type { Config } from "./config.js";
+import type { Credential, StrayStage } from "./credential.js";
 import type { HostKind } from "./host.js";
 import { BaseBranchChecks } from "./failing-base.js";
 import { Landing } from "./landing.js";
@@ -125,9 +126,12 @@ const repoRoot = "/repo";
 let worktree: string;
 /** The Run log, for the lines a Ticket is expected to print — or not to. */
 let logged: string[];
+/** The Stages the Run named for running on another credential than its own. */
+let strayStages: StrayStage[];
 
 beforeEach(() => {
   logged = [];
+  strayStages = [];
   worktree = join(repoRoot, ".worktrees", `ticket-${TICKET}`);
   tracker = new FakeTracker();
   tracker.addIssue({ number: TICKET, title: "Skeleton: one Ticket end to end", url: URL });
@@ -165,6 +169,7 @@ function stateAtEachStage(): { stage: StageName; state: TicketState | undefined 
 async function run(
   overrides: Partial<Config> = {},
   host: HostKind = "workstation",
+  credential: Credential = "subscription",
 ): Promise<TicketOutcome> {
   const settings = config(overrides);
   return await processTicket(
@@ -177,6 +182,8 @@ async function run(
       runId: "run-1",
       version: VERSION,
       host,
+      credential,
+      strayStages,
       baseBranch: await resolveBaseBranch(tracker, settings),
       landing: new Landing(),
       standingNotes: new StandingNotes(),
@@ -2188,6 +2195,113 @@ describe("releasing a Ticket a transient API failure stopped", () => {
   });
 });
 
+describe("releasing a Ticket whose API key ran out of budget", () => {
+  const state = () => workspace.state(TICKET);
+  const outOfBudget = { ok: false, failure: "out-of-budget" } as const;
+
+  it("releases the Ticket as a rate limit does, naming the budget", async () => {
+    runner.queue("implement", outOfBudget);
+
+    const outcome = await run({}, "workstation", "api-key");
+
+    expect(outcome).toEqual({
+      outcome: "released",
+      ticket: TICKET,
+      title: "Skeleton: one Ticket end to end",
+      branch: BRANCH,
+      stage: "implement",
+      cause: "out-of-budget",
+      notes: [],
+    });
+    expect(tracker.issue(TICKET).labels).toEqual(["ready-for-agent"]);
+    expect(tracker.issue(TICKET).assignees).toEqual([]);
+    expect(notices()).toEqual([]);
+    expect(tracker.pullRequests).toEqual([]);
+    expect(workspace.worktrees.get(worktree)).toBe(BRANCH);
+    expect(workspace.calls).not.toContain(`deleteRemoteBranch:${BRANCH}`);
+    expect(state()).toMatchObject({ state: "claimed", fixUsed: false });
+    expect(progressTable()).toContain("| implement | ⏸ out of API budget | 7 | 0m |");
+    expect(logged).toContain(`#${TICKET} released at implement · out of API budget · ${BRANCH}`);
+  });
+
+  it("gives back the fix budget a fix Stage it stopped never spent", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    runner.queue("fix", outOfBudget);
+
+    expect(await run({}, "workstation", "api-key")).toMatchObject({
+      outcome: "released",
+      stage: "fix",
+      cause: "out-of-budget",
+    });
+    expect(state()).toMatchObject({ state: "implemented", fixUsed: false });
+    expect(progressTable()).toContain("| fix | ⏸ out of API budget |");
+  });
+
+  it("aborts the rebase a conflict Stage it stopped left behind", async () => {
+    workspace.rebaseOutcome = { ok: false, conflict: CONFLICT };
+    workspace.rebaseStateAfterStage = UNRESOLVED;
+    runner.queue("conflict", outOfBudget);
+
+    expect(await run({}, "workstation", "api-key")).toMatchObject({
+      outcome: "released",
+      stage: "rebase",
+      cause: "out-of-budget",
+    });
+    expect(workspace.aborts).toBe(1);
+    expect(progressTable()).toContain("| conflict | ⏸ out of API budget |");
+  });
+});
+
+describe("the rate limit of a Run on the API key", () => {
+  it("is put down to the API's rate limit, not the subscription's", async () => {
+    runner.queue("verify", { ok: false, failure: "rate-limited" });
+
+    const outcome = await run({}, "workstation", "api-key");
+
+    expect(outcome).toMatchObject({ outcome: "released", stage: "verify", cause: "rate-limited" });
+    expect(progressTable()).toContain("| verify | ⏸ API rate limited |");
+    expect(logged).toContain(`#${TICKET} released at verify · API rate limit · ${BRANCH}`);
+  });
+
+  it("stays the plain rate limit on a subscription Run", async () => {
+    runner.queue("verify", { ok: false, failure: "rate-limited" });
+
+    await run();
+
+    expect(progressTable()).toContain("| verify | ⏸ rate limited |");
+    expect(logged).toContain(`#${TICKET} released at verify · rate limit · ${BRANCH}`);
+  });
+});
+
+describe("a Stage that ran on another credential than its Run's", () => {
+  it("is named in the log and kept for the summary", async () => {
+    runner.queue("verify", stageResult({ result: PASSING_VERDICT, apiKeySource: "apiKeyHelper" }));
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(strayStages).toEqual([{ ticket: TICKET, stage: "verify", apiKeySource: "apiKeyHelper" }]);
+    expect(logged).toContain(
+      `#${TICKET} verify ran on apiKeySource apiKeyHelper, not the subscription (none)`,
+    );
+  });
+
+  it("is a Stage on the subscription in a Run on the API key", async () => {
+    runner.queue("implement", { apiKeySource: "none" });
+
+    await run({}, "workstation", "api-key");
+
+    expect(strayStages).toEqual([{ ticket: TICKET, stage: "implement", apiKeySource: "none" }]);
+  });
+
+  it("is never a Stage that ran on the Run's own, or said nothing", async () => {
+    runner.queue("implement", { apiKeySource: "ANTHROPIC_API_KEY" });
+
+    await run({}, "workstation", "api-key");
+
+    expect(strayStages).toEqual([]);
+    expect(logged.join("\n")).not.toContain("apiKeySource");
+  });
+});
+
 describe("a Check the Base branch fails too", () => {
   const state = () => workspace.state(TICKET);
   const MERGE_BASE = "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d";
@@ -2354,6 +2468,8 @@ describe("a Check the Base branch fails too", () => {
         runId: "run-1",
         version: VERSION,
         host: "workstation",
+        credential: "subscription",
+        strayStages: [],
         baseBranch: "main",
         landing,
         standingNotes: new StandingNotes(),
@@ -2393,6 +2509,8 @@ describe("Tickets in several Lanes failing against one merge-base", () => {
       runId: "run-1",
       version: VERSION,
       host: "workstation",
+      credential: "subscription",
+      strayStages: [],
       baseBranch: "main",
       landing: new Landing(),
       standingNotes: new StandingNotes(),
@@ -4274,6 +4392,8 @@ describe("the Landing", () => {
       runId: "run-1",
       version: VERSION,
       host: "workstation",
+      credential: "subscription",
+      strayStages: [],
       baseBranch: await resolveBaseBranch(tracker, settings),
       landing: new Landing(),
       standingNotes: new StandingNotes(),

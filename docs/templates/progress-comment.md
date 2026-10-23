@@ -76,11 +76,11 @@ Ticket for a later Run to resume.
 
 | Stage | Outcome |
 |---|---|
-| implement | `✅ committed`, `❌ no commits`, `⏸ rate limited`, `⏸ API failure`, `❌ <why the Stage did not finish>` |
-| fix | `✅ committed`, `❌ no commits`, `⏸ rate limited`, `⏸ API failure`, `❌ <why the Stage did not finish>` |
+| implement | `✅ committed`, `❌ no commits`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
+| fix | `✅ committed`, `❌ no commits`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
 | checks | `✅ passed`, `❌ uncommitted work`, ``❌ `<command>` failed``, ``❌ `<command>` timed out``, ``⏸ `<command>` fails on the Base branch`` |
-| verify | `✅ <k> met · <u> unverifiable`, `❌ <k> unmet`, `❌ no evidence`, `❌ no Verdict`, `⏸ rate limited`, `⏸ API failure`, `❌ <why the Stage did not finish>` |
-| conflict | `✅ rebased`, `❌ unresolved`, `⏸ rate limited`, `⏸ API failure`, `❌ unknown` |
+| verify | `✅ <k> met · <u> unverifiable`, `❌ <k> unmet`, `❌ no evidence`, `❌ no Verdict`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
+| conflict | `✅ rebased`, `❌ unresolved`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ unknown` |
 | ci | `✅ passed`, `❌ failed`, `❌ conflicting`, `❌ no checks`, `⚠️ no checks`, `❌ timed out`, ``⏸ `<command>` fails on the Base branch`` |
 | merge | `✅ #<pr>` |
 
@@ -111,12 +111,15 @@ never carries.
 
 `<why the Stage did not finish>` is the short form of a Stage failure: `timed
 out`, `turn capped`, `exited non-zero`, `invalid result`, or `failed` when the
-Stage came back without saying which. The subscription rate limit and a
-transient API failure — an API error with a 5xx status or none, after the CLI
-had given up retrying it — are the Stage failures that are nothing about the
-Ticket, so they read `⏸ rate limited` and `⏸ API failure` and are the last row
-of their Run's table: the Ticket is released there, and the Run
-that resumes it writes its own section below this one.
+Stage came back without saying which. The rate limit, a transient API failure
+— an API error with a 5xx status or none, after the CLI had given up retrying
+it — and, on a Run started with `--api-key`, the key out of credit or past its
+workspace's spend limit are the Stage failures that are nothing about the
+Ticket, so they read `⏸ rate limited`, `⏸ API failure` and `⏸ out of API
+budget` and are the last row of their Run's table: the Ticket is released there,
+and the Run that resumes it writes its own section below this one. The rate
+limit of an `--api-key` Run is the API's rather than the subscription's, and
+reads `⏸ API rate limited`.
 
 `❌ no commits` reads the same on both Stages the branch is asked about — a
 session that came back having committed nothing — but it is not the same
@@ -125,10 +128,10 @@ whether it grew, since implement's commits are already on it. A fix Stage that
 answers no ends the Ticket where it stands, because the fix budget it would take
 to try again is the one already spent on it.
 
-A `conflict` Stage that came back rate-limited, or stopped by an API failure, is
-still read as `✅ rebased` when it had finished the rebase first: the worktree
-decides that row, so a Stage that did the job and only then was stopped is not
-released.
+A `conflict` Stage that came back rate-limited, or stopped by an API failure or
+the API budget, is still read as `✅ rebased` when it had finished the rebase
+first: the worktree decides that row, so a Stage that did the job and only then
+was stopped is not released.
 
 `conflict` is the one row that can say `❌ unknown`: the worktree decides whether
 the rebase was finished, so a worktree git could not be asked about leaves the
