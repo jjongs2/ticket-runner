@@ -29,7 +29,7 @@ The set of open, unclaimed Tickets whose blockers are all closed. The only Ticke
 _Avoid_: queue, backlog
 
 **Candidate**:
-An open Ticket labelled ready-for-agent that a Run considered. The Frontier is the candidates left after dropping the claimed and the blocked ones.
+An open Ticket labelled ready-for-agent that a Run considered. The Frontier is the Candidates left after dropping the claimed and the blocked ones.
 _Avoid_: pick, contender
 
 **Claim**:

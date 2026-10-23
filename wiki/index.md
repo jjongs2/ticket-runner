@@ -38,12 +38,16 @@ npm install -g ticket-runner
 
 cd ~/code/acme        # the repository you want it to work in
 ticket-runner init    # set it up, and report what only you can fix
+git add .gitignore CLAUDE.md ticket-runner.json docs/agents .claude/skills/ticket-runner
+git commit -m "chore: set up ticket-runner" && git push
 ticket-runner run     # take every ready Ticket to a merge
 ```
 
+A Stage reads what `init` wrote only once it is on the Base branch, so push it before the first Run, through a pull request if the repository asks for one.
+
 To try it before installing anything, type `npx ticket-runner` wherever these pages say `ticket-runner`: see [Try it without installing](./guide/installation.md#try-it-without-installing).
 
-`init` exits `1` while anything it reports is still yours to fix, so `ticket-runner init && ticket-runner run` stops before a Run that could not work. A Run takes only issues that [Planning](./guide/planning.md) made usable: labelled `ready-for-agent`, with `- [ ]` criteria, and blocked only through GitHub's own `blocked by` links.
+A Run takes only issues that [Planning](./guide/planning.md) made usable: labelled `ready-for-agent`, with `- [ ]` criteria, and blocked only through GitHub's own `blocked by` links.
 
 ## The whole flow
 
@@ -68,7 +72,7 @@ flowchart LR
     L -. red CI .-> X
     X --> K
     X -. fails again .-> H["Hand-off: ready-for-human"]
-    I -. rate limit, API failure, API budget .-> RL["Release: ready-for-agent"]
+    I -. "any Stage: rate limit, API failure, API budget" .-> RL["Release: ready-for-agent"]
     K -. Base branch fails too .-> RL
   end
   R --> F
@@ -78,7 +82,7 @@ flowchart LR
 ```
 <!-- Sources: src/run.ts, src/orchestrator.ts, src/frontier.ts, src/guards.ts -->
 
-Any Stage can be stopped by the rate limit, a transient API failure or, on a Run started with `--api-key`, the key running out of budget, not only implement; every one of them ends in a Release. So does a failing Check or red CI that the Base branch fails too: the branch inherited it, so no fix Stage is spent on it. [From Ticket to merge](./guide/ticket-to-merge.md) walks the Execution half one step at a time.
+[From Ticket to merge](./guide/ticket-to-merge.md) walks the Execution half one step at a time. What a Hand-off and a Release each leave, and what you do about them, is on [Hand-offs, stopping and resuming](./guide/stopping-and-resuming.md).
 
 ## The guide
 
@@ -89,7 +93,7 @@ Any Stage can be stopped by the rate limit, a transient API failure or, on a Run
 | [Running](./guide/running.md) | `run`, `--lanes`, `--api-key`, a narrowed Run, `stop`, `-v`, the summary and exit codes, logs, running from the Claude app |
 | [Configuration](./guide/configuration.md) | Every field of `ticket-runner.json` |
 | [From Ticket to merge](./guide/ticket-to-merge.md) | The Stages, the Fix budget, Lanes and the Landing, rebase conflicts, what the board is told, Notes |
-| [Stopping and resuming](./guide/stopping-and-resuming.md) | Hand-off, Release, Stop against kill, Stranded Tickets, handing a Ticket back, the Run lock and the State branch |
+| [Hand-offs, stopping and resuming](./guide/stopping-and-resuming.md) | Hand-off, Release, Stop against kill, Stranded Tickets, handing a Ticket back, the Run lock and the State branch |
 | [Internals](./guide/internals.md) | Ports and adapters, a map of the modules, Versions, the ADRs, working on the pipeline itself |
 
 The words the pipeline uses (Ticket, Run, Stage, Lane and the rest) are defined once, in the [glossary](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md).

@@ -42,7 +42,7 @@ It fits a repository where:
   [`gh`](https://cli.github.com/), and `claude` with the
   [`mattpocock-skills`](https://github.com/mattpocock/skills) plugin, version 1.2.3 or later
 
-It merges to your base branch without asking. It is for repositories where that is what you want.
+It merges to your Base branch without asking. It is for repositories where that is what you want.
 
 ## Try it
 
@@ -50,12 +50,15 @@ In the repository you want it to work in (the **Target**):
 
 ```bash
 npx ticket-runner init   # set the Target up and report what is still missing
+git add .gitignore CLAUDE.md ticket-runner.json docs/agents .claude/skills/ticket-runner
+git commit -m "chore: set up ticket-runner" && git push
 npx ticket-runner run    # work through every ready issue
 ```
 
 `init` writes a few files for you to review and commit: `.gitignore` lines, a conventions
 document, a section in `CLAUDE.md` and a Claude skill. It also creates the triage labels and
-turns on squash merging and branch deletion on merge. It commits nothing.
+turns on squash merging and branch deletion on merge. It commits nothing, and a session reads
+those files only once they are on your Base branch, so push them before the first `run`.
 
 To keep it, install it globally:
 
@@ -97,7 +100,7 @@ The [project wiki](https://jjongs2.github.io/ticket-runner/) explains the pipeli
 - [Running](https://jjongs2.github.io/ticket-runner/guide/running)
 - [Configuration](https://jjongs2.github.io/ticket-runner/guide/configuration)
 - [From Ticket to merge](https://jjongs2.github.io/ticket-runner/guide/ticket-to-merge)
-- [Stopping and resuming](https://jjongs2.github.io/ticket-runner/guide/stopping-and-resuming)
+- [Hand-offs, stopping and resuming](https://jjongs2.github.io/ticket-runner/guide/stopping-and-resuming)
 - [Internals](https://jjongs2.github.io/ticket-runner/guide/internals)
 
 The vocabulary is defined in [`GLOSSARY.md`](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), the decisions in

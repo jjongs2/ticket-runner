@@ -26,7 +26,7 @@ const sections: Section[] = [
     ko: "동작 방식",
     pages: [
       { link: "/guide/ticket-to-merge", en: "From Ticket to merge", ko: "Ticket 하나가 merge되기까지" },
-      { link: "/guide/stopping-and-resuming", en: "Stopping and resuming", ko: "멈추고 이어 하기" },
+      { link: "/guide/stopping-and-resuming", en: "Hand-offs, stopping and resuming", ko: "Hand-off, 멈추고 이어 하기" },
       { link: "/guide/internals", en: "Internals", ko: "내부 구조" },
     ],
   },
