@@ -38,7 +38,8 @@ npm install -g ticket-runner
 
 cd ~/code/acme        # 파이프라인이 일할 저장소
 ticket-runner init    # 준비해 두고, 직접 고쳐야만 하는 것을 알려 줌
-git add -A && git commit -m "chore: set up ticket-runner" && git push
+git add .gitignore CLAUDE.md ticket-runner.json docs/agents .claude/skills/ticket-runner
+git commit -m "chore: set up ticket-runner" && git push
 ticket-runner run     # 준비된 Ticket을 모두 merge까지
 ```
 

@@ -284,8 +284,8 @@ Run과 `init`은 파이프라인 자신의 저장소에서 공개된 가장 높�
 ```bash
 git clone https://github.com/jjongs2/ticket-runner && cd ticket-runner
 npm install
-npm run ticket-runner -- run         # drain this repository's Frontier
-npm run ticket-runner -- run 3 7     # a Run narrowed to #3 and #7
+npm run ticket-runner -- run         # 이 저장소의 Frontier 비우기
+npm run ticket-runner -- run 3 7     # #3과 #7로 좁힌 Run
 npm test                             # vitest
 npm run typecheck                    # tsc --noEmit
 ```

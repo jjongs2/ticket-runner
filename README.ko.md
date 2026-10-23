@@ -48,7 +48,8 @@ Acceptance Criteria 체크리스트가 달리고, blocker가 연결됩니다. **
 
 ```bash
 npx ticket-runner init   # Target을 준비하고, 아직 빠진 것을 알려 줍니다
-git add -A && git commit -m "chore: set up ticket-runner" && git push
+git add .gitignore CLAUDE.md ticket-runner.json docs/agents .claude/skills/ticket-runner
+git commit -m "chore: set up ticket-runner" && git push
 npx ticket-runner run    # 준비된 이슈를 모두 처리합니다
 ```
 
@@ -96,7 +97,7 @@ npm uninstall -g ticket-runner # 전역 설치
 - [실행하기](https://jjongs2.github.io/ticket-runner/ko/guide/running)
 - [설정](https://jjongs2.github.io/ticket-runner/ko/guide/configuration)
 - [Ticket 하나가 merge되기까지](https://jjongs2.github.io/ticket-runner/ko/guide/ticket-to-merge)
-- [멈추고 이어 하기](https://jjongs2.github.io/ticket-runner/ko/guide/stopping-and-resuming)
+- [Hand-off, 멈추고 이어 하기](https://jjongs2.github.io/ticket-runner/ko/guide/stopping-and-resuming)
 - [내부 구조](https://jjongs2.github.io/ticket-runner/ko/guide/internals)
 
 용어는 [`GLOSSARY.md`](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)에, 설계 결정은

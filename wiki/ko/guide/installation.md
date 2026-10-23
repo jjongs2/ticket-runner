@@ -68,6 +68,8 @@ A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -
 ```bash
 cd ~/code/acme
 npx ticket-runner init
+git add .gitignore CLAUDE.md ticket-runner.json docs/agents .claude/skills/ticket-runner
+git commit -m "chore: set up ticket-runner" && git push
 npx ticket-runner run
 npx ticket-runner remove   # 다 써 봤으면
 ```

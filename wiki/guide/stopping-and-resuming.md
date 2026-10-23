@@ -71,6 +71,7 @@ The Failure line says what stopped the Ticket. What it asks of you:
 |---|---|
 | A Stage ran past its minute limit, or hit its turn limit | Raise that Stage's `maxMinutes` or `maxTurns` in [`stages`](./configuration.md#stages), or split the Ticket |
 | implement left no commits | Read its transcript, then make the Ticket smaller or clearer |
+| A Check, a criterion or CI still failing after the fix | Read the evidence in the comment, then mend the code by hand on the branch, or, for a criterion, rewrite it as the next row says |
 | Criteria unmet after the fix, or no evidence | Mend the code by hand, or rewrite the criteria so a session can check them by running or reading code ([Acceptance Criteria](./planning.md#acceptance-criteria)) |
 | CI timed out | Raise [`ciTimeoutMinutes`](./configuration.md#ci) |
 | No checks | Add a CI workflow, raise `ciGraceMinutes` if checks register slowly, or turn [`gates.ci`](./configuration.md#gates) off |
@@ -78,6 +79,7 @@ The Failure line says what stopped the Ticket. What it asks of you:
 | The Base branch could not be pulled | Clear what is in the way in the main checkout ([Running](./running.md#run)) |
 | The merge failed | Put right the repository setting GitHub's refusal names, such as a branch protection rule |
 | A branch in the way, or copies that have parted | Run the command the Failure line names |
+| Any other Stage failure, such as a non-zero exit or an answer its schema rejected | Read that Stage's transcript ([What stays where](#what-stays-where)) |
 
 ### When a Hand-off does less
 

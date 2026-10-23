@@ -68,6 +68,8 @@ Nothing is printed when this copy is the latest or ahead of it, or when GitHub c
 ```bash
 cd ~/code/acme
 npx ticket-runner init
+git add .gitignore CLAUDE.md ticket-runner.json docs/agents .claude/skills/ticket-runner
+git commit -m "chore: set up ticket-runner" && git push
 npx ticket-runner run
 npx ticket-runner remove   # when you are done with it
 ```
