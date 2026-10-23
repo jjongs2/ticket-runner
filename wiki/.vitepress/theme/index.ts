@@ -1,6 +1,6 @@
 import DefaultTheme from "vitepress/theme";
 import { onMounted, watch, nextTick } from "vue";
-import { useRoute } from "vitepress";
+import { getScrollOffset, inBrowser, useRoute, type Router, type Theme } from "vitepress";
 import mediumZoom from "medium-zoom";
 import "./custom.css";
 
@@ -62,8 +62,37 @@ function openDiagram(el: HTMLElement) {
   document.addEventListener("keydown", onKey);
 }
 
+// The heading the outline marks as the one being read, or null above the first.
+function currentHeading(): string | null {
+  let id: string | null = null;
+  for (const h of document.querySelectorAll<HTMLElement>(".vp-doc :is(h2, h3)[id]")) {
+    if (h.getBoundingClientRect().top > getScrollOffset() + 4) break;
+    id = h.id;
+  }
+  return id;
+}
+
+// Both locales give a page the same heading anchors, so switching language
+// lands on the section being read instead of the top of the page. The theme's
+// language link carries the URL's anchor, which goes stale once the reader scrolls.
+function keepSectionOnLanguageSwitch(router: Router) {
+  router.onBeforeRouteChange = (href) => {
+    const to = new URL(href, location.href);
+    const twin = (path: string) => path.replace("/ko/", "/");
+    if (to.pathname === location.pathname || twin(to.pathname) !== twin(location.pathname)) return;
+    const id = currentHeading();
+    const target = id ? `${to.pathname}#${id}` : to.pathname;
+    if (target === to.pathname + to.hash) return;
+    router.go(target);
+    return false;
+  };
+}
+
 export default {
   extends: DefaultTheme,
+  enhanceApp({ router }) {
+    if (inBrowser) keepSectionOnLanguageSwitch(router);
+  },
   setup() {
     const route = useRoute();
     const refresh = () => {
@@ -73,4 +102,4 @@ export default {
     onMounted(refresh);
     watch(() => route.path, () => nextTick(refresh));
   },
-};
+} satisfies Theme;
