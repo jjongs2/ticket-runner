@@ -38,12 +38,15 @@ npm install -g ticket-runner
 
 cd ~/code/acme        # 파이프라인이 일할 저장소
 ticket-runner init    # 준비해 두고, 사람이 고칠 것을 알려 줌
+git add -A && git commit -m "chore: set up ticket-runner" && git push
 ticket-runner run     # 준비된 Ticket을 모두 merge까지
 ```
 
+Stage는 `init`이 쓴 것이 Base branch에 들어간 뒤에야 읽습니다. 그러니 첫 Run 전에 push하세요. 저장소가 pull request를 요구하면 pull request로 넣으면 됩니다.
+
 설치 없이 먼저 써 보려면, 이 문서에서 `ticket-runner`라고 쓴 자리에 `npx ticket-runner`를 입력하세요. [설치 없이 써 보기](./guide/installation.md#try-it-without-installing)에 자세히 있습니다.
 
-`init`은 알려 준 항목 중 하나라도 아직 사람이 고칠 게 남아 있으면 `1`로 끝납니다. 그래서 `ticket-runner init && ticket-runner run`은 어차피 안 될 Run을 시작하기 전에 멈춥니다. Run은 [계획](./guide/planning.md)이 쓸 수 있게 만들어 둔 이슈만 가져갑니다. `ready-for-agent` 라벨이 있고, `- [ ]` 기준이 있고, GitHub 자체의 `blocked by` 연결로만 막혀 있는 이슈입니다.
+Run은 [계획](./guide/planning.md)이 쓸 수 있게 만들어 둔 이슈만 가져갑니다. `ready-for-agent` 라벨이 있고, `- [ ]` 기준이 있고, GitHub 자체의 `blocked by` 연결로만 막혀 있는 이슈입니다.
 
 ## 전체 흐름 {#the-whole-flow}
 
@@ -68,7 +71,7 @@ flowchart LR
     L -. CI 실패 .-> X
     X --> K
     X -. 또 실패 .-> H["Hand-off: ready-for-human"]
-    I -. rate limit, API 장애, API 예산 .-> RL["Release: ready-for-agent"]
+    I -. "어느 Stage든: rate limit, API 장애, API 예산" .-> RL["Release: ready-for-agent"]
     K -. Base branch도 실패 .-> RL
   end
   R --> F
@@ -78,7 +81,7 @@ flowchart LR
 ```
 <!-- Sources: src/run.ts, src/orchestrator.ts, src/frontier.ts, src/guards.ts -->
 
-rate limit, 일시적인 API 장애, 그리고 `--api-key`로 시작한 Run에서 키의 예산 소진은 implement만이 아니라 어느 Stage에서든 일어날 수 있고, 어디서 일어나든 Release로 끝납니다. Base branch에서도 똑같이 실패하는 Check나 빨간 CI도 Release로 끝납니다. branch가 물려받은 실패이니 fix Stage를 쓰지 않습니다. 실행 쪽 절반은 [Ticket 하나가 merge되기까지](./guide/ticket-to-merge.md)에서 한 단계씩 따라가 봅니다.
+실행 쪽 절반은 [Ticket 하나가 merge되기까지](./guide/ticket-to-merge.md)에서 한 단계씩 따라가 봅니다. Hand-off와 Release가 각각 무엇을 남기는지, 그때 무엇을 하면 되는지는 [Hand-off, 멈추고 이어 하기](./guide/stopping-and-resuming.md)에 있습니다.
 
 ## 가이드 {#the-guide}
 
@@ -89,7 +92,7 @@ rate limit, 일시적인 API 장애, 그리고 `--api-key`로 시작한 Run에�
 | [실행하기](./guide/running.md) | `run`, `--lanes`, `--api-key`, 좁힌 Run, `stop`, `-v`, 요약과 종료 코드, 로그, Claude 앱에서 실행하기 |
 | [설정](./guide/configuration.md) | `ticket-runner.json`의 모든 필드 |
 | [Ticket 하나가 merge되기까지](./guide/ticket-to-merge.md) | Stage, Fix budget, Lane과 Landing, rebase 충돌, 보드에 남기는 것, Note |
-| [멈추고 이어 하기](./guide/stopping-and-resuming.md) | Hand-off, Release, Stop과 kill, Stranded Ticket, Ticket 돌려주기, Run lock과 State branch |
+| [Hand-off, 멈추고 이어 하기](./guide/stopping-and-resuming.md) | Hand-off, Release, Stop과 kill, Stranded Ticket, Ticket 돌려주기, Run lock과 State branch |
 | [내부 구조](./guide/internals.md) | 포트와 어댑터, 모듈 지도, Version, ADR 요약, 파이프라인 자체를 고치는 법 |
 
 파이프라인이 쓰는 용어(Ticket, Run, Stage, Lane 등)는 [용어집](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 한곳에 정의되어 있습니다.

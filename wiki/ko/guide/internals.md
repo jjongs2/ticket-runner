@@ -1,13 +1,13 @@
 ---
 title: 내부 구조
-description: 세 port와 그 adapter, src/ 모듈 지도, Version을 끊고 찍는 방식, ADR 요약, 그리고 파이프라인 자체를 고치는 방법.
+description: 세 port와 그 adapter, src/ 모듈 지도, Version을 찍는 방식, ADR 요약, 그리고 checkout에서 파이프라인을 돌리는 방법.
 ---
 
 # 내부 구조
 
 파이프라인이 바깥에서 건드리는 것은 셋입니다. GitHub, Claude, git. 셋 모두 orchestrator가 의존하는 interface인 port를 거쳐서 닿습니다. 덕분에 무인으로 도는 흐름 전체를 메모리 안에서 테스트할 수 있습니다. 구독 한도를 쓰지도, GitHub에 무언가를 쓰지도 않고요. port 뒤의 adapter는 얇게 유지합니다. 인자를 만들고 출력을 해석할 뿐이고, 판단은 그 위의 모듈이 맡습니다.
 
-이 페이지는 소스를 읽거나 고치려는 분을 위한 것입니다. 파이프라인을 쓰기만 하려면 [설치](./installation.md)부터 보세요.
+이 페이지는 파이프라인이 안에서 어떻게 도는지 궁금한 분을 위한 것이고, 이름을 대는 모듈마다 링크를 겁니다. 파이프라인을 쓰기만 하려면 [설치와 제거](./installation.md)부터 보세요.
 
 ## 한눈에 보기 {#at-a-glance}
 
@@ -70,28 +70,54 @@ claude --print <prompt> --output-format stream-json --verbose \
   | 변수 | 값 | 이유 |
   |---|---|---|
   | `ANTHROPIC_API_KEY` | Run을 `--api-key`로 시작하지 않았으면 뺌 | `-p`에서는 키가 묻지도 않고 Claude 로그인보다 앞서니, 남은 키가 그대로 과금됨 |
-  | `TICKET_RUNNER_STAGE` | Stage 이름 | [Stage mark](./ticket-to-merge.md) |
+  | `TICKET_RUNNER_STAGE` | Stage 이름 | [Stage mark](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md). Stage 안에서는 CLI가 거절하게 함 |
   | `TICKET_RUNNER_SESSION` | Stage 세션마다 다른 UUID | [`maxMinutes`의 kill](#smaller-adapters)이 찾는 Session mark |
   | `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | `1` | Host 사용자의 memory는 Target이 아닌 그 사람의 프로젝트에 관한 것 |
   | `CLAUDE_CODE_SHELL` | `/bin/bash`, 있을 때만 | zsh는 아무것도 맞지 않는 glob 하나에 명령 전체를 멈춤 |
   `ANTHROPIC_AUTH_TOKEN`을 비롯한 다른 변수는 그대로 물려받습니다.
-- Stage가 시작되는 순간부터 `<stage>.command`, `.stdout`, `.stderr`, `.transcript.jsonl`을 씁니다. 명령 파일은 키 없이 돈 Stage면 `env -u ANTHROPIC_API_KEY`로, 키로 돈 Stage면 `ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"`로 시작하고 키 값은 적지 않습니다. 명령 파일은 Hand-off 때 Target의 원격으로 가기 때문입니다. 같은 이유로, 세션이 키 값을 출력한 곳에서는 그 값을 `<ANTHROPIC_API_KEY>`로 바꿔 적습니다.
+- Stage가 시작되는 순간부터 [Stage의 파일](./running.md#logs-and-transcripts)을 쓰고, 거기에 키 값은 절대 적지 않습니다. 명령 파일은 Hand-off 때 Target의 원격으로 가기 때문입니다.
 - 세션의 `system/init` 이벤트에서 `apiKeySource`를 읽고, orchestrator가 이를 Run의 과금처와 맞춰 봅니다.
-- `maxMinutes`가 지나면 자식과 자식이 띄운 프로세스를 모두 죽이고, 실패를 `rate-limited`, `api-error`, `out-of-budget`, `timed-out`, `turn-capped`, `nonzero-exit`, `invalid-result`로 분류합니다.
+- `maxMinutes`가 지나면 자식과 자식이 띄운 프로세스를 모두 죽이고, 실패를 `rate-limited`, `api-error`, `out-of-budget`, `timed-out`, `turn-capped`, `nonzero-exit`, `invalid-result`로 분류합니다. 성공한 세션은 앞의 셋 중 어느 것도 아니고, 셋은 실패한 세션에서 이렇게 읽습니다.
+
+  | 실패 | 읽는 곳 |
+  |---|---|
+  | `out-of-budget` | `api_error_status: 400`이고 메시지가 `credit balance is too low`나 `workspace API usage limits`를 말함. 지출 한도 메시지도 usage limit이라는 말을 담지만, 이것은 예산으로 읽음 |
+  | `rate-limited` | `api_error_status: 429`, status가 `rejected`인 `rate_limit_event`(경고만 하는 이벤트는 멈춤이 아님), 또는 result나 stderr의 `usage limit`, `session limit`, `rate limit`, `rate_limit`. 이 문구는 바뀐 적이 있어서 마지막에 읽음 |
+  | `api-error` | `terminal_reason: "api_error"`이고 `api_error_status`가 5xx이거나 없음 |
 
 ### `GitWorkspace` {#gitworkspace}
 
-[`GitWorkspace`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts)는 `.worktrees/` 아래의 worktree(Ticket의 것과, 실패한 Check를 merge-base에서 다시 돌리는 detached worktree)를 맡고, Check를 돌리고, rebase와 push를 하고, `ticket-runner/state`와 `ticket-runner/lock` branch를 관리합니다([멈추고 이어 하기](./stopping-and-resuming.md)).
+[`GitWorkspace`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts)는 `.worktrees/` 아래의 worktree(Ticket의 것과, 실패한 Check를 merge-base에서 다시 돌리는 detached worktree)를 맡고, Check를 돌리고, rebase와 push를 하고, `ticket-runner/state`와 `ticket-runner/lock` branch를 관리합니다([Hand-off, 멈추고 이어 하기](./stopping-and-resuming.md)).
 
-- git은 ref나 index lock이 잡혀 있으면 기다리지 않고 실패하므로, main checkout에서의 명령은 한 번에 하나씩 돌립니다.
-- worktree 안의 명령은 병렬로 둡니다.
+- git은 ref나 index lock이 잡혀 있으면 기다리지 않고 실패하므로, main checkout에서의 명령은 한 번에 하나씩 돌립니다. worktree 안의 명령은 병렬로 둡니다.
+- state branch는 부모 없는 snapshot commit 하나로 다시 씁니다. git object와 임시 index만으로 만들기 때문에 main checkout의 tree는 건드리지 않습니다. 서명 없이, `--no-verify`와 읽어 온 tip에 대한 `--force-with-lease`로 push하고, 더 새 snapshot에 밀린 변경은 다시 얹습니다. 최대 세 번 시도합니다. 한 Run 안에서는 변경이 차례를 지키니, 두 Lane이 서로의 Ticket을 빠뜨린 snapshot을 올리는 일이 없습니다.
+- lock은 compare-and-swap으로 잡습니다. 잡을 때도 풀 때도 읽어 온 tip 위에 commit하고, 그 tip에 lease를 걸어 push합니다.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Host A의 Run
+    participant R as GitHub의 ticket-runner/lock
+    participant B as Host B의 Run
+    A->>R: tip T를 fetch ("free")
+    B->>R: tip T를 fetch ("free")
+    A->>R: T 위에 "held by A" push, T에 lease
+    R-->>A: 받아들임
+    B->>R: T 위에 "held by B" push, T에 lease
+    R-->>B: 거절: tip이 더는 T가 아님
+    B->>R: 다시 fetch
+    R-->>B: 다른 Host의 A가 쥐고 있음
+    Note over B: Host A, 그 Run, 시작 시각을 알리고 2로 끝남
+    A->>R: Lane이 다 돌아오면 그 위에 "free" push
+```
+<!-- Sources: src/adapters/git-workspace.ts, src/lock.ts, src/start.ts -->
 
 ### 작은 adapter들 {#smaller-adapters}
 
 - [`exec.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/exec.ts)는 timeout과 스트리밍 sink를 붙여 자식 프로세스를 띄웁니다. 명령이 스스로 124로 끝날 수도 있으니 `timedOut`을 따로 알려 줍니다.
-- [`process-tree.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/process-tree.ts)는 시간 한도에 걸린 명령을 하위 프로세스 전부, 그리고 이들이 leader인 process group과 함께 죽입니다. 먼저 SIGTERM을 보내고, 5초 뒤에도 남은 것은 SIGKILL로 끝냅니다. 명령 자신의 group만 죽여서는 안 됩니다. Stage는 Run의 group을 같이 쓰고([ADR-0006](#adr-0006)), Claude Code는 Bash 명령마다 session을 따로 만듭니다. 셸이 이미 끝난 background 프로세스는 부모를 따라가도 Stage에 닿지 않으므로, Stage의 Session mark를 가진 프로세스도 모두 함께 죽입니다. 환경은 Linux에서는 `/proc/<pid>/environ`, macOS에서는 `ps -wwE`로 읽습니다. 환경을 읽을 수 없는 프로세스는 부모를 따라서만 닿습니다.
+- [`process-tree.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/process-tree.ts)는 시간 한도에 걸린 명령을 하위 프로세스 전부, 그리고 이들이 leader인 process group과 함께 죽입니다. 먼저 SIGTERM을 보내고, 5초 뒤에도 남은 것은 SIGKILL로 끝냅니다. 명령 자신의 group만 죽여서는 안 됩니다. Stage는 Run의 group을 같이 쓰고([ADR-0006](#adr-0006)), Claude Code는 Bash 명령마다 session을 따로 만듭니다. 셸이 이미 끝난 background 프로세스는 부모를 따라가도 Stage에 닿지 않으므로, Stage의 Session mark를 가진 프로세스도 모두 함께 죽입니다.
 - [`repo-root.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/repo-root.ts)는 worktree 안에서 실행해도 main checkout을 찾습니다. 그래서 lock, `.worktrees/`, 로그가 clone마다 한 곳에 모입니다.
-- [`version.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts)는 이 사본이 어느 [Version](#versions)인지 읽습니다. 설명하는 port는 없지만 git을 실행하니 adapter에 둡니다.
+- [`version.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts)는 이 사본이 어느 [Version](#versions)인지 읽습니다.
 
 ## `src/` 지도 {#a-map-of-src}
 
@@ -163,52 +189,13 @@ claude --print <prompt> --output-format stream-json --verbose \
 | [`staleness.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/staleness.ts) | 새 Version 안내 줄과 conventions 문서 경고 |
 | [`version-pr.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/version-pr.ts) | Version PR이 지켜야 할 것, GitHub Release에 올릴 notes |
 
-**테스트 전용**: [`testing/`](https://github.com/jjongs2/ticket-runner/blob/main/src/testing/fakes.ts)에는 아래에서 설명하는 fake와 도우미가 있습니다.
-
-## orchestrator를 테스트하는 방법 {#how-the-orchestrator-is-tested}
-
-어떤 테스트도 `gh`나 `claude`를 띄우지 않습니다. 층마다 맞는 경계에서 테스트합니다.
-
-| 층 | 테스트 대상 |
-|---|---|
-| `orchestrator.ts`, `run.ts`, `start.ts`, `stranded.ts` … | 세 port 모두의 메모리 fake |
-| 나란히 도는 Lane | fake에 `Hold`와 `settle`을 더해서 |
-| `GitWorkspace` | 진짜 git: bare remote를 붙인 임시 저장소 |
-| `GhTracker`, `ClaudeAgentRunner` | `run` seam으로 넣는 녹화된 실행 결과 |
-
-- fake마다 순서가 있는 `calls` 로그를 둡니다. 테스트는 내부 helper가 아니라 이 로그와 결과 상태를 확인합니다. `FakeWorkspace`는 State와 lock을 메모리에 두고, `THIS_HOST`나 `ANOTHER_HOST` 역할을 할 수 있습니다.
-- `Hold`는 Ticket 하나를 원하는 지점(Stage 안, CI 대기 안)에 세워 두었다가 테스트가 풀어 줄 때 보냅니다. 그 사이 다른 Lane이 하는 일을 관찰할 수 있습니다.
-- `GitWorkspace` 테스트는 worktree, rebase, lease, state와 lock branch를 진짜로 돌립니다.
-- 나머지 두 adapter에는 `testing/executions.ts`가 프로세스가 돌려줬을 `Execution`을 만들어 줍니다.
-
-그래서 파이프라인 자신의 기록까지 포함해 모든 바깥 효과가 port를 거칩니다. State와 lock도 remote에 대한 효과이니 `Workspace`의 메서드이고, fake가 이를 다룹니다([ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md)의 마지막 amendment).
+**테스트 전용**: [`testing/`](https://github.com/jjongs2/ticket-runner/blob/main/src/testing/fakes.ts)에는 테스트가 orchestrator에 닿을 때 거치는 세 port의 메모리 fake가 있습니다. 층마다 어떻게 테스트하는지는 [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md#code)에 있습니다.
 
 ## Version {#versions}
 
-Version이 없던 때는 두 설치본이 같은 번호를 말하면서 몇 주씩 떨어진 코드를 돌릴 수 있었습니다. 그래서 transcript에서 찾은 버그를 commit과 이을 수 없었고, 낡은 설치본은 Target이 지난주 파이프라인처럼 굴 때에야 드러났습니다. 파이프라인이 Target에 남기는 것들도 어느 파이프라인이 썼는지 말해 주지 않아서, 설치본이 다른 두 머신이 같은 conventions 문서를 번갈아 다시 쓰곤 했습니다.
-
 [Version](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 `main`이 `v<x.y.z>` tag로 달고, npm에 올리고, GitHub Release로 공개하는 번호입니다. 설치된 사본이 이 번호를 알려 줍니다. 머신에는 `main`이 아니라 Version을 설치하니, `0.5.2`라고 말하는 두 머신은 같은 코드를 돌립니다([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
 
-### Version을 끊는 방법 {#how-one-is-cut}
-
-```mermaid
-flowchart LR
-    SK["/cut-a-version이 Version PR 초안을 만듦"] --> PR["version/‹number› · chore: version ‹number›"]
-    PR --> CK{"version-pr.yml 검사"}
-    CK -- 거절 --> PR
-    CK -- 통과 --> MG["사람이 리뷰하고 merge"]
-    MG --> TG["version-tag.yml: v‹number› tag"]
-    TG --> NP["npm: ticket-runner@‹number›, tag에서 올림"]
-    NP --> RL["GitHub Release, 본문은 CHANGELOG 섹션"]
-```
-<!-- Sources: src/version-pr.ts, scripts/version.ts, .github/workflows/version-pr.yml, .github/workflows/version-tag.yml -->
-
-- **번호.** 지난 Version 뒤로 Spec이 하나라도 닫혔으면 minor를, 그 밖에는 작은 기능까지 포함해 모두 patch를 올립니다. 질문은 오직 "Spec이 닫혔나"뿐입니다. 언제 끊을지는 사람이 정합니다. Planning의 결정이니까요.
-- **Version PR.** `package.json`과 lock file의 번호를 올리고, `CHANGELOG.md`에 그 Version의 섹션을 더하고, `npx tsx scripts/version.ts mark`로 이 저장소의 conventions 문서에 새 표시를 합니다. 초안은 [`/cut-a-version`](https://github.com/jjongs2/ticket-runner/blob/main/.claude/skills/cut-a-version/SKILL.md) skill이 만들고, merge는 하지 않습니다.
-- **검사**는 이유를 한꺼번에 모두 알려 줍니다. 번호가 모든 tag보다 높지 않을 때, lock file이 다른 번호일 때, 섹션이 없을 때, 섹션에 `### After upgrading` 제목이 없을 때입니다. 번호를 건드리지 않은 pull request는 그대로 통과합니다.
-- **tag workflow**는 merge commit에 tag를 달고, tag가 가리키는 commit을 trusted publishing으로 npm에 올린 뒤(npm token은 어디에도 없습니다), 그 섹션을 GitHub Release로 올립니다. 섹션이 없으면 GitHub이 만든 notes를 씁니다. 셋 중 빠진 것만 채우니, 반쯤 끊긴 Version도 다시 돌리면 온전해집니다.
-
-release-please와 Changesets는 둘 다 채택하지 않았습니다. 앞의 것은 해마다 만료되는 token, 저장소 설정, 그리고 `feat`/`fix`만 Version을 끊는다는 규칙이 필요했습니다. 뒤의 것은 모든 Stage의 일에 changeset 파일 쓰기를 얹었을 것입니다.
+Version은 사람이 Version PR을 merge해서 끊고, 그 PR의 초안은 [`/cut-a-version`](https://github.com/jjongs2/ticket-runner/blob/main/.claude/skills/cut-a-version/SKILL.md)이 만듭니다. 단계와 거기 붙는 검사는 [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md#versions)에 있습니다.
 
 ### 찍히는 번호 {#the-stamp}
 
@@ -232,23 +219,11 @@ Version은 CLI에서 한 번 정해서 아래로 넘깁니다. 그래서 한 Run
 | conventions 문서의 첫 줄(번호만) | `init`과 Run이 어느 쪽이 뒤처졌는지 알 수 있도록 |
 | 설치본이 모르는 config key를 거절하는 문구 | 낡은 설치본과 잘못된 config를 구별할 수 있도록 |
 
-요약의 머리는 `ticket-runner <version> run <runId> · <n>m` 모양입니다. 파일은 `.ticket-runner/runs/<runId>/version.txt`이고, Hand-off는 이 파일을 transcript와 함께 남깁니다.
-
-conventions 문서의 표시 `<!-- ticket-runner:version <number> -->`에는 방향이 있습니다. 더 오래된 파이프라인은 더 새 문서를 건드리지 않고 업그레이드를 권합니다. 문서보다 뒤처진 Run은 경고하고, 앞선 Run은 `init`을 권합니다. 어느 쪽도 거절하지는 않습니다.
-
 ### 새 Version 확인 {#the-newer-version-check}
 
 Run과 `init`은 파이프라인 자신의 저장소에서 공개된 가장 높은 Version을 찾아봅니다. 저장소는 `package.json`의 `repository` 필드에서 읽으니, fork는 자기 자신을 묻습니다. 조회는 tag가 아니라 GitHub Release를 읽되 draft와 prerelease는 뺍니다. tag workflow는 npm에 Version이 올라간 뒤에야 Release를 만드니, Release가 있는 Version은 업그레이드로 설치할 수 있습니다. 번호만 비교하므로, 최신 Version보다 앞선 commit을 돌리는 checkout도 낡은 것으로 보지 않습니다.
 
-새 Version이 있으면 [`staleness.ts` · `newerVersionLine`](https://github.com/jjongs2/ticket-runner/blob/main/src/staleness.ts)이 한 줄을 Run 로그 맨 위와 요약 머리에 찍습니다.
-
-```
-A newer Version is out: 0.6.0, and this is 0.5.2 — upgrade with `npm install -g ticket-runner`.
-```
-
-네트워크가 없거나, `gh`가 없거나, 아무도 볼 수 없는 저장소라서 조회하지 못하면 아무것도 찍지 않습니다. 이 때문에 무언가를 거절하는 일은 없습니다.
-
-설치와 업그레이드는 `npm install -g ticket-runner`로 하고, 전역 설치 없이 써 보려면 `npx`를 쓰면 됩니다([설치 없이 써 보기](./installation.md#try-it-without-installing)). GitHub tag 범위 `npm install -g "github:jjongs2/ticket-runner#semver:*"`로도 가장 높은 Version tag가 설치됩니다. [설치](./installation.md)를 참고하세요.
+무엇을 출력하는지는 [설치](./installation.md#install)에 있습니다.
 
 ## ADR 요약 {#the-adrs-in-brief}
 
@@ -287,7 +262,7 @@ A newer Version is out: 0.6.0, and this is 0.5.2 — upgrade with `npm install -
 ### [ADR-0006: Stop is a signal, and Ctrl+C stays a kill](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md) {#adr-0006}
 
 - **결정**: Stop은 SIGTERM뿐이고, Run이 도는 Host에서만 보낼 수 있습니다. Ctrl+C는 kill로 둡니다.
-- **이유**: 신호는 바로 닿고 치울 것을 남기지 않습니다. Stage는 Run의 process group을 같이 씁니다.
+- **이유**: 신호는 바로 닿고 치울 것을 남기지 않습니다. Stage는 Run의 process group을 같이 쓰니 Ctrl+C는 모든 `claude` 세션에도 닿고, 이를 부드럽게 만들려면 Stage를 별도 group으로 떼어 내야 합니다.
 - **비용**: Stop은 되돌릴 수 없고, 다른 Host의 Run은 여기서 멈출 수 없습니다.
 
 ### [ADR-0007: A Version is cut by a human, and installs follow tags](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md) {#adr-0007}
@@ -299,7 +274,7 @@ A newer Version is out: 0.6.0, and this is 0.5.2 — upgrade with `npm install -
 ### [ADR-0008: A cloud Host is a Claude Code cloud session, and the Run lock lives on GitHub](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md) {#adr-0008}
 
 - **결정**: cloud Host는 Operator가 있는 Claude Code cloud 세션이고, Run lock은 GitHub에 둡니다.
-- **이유**: Actions 시간 비용이 없고, 앱에서 Run을 조종할 수 있습니다. 모든 Host가 lock을 봐야 합니다.
+- **이유**: Actions 시간 비용이 없고, 앱에서 Run을 조종할 수 있습니다. 모든 Host가 lock을 봐야 합니다. 갱신하지 않으면 만료되는 lease 방식은 채택하지 않았습니다. 살아 있는 Run이 heartbeat 한 번 놓쳤다고 Target을 빼앗기게 되니까요.
 - **비용**: REST만 씁니다. remote에 둔 어떤 것도 ref 삭제에 기대면 안 됩니다. 사라진 Host의 lock은 사람이 풀어야 합니다.
 
 ## 파이프라인 자체를 고치려면 {#working-on-the-pipeline-itself}
@@ -317,18 +292,11 @@ npm run typecheck                    # tsc --noEmit
 
 checkout은 번호 옆에 commit도 함께 알려 줍니다([찍히는 번호](#the-stamp) 참고). CI는 pull request마다 `npm run typecheck`와 `npm test`를 돌리고, 그 옆에서 Version PR 검사도 돌립니다.
 
-이 저장소는 자기 파이프라인의 Target이기도 해서, 다른 Target과 같은 규칙을 따릅니다. commit하기 전에 여기 옮겨 적은 것이 아니라 원문을 읽어 주세요.
-
-- [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md): branch, commit, pull request, Version PR, issue, 그리고 코드 규칙(strict ESM TypeScript, 코드 옆의 테스트, 모든 효과는 port로, `scripts/`는 얇게)
-- [`docs/agents/pipeline-conventions.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/agents/pipeline-conventions.md): 파이프라인이 모든 Target에 요구하는 것
-- [`GLOSSARY.md`](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md): 이름은 용어집을 따릅니다. 새 단어가 필요한 개념은 거기부터 적습니다.
-- [`docs/templates/`](https://github.com/jjongs2/ticket-runner/tree/main/docs/templates): 모양을 바꿀 때는 그걸 쓰는 코드보다 여기를 먼저 바꿉니다.
-
-Stage는 파이프라인을 실행할 수 없습니다. Stage의 셸에는 `TICKET_RUNNER_STAGE`가 있고, 이 변수가 있으면 모든 명령이 거절되어 파이프라인은 그 셸을 띄운 Run의 몫으로 남습니다. 이 저장소에서는 Stage의 프롬프트가 대신 테스트와 fake로 파이프라인을 돌려 보라고 덧붙입니다.
+이 저장소는 자기 파이프라인의 Target이기도 합니다. 이 저장소의 규칙은 [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md)에 있습니다.
 
 ## 관련 페이지 {#related-pages}
 
-- [멈추고 이어 하기](./stopping-and-resuming.md): `GitWorkspace`가 맡는 state branch와 Run lock
+- [Hand-off, 멈추고 이어 하기](./stopping-and-resuming.md): `GitWorkspace`가 맡는 state branch와 Run lock
 - [Ticket 하나가 merge되기까지](./ticket-to-merge.md): `orchestrator.ts`가 이끄는 lifecycle
 - [실행하기](./running.md): `cli.ts`가 나눠 주는 명령들과 `-v`
 - [설치](./installation.md): Version 설치, `init`, `remove`

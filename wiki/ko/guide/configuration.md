@@ -5,9 +5,9 @@ description: ticket-runner.json의 모든 필드, 기본값, 그리고 각 필�
 
 # 설정
 
-Target은 설정 없이도 돌아가야 하므로 모든 필드는 선택이고, `init`은 파일을 `{}`로 만듭니다. 이 파일은 Target만 아는 것을 적는 곳입니다. 어떤 명령이 코드가 제대로 돈다는 걸 증명하는지, CI가 얼마나 걸리는지, Check가 한 머신을 함께 써도 되는지, 라벨을 뭐라고 부르는지 같은 것들이죠. 머신 하나가 Ticket을 몇 개까지 동시에 감당할지는 그 머신이 정할 일이라, 사실상 Host에 관한 유일한 설정은 [`--lanes`](./running.md#lanes)가 덮어씁니다. Run이 누구의 돈을 쓰는지도 Host가 정할 일이라, 필드 없이 [`--api-key`](./running.md#api-key) 플래그로만 정합니다.
+Target은 설정 없이도 돌아가야 하므로 모든 필드는 선택이고, `init`은 파일을 `{}`로 만듭니다. 이 파일은 Target만 아는 것을 적는 곳입니다. 어떤 명령이 코드가 제대로 돈다는 걸 증명하는지, CI가 얼마나 걸리는지, Check가 한 머신을 함께 써도 되는지, 라벨을 뭐라고 부르는지 같은 것들이죠. Target이 아니라 Host에 속하는 것은 `run`의 플래그입니다. [`--lanes`](./running.md#lanes)는 `lanes`를 덮어쓰고, [`--api-key`](./running.md#api-key)는 Stage 비용을 어디로 청구할지 고릅니다. 이건 어떤 필드로도 정하지 않습니다.
 
-파일은 Target 루트의 `ticket-runner.json`입니다. `JSON.parse`로 읽는 평범한 JSON이라 주석을 넣을 수 없습니다.
+파일은 Target 루트의 `ticket-runner.json`입니다. 평범한 JSON이라 주석을 넣을 수 없습니다. Run은 시작할 때 메인 체크아웃의 작업 트리에서 이 파일을 한 번 읽으니, 고친 내용은 다음 Run부터 적용됩니다.
 
 | 필드 | 기본값 | 바꾸는 것 |
 |---|---|---|
@@ -48,13 +48,13 @@ Target은 설정 없이도 돌아가야 하므로 모든 필드는 선택이고,
 Invalid ticket-runner.json: stages: Unrecognized key: "implment". Refused by ticket-runner 0.5.2, so the key may be newer than this install.
 ```
 
-두 번째 문장은 모르는 키일 때만 붙습니다. 설치가 오래된 머신에서는 새 Version이 추가한 키와 오타가 똑같아 보이니, 거절한 Version을 밝혀 두는 것입니다. 파일 자체에는 Version을 적지 않습니다([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
+두 번째 문장은 모르는 키일 때만 붙습니다. 설치가 오래된 머신에서는 새 Version이 추가한 키와 오타가 똑같아 보이니, 철자를 확인하고 그다음 업그레이드하세요.
 
 ## `baseBranch` {#basebranch}
 
 - `baseBranch`: 문자열
 
-[Base branch](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 Run이 Ticket마다 branch를 따 오고, rebase하고, pull request가 향하고, merge 뒤에 메인 체크아웃을 pull하는 branch입니다. 이 필드가 없으면 GitHub가 저장소의 기본 branch라고 부르는 것을 쓰니, `master`를 쓰는 Target도 따로 설정할 필요가 없습니다. Run이 시작할 때 한 번 정합니다.
+[Base branch](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 모든 Ticket이 출발하고 merge되어 들어가는 branch입니다. 이 필드가 없으면 GitHub가 저장소의 기본 branch라고 부르는 것을 쓰니, `master`를 쓰는 Target도 따로 설정할 필요가 없습니다. Run이 시작할 때 한 번 정합니다.
 
 ## `lanes` {#lanes}
 
@@ -67,11 +67,11 @@ Run이 동시에 쥐는 Ticket 수입니다. [Lane](https://github.com/jjongs2/t
 - `checks`: 문자열 배열
 - `checkTimeoutMinutes`: 0보다 큰 수
 
-[Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 파이프라인이 직접 돌리는 결정적인 명령이지, 에이전트의 의견이 아닙니다. 각 명령은 Ticket의 worktree에서 셸을 통해 돌고, implement Stage 뒤, fix Stage 뒤, rebase 충돌을 해결한 뒤에 실행됩니다. 0이 아닌 코드로 끝나면 게이트를 통과하지 못하고, Ticket은 [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)을 씁니다. 단, Base branch도 같은 명령에 실패하면 예외입니다. 실패한 명령을 branch와 Base branch의 merge-base에 만든 깨끗한 worktree에서 한 번 더 돌려 보고, 거기서도 실패하면 Ticket을 Release합니다([Ticket 하나가 merge되기까지](./ticket-to-merge.md#the-checks) 참고). CI가 빨갛게 끝났을 때는 모든 명령을 거기서 같은 식으로 돌리므로, CI도 돌리는 명령을 적어 두는 게 좋습니다.
+[Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 파이프라인이 직접 돌리는 명령입니다. 각 명령은 Ticket의 worktree에서 셸을 통해 돌고, implement Stage 뒤, fix Stage 뒤, rebase 충돌을 해결한 뒤에 실행됩니다. 0이 아닌 코드로 끝나면 게이트를 통과하지 못하고, Ticket은 [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)을 씁니다. 단, Base branch도 같은 명령에 실패하면 예외입니다([Base branch도 함께 실패할 때](./ticket-to-merge.md#a-failure-the-base-branch-shares)). CI가 빨갛게 끝났을 때도 이 명령들을 돌려 그 여부를 따지므로, CI도 돌리는 명령을 적어 두는 게 좋습니다.
 
 이 필드가 없으면 `package.json`에 `test`, `typecheck` 스크립트 중 정의된 것을 보고 `npm test`와 `npm run typecheck`를 추론합니다.
 
-`checkTimeoutMinutes`는 모든 명령에 하나로 적용되는 한도이고, 명령마다 이 시간을 통째로 받습니다. merge-base에서 돌릴 때도 같습니다. 한도에서 kill된 명령은 실패한 Check이고 다른 실패처럼 Fix budget을 씁니다. 멈춰 버리는 테스트 스위트는 branch 자기 코드의 결함이기 때문입니다. fix Stage에는 Check가 실패한 게 아니라 멈췄다는 사실이 전달됩니다.
+`checkTimeoutMinutes`는 모든 명령에 하나로 적용되는 한도이고, 명령마다 이 시간을 통째로 받습니다. merge-base에서 돌릴 때도 같습니다. 한도에서 kill된 명령은 실패한 Check이고 다른 실패처럼 Fix budget을 씁니다.
 
 ## `gates` {#gates}
 
@@ -106,26 +106,26 @@ Stage 하나는 `claude -p` 세션 하나입니다. `stages`는 Stage마다 객�
 
 | 키 | 타입 | 기본값 | 넘기는 방식 |
 |---|---|---|---|
-| `model` | 문자열 | `"claude-opus-5-5"` | `--model` |
+| `model` | 문자열. `sonnet`처럼 `claude --model`이 받는 값이면 무엇이든 | `"claude-opus-5-5"` | `--model` |
 | `effort` | `"low"`, `"medium"`, `"high"`, `"xhigh"`, `"max"` | `"high"` | `--effort` |
 | `maxTurns` | 1 이상의 정수 | 위의 Stage별 값 | `--max-turns` |
 | `maxMinutes` | 0보다 큰 수 | 위의 Stage별 값 | 세션을 kill하는 wall-clock 한도 |
 | `extraPrompt` | 문자열 | `""` | Stage 프롬프트의 마지막 섹션으로 덧붙임 |
 
-모델과 effort는 머신 기본값에 맡기지 않고 언제나 넘깁니다. 그래서 저장된 Stage 명령줄만 보면 무엇으로 돌렸는지 정확히 알 수 있고, 다시 돌려도 똑같이 돕니다. 턴이나 시간을 다 쓴 Stage가 Ticket에 무엇을 치르게 하는지는 [Ticket 하나가 merge되기까지](./ticket-to-merge.md)에 있습니다.
+모델과 effort는 언제나 넘기므로, 머신에 있는 `claude`의 기본값은 쓰이지 않습니다. 턴이나 시간을 다 쓴 Stage가 Ticket에 무엇을 치르게 하는지는 [Ticket 하나가 merge되기까지](./ticket-to-merge.md)에 있습니다.
 
 ## `permissionMode` {#permissionmode}
 
 - `permissionMode`: `"auto"`, `"acceptEdits"`, `"bypassPermissions"`
 
-모든 Stage에 `--permission-mode`로 넘깁니다. 모든 Stage는 `--permission-prompts none`으로도 돕니다. 지켜보는 사람이 없으니, 물어봐야 할 일은 묻는 대신 거부됩니다. 고를 수 있는 모드는 무인으로 일할 수 있는 것들뿐입니다. `plan`이나 물어보는 모드로는 아무 일도 하지 않는 Stage가 될 게 뻔하니까요.
+모든 Stage에 `--permission-mode`로 넘깁니다. 모든 Stage는 `--permission-prompts none`으로도 돕니다. 지켜보는 사람이 없으니, 물어봐야 할 일은 묻는 대신 거부됩니다.
 
 ## CI {#ci}
 
 - `ciTimeoutMinutes`: 0보다 큰 수
 - `ciGraceMinutes`: 0보다 큰 수
 
-Landing이 pull request를 연 뒤, Run은 최대 `ciTimeoutMinutes` 동안 check를 기다립니다. 시간 안에 끝나지 않는 CI는 Fix budget을 쓰지 않는 Hand-off입니다. 남의 인프라 문제이지, fix Stage가 고칠 수 있는 결함이 아니기 때문입니다.
+Landing이 pull request를 연 뒤, Run은 최대 `ciTimeoutMinutes` 동안 check를 기다립니다. 시간 안에 끝나지 않는 CI는 Fix budget을 쓰지 않는 Hand-off입니다.
 
 `ciGraceMinutes`는 GitHub가 check run을 등록하기 전의 틈을 메웁니다. 이 틈이 3분을 넘긴 적도 있습니다. 이 시간이 지나기 전까지는 check가 아직 없는 pull request를 "없음"이 아니라 대기 중으로 봅니다. `ciTimeoutMinutes`보다 길어지지는 않습니다. Actions 대기열이 느린 Target이라면 늘리세요. CI 워크플로가 없는 Target은 merge할 때마다 이 시간을 한 번씩 기다리고, Landing에는 한 번에 Lane 하나만 들어가니 그동안 다른 Lane의 merge도 함께 기다립니다.
 
