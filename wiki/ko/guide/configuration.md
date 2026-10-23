@@ -7,7 +7,7 @@ description: ticket-runner.json의 모든 필드, 기본값, 그리고 각 필�
 
 Target은 설정 없이도 돌아가야 하므로 모든 필드는 선택이고, `init`은 파일을 `{}`로 만듭니다. 이 파일은 Target만 아는 것을 적는 곳입니다. 어떤 명령이 코드가 제대로 돈다는 걸 증명하는지, CI가 얼마나 걸리는지, Check가 한 머신을 함께 써도 되는지, 라벨을 뭐라고 부르는지 같은 것들이죠. Target이 아니라 Host에 속하는 것은 `run`의 플래그입니다. [`--lanes`](./running.md#lanes)는 `lanes`를 덮어쓰고, [`--api-key`](./running.md#api-key)는 Stage 비용을 어디로 청구할지 고릅니다. 이건 어떤 필드로도 정하지 않습니다.
 
-파일은 Target 루트의 `ticket-runner.json`입니다. 평범한 JSON이라 주석을 넣을 수 없습니다. Run은 시작할 때 메인 체크아웃의 작업 트리에서 이 파일을 한 번 읽으니, 고친 내용은 다음 Run부터 적용됩니다.
+파일은 Target 루트의 `ticket-runner.json`입니다. 평범한 JSON이라 주석을 넣을 수 없습니다. Run은 시작할 때 main checkout의 working tree에서 이 파일을 한 번 읽으니, 고친 내용은 다음 Run부터 적용됩니다.
 
 | 필드 | 기본값 | 바꾸는 것 |
 |---|---|---|
@@ -42,7 +42,7 @@ Target은 설정 없이도 돌아가야 하므로 모든 필드는 선택이고,
 
 ## 읽히지 않는 파일 {#a-file-that-will-not-load}
 
-스키마는 엄격합니다. 모르는 키, 잘못된 타입, 범위를 벗어난 값은 이름을 짚어 거절하고, JSON이 아닌 파일도 마찬가지입니다. 파일을 읽는 명령(`init`, `run`, `remove`)은 모두 종료 코드 `2`로 끝납니다. `stop`은 파일을 아예 읽지 않습니다.
+스키마는 엄격합니다. 모르는 키, 잘못된 타입, 범위를 벗어난 값은 이름을 짚어 거절하고, JSON이 아닌 파일도 마찬가지입니다. 파일을 읽는 명령(`init`, `run`, `remove`)은 이런 파일을 만나면 모두 종료 코드 `2`로 끝납니다. `stop`은 파일을 아예 읽지 않습니다.
 
 ```text
 Invalid ticket-runner.json: stages: Unrecognized key: "implment". Refused by ticket-runner 0.5.2, so the key may be newer than this install.
@@ -60,14 +60,14 @@ Invalid ticket-runner.json: stages: Unrecognized key: "implment". Refused by tic
 
 - `lanes`: 1 이상의 정수
 
-Run이 동시에 쥐는 Ticket 수입니다. [Lane](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 하나에 Ticket 하나. `run --lanes <n>`이 한 Run에 한해 덮어씁니다. Lane들은 각자의 worktree에서 동시에 Check를 돌리니, Check가 포트나 데이터베이스처럼 함께 써야 하는 것을 필요로 하는 Target은 `1`로 두세요. Landing(rebase부터 merge까지)에는 한 번에 Lane 하나만 들어가므로, Lane을 늘리면 implement와 verify가 빨라질 뿐 merge가 빨라지지는 않습니다([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)).
+Run이 동시에 쥐는 Ticket 수입니다. [Lane](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 하나에 Ticket 하나. `run --lanes <n>`이 한 Run에 한해 덮어씁니다. Lane들은 각자의 worktree에서 동시에 Check를 돌리니, 포트나 데이터베이스처럼 Check끼리 겹쳐 쓰게 되는 것이 있는 Target은 `1`로 두세요. Landing(rebase부터 merge까지)에는 한 번에 Lane 하나만 들어가므로, Lane을 늘리면 implement와 verify가 빨라질 뿐 merge가 빨라지지는 않습니다([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)).
 
 ## `checks` {#checks}
 
 - `checks`: 문자열 배열
 - `checkTimeoutMinutes`: 0보다 큰 수
 
-[Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 파이프라인이 직접 돌리는 명령입니다. 각 명령은 Ticket의 worktree에서 셸을 통해 돌고, implement Stage 뒤, fix Stage 뒤, rebase 충돌을 해결한 뒤에 실행됩니다. 0이 아닌 코드로 끝나면 게이트를 통과하지 못하고, Ticket은 [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)을 씁니다. 단, Base branch도 같은 명령에 실패하면 예외입니다([Base branch도 함께 실패할 때](./ticket-to-merge.md#a-failure-the-base-branch-shares)). CI가 빨갛게 끝났을 때도 이 명령들을 돌려 그 여부를 따지므로, CI도 돌리는 명령을 적어 두는 게 좋습니다.
+[Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 파이프라인이 직접 돌리는 명령입니다. 각 명령은 Ticket의 worktree에서 셸을 통해 돌고, implement Stage 뒤, fix Stage 뒤, rebase 충돌을 해결한 뒤에 실행됩니다. 0이 아닌 코드로 끝나면 관문을 통과하지 못하고, Ticket은 [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)을 씁니다. 단, Base branch도 같은 명령에 실패하면 예외입니다([Base branch도 함께 실패할 때](./ticket-to-merge.md#a-failure-the-base-branch-shares)). CI가 실패했을 때도 Base branch가 함께 실패하는지 이 명령들로 따지므로, CI가 돌리는 명령과 같은 것을 적어 두세요.
 
 이 필드가 없으면 `package.json`에 `test`, `typecheck` 스크립트 중 정의된 것을 보고 `npm test`와 `npm run typecheck`를 추론합니다.
 
@@ -80,12 +80,12 @@ Run이 동시에 쥐는 Ticket 수입니다. [Lane](https://github.com/jjongs2/t
 
 | 설정 | 켜져 있을 때(기본) | `false`일 때 |
 |---|---|---|
-| `gates.checks` | 설정하거나 추론한 Check 명령이 하나도 없으면 Run이 시작을 거절 | 경고와 함께 그대로 시작. 존재하는 Check 명령은 여전히 돎 |
+| `gates.checks` | 설정하거나 추론한 Check 명령이 하나도 없으면 Run이 시작을 거절 | 경고와 함께 그대로 시작. 있는 Check 명령은 그대로 실행됨 |
 | `gates.ci` | CI check가 하나도 없는 pull request는 Hand-off | 시작할 때 경고하고, merge하면서 Ticket에 `⚠️ no checks` 줄을 남김 |
 
-`gates.ci`를 꺼도 봐주는 것은 check가 *하나도 없는* pull request뿐입니다. CI 실패, CI 시간 초과, Base branch와 충돌하는 pull request는 게이트 설정과 상관없이 Ticket을 끝냅니다.
+`gates.ci`를 꺼도 봐주는 것은 check가 *하나도 없는* pull request뿐입니다. CI 실패, CI 시간 초과, Base branch와 충돌하는 pull request는 `gates` 설정과 상관없이 Ticket을 끝냅니다.
 
-`gates.checks`가 막아 주는 거절은 이렇게 나옵니다.
+`gates.checks`가 켜져 있으면 Run은 이렇게 거절합니다.
 
 ```text
 No Check commands are configured and none could be inferred from package.json. Add them to `checks` in ticket-runner.json, add `test` and `typecheck` scripts to package.json, or set `gates.checks` to false in ticket-runner.json to run without a net.
@@ -118,7 +118,7 @@ Stage 하나는 `claude -p` 세션 하나입니다. `stages`는 Stage마다 객�
 
 - `permissionMode`: `"auto"`, `"acceptEdits"`, `"bypassPermissions"`
 
-모든 Stage에 `--permission-mode`로 넘깁니다. 모든 Stage는 `--permission-prompts none`으로도 돕니다. 지켜보는 사람이 없으니, 물어봐야 할 일은 묻는 대신 거부됩니다.
+모든 Stage에 `--permission-mode`로 넘깁니다. 모든 Stage는 `--permission-prompts none`으로도 실행됩니다. 지켜보는 사람이 없으니, 물어봐야 할 일은 묻는 대신 거부됩니다.
 
 ## CI {#ci}
 
@@ -149,7 +149,7 @@ Target이 이미 다른 라벨 이름을 쓰고 있다면 triage 어휘의 이�
 ## 관련 페이지 {#related-pages}
 
 - [실행하기](./running.md): `--lanes`, 그리고 이 파일을 읽는 Run.
-- [Ticket 하나가 merge되기까지](./ticket-to-merge.md): 각 Stage, Check, 게이트가 Ticket의 일생 어디에 있는지.
+- [Ticket 하나가 merge되기까지](./ticket-to-merge.md): 각 Stage, Check, 관문이 Ticket의 일생 어디에 있는지.
 - [일 계획하기](./planning.md): 라벨과 그 뜻.
 - [설치와 제거](./installation.md): `init`이 빈 파일을 만들고, `remove`가 맨 마지막에 지움.
 
