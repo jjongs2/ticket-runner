@@ -28,9 +28,7 @@ import type { Workspace } from "./ports/workspace.js";
  * state machine with, and there is no state machine here: these are questions
  * asked of a directory before a Run exists, and the answers are already driven
  * from a temporary repository root, which is how the local state under
- * `.ticket-runner/` is tested too (ADR-0004). Widening the `Workspace` port for
- * them would put reads no Stage and no Ticket ever makes on the interface the
- * orchestrator depends on.
+ * `.ticket-runner/` is tested too (ADR-0004).
  *
  * The same files on the remote's Base branch are the one exception, read
  * through `Workspace` like every other question about the remote: every
@@ -184,7 +182,7 @@ export async function readinessRefusal({
   ].join(" ");
 }
 
-export interface PushedOptions {
+export interface UnpushedOptions {
   workspace: Pick<Workspace, "remote" | "readRemoteFile">;
   /** The Run's Base branch, resolved once and carried on into the Run. */
   baseBranch: string;
@@ -203,17 +201,14 @@ export interface PushedOptions {
 export async function unpushedRefusal({
   workspace,
   baseBranch,
-}: PushedOptions): Promise<string | undefined> {
-  const on = `${workspace.remote}/${baseBranch}`;
-  const missing = await missingItemMessage(
-    (path) => workspace.readRemoteFile(baseBranch, path),
-    on,
-  );
+}: UnpushedOptions): Promise<string | undefined> {
+  const remoteBase = `${workspace.remote}/${baseBranch}`;
+  const missing = await missingItemMessage((path) => workspace.readRemoteFile(baseBranch, path));
   if (missing === undefined) return undefined;
 
   return [
-    `This Target's \`${on}\` is not set up: ${missing}.`,
-    `Every Ticket's worktree is made from \`${on}\`, not from this checkout:`,
+    `This Target's \`${remoteBase}\` is not set up: ${missing}.`,
+    `Every Ticket's worktree is made from \`${remoteBase}\`, not from this checkout:`,
     "commit and push what `init` wrote there, then start again.",
   ].join(" ");
 }
@@ -231,32 +226,27 @@ async function missingFileMessage(repoRoot: string): Promise<string | undefined>
 /**
  * Names the first of the items both the checkout and the remote's Base branch
  * must carry that `read` does not find, asking each the same question in both
- * places. `on` names the remote branch they were read at, and is left out for
- * the checkout.
+ * places. Where it was asked is the refusal's to say.
  */
 async function missingItemMessage(
   read: (path: string) => Promise<string | undefined>,
-  on?: string,
 ): Promise<string | undefined> {
-  const at = on === undefined ? "" : ` on \`${on}\``;
-  const there = on === undefined ? "there" : `on \`${on}\``;
-
   const conventions = await read(CONVENTIONS_PATH);
   if (conventions === undefined) {
-    return `\`${CONVENTIONS_PATH}\` is not ${there}`;
+    return `\`${CONVENTIONS_PATH}\` is not there`;
   }
   if (conventionsMark(conventions) === undefined) {
-    return `\`${CONVENTIONS_PATH}\`${at} carries no Version`;
+    return `\`${CONVENTIONS_PATH}\` carries no Version`;
   }
 
   if (!hasClaudePointer(await read(CLAUDE_FILENAME))) {
-    return `\`${CLAUDE_FILENAME}\`${at} does not point at \`${CONVENTIONS_PATH}\``;
+    return `\`${CLAUDE_FILENAME}\` does not point at \`${CONVENTIONS_PATH}\``;
   }
 
   // Asked of a workstation too, though only a cloud session reads it: a Target
   // a local Run accepts is then one the app can run as well (ADR-0008).
   if ((await read(OPERATOR_SKILL_PATH)) === undefined) {
-    return `the Operator's skill \`${OPERATOR_SKILL_PATH}\` is not ${there}`;
+    return `the Operator's skill \`${OPERATOR_SKILL_PATH}\` is not there`;
   }
 
   return undefined;

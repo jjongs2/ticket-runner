@@ -315,10 +315,6 @@ describe("a Target init has not set up", () => {
   });
 });
 
-/**
- * A Target an earlier pipeline left State files in, under the run directory:
- * resume state lives on the remote now, and nothing migrates them (ADR-0004).
- */
 describe("a Target whose remote lacks what init wrote", () => {
   it("refuses a Target that pushed none of it, saying to push rather than to run init", async () => {
     workspace.remoteFiles.clear();
@@ -437,6 +433,10 @@ describe("a Target whose remote lacks what init wrote", () => {
   });
 });
 
+/**
+ * A Target an earlier pipeline left State files in, under the run directory:
+ * resume state lives on the remote now, and nothing migrates them (ADR-0004).
+ */
 describe("a Target with State files left in its checkout", () => {
   it("refuses to start, naming the Tickets they belong to, and takes nothing", async () => {
     write(".ticket-runner/state/ticket-9.json", "{}");

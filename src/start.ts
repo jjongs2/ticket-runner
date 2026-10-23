@@ -84,11 +84,10 @@ export interface StartOptions {
  * Start a Run, and answer with the exit code it earned.
  *
  * Every refusal comes before the lock: an `--api-key` the Host cannot honour,
- * a Target `init` has not set up, one whose remote lacks what `init` wrote, one
- * holding State files an earlier pipeline
- * left in the checkout, and one with nothing to gate a merge. None is a Run
- * that went wrong, so none should leave a lock behind for the next one to
- * reclaim.
+ * a Target `init` has not set up, one whose remote lacks what `init` wrote,
+ * one holding State files an earlier pipeline left in the checkout, and one
+ * with nothing to gate a merge. None is a Run that went wrong, so none should
+ * leave a lock behind for the next one to reclaim.
  */
 export async function startRun(given: StartOptions): Promise<number> {
   // The count a Run was told is folded into the config once, here, so
