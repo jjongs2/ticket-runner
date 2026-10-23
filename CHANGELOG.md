@@ -4,6 +4,32 @@ One section per Version, newest first, written in the Version PR that cut it and
 published as the body of that Version's GitHub Release (ADR-0007). The shape is
 `docs/templates/version-notes.md`.
 
+## 0.6.3 (2026-10-24)
+
+Stages run on the subscription unless a Run starts with `--api-key`.
+
+### Runs
+
+- A Stage runs on the subscription, not the Host's API key, unless the Run starts with `--api-key` ([#263])
+- A Stage out of API credit or past its spend limit releases its Ticket ([#263])
+- The Run summary names what the Run was billed to ([#263])
+- A Run is refused when the remote Base branch lacks what `init` wrote ([#269])
+
+### Docs
+
+- The wiki tells each fact once, and says what to do where a reader is stuck ([#268])
+- Switching language in the wiki keeps the section being read ([#265], [#266])
+
+### After upgrading
+
+Run `ticket-runner init` in each Target, then commit and push what it writes: the Operator's skill gained `--api-key`.
+
+[#263]: https://github.com/jjongs2/ticket-runner/pull/263
+[#265]: https://github.com/jjongs2/ticket-runner/pull/265
+[#266]: https://github.com/jjongs2/ticket-runner/pull/266
+[#268]: https://github.com/jjongs2/ticket-runner/pull/268
+[#269]: https://github.com/jjongs2/ticket-runner/pull/269
+
 ## 0.6.2 (2026-10-22)
 
 Stages run leaner, with the Checks left to the pipeline, and a Run releases a Ticket when the Base branch or the API failed it, not the Ticket's own work.
