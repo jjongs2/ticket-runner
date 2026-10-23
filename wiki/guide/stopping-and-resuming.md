@@ -79,6 +79,7 @@ The Failure line says what stopped the Ticket. What it asks of you:
 | The Base branch could not be pulled | Clear what is in the way in the main checkout ([Running](./running.md#run)) |
 | The merge failed | Put right the repository setting GitHub's refusal names, such as a branch protection rule |
 | A branch in the way, or copies that have parted | Run the command the Failure line names |
+| A git or GitHub step failed: pushing, opening or un-drafting the pull request, the rebase's git, or setting up the worktree | Put right what the error in the Failure line names, on the Host that ran it for git, then hand it back. A pull request someone closed by hand means the work should stop |
 | Any other Stage failure, such as a non-zero exit or an answer its schema rejected | Read that Stage's transcript ([What stays where](#what-stays-where)) |
 
 ### When a Hand-off does less
@@ -151,7 +152,7 @@ On a Run started without `--api-key` the limit is the subscription's; on one sta
 What the Release does:
 
 - writes a `⏸ rate limited` or `⏸ API failure` row in the Progress comment, which is the whole report
-- brings the State file up to date: `claimed` if the implement Stage was stopped, `implemented` if a later Stage was. The Fix budget stays as it was, except that a fix Stage stopped this way spends nothing.
+- brings the State file up to date, to `claimed` if the implement Stage was stopped and `implemented` if a later Stage was, and keeps the Fix budget as it was, except that a fix Stage stopped this way spends nothing
 - undoes the Claim: adds `ready-for-agent`, removes `in-progress`, and unassigns
 - posts no comment and opens no draft pull request
 

@@ -1,6 +1,6 @@
 ---
 title: Hand-off, 멈추고 이어 하기
-description: Hand-off, Release, Stop, kill이 각각 무엇을 남기는지, 그리고 어느 Host의 다음 Run이든 거기서 Ticket을 어떻게 이어받는지.
+description: Hand-off, Release, Stop, kill이 각각 무엇을 남기는지, 그리고 어느 Host의 다음 Run이든 거기서 Ticket을 어떻게 이어받는지
 ---
 
 # Hand-off, 멈추고 이어 하기
@@ -11,13 +11,13 @@ Run은 아무도 지켜보지 않는 사이에 돌아가니, 일이 틀어졌을
 
 | 끝맺음 | 원인 | 남는 것 |
 |---|---|---|
-| merge | 모든 관문을 초록으로 통과 | 닫힌 이슈. branch와 State file은 사라짐 |
+| merge | 모든 게이트를 초록으로 통과 | 닫힌 이슈. branch와 State file은 사라짐 |
 | [Hand-off](#hand-off) | Fix budget으로 감당할 수 없는 실패 | `ready-for-human`, 코멘트, draft pull request. 작업과 State 유지 |
 | [Release](#release-on-a-rate-limit) | 요금제나 API의 rate limit, 일시적인 API 장애, [API 키의 예산 소진](#release-out-of-api-budget), 또는 [Base branch 실패](#release-over-a-failing-base-branch) | `ready-for-agent`, Ticket에 코멘트 없음. 작업과 State 유지 |
 | [Stop](#stop-and-kill) | `ticket-runner stop`(SIGTERM) | 새로 남는 것 없음 |
 | [kill](#stop-and-kill) | Ctrl+C, SIGKILL, 사라진 Host | Claim, 마지막 push 시점의 작업, State |
 
-merge나 Hand-off 뒤에는 Run이 그 Lane을 다시 채웁니다. Release나 Stop 뒤에는 더 claim하지 않고, 바쁜 Lane만 쥔 일을 마칩니다. kill이면 그 자리에서 끝납니다.
+merge나 Hand-off 뒤에는 Run이 그 Lane을 다시 채웁니다. Release나 Stop 뒤에는 더 claim하지 않고, 바쁜 Lane만 맡은 일을 마칩니다. kill이면 그 자리에서 끝납니다.
 
 아직 끝나지 않은 Ticket은 저마다 한 갈래 길로 돌아옵니다. 어느 길인지는 보드가 정합니다.
 
@@ -43,10 +43,10 @@ stateDiagram-v2
 
 Hand-off가 남기는 것:
 
-- push할 작업이 있으면, branch의 작업을 담은 draft pull request. 이미 열려 있던 pull request는 draft로 되돌아갑니다
-- 아래의 Hand-off 코멘트. Ticket이 어디서, 왜 실패했는지 알려 줍니다
+- push할 작업이 있으면, branch의 작업을 담은 draft pull request. 이미 열려 있던 pull request는 draft로 되돌아갑니다.
+- 아래의 Hand-off 코멘트. Ticket이 어디서, 왜 실패했는지 알려 줍니다.
 - `in-progress` 대신 `ready-for-human`, 그리고 담당자 없음
-- 각 Stage의 명령줄과 transcript. `ticket-runner/state` branch의 `ticket-<n>/<runId>/` 아래에 남습니다
+- 각 Stage의 명령줄과 transcript. `ticket-runner/state` branch의 `ticket-<n>/<runId>/` 아래에 남습니다.
 
 State file은 남겨 두니, 라벨만 바꾸면 Ticket을 이어 갑니다([Ticket 돌려주기](#handing-a-ticket-back)). 이 Run의 Stage가 작업을 남겼을 리 없는 경우는 예외입니다(아래 참고).
 
@@ -79,6 +79,7 @@ Failure 줄은 무엇이 Ticket을 멈췄는지 말합니다. 그에 따라 할 
 | Base branch를 pull하지 못함 | main checkout에서 걸리는 것을 치우기([실행하기](./running.md#run)) |
 | merge 실패 | GitHub가 거절하며 가리킨 저장소 설정을 바로잡기. branch protection rule 같은 것 |
 | 앞을 막은 branch, 또는 갈라진 사본 | Failure 줄이 알려 주는 명령을 실행하기 |
+| git이나 GitHub 단계가 실패함: pull request의 push, 열기, draft에서 꺼내기, rebase 중의 git 명령, worktree 준비 | Failure 줄의 오류가 가리키는 것을 바로잡고(git 단계라면 그 단계를 돌린 Host에서) 돌려주기. 누군가 손으로 닫은 pull request는 작업을 멈추라는 뜻입니다. |
 | 그 밖의 Stage 실패. 0이 아닌 종료 코드, 스키마가 거절한 답 같은 것 | 그 Stage의 transcript를 읽기([무엇이 어디에 남나](#what-stays-where)) |
 
 ### Hand-off가 덜 하는 경우 {#when-a-hand-off-does-less}
@@ -122,7 +123,7 @@ Hand-off된 Ticket은 네 가지 중 하나로 끝내면 됩니다.
 
 | 할 일 | 그다음 |
 |---|---|
-| Ticket이나 기준, 설정을 바꾸고 돌려주기 | 다음 Run이 그때 이슈에 적힌 대로 채점함 |
+| Ticket이나 기준, 설정을 바꾸고 돌려주기 | 다음 Run이 그때 이슈에 적힌 대로 판정함 |
 | remote의 branch에 commit을 push하고 돌려주기 | 다음 Run이 자기 사본을 그 tip까지 끌어올림. 이력을 다시 쓰면 그 대신 사본이 갈라짐 |
 | 직접 마무리하기: draft를 ready로 바꾸고 merge | 이슈가 닫힘. `ready-for-human`은 직접 떼고, worktree와 로컬 branch는 그것을 만든 Host에서 지우기 |
 | 버리기: 이슈를 닫음 | draft pull request와 branch는 직접 닫고 지울 때까지 남음 |
@@ -216,7 +217,7 @@ kill된 Run은 아무것도 놓아주지 않습니다. 그 Ticket들은 Claim을
 
 Stranded Ticket은 Frontier가 내놓는 것보다 먼저 빈 Lane을 채웁니다([실행하기](./running.md#run)).
 
-그래도 kill은 Stop보다 비쌉니다. Stage가 아직 commit하고 push하지 못한 것은 사라집니다. rebase 도중에 멈춘 worktree는 Check가 채점하기 전에 rebase를 abort해 branch tip으로 되돌립니다.
+그래도 kill은 Stop보다 비쌉니다. Stage가 아직 commit하고 push하지 못한 것은 사라집니다. rebase 도중에 멈춘 worktree는 Check가 판정하기 전에 rebase를 abort해 branch tip으로 되돌립니다.
 
 ## State file {#the-state-file}
 
@@ -260,21 +261,21 @@ State는 Target의 remote에 두니, 어느 Host의 Run이든 다른 Host가 남
 
 ## Run lock {#the-run-lock}
 
-어느 Host에서 돌든 한 Target은 한 번에 한 Run만 쥡니다. 모든 Host와 모든 사람이 볼 수 있는 Target의 GitHub 저장소에 lock을 두고 그렇게 합니다([ADR-0008](./internals.md#adr-0008)).
+어느 Host에서 돌든 Target 하나는 한 번에 Run 하나만 잡습니다. 모든 Host와 모든 사람이 볼 수 있는 Target의 GitHub 저장소에 lock을 두고 그렇게 합니다([ADR-0008](./internals.md#adr-0008)).
 
-lock은 `ticket-runner/lock` branch tip의 `lock.json`입니다. 이 branch는 Run이 한 번 시작된 뒤로 늘 존재합니다. 파일에는 쥔 쪽이 적힙니다. `host`(kind, id, name), `pid`, `command`, `runId`, `startedAt`, 그리고 OS가 알려 주는 프로세스 시작 시각입니다. 아무도 쥐지 않았다면 `{ "held": false }`입니다. commit 메시지도 같은 내용을 말로 적습니다. 예를 들면 ``Held by run 2026-09-17T09-00-00-000 on the workstation `desk`: ticket-runner run``이나 `Free`입니다.
+lock은 `ticket-runner/lock` branch tip의 `lock.json`입니다. 이 branch는 Run이 한 번 시작된 뒤로 늘 존재합니다. 파일에는 잡은 쪽이 적힙니다. `host`(kind, id, name), `pid`, `command`, `runId`, `startedAt`, 그리고 OS가 알려 주는 프로세스 시작 시각입니다. 아무도 잡지 않았다면 `{ "held": false }`입니다. commit 메시지도 같은 내용을 말로 적습니다. 예를 들면 ``Held by run 2026-09-17T09-00-00-000 on the workstation `desk`: ticket-runner run``이나 `Free`입니다.
 
-state branch와 달리 lock은 이력을 남기니, GitHub에서 누가 언제 Target을 쥐었는지 볼 수 있습니다. 두 Run이 동시에 잡으려 할 때 어떻게 가려내는지는 [`GitWorkspace`](./internals.md#gitworkspace)에 있습니다.
+state branch와 달리 lock은 이력을 남기니, GitHub에서 누가 언제 Target을 잡았는지 볼 수 있습니다. 두 Run이 동시에 잡으려 할 때 어떻게 가려내는지는 [`GitWorkspace`](./internals.md#gitworkspace)에 있습니다.
 
-누군가 쥐고 있는 lock을 Run이 어떻게 보느냐는 쥔 쪽이 어디 있느냐에 달려 있습니다.
+누군가 잡고 있는 lock을 Run이 어떻게 보느냐는 잡은 쪽이 어디 있느냐에 달려 있습니다.
 
-| 쥔 쪽 | 판정 | 새 Run은 |
+| 잡은 쪽 | 판정 | 새 Run은 |
 |---|---|---|
 | 이 Host, 프로세스가 살아 있고 시작 시각도 같음 | running | 거절: `Another ticket-runner is running on this Host: …` |
 | 이 Host, 프로세스가 없음(또는 그 pid를 다른 프로그램이 다시 씀) | abandoned | 스스로 넘겨받음. Ctrl+C로 끝난 Run은 아무 비용도 남기지 않음 |
 | 다른 Host | elsewhere | 거절. 죽었다고 넘겨짚지 않음 |
 
-한 Host에서는 다른 Host의 프로세스를 볼 수 없으니, 다른 Host가 남긴 lock은 사람이 풀 때까지 그대로 있습니다. GitHub에 있는 lock의 마지막 commit이 쥔 쪽을 `Held by run <id> on <host>: …`처럼 밝힙니다. 그 Host를 확인하고, 그 Run이 사라진 뒤에만 lock을 푸세요. Operator에게 부탁하거나, GitHub에서 그 branch에 `{ "held": false }`인 `lock.json`을 commit하면 됩니다. 단, 돌고 있는 Run이 없을 때만 그렇게 하세요. Run 도중 클라우드 VM이 회수되면 딱 이 한 번의 해제가 필요합니다.
+한 Host에서는 다른 Host의 프로세스를 볼 수 없으니, 다른 Host가 남긴 lock은 사람이 풀 때까지 그대로 있습니다. GitHub에 있는 lock의 마지막 commit이 잡은 쪽을 `Held by run <id> on <host>: …`처럼 밝힙니다. 그 Host를 확인하고, 그 Run이 사라진 뒤에만 lock을 푸세요. Operator에게 부탁하거나, GitHub에서 그 branch에 `{ "held": false }`인 `lock.json`을 commit하면 됩니다. 단, 돌고 있는 Run이 없을 때만 그렇게 하세요. Run 도중 클라우드 VM이 회수되면 딱 이 한 번의 해제가 필요합니다.
 
 클라우드 Host는 세션 id로 구별합니다. 세션을 알려 주지 않는 클라우드 Host는 무작위 id를 받으니, 그 Host의 다음 Run조차 그 lock을 남의 것으로 봅니다. 끝날 때 lock을 풀지 못한 Run은 그렇다고 알리되, 자기 종료 코드는 그대로 지킵니다.
 
@@ -303,11 +304,11 @@ flowchart TD
 ```
 <!-- Sources: src/adapters/git-workspace.ts, src/orchestrator.ts -->
 
-"parted"는 양쪽이 각자 상대에게 없는 commit을 들고 있다는 뜻입니다. 이 Host가 push하지 못한 작업을 쥐고 있는 사이, 다른 Host가 앞으로 나아간 것이지요. 파이프라인은 한쪽을 조용히 고르지 않습니다. Hand-off 문구가 두 사본을 모두 알려 주고, 하나로 합치는 두 가지 방법을 안내합니다. 알려 주는 명령으로 이 Host의 사본을 버리거나, 그 worktree에서 remote의 것 위로 force-push(`git push --force-with-lease origin <branch>`)하면 됩니다. 그런 다음 Ticket의 라벨을 바꾸세요. 두 사본 모두 파이프라인의 작업이라 State file은 남아 있고, 다음 Run은 사람이 남긴 쪽에서 이어 갑니다.
+"parted"는 양쪽이 각자 상대에게 없는 commit을 들고 있다는 뜻입니다. 이 Host가 push하지 못한 작업을 들고 있는 사이, 다른 Host가 앞으로 나아간 것이지요. 파이프라인은 한쪽을 조용히 고르지 않습니다. Hand-off 문구가 두 사본을 모두 알려 주고, 하나로 합치는 두 가지 방법을 안내합니다. 알려 주는 명령으로 이 Host의 사본을 버리거나, 그 worktree에서 remote의 것 위로 force-push(`git push --force-with-lease origin <branch>`)하면 됩니다. 그런 다음 Ticket의 라벨을 바꾸세요. 두 사본 모두 파이프라인의 작업이라 State file은 남아 있고, 다음 Run은 사람이 남긴 쪽에서 이어 갑니다.
 
 ## 관련 페이지 {#related-pages}
 
-- [Ticket 하나가 merge되기까지](./ticket-to-merge.md): 이 끝맺음들이 끊고 들어가는 Ticket의 일생, Fix budget, Landing
+- [Ticket 하나가 merge되기까지](./ticket-to-merge.md): 이 끝맺음들이 끊고 들어가는 Ticket의 생명 주기, Fix budget, Landing
 - [실행하기](./running.md): `run`, `stop`, 번호를 지정한 Run, 요약과 종료 코드, 클라우드 Host의 Operator
 - [설정](./configuration.md): Stage를 언제 "끝까지 가지 못한" 것으로 볼지 정하는 Stage 한도와 시간 제한
 - [내부 구조](./internals.md): State와 lock을 맡는 `Workspace` port, 그리고 이 페이지 뒤의 ADR

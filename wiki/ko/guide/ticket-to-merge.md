@@ -5,7 +5,7 @@ description: Ticket 하나가 Run 안에서 Claim부터 Stage, Check, Verdict, F
 
 # Ticket 하나가 merge되기까지
 
-Run은 아무도 지켜보지 않으니, 세션 하나의 말만 믿고 merge할 수는 없습니다. 그래서 모든 [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 같은 관문을 같은 순서로 지납니다. 결과가 늘 같은(결정론적) Check, 작업이 틀렸음을 증명하려 드는 두 번째 세션, 그리고 CI입니다. 새 세션이 고칠 수 있는 실패라면 fix Stage를 딱 한 번 얻고, 그 밖의 실패는 사람에게 넘어갑니다. 한 Run의 Ticket들은 나란히 구현되지만 merge는 하나씩 하므로, CI가 채점한 코드가 그대로 Base branch에 들어갑니다.
+Run은 아무도 지켜보지 않으니, 세션 하나의 말만 믿고 merge할 수는 없습니다. 그래서 모든 [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 같은 게이트를 같은 순서로 지납니다. 결과가 늘 같은(결정론적) Check, 작업이 틀렸음을 증명하려 드는 두 번째 세션, 그리고 CI입니다. 새 세션이 고칠 수 있는 실패라면 fix Stage를 딱 한 번 얻고, 그 밖의 실패는 사람에게 넘어갑니다. 한 Run의 Ticket들은 나란히 구현되지만 merge는 하나씩 하므로, CI가 판정한 코드가 그대로 Base branch에 들어갑니다.
 
 이 페이지는 Ticket 하나를 Claim부터 merge까지 따라갑니다. Hand-off, Release, Stop, 돌아오지 못한 Run처럼 중간에 멈추는 경우는 [Hand-off, 멈추고 이어 하기](./stopping-and-resuming.md)에서 다룹니다.
 
@@ -15,7 +15,7 @@ Run은 아무도 지켜보지 않으니, 세션 하나의 말만 믿고 merge할
 | worktree | `.worktrees/ticket-<n>`에 `agent/<n>-<slug>` | git |
 | implement Stage | worktree에서 `/mattpocock-skills:implement` 실행 | 에이전트 |
 | Check | commit 안 된 변경이 없는지 본 뒤 Check 명령을 하나씩 실행 | 종료 코드 |
-| verify Stage | Acceptance Criteria를 적대적으로 채점 | Verdict를 읽은 파이프라인 |
+| verify Stage | Acceptance Criteria를 적대적으로 판정 | Verdict를 읽은 파이프라인 |
 | fix Stage | 실패 내용을 받은 새 세션, Ticket당 한 번 | Fix budget |
 | Landing | rebase, Conflict Stage, pull request, CI, squash merge | 한 번에 Lane 하나 |
 | merge 이후 | 충족된 기준에 체크, 정리 | 파이프라인 |
@@ -105,12 +105,12 @@ Stage마다 디스크에 무엇을 남기는지는 [로그와 transcript](./runn
 implement 스킬이 Ticket을 읽고, 만들고, 리뷰합니다. 세션이 끝나면 파이프라인은 [Note](#notes)를 보내고, `title`을 기록하고, commit이 있으면 branch를 push합니다. 다른 Host의 Run도 거기서 이어 갈 수 있게 하려는 것입니다. 그다음은 이렇습니다.
 
 - 끝까지 가지 못한 Stage는 `implement`에서 Hand-off됩니다.
-- Base branch보다 commit이 하나도 늘지 않은 branch도 Hand-off됩니다. 조용히 포기한 에이전트는 채점할 거리를 남기지 않기 때문입니다.
+- Base branch보다 commit이 하나도 늘지 않은 branch도 Hand-off됩니다. 조용히 포기한 에이전트는 판정할 거리를 남기지 않기 때문입니다.
 - 그 외에는 State file이 `implemented`로 넘어가, 이후 어떤 Run도 이 Stage 비용을 다시 치르지 않습니다.
 
 ## Check {#the-checks}
 
-에이전트가 아니라 파이프라인이 직접 여는 관문이 둘 있습니다.
+에이전트가 아니라 파이프라인이 직접 여는 게이트가 둘 있습니다.
 
 1. **commit 안 된 변경 없음.** 어떤 commit에도 없는 변경이 worktree에 있으면 실패이고, 해당 경로를 전부 알려 줍니다. 설치한 의존성 같은 gitignore 파일은 세지 않습니다.
 2. **Check 명령**을 순서대로, worktree의 셸에서, 각각 `checkTimeoutMinutes`(기본 15분) 안에 실행합니다. 처음 실패한 곳에서 멈춥니다. 한도에서 kill된 명령은 timed out으로 보고되고, 실패가 아니라 멈춰 있었다는 한 줄이 출력 뒤에 붙습니다.
@@ -176,17 +176,17 @@ merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 �
 | merge 실패 | merge | 아니요, Hand-off |
 | 어디서든 rate limit, 일시적인 API 장애, API 키의 예산 소진 | 어디든 | 아니요, Release |
 
-fix Stage가 끝나면 Ticket은 Check부터 다시 시작합니다. verify Stage를 포함해 모든 관문이 수정본을 다시 채점하므로, 수정본도 처음 구현과 같은 기준을 통과해야 합니다. fix Stage 후 branch가 자라지 않았다면 곧바로 Hand-off입니다. 아무도 건드리지 않은 branch를 다시 채점해 봐야 똑같이 실패할 뿐이기 때문입니다. squash하거나 amend한 branch도 자라지 않은 것으로 봅니다. 이때 Hand-off 코멘트에는 fix Stage가 받았던 근거가 실리므로, 사람에게 넘어간 `unmet` 기준은 그 근거가 묻는 질문과 함께 도착합니다.
+fix Stage가 끝나면 Ticket은 Check부터 다시 시작합니다. verify Stage를 포함해 모든 게이트가 수정본을 다시 판정하므로, 수정본도 처음 구현과 같은 기준을 통과해야 합니다. fix Stage 후 branch가 자라지 않았다면 곧바로 Hand-off입니다. 아무도 건드리지 않은 branch를 다시 판정해 봐야 똑같이 실패할 뿐이기 때문입니다. squash하거나 amend한 branch도 자라지 않은 것으로 봅니다. 이때 Hand-off 코멘트에는 fix Stage가 받았던 근거가 실리므로, 사람에게 넘어간 `unmet` 기준은 그 근거가 묻는 질문과 함께 도착합니다.
 
 rate limit, API 장애, API 예산으로 멈춘 fix Stage는 Fix budget을 쓰지 않습니다. 다음 Run이 어떤 budget으로 시작하는지는 [Ticket 돌려주기](./stopping-and-resuming.md#handing-a-ticket-back)에 있습니다.
 
 ## Lane과 Frontier 다시 채우기 {#lanes-and-the-frontier-refill}
 
-Run은 [Lane](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 하나에 Ticket 하나를 쥐고, Lane의 Ticket이 끝나는 즉시 다시 채웁니다. 어떤 순서로 채우는지는 [실행하기](./running.md#run)에, Lane을 늘리면 언제 도움이 되는지는 [`lanes`](./configuration.md#lanes)에, 두 Ticket이 서로 방해하지 않게 하는 것은 [Blocker](./planning.md#blockers)에 있습니다.
+Run은 [Lane](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 하나에 Ticket 하나를 맡고, Lane의 Ticket이 끝나는 즉시 다시 채웁니다. 어떤 순서로 채우는지는 [실행하기](./running.md#run)에, Lane을 늘리면 언제 도움이 되는지는 [`lanes`](./configuration.md#lanes)에, 두 Ticket이 서로 방해하지 않게 하는 것은 [blocker](./planning.md#blockers)에 있습니다.
 
 ## Landing {#the-landing}
 
-rebase 직전의 Base branch pull부터 merge 직후의 pull까지인 [Landing](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)에는 한 번에 Ticket 하나만, 도착한 순서대로 들어갑니다. 그래서 Ticket의 rebase와 merge 사이에 Base branch가 움직일 수 없고, CI가 채점한 그대로 merge됩니다([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)). 시간이 많이 드는 implement와 verify는 계속 병렬로 돌아갑니다. 대신 한 Lane의 Conflict Stage나 느린 CI가 다른 Lane의 Landing을 붙잡아 둡니다.
+rebase 직전의 Base branch pull부터 merge 직후의 pull까지인 [Landing](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)에는 한 번에 Ticket 하나만, 도착한 순서대로 들어갑니다. 그래서 Ticket의 rebase와 merge 사이에 Base branch가 움직일 수 없고, CI가 판정한 그대로 merge됩니다([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)). 시간이 많이 드는 implement와 verify는 계속 병렬로 돌아갑니다. 대신 한 Lane의 Conflict Stage나 느린 CI가 다른 Lane의 Landing을 붙잡아 둡니다.
 
 ```mermaid
 sequenceDiagram
@@ -227,7 +227,7 @@ Ticket은 fix Stage, Hand-off, Release 때도 Landing을 나가므로, 누구도
 | 그 밖의 이유로 해결 안 됨 | `❌ unresolved`. rebase를 abort하고 Fix budget을 씀 |
 | Stage를 띄우지 못했거나 git에 물을 수 없음 | `❌ unknown`. rebase를 abort하고 Hand-off |
 
-Check를 다시 돌리는 건 해결 내용이 어떤 관문도 본 적 없는 코드이기 때문입니다. verify는 다시 하지 않습니다. 이 Stage는 기준이 다루는 동작을 바꾸지 않도록 지시받기 때문입니다. 해결하지 못한 rebase는 충돌 내용과 남은 문제를 근거로 fix Stage에 넘깁니다. abort는 항상 실행되므로, fix Stage나 사람이 반쯤 끝난 rebase를 물려받는 일은 없습니다.
+Check를 다시 돌리는 건 해결 내용이 어떤 게이트도 본 적 없는 코드이기 때문입니다. verify는 다시 하지 않습니다. 이 Stage는 기준이 다루는 동작을 바꾸지 않도록 지시받기 때문입니다. 해결하지 못한 rebase는 충돌 내용과 남은 문제를 근거로 fix Stage에 넘깁니다. abort는 항상 실행되므로, fix Stage나 사람이 반쯤 끝난 rebase를 물려받는 일은 없습니다.
 
 ### pull request {#pull-request}
 
@@ -236,8 +236,8 @@ rebase로 branch가 다시 쓰였으니 `--force-with-lease`로 push합니다. B
 **제목**은 아래 후보 가운데 commit 컨벤션 형식(`<type>(<scope>): <summary>`, 한 줄)에 맞는 첫 번째 것입니다. 끝의 `(#<n>)`는 떼어 냅니다.
 
 1. implement나 fix Stage가 branch 전체에 대해 마지막으로 답한 `title`. 이번 Run의 것이든, 이전 Run이 State file에 기록한 것이든 상관없습니다.
-2. branch의 첫 commit 제목.
-3. Ticket 제목 그대로.
+2. branch의 첫 commit 제목
+3. Ticket 제목 그대로
 
 **본문**은 `Closes #<n>`, Verdict 집계, 접힌 기준 목록(`met`이 아닌 것은 근거 표시), 그리고 Run을 밝히는 한 줄입니다. 워크스테이션에서는 그 줄이 `.ticket-runner/runs/<runId>/<n>/`도 가리킵니다. 클라우드 Host의 Run 디렉터리는 세션과 함께 사라지므로 거기서는 Run만 밝힙니다.
 
@@ -312,7 +312,7 @@ Ticket은 이미 merge됐으니 여기서부터는 Hand-off될 수 없습니다.
 
 ## Note {#notes}
 
-Stage는 자기 Ticket과 상관없는 결함을 자주 만납니다. 고치면 verify가 채점하는 범위를 넘어 Ticket이 넓어지고, 무시하면 transcript 속에 묻혀 버립니다. 그래서 implement, verify, fix Stage는 [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 목록을 남기며 끝나고, 파이프라인은 각 Note를 사람이 볼 만한 곳에 올립니다. Note는 Ticket 밖의 결함이고, 그 Ticket 안에서는 손대지 않습니다. branch 스스로 만든 결함은 Note로 남기지 않고 고칩니다. Note는 Stage 자체의 결과를 판정하기 전에 보내므로, 턴이 바닥난 Stage도 알아챈 것은 전합니다.
+Stage는 자기 Ticket과 상관없는 결함을 자주 만납니다. 고치면 verify가 판정하는 범위를 넘어 Ticket이 넓어지고, 무시하면 transcript 속에 묻혀 버립니다. 그래서 implement, verify, fix Stage는 [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 목록을 남기며 끝나고, 파이프라인은 각 Note를 사람이 볼 만한 곳에 올립니다. Note는 Ticket 밖의 결함이고, 그 Ticket 안에서는 손대지 않습니다. branch 스스로 만든 결함은 Note로 남기지 않고 고칩니다. Note는 Stage 자체의 결과를 판정하기 전에 보내므로, 턴이 바닥난 Stage도 알아챈 것은 전합니다.
 
 | Note가 가리키는 곳 | 가는 곳 |
 |---|---|
@@ -327,11 +327,11 @@ Note 안의 줄 머리 `- [ ]`는 escape되므로, Note가 Acceptance Criteria�
 
 ## 관련 페이지 {#related-pages}
 
-- [일 계획하기](./planning.md): Claim 전에 도는 Guard, verify가 채점할 수 있는 Acceptance Criteria 쓰는 법.
-- [실행하기](./running.md): Run 시작, `--lanes`, `--api-key`, 범위를 좁힌 Run, 요약, 종료 코드, transcript.
-- [설정](./configuration.md): `checks`, `gates`, Stage 한도, `ciTimeoutMinutes`, `ciGraceMinutes`.
-- [Hand-off, 멈추고 이어 하기](./stopping-and-resuming.md): Hand-off, Release, Stop, Stranded Ticket, Ticket 돌려주기.
-- [내부 구조](./internals.md): 각 단계 뒤의 port와 adapter.
+- [일 계획하기](./planning.md): Claim 전에 도는 Guard, verify가 판정할 수 있는 Acceptance Criteria 쓰는 법
+- [실행하기](./running.md): Run 시작, `--lanes`, `--api-key`, 범위를 좁힌 Run, 요약, 종료 코드, transcript
+- [설정](./configuration.md): `checks`, `gates`, Stage 한도, `ciTimeoutMinutes`, `ciGraceMinutes`
+- [Hand-off, 멈추고 이어 하기](./stopping-and-resuming.md): Hand-off, Release, Stop, Stranded Ticket, Ticket 돌려주기
+- [내부 구조](./internals.md): 각 단계 뒤의 port와 adapter
 
 ## 참고 자료 {#references}
 

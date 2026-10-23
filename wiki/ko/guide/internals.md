@@ -1,6 +1,6 @@
 ---
 title: 내부 구조
-description: 세 port와 그 adapter, src/ 모듈 지도, Version을 찍는 방식, ADR 요약, 그리고 checkout에서 파이프라인을 돌리는 방법.
+description: 세 port와 그 adapter, src/ 모듈 구성, Version을 찍는 방식, ADR 요약, 그리고 checkout에서 파이프라인을 돌리는 방법
 ---
 
 # 내부 구조
@@ -106,7 +106,7 @@ sequenceDiagram
     B->>R: T 위에 "held by B" push, T에 lease
     R-->>B: 거절: tip이 더는 T가 아님
     B->>R: 다시 fetch
-    R-->>B: 다른 Host의 A가 쥐고 있음
+    R-->>B: 다른 Host의 A가 잡고 있음
     Note over B: Host A, 그 Run, 시작 시각을 알리고 2로 끝남
     A->>R: Lane이 다 돌아오면 그 위에 "free" push
 ```
@@ -119,7 +119,7 @@ sequenceDiagram
 - [`repo-root.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/repo-root.ts)는 worktree 안에서 실행해도 main checkout을 찾습니다. 그래서 lock, `.worktrees/`, 로그가 clone마다 한 곳에 모입니다.
 - [`version.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts)는 이 사본이 어느 [Version](#versions)인지 읽습니다.
 
-## `src/` 지도 {#a-map-of-src}
+## `src/` 모듈 구성 {#a-map-of-src}
 
 테스트는 각 모듈 옆에 `*.test.ts`로 있습니다.
 
@@ -131,7 +131,7 @@ sequenceDiagram
 | [`command-line.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/command-line.ts) | 아무것도 보기 전에 인자를 해석함. 사용법 문구도 여기 있음 |
 | [`stage-guard.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stage-guard.ts) | Stage의 셸 안에서는 모든 명령을 거절(Stage mark) |
 | [`start.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts) | 거절, Run lock, Stop 수신, 요약과 종료 코드 |
-| [`startup.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts) | merge를 막을 관문이 없는 Run을 거절하고, 꺼 둔 관문을 경고 |
+| [`startup.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts) | merge를 막을 게이트가 없는 Run을 거절하고, 꺼 둔 게이트를 경고 |
 
 **Run과 Ticket**
 
@@ -150,7 +150,7 @@ sequenceDiagram
 | [`resume.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/resume.ts) | State file의 모양과 이름 |
 | [`handoff.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/handoff.ts) | Ticket을 다시 가져갈 때 예전 Hand-off 코멘트를 지난 일로 표시 |
 | [`stop.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stop.ts) | `ticket-runner stop`, 그리고 Run 쪽에서 받는 SIGTERM |
-| [`lock.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lock.ts) | Run lock 파일의 내용, 쥔 쪽이 살아 있는지 |
+| [`lock.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lock.ts) | Run lock 파일의 내용, 잡은 쪽이 살아 있는지 |
 | [`host.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/host.ts) | 워크스테이션인지 클라우드인지, 어느 것인지 |
 | [`credential.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/credential.ts) | 요금제인지 API 키인지, Stage마다 보고해야 할 것, `--api-key`를 거절하는 경우 |
 
@@ -232,7 +232,7 @@ Run과 `init`은 파이프라인 자신의 저장소에서 공개된 가장 높�
 ### [ADR-0001: Humans plan, the pipeline executes](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0001-humans-plan-the-pipeline-executes.md) {#adr-0001}
 
 - **결정**: 사람이 계획하고, 무인으로 도는 것은 Execution뿐입니다.
-- **이유**: grilling 질문에 잘못 답하면, 걸러 줄 관문 없이 Spec, Ticket, merge된 코드로 굳어 버립니다.
+- **이유**: grilling 질문에 잘못 답하면, 걸러 줄 게이트 없이 Spec, Ticket, merge된 코드로 굳어 버립니다.
 - **비용**: Planning의 품질은 사람 몫입니다. 파이프라인은 알려진 결함만 막습니다.
 
 ### [ADR-0002: One `claude -p` child process per Stage](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md) {#adr-0002}
@@ -256,7 +256,7 @@ Run과 `init`은 파이프라인 자신의 저장소에서 공개된 가장 높�
 ### [ADR-0005: Landing is a serialized section, not a merge queue](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md) {#adr-0005}
 
 - **결정**: Landing은 merge queue가 아니라, 한 번에 Lane 하나만 들어가는 구간입니다.
-- **이유**: CI를 두 번 치르지 않고도 CI가 채점한 그대로 merge됩니다. GitHub merge queue는 저장소 설정 하나를 Target readiness의 일부로 만들었을 것입니다.
+- **이유**: CI를 두 번 치르지 않고도 CI가 판정한 그대로 merge됩니다. GitHub merge queue는 저장소 설정 하나를 Target readiness의 일부로 만들었을 것입니다.
 - **비용**: 느린 CI나 Conflict Stage 하나가 다른 모든 Lane의 Landing을 붙잡습니다.
 
 ### [ADR-0006: Stop is a signal, and Ctrl+C stays a kill](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md) {#adr-0006}
@@ -297,7 +297,7 @@ checkout은 번호 옆에 commit도 함께 알려 줍니다([찍히는 번호](#
 ## 관련 페이지 {#related-pages}
 
 - [Hand-off, 멈추고 이어 하기](./stopping-and-resuming.md): `GitWorkspace`가 맡는 state branch와 Run lock
-- [Ticket 하나가 merge되기까지](./ticket-to-merge.md): `orchestrator.ts`가 이끄는 Ticket의 일생
+- [Ticket 하나가 merge되기까지](./ticket-to-merge.md): `orchestrator.ts`가 이끄는 Ticket의 생명 주기
 - [실행하기](./running.md): `cli.ts`가 나눠 주는 명령들과 `-v`
 - [설치](./installation.md): Version 설치, `init`, `remove`
 

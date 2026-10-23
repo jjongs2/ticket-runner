@@ -1,6 +1,6 @@
 ---
 title: 실행하기
-description: Run 시작하기, Lane 주기, API 키로 과금하기, 지정한 Ticket으로 좁히기, 멈추기, 요약과 종료 코드와 transcript 읽기, 그리고 Claude 앱에서 실행하기.
+description: Run 시작하기, Lane 주기, API 키로 과금하기, 지정한 Ticket으로 좁히기, 멈추기, 요약과 종료 코드와 transcript 읽기, 그리고 Claude 앱에서 실행하기
 ---
 
 # 실행하기
@@ -13,7 +13,7 @@ description: Run 시작하기, Lane 주기, API 키로 과금하기, 지정한 T
 | `ticket-runner run 3 7` | 같은 Run을 #3과 #7로 좁힘 | 위와 같음 |
 | `ticket-runner run --lanes 2` | 같은 Run을 Ticket 두 개씩 동시에 | 위와 같음 |
 | `ticket-runner run --api-key` | 같은 Run을 셸이 export한 `ANTHROPIC_API_KEY`로 과금 | 위와 같음 |
-| `ticket-runner stop` | 이 Target의 Run에게 쥔 것만 마치고 더 가져가지 말라고 요청 | `0` 보냄 · `2` 보낼 상대 없음 |
+| `ticket-runner stop` | 이 Target의 Run에게 맡은 것만 마치고 더 가져가지 말라고 요청 | `0` 보냄 · `2` 보낼 상대 없음 |
 | `ticket-runner -v` | 이 사본의 Version을 출력 | `0` |
 | `ticket-runner -h` | 사용법을 출력 | `0` (명령 없이 실행하면 `2`) |
 
@@ -27,10 +27,10 @@ description: Run 시작하기, Lane 주기, API 키로 과금하기, 지정한 T
 |---|---|---|
 | 지켜보는 사람 | 나. 내 세션에서 보면서 방향을 틀 수 있음 | 없음. 끝난 뒤 요약과 보드를 읽음 |
 | 일의 단위 | Spec 하나 전체를 세션 하나에서 | Ticket 하나. branch와 pull request가 Ticket마다 따로 |
-| 관문 | 스킬이 밟는 단계, 그다음 나의 검토 | Ticket마다 Check, verify Stage, CI |
+| 게이트 | 스킬이 밟는 단계, 그다음 나의 검토 | Ticket마다 Check, verify Stage, CI |
 | 끝나는 모습 | 세션이 끝나면 Spec의 작업이 내 검토를 기다림 | Ticket마다 Base branch에 merge되거나 사람에게 넘어감 |
 | 이어 하기 | 어디까지 했는지 보드에 남는 기록이 없어 남은 일은 내가 가려내야 함 | [Stranded Ticket](./stopping-and-resuming.md)을 다음 Run이 어느 Host에서든 이어 감 |
-| 보드에 남는 표시 | 작업하는 동안 없음 | Run이 쥔 동안 `in-progress`와 담당자 |
+| 보드에 남는 표시 | 작업하는 동안 없음 | Run이 맡은 동안 `in-progress`와 담당자 |
 
 둘이 한 Spec을 나눠 맡지는 않습니다. Spec에 `/implement-spec`을 돌리기 전에 그 Ticket들에서 `ready-for-agent`를 떼세요([라벨](./planning.md#labels)). 스킬이 단계마다 하는 일, pull request를 여는 조건, 알려진 약점은 [upstream 페이지](https://www.aihero.dev/skills-implement-spec)에 있습니다.
 
@@ -108,7 +108,7 @@ Stop이나 Release 때문에 Run이 손대지 못한 지정 Ticket에는 줄이 
 ticket-runner stop
 ```
 
-Stop은 Run에게 Lane이 쥐고 있는 Ticket만 merge나 Hand-off까지 마치고 더는 가져가지 말라고 하는 요청입니다. `stop`은 GitHub에서 Run lock을 읽어 거기 적힌 프로세스에 SIGTERM을 보내고, 어느 Run에게 요청했는지 알려 줍니다.
+Stop은 Run에게 Lane이 맡고 있는 Ticket만 merge나 Hand-off까지 마치고 더는 가져가지 말라고 하는 요청입니다. `stop`은 GitHub에서 Run lock을 읽어 거기 적힌 프로세스에 SIGTERM을 보내고, 어느 Run에게 요청했는지 알려 줍니다.
 
 ```text
 `ticket-runner run` (run 2026-09-17T09-00-00-000, pid 4321) will stop once the Tickets it holds are finished. It claims no more.
@@ -134,8 +134,8 @@ Target에서는 lock 말고 아무것도 필요 없습니다. 설정도, `gh` �
 
 | 상황 | 보게 되는 것 |
 |---|---|
-| 이 Host의 다른 Run이 Target을 쥐고 있음 | ``Another ticket-runner is running on this Host: `ticket-runner run` as run … Wait for it to finish, or ask it to with `ticket-runner stop`.`` |
-| 다른 Host의 Run이 Target을 쥐고 있음 | 그 Host, Run, 시작 시각, 그리고 그 Run이 사라졌을 때 lock을 푸는 방법 |
+| 이 Host의 다른 Run이 Target을 잡고 있음 | ``Another ticket-runner is running on this Host: `ticket-runner run` as run … Wait for it to finish, or ask it to with `ticket-runner stop`.`` |
+| 다른 Host의 Run이 Target을 잡고 있음 | 그 Host, Run, 시작 시각, 그리고 그 Run이 사라졌을 때 lock을 푸는 방법 |
 | 셸이 Stage의 것임 | ``Refusing to start: TICKET_RUNNER_STAGE is set to `implement`, …`` |
 | 키를 export하지 않고 `--api-key` | `` `--api-key` runs every Stage on the `ANTHROPIC_API_KEY` this shell exports, and it exports none. … `` |
 | 클라우드 Host에서 `--api-key` | `` `--api-key` needs a workstation Host: a cloud session runs every Stage on the subscription, … `` |
@@ -176,7 +176,7 @@ Frontier blocked.
 | `Frontier blocked.` | 남은 것에 모두 열린 blocker가 있음 |
 | `Rate limited · resets 2026-09-20 03:40 UTC.` | rate limit으로 Release되어 멈춤. 시각은 CLI가 알려 준, 한도가 풀리는 시각(UTC)이고, 알려 주지 않았으면 `Rate limited.`로 끝남. `--api-key` Run이면 `API rate limited` |
 | `API failure.` | 일시적인 API 장애로 Release되어 멈췄고, 그 뒤 rate limit으로 Release된 Ticket이 없음. 마지막 줄에서는 rate limit이 API 장애보다 앞섬 |
-| `Out of API budget.` | 키의 크레딧이나 지출 한도로 Release되어 멈춤. 사람이 손써야 하는 것은 이것뿐이라 rate limit과 API 장애보다 앞섬. Console을 확인하세요 |
+| `Out of API budget.` | 키의 크레딧이나 지출 한도로 Release되어 멈춤. 사람이 손써야 하는 것은 이것뿐이라 rate limit과 API 장애보다 앞섬. Console을 확인하세요. |
 | ``Base branch `main` fails `npm test` at 1a2b3c4.`` | Base branch 실패로 Release되어 멈춤. 실패한 Check와 merge-base를 알려 줌. Base branch에서 고치면 되고, 출력은 상설 Notes 이슈의 Note에 있음 |
 | `Stopped at 22:07 · finishing #4 #9.` | 그 시각(UTC)에 Stop이 왔고, 그때 그 Ticket들이 Lane에 있었음 |
 
@@ -205,7 +205,7 @@ ticket-runner run 2026-09-17T09-00-00-000 · 1 lane
 
 Stage가 도는 동안이나 CI를 기다리는 동안에는 아무것도 출력하지 않고, 이 시간은 한 시간이 될 수도 있습니다. Stage 자신의 출력은 아래의 `.stdout` 파일에 있습니다. 좁힌 Run이면 첫 줄에 지정한 Ticket이 덧붙고, 재개한 Ticket은 `claimed` 대신 `resumed from <state>`라고 출력합니다. Run과 다른 Credential로 실행된 Stage는 끝나는 즉시 알려 줍니다. `#4 implement ran on apiKeySource apiKeyHelper, not the subscription (none)`. 경고와 거절은 stderr로 갑니다.
 
-Stage가 한 일은 모두 Target의 gitignore된 `.ticket-runner/` 아래 디스크에 남습니다. run id는 UTC 시작 시각입니다. 예를 들면 `2026-09-17T09-00-00-000`.
+Stage가 한 일은 모두 Target의 gitignore된 `.ticket-runner/` 아래 디스크에 남습니다. run id는 `2026-09-17T09-00-00-000`처럼 UTC 시작 시각입니다.
 
 | `.ticket-runner/runs/<runId>/` 아래 경로 | 담는 것 |
 |---|---|
@@ -240,8 +240,8 @@ Stage가 한 일은 모두 Target의 gitignore된 `.ticket-runner/` 아래 디�
 Host 준비는 클라우드 환경의 setup 스크립트가 설치하지 않은 것만 채웁니다.
 
 1. **파이프라인.** setup 스크립트가 설치한 사본이 있으면 Version과 상관없이 그대로 씁니다. 없으면 Target의 conventions 문서에 찍힌 Version을 설치합니다. 찍힌 Version이 없으면 아무것도 설치하지 않고, 워크스테이션에서 `init`을 실행해 달라고 합니다.
-2. **`mattpocock-skills` 플러그인**, 공식 마켓플레이스에서.
-3. **`gh`**, apt에서.
+2. **`mattpocock-skills` 플러그인**, 공식 마켓플레이스에서
+3. **`gh`**, apt에서
 4. **Target 자체의 의존성**, main checkout에. 모든 worktree의 Check가 거기서 찾아 씁니다.
 
 Run이 Ticket을 끝낼 때마다 보고하고, 끝나면 요약과 종료 코드의 뜻을 전합니다.
@@ -256,11 +256,11 @@ Run이 Ticket을 끝낼 때마다 보고하고, 끝나면 요약과 종료 코�
 
 ## 관련 페이지 {#related-pages}
 
-- [일 계획하기](./planning.md): Ticket이 Frontier에 오르려면.
-- [설정](./configuration.md): Run이 쓰는 `lanes`, Check, Stage 한도.
-- [Ticket 하나가 merge되기까지](./ticket-to-merge.md): Lane이 Ticket 하나로 하는 일.
-- [Hand-off, 멈추고 이어 하기](./stopping-and-resuming.md): Stop과 kill, Release, Stranded Ticket, Run lock.
-- [설치와 제거](./installation.md): 시작하기 전에 Run이 거절하는 것.
+- [일 계획하기](./planning.md): Ticket이 Frontier에 오르려면
+- [설정](./configuration.md): Run이 쓰는 `lanes`, Check, Stage 한도
+- [Ticket 하나가 merge되기까지](./ticket-to-merge.md): Lane이 Ticket 하나로 하는 일
+- [Hand-off, 멈추고 이어 하기](./stopping-and-resuming.md): Stop과 kill, Release, Stranded Ticket, Run lock
+- [설치와 제거](./installation.md): 시작하기 전에 Run이 거절하는 것
 
 ## 참고 자료 {#references}
 

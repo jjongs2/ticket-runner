@@ -1,6 +1,6 @@
 ---
 title: 설치와 제거
-description: 머신과 저장소에 필요한 것, ticket-runner 설치, init이 Target을 준비하는 방식, Run이 거절하는 경우, 그리고 전부 다시 걷어 내는 방법.
+description: 머신과 저장소에 필요한 것, ticket-runner 설치, init이 Target을 준비하는 방식, Run이 거절하는 경우, 그리고 전부 다시 걷어 내는 방법
 ---
 
 # 설치와 제거
@@ -174,7 +174,7 @@ readiness보다 먼저 오는 거절이 하나 있습니다. 클라우드 Host�
 readiness 다음에 거절이 두 가지 더 있습니다.
 
 - **checkout에 남은 State file.** 초기 파이프라인은 Ticket의 재개 상태를 `.ticket-runner/state/`에 뒀는데, 지금은 Target의 remote에 두고, 옮겨 주는 것은 없습니다. 이 디렉터리에 State file이 남아 있으면 Run은 해당 Ticket을 나열하며 거절합니다. 그 파일을 쓴 Version으로 Ticket을 마무리하거나 사람에게 넘긴 다음, 디렉터리를 지우세요.
-- **Check 없음.** [Checks 관문](./configuration.md#gates)이 켜져 있는데 설정하거나 추론할 수 있는 Check 명령이 없으면, 검사하지 않은 코드를 merge하느니 Run을 거절합니다.
+- **Check 없음.** [Checks 게이트](./configuration.md#gates)가 켜져 있는데 설정하거나 추론할 수 있는 Check 명령이 없으면, 검사하지 않은 코드를 merge하느니 Run을 거절합니다.
 
 ## `remove`로 걷어 내기 {#take-it-out-with-remove}
 
@@ -207,17 +207,17 @@ flowchart TD
 ```
 <!-- Sources: src/remove.ts, src/lock.ts, src/host.ts -->
 
-거절할 때는 언제나 다음에 할 일을 알려 줍니다. lock이 잡혀 있으면 누가 잡았든 거절됩니다. 이 Host에서 프로세스가 사라진 Run이 잡고 있어도 마찬가지입니다. `remove`는 lock을 넘겨받지 않으니, `ticket-runner run`을 시작해 그 Run이 쥐고 있던 일을 마무리하거나 직접 lock을 푸세요([Hand-off, 멈추고 이어 하기](./stopping-and-resuming.md)). 클라우드 Host는 remote의 branch를 지울 수 없어서 거절합니다. `remove`는 워크스테이션에서 실행하세요.
+거절할 때는 언제나 다음에 할 일을 알려 줍니다. lock이 잡혀 있으면 누가 잡았든 거절됩니다. 이 Host에서 프로세스가 사라진 Run이 잡고 있어도 마찬가지입니다. `remove`는 lock을 넘겨받지 않으니, `ticket-runner run`을 시작해 그 Run이 맡고 있던 일을 마무리하거나 직접 lock을 푸세요([Hand-off, 멈추고 이어 하기](./stopping-and-resuming.md)). 클라우드 Host는 remote의 branch를 지울 수 없어서 거절합니다. `remove`는 워크스테이션에서 실행하세요.
 
 ### 사라지는 것과 남는 것 {#what-goes-and-what-stays}
 
 제거하는 것:
 
-- `docs/agents/pipeline-conventions.md`, Operator의 스킬, 그 결과 비게 된 디렉터리.
+- `docs/agents/pipeline-conventions.md`, Operator의 스킬, 그 결과 비게 된 디렉터리
 - `init`이 쓴 `CLAUDE.md` 섹션. 그 섹션뿐인 파일이면 파일째 지웁니다.
 - `init`이 쓴 주석 아래 그대로 있는 `.gitignore` 줄. 그 줄뿐인 파일이면 파일째 지웁니다.
-- `.ticket-runner/`: Run 로그와 transcript.
-- `.worktrees/ticket-<n>` worktree와 그 branch, 다른 로컬 `agent/` branch, 비게 된 `.worktrees/`.
+- `.ticket-runner/`: Run 로그와 transcript
+- `.worktrees/ticket-<n>` worktree와 그 branch, 다른 로컬 `agent/` branch, 비게 된 `.worktrees/`
 - `in-progress` 라벨. 달고 있던 모든 이슈에서 뗍니다.
 - `ticket-runner/state` branch. 이제 재개할 수 없게 된 Ticket을 보고서가 모두 알려 줍니다.
 - `ticket-runner.json`. 맨 마지막에, 앞의 제거가 모두 성공했을 때만 지웁니다.
@@ -227,10 +227,10 @@ flowchart TD
 
 - `in-progress`를 뺀 triage 라벨 다섯 개. Planning에서도 쓰기 때문입니다.
 - 문구를 고친 `CLAUDE.md` 섹션. 이제 사람의 것일 수 있어서입니다.
-- 사람이 단 주석 아래 있는 `.gitignore` 줄.
-- 다른 것이 들어 있는 `.worktrees/`, 그리고 그 `.gitignore` 줄.
+- 사람이 단 주석 아래 있는 `.gitignore` 줄
+- 다른 것이 들어 있는 `.worktrees/`, 그리고 그 `.gitignore` 줄
 - squash merge와 merge 시 branch 삭제 설정. `init` 전부터 켜져 있었을 수 있습니다.
-- GitHub의 `agent/` branch와 거기 열린 pull request.
+- GitHub의 `agent/` branch와 거기 열린 pull request
 - 상설 Notes 이슈, 그리고 Run이 쓴 모든 코멘트. 사람에게 쓴 글이라서입니다.
 
 실패한 제거는 보고하고 나머지는 계속 진행합니다. `remove`를 다시 실행하면 남은 것을 대상으로 처음부터 다시 하는 셈입니다.
@@ -251,10 +251,10 @@ Target마다 먼저 `ticket-runner remove`를 실행하세요. 명령을 지운 
 
 ## 관련 페이지 {#related-pages}
 
-- [일 계획하기](./planning.md): 파이프라인이 가져가는 Ticket이 되려면.
-- [실행하기](./running.md): Run을 시작하고, 좁히고, 멈추기.
-- [설정](./configuration.md): 라벨을 포함한 `ticket-runner.json`의 필드.
-- [Hand-off, 멈추고 이어 하기](./stopping-and-resuming.md): `remove`가 지우는 Run lock과 State branch.
+- [일 계획하기](./planning.md): 파이프라인이 가져가는 Ticket이 되려면
+- [실행하기](./running.md): Run을 시작하고, 좁히고, 멈추기
+- [설정](./configuration.md): 라벨을 포함한 `ticket-runner.json`의 필드
+- [Hand-off, 멈추고 이어 하기](./stopping-and-resuming.md): `remove`가 지우는 Run lock과 State branch
 
 ## 참고 자료 {#references}
 

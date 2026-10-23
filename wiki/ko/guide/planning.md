@@ -1,6 +1,6 @@
 ---
 title: 일 계획하기
-description: GitHub 이슈가 파이프라인이 가져가는 Ticket이 되는 조건. Spec과 Ticket, Acceptance Criteria, 네이티브 blocker, 라벨, 그리고 Planning이 쓸 수 없게 남긴 것을 거르는 Guard.
+description: GitHub 이슈가 파이프라인이 가져가는 Ticket이 되는 조건. Spec과 Ticket, Acceptance Criteria, 네이티브 blocker, 라벨, 그리고 Planning이 쓸 수 없게 남긴 것을 거르는 Guard
 ---
 
 # 일 계획하기
@@ -11,7 +11,7 @@ description: GitHub 이슈가 파이프라인이 가져가는 Ticket이 되는 �
 |---|---|
 | `ready-for-agent` 라벨 | Run이 Ticket을 찾는 방법 |
 | 담당자 없음 | 누군가 지정되어 있으면 이미 claim한 것 |
-| Acceptance Criteria: 본문이나 코멘트의 `- [ ]` 줄 | verify Stage가 채점하는 유일한 대상 |
+| Acceptance Criteria: 본문이나 코멘트의 `- [ ]` 줄 | verify Stage가 판정하는 유일한 대상 |
 | 네이티브 `blocked by` 연결로 적은 blocker, 모두 닫힘 | 어떤 Ticket을 어떤 순서로 돌릴지 정함 |
 | 네이티브 sub-issue 없음 | sub-issue가 있는 이슈는 Ticket이 아니라 Spec |
 
@@ -28,13 +28,13 @@ Planning은 `mattpocock-skills` 플러그인의 스킬을 차례로 쓰는 일�
 | `to-tickets` | **Ticket**: Spec의 네이티브 sub-issue. 하나가 에이전트 세션 하나 분량이고, `ready-for-agent` 라벨이 붙음 |
 | `triage` | 다른 경로로 들어온 이슈를 Ticket으로. 브리프(와 그 기준)는 코멘트로 올라감 |
 
-[Spec](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 언제나 그 아래 Ticket을 통해서만 구현됩니다. [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 implement Stage 한 번에 끝날 만큼 작아야 합니다. implement Stage는 기본으로 300턴, 60분입니다([설정](./configuration.md#stages)).
+[Spec](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 언제나 하위 Ticket을 통해서만 구현됩니다. [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 implement Stage 한 번에 끝날 만큼 작아야 합니다. implement Stage는 기본으로 300턴, 60분입니다([설정](./configuration.md#stages)).
 
 `to-tickets`를 돌린 뒤에는, 그대로 두면 Guard가 거절할 것들을 확인하세요.
 
 - Ticket마다 `- [ ]` 기준과 `ready-for-agent` 라벨이 있는지
-- 본문이 `Blocked by` 아래 적은 이슈마다 네이티브 연결도 있는지([Blocker](#blockers))
-- Spec에 `ready-for-agent`가 없는지. `to-spec`이 이 라벨을 붙이는데, Ticket이 생기기 전까지 Run은 Spec을 `no-criteria`로 건너뛰고, Ticket이 생기면 `spec` Guard가 라벨을 뗍니다
+- 본문이 `Blocked by` 아래 적은 이슈마다 네이티브 연결도 있는지([blocker](#blockers))
+- Spec에 `ready-for-agent`가 없는지. `to-spec`이 이 라벨을 붙이는데, Ticket이 생기기 전까지 Run은 Spec을 `no-criteria`로 건너뛰고, Ticket이 생기면 `spec` Guard가 라벨을 뗍니다.
 
 부모와 blocker까지 달아서 직접 만들려면:
 
@@ -49,12 +49,12 @@ gh issue create --title "Drain the Frontier" --parent 12 --blocked-by 14,15 --la
 ```markdown
 - [ ] `run 3 7` takes only #3 and #7            ← 기준
   * [ ] a nested item counts too                ← 기준
-- [x] already ticked                            ← 아님: 더 채점할 게 없음
+- [x] already ticked                            ← 아님: 더 판정할 게 없음
 The command must refuse bad input.              ← 아님: 산문
 1. [ ] a numbered item                          ← 아님: 불릿이 없음
 ```
 
-verify Stage는 기준마다 `met`, `unmet`, `unverifiable` 중 하나로 채점합니다([Ticket 하나가 merge되기까지](./ticket-to-merge.md#the-verify-stage-and-its-verdict)).
+verify Stage는 기준마다 `met`, `unmet`, `unverifiable` 중 하나로 판정합니다([Ticket 하나가 merge되기까지](./ticket-to-merge.md#the-verify-stage-and-its-verdict)).
 
 기준은 세션이 코드를 돌려 보거나 읽어서 확인할 수 있게 쓰세요. 사람의 눈이 필요한 기준(스크린샷, 느낌)은 `unverifiable`로 돌아옵니다.
 
@@ -87,7 +87,7 @@ blocker 중 하나라도 열려 있으면 Ticket은 기다립니다. 같은 Run�
 | `needs-triage` | 사람. 파이프라인은 상설 Notes 이슈에 | 그 라벨로 Notes 이슈를 여는 것 말고는 없음 |
 | `needs-info` | 사람 | 없음 |
 | `ready-for-agent` | Planning, Release, Ticket을 돌려주는 사람 | Candidate로 가져감. Claim할 때 뗌 |
-| `in-progress` | Run만, Claim할 때 | Run이 쥐고 있는 Ticket 표시. merge, Hand-off, Release 때 뗌 |
+| `in-progress` | Run만, Claim할 때 | Run이 맡고 있는 Ticket 표시. merge, Hand-off, Release 때 뗌 |
 | `ready-for-human` | Hand-off | 사람이 라벨을 바꿀 때까지 건드리지 않음 |
 | `wontfix` | 사람 | 없음 |
 
@@ -116,18 +116,18 @@ flowchart TD
 
 | 이유 | Candidate의 상태 | 파이프라인이 하는 일 |
 |---|---|---|
-| `spec` | 네이티브 sub-issue가 있으니 Spec | 건너뛰고 `ready-for-agent`를 뗌. 그 아래 Ticket은 하나씩 가져감 |
-| `no-criteria` | 본문과 코멘트에 `- [ ]` 줄이 없어 verify가 채점할 게 없음 | 건너뛰고 라벨은 둠. 코멘트로 기준을 더할 수 있으니까 |
+| `spec` | 네이티브 sub-issue가 있으니 Spec | 건너뛰고 `ready-for-agent`를 뗌. 하위 Ticket은 하나씩 가져감 |
+| `no-criteria` | 본문과 코멘트에 `- [ ]` 줄이 없어 verify가 판정할 게 없음 | 건너뛰고 라벨은 둠. 코멘트로 기준을 더할 수 있으니까 |
 | `body-only-blockers` | `Blocked by` 섹션이 네이티브 연결 없는 이슈를 적음 | 건너뛰고 라벨은 둠. 본문의 줄은 blocker로 읽지 않음 |
 
 건너뛸 때는 무엇을 고치면 되는지 적은 경고 코멘트를 남기되, 같은 이유로는 한 번만 답니다. Run 요약에는 `skipped  #<n> <reason>`으로 남습니다. 이슈를 고치면 다음 Run이 가져갑니다.
 
 ## 관련 페이지 {#related-pages}
 
-- [실행하기](./running.md): Run이 비우는 Frontier, 그리고 지정한 Ticket으로 좁힌 Run.
-- [Ticket 하나가 merge되기까지](./ticket-to-merge.md): Ticket을 claim한 다음 일어나는 일과 verify가 기준을 채점하는 방식.
-- [설정](./configuration.md): 라벨 이름 바꾸기.
-- [설치와 제거](./installation.md): `init`이 라벨과 conventions 문서를 만듦.
+- [실행하기](./running.md): Run이 비우는 Frontier, 그리고 지정한 Ticket으로 좁힌 Run
+- [Ticket 하나가 merge되기까지](./ticket-to-merge.md): Ticket을 claim한 다음 일어나는 일과 verify가 기준을 판정하는 방식
+- [설정](./configuration.md): 라벨 이름 바꾸기
+- [설치와 제거](./installation.md): `init`이 라벨과 conventions 문서를 만듦
 
 ## 참고 자료 {#references}
 

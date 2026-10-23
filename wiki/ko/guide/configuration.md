@@ -1,6 +1,6 @@
 ---
 title: 설정
-description: ticket-runner.json의 모든 필드, 기본값, 그리고 각 필드가 Run에서 바꾸는 것.
+description: ticket-runner.json의 모든 필드, 기본값, 그리고 각 필드가 Run에서 바꾸는 것
 ---
 
 # 설정
@@ -12,7 +12,7 @@ Target은 설정 없이도 돌아가야 하므로 모든 필드는 선택이고,
 | 필드 | 기본값 | 바꾸는 것 |
 |---|---|---|
 | [`baseBranch`](#basebranch) | GitHub의 기본 branch | Ticket을 따 오고, rebase하고, merge하는 branch |
-| [`lanes`](#lanes) | `1` | Run이 동시에 쥐는 Ticket 수 |
+| [`lanes`](#lanes) | `1` | Run이 동시에 맡는 Ticket 수 |
 | [`checks`](#checks) | `package.json`에서 추론 | 파이프라인이 Ticket을 거르려고 직접 돌리는 명령 |
 | [`checkTimeoutMinutes`](#checks) | `15` | Check 명령 하나당 wall-clock 한도 |
 | [`gates.checks`](#gates) | `true` | Check가 하나도 없어도 Run을 시작할지 |
@@ -60,14 +60,14 @@ Invalid ticket-runner.json: stages: Unrecognized key: "implment". Refused by tic
 
 - `lanes`: 1 이상의 정수
 
-Run이 동시에 쥐는 Ticket 수입니다. [Lane](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 하나에 Ticket 하나. `run --lanes <n>`이 한 Run에 한해 덮어씁니다. Lane들은 각자의 worktree에서 동시에 Check를 돌리니, 포트나 데이터베이스처럼 Check끼리 겹쳐 쓰게 되는 것이 있는 Target은 `1`로 두세요. Landing(rebase부터 merge까지)에는 한 번에 Lane 하나만 들어가므로, Lane을 늘리면 implement와 verify가 빨라질 뿐 merge가 빨라지지는 않습니다([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)).
+Run이 동시에 맡는 Ticket 수입니다. [Lane](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 하나에 Ticket 하나. `run --lanes <n>`이 한 Run에 한해 덮어씁니다. Lane들은 각자의 worktree에서 동시에 Check를 돌리니, 포트나 데이터베이스처럼 Check끼리 겹쳐 쓰게 되는 것이 있는 Target은 `1`로 두세요. Landing(rebase부터 merge까지)에는 한 번에 Lane 하나만 들어가므로, Lane을 늘리면 implement와 verify가 빨라질 뿐 merge가 빨라지지는 않습니다([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)).
 
 ## `checks` {#checks}
 
 - `checks`: 문자열 배열
 - `checkTimeoutMinutes`: 0보다 큰 수
 
-[Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 파이프라인이 직접 돌리는 명령입니다. 각 명령은 Ticket의 worktree에서 셸을 통해 돌고, implement Stage 뒤, fix Stage 뒤, rebase 충돌을 해결한 뒤에 실행됩니다. 0이 아닌 코드로 끝나면 관문을 통과하지 못하고, Ticket은 [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)을 씁니다. 단, Base branch도 같은 명령에 실패하면 예외입니다([Base branch도 함께 실패할 때](./ticket-to-merge.md#a-failure-the-base-branch-shares)). CI가 실패했을 때도 Base branch가 함께 실패하는지 이 명령들로 따지므로, CI가 돌리는 명령과 같은 것을 적어 두세요.
+[Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 파이프라인이 직접 돌리는 명령입니다. 각 명령은 Ticket의 worktree에서 셸을 통해 돌고, implement Stage 뒤, fix Stage 뒤, rebase 충돌을 해결한 뒤에 실행됩니다. 0이 아닌 코드로 끝나면 게이트를 통과하지 못하고, Ticket은 [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)을 씁니다. 단, Base branch도 같은 명령에 실패하면 예외입니다([Base branch도 함께 실패할 때](./ticket-to-merge.md#a-failure-the-base-branch-shares)). CI가 실패했을 때도 Base branch가 함께 실패하는지 이 명령들로 따지므로, CI가 돌리는 명령과 같은 것을 적어 두세요.
 
 이 필드가 없으면 `package.json`에 `test`, `typecheck` 스크립트 중 정의된 것을 보고 `npm test`와 `npm run typecheck`를 추론합니다.
 
@@ -148,10 +148,10 @@ Target이 이미 다른 라벨 이름을 쓰고 있다면 triage 어휘의 이�
 
 ## 관련 페이지 {#related-pages}
 
-- [실행하기](./running.md): `--lanes`, 그리고 이 파일을 읽는 Run.
-- [Ticket 하나가 merge되기까지](./ticket-to-merge.md): 각 Stage, Check, 관문이 Ticket의 일생 어디에 있는지.
-- [일 계획하기](./planning.md): 라벨과 그 뜻.
-- [설치와 제거](./installation.md): `init`이 빈 파일을 만들고, `remove`가 맨 마지막에 지움.
+- [실행하기](./running.md): `--lanes`, 그리고 이 파일을 읽는 Run
+- [Ticket 하나가 merge되기까지](./ticket-to-merge.md): 각 Stage, Check, 게이트가 Ticket의 생명 주기 어디에 있는지
+- [일 계획하기](./planning.md): 라벨과 그 뜻
+- [설치와 제거](./installation.md): `init`이 빈 파일을 만들고, `remove`가 맨 마지막에 지움
 
 ## 참고 자료 {#references}
 
