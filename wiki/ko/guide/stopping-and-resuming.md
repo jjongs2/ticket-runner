@@ -44,7 +44,7 @@ stateDiagram-v2
 Hand-off가 남기는 것:
 
 - push할 작업이 있으면, branch의 작업을 담은 draft pull request. 이미 열려 있던 pull request는 draft로 되돌아갑니다.
-- 아래의 Hand-off 코멘트. Ticket이 어디서, 왜 실패했는지 알려 줍니다.
+- 아래의 hand-off 코멘트. Ticket이 어디서, 왜 실패했는지 알려 줍니다.
 - `in-progress` 대신 `ready-for-human`, 그리고 담당자 없음
 - 각 Stage의 명령줄과 transcript. `ticket-runner/state` branch의 `ticket-<n>/<runId>/` 아래에 남습니다.
 
@@ -138,7 +138,7 @@ Ticket을 파이프라인에 돌려주려면 라벨을 `ready-for-human`에서 `
 
 - **Fix budget**: 새로 채워집니다. Ticket이 사람 손을 거쳤으니, 그 사람이 한 일에 새 budget을 쓰라는 뜻입니다. 예전 코멘트에는 budget을 썼다고 그대로 남습니다. 실제로 썼으니까요.
 - **draft pull request**: CI를 기다리기 전에 draft를 풉니다. draft에서는 워크플로가 아예 돌지 않는 일이 많아서, 그대로 기다리면 "no checks"로 읽히기 때문입니다. 사람이 닫아 버린 pull request처럼 draft가 풀리지 않으면 `pr`에서 Hand-off합니다. 닫았다는 건 이어 가지 말라는 뜻이니까요.
-- **Hand-off 코멘트**: 각 코멘트의 마커 바로 아래에 `_Taken again by a later Run; this hand-off is history._`가 붙습니다. 알림은 가지 않습니다.
+- **hand-off 코멘트**: 각 코멘트의 마커 바로 아래에 `_Taken again by a later Run; this hand-off is history._`가 붙습니다. 알림은 가지 않습니다.
 - **Progress comment**: 새로 하나 답니다. 사람이 읽었던 코멘트는 읽은 모습 그대로 둡니다.
 
 라벨을 바꾸기 전까지 State file은 가만히 있습니다. 어떤 Frontier도 `ready-for-human` Ticket을 내놓지 않고, sweep은 아무 말 없이 지나가며, 번호를 지정한 Run은 `not-ready`로 건너뜁니다. 이슈가 닫히면 다음 Run의 sweep이 파일과 transcript를 지웁니다.
@@ -304,7 +304,7 @@ flowchart TD
 ```
 <!-- Sources: src/adapters/git-workspace.ts, src/orchestrator.ts -->
 
-"parted"는 양쪽이 각자 상대에게 없는 commit을 들고 있다는 뜻입니다. 이 Host가 push하지 못한 작업을 들고 있는 사이, 다른 Host가 앞으로 나아간 것이지요. 파이프라인은 한쪽을 조용히 고르지 않습니다. Hand-off 문구가 두 사본을 모두 알려 주고, 하나로 합치는 두 가지 방법을 안내합니다. 알려 주는 명령으로 이 Host의 사본을 버리거나, 그 worktree에서 remote의 것 위로 force-push(`git push --force-with-lease origin <branch>`)하면 됩니다. 그런 다음 Ticket의 라벨을 바꾸세요. 두 사본 모두 파이프라인의 작업이라 State file은 남아 있고, 다음 Run은 사람이 남긴 쪽에서 이어 갑니다.
+"parted"는 양쪽이 각자 상대에게 없는 commit을 들고 있다는 뜻입니다. 이 Host가 push하지 못한 작업을 들고 있는 사이, 다른 Host가 앞으로 나아간 것이지요. 파이프라인은 한쪽을 조용히 고르지 않습니다. hand-off 문구가 두 사본을 모두 알려 주고, 하나로 합치는 두 가지 방법을 안내합니다. 알려 주는 명령으로 이 Host의 사본을 버리거나, 그 worktree에서 remote의 것 위로 force-push(`git push --force-with-lease origin <branch>`)하면 됩니다. 그런 다음 Ticket의 라벨을 바꾸세요. 두 사본 모두 파이프라인의 작업이라 State file은 남아 있고, 다음 Run은 사람이 남긴 쪽에서 이어 갑니다.
 
 ## 관련 페이지 {#related-pages}
 

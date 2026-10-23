@@ -55,7 +55,7 @@ fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종�
 
 1. **State file**을 씁니다. Ticket의 branch, 도달한 상태(`claimed`), Fix budget을 썼는지가 담깁니다.
 2. `gh` 사용자를 Ticket의 담당자로 지정하고, `in-progress`를 붙이고 `ready-for-agent`를 뗍니다. Stranded Ticket은 이미 이 Claim을 달고 있으니 다시 쓰지 않습니다.
-3. Ticket에 아직 유효한 Hand-off 코멘트가 있으면 지난 일로 표시합니다([Ticket 돌려주기](./stopping-and-resuming.md#handing-a-ticket-back)).
+3. Ticket에 아직 유효한 hand-off 코멘트가 있으면 지난 일로 표시합니다([Ticket 돌려주기](./stopping-and-resuming.md#handing-a-ticket-back)).
 
 ## worktree와 branch {#the-worktree-and-branch}
 
@@ -176,7 +176,7 @@ merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 �
 | merge 실패 | merge | 아니요, Hand-off |
 | 어디서든 rate limit, 일시적인 API 장애, API 키의 예산 소진 | 어디든 | 아니요, Release |
 
-fix Stage가 끝나면 Ticket은 Check부터 다시 시작합니다. verify Stage를 포함해 모든 게이트가 수정본을 다시 판정하므로, 수정본도 처음 구현과 같은 기준을 통과해야 합니다. fix Stage 후 branch가 자라지 않았다면 곧바로 Hand-off입니다. 아무도 건드리지 않은 branch를 다시 판정해 봐야 똑같이 실패할 뿐이기 때문입니다. squash하거나 amend한 branch도 자라지 않은 것으로 봅니다. 이때 Hand-off 코멘트에는 fix Stage가 받았던 근거가 실리므로, 사람에게 넘어간 `unmet` 기준은 그 근거가 묻는 질문과 함께 도착합니다.
+fix Stage가 끝나면 Ticket은 Check부터 다시 시작합니다. verify Stage를 포함해 모든 게이트가 수정본을 다시 판정하므로, 수정본도 처음 구현과 같은 기준을 통과해야 합니다. fix Stage 후 branch가 자라지 않았다면 곧바로 Hand-off입니다. 아무도 건드리지 않은 branch를 다시 판정해 봐야 똑같이 실패할 뿐이기 때문입니다. squash하거나 amend한 branch도 자라지 않은 것으로 봅니다. 이때 hand-off 코멘트에는 fix Stage가 받았던 근거가 실리므로, 사람에게 넘어간 `unmet` 기준은 그 근거가 묻는 질문과 함께 도착합니다.
 
 rate limit, API 장애, API 예산으로 멈춘 fix Stage는 Fix budget을 쓰지 않습니다. 다음 Run이 어떤 budget으로 시작하는지는 [Ticket 돌려주기](./stopping-and-resuming.md#handing-a-ticket-back)에 있습니다.
 
