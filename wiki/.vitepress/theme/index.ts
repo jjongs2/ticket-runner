@@ -88,10 +88,45 @@ function keepSectionOnLanguageSwitch(router: Router) {
   };
 }
 
+// Diagrams render after the router has scrolled to a heading and push it down the page,
+// so the heading is put back each time the page grows, until the reader moves or the
+// diagrams have had as long as whenDiagramsRender gives them.
+function holdHeading(id: string) {
+  const heading = document.getElementById(id);
+  const doc = document.querySelector(".vp-doc");
+  if (!heading || !doc) return;
+  // Where the router's own scroll puts a heading.
+  const place = () => {
+    const padding = parseInt(getComputedStyle(heading).paddingTop, 10);
+    window.scrollTo(0, window.scrollY + heading.getBoundingClientRect().top - getScrollOffset() + padding);
+  };
+  const observer = new ResizeObserver(place);
+  const inputs = ["wheel", "touchstart", "keydown", "pointerdown"];
+  const release = () => {
+    observer.disconnect();
+    clearTimeout(timer);
+    inputs.forEach((e) => window.removeEventListener(e, release));
+  };
+  const timer = setTimeout(release, 10_000);
+  inputs.forEach((e) => window.addEventListener(e, release, { passive: true }));
+  observer.observe(doc);
+}
+
+function holdHeadingAfterRouteChange(router: Router) {
+  router.onAfterRouteChange = async (href) => {
+    const id = decodeURIComponent(new URL(href, location.href).hash.slice(1));
+    if (!id) return;
+    await nextTick();
+    holdHeading(id);
+  };
+}
+
 export default {
   extends: DefaultTheme,
   enhanceApp({ router }) {
-    if (inBrowser) keepSectionOnLanguageSwitch(router);
+    if (!inBrowser) return;
+    keepSectionOnLanguageSwitch(router);
+    holdHeadingAfterRouteChange(router);
   },
   setup() {
     const route = useRoute();
