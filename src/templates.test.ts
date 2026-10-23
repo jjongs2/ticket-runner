@@ -391,6 +391,7 @@ describe("runSummary", () => {
 
   it("heads the summary with the Version, the Run and how long it took", () => {
     const summary = runSummary({
+      credential: "subscription",
       version: VERSION,
       runId: "r1",
       durationMs: 42 * 60_000,
@@ -398,7 +399,7 @@ describe("runSummary", () => {
       stop: { reason: "frontier", blocked: [] },
     });
 
-    expect(summary.split("\n")[0]).toBe(`ticket-runner ${VERSION} run r1 · 42m`);
+    expect(summary.split("\n")[0]).toBe(`ticket-runner ${VERSION} run r1 · 42m · subscription`);
   });
 
   /**
@@ -409,6 +410,7 @@ describe("runSummary", () => {
   it("puts the newer-Version line at the head, above the header", () => {
     const newer = "A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade.";
     const summary = runSummary({
+      credential: "subscription",
       version: VERSION,
       runId: "r1",
       durationMs: 0,
@@ -419,11 +421,12 @@ describe("runSummary", () => {
 
     const [first, second] = summary.split("\n");
     expect(first).toBe(newer);
-    expect(second).toBe(`ticket-runner ${VERSION} run r1 · 0m`);
+    expect(second).toBe(`ticket-runner ${VERSION} run r1 · 0m · subscription`);
   });
 
   it("heads the summary with the Run where no newer Version is out", () => {
     const summary = runSummary({
+      credential: "subscription",
       version: VERSION,
       runId: "r1",
       durationMs: 0,
@@ -431,11 +434,12 @@ describe("runSummary", () => {
       stop: { reason: "frontier", blocked: [] },
     });
 
-    expect(summary.split("\n")[0]).toBe(`ticket-runner ${VERSION} run r1 · 0m`);
+    expect(summary.split("\n")[0]).toBe(`ticket-runner ${VERSION} run r1 · 0m · subscription`);
   });
 
   it("lists merged, handed-off and skipped Tickets by number", () => {
     const summary = runSummary({
+      credential: "subscription",
       version: VERSION,
       runId: "r1",
       durationMs: 0,
@@ -450,6 +454,7 @@ describe("runSummary", () => {
 
   it("says where the rate limit landed on a released Ticket", () => {
     const summary = runSummary({
+      credential: "subscription",
       version: VERSION,
       runId: "r1",
       durationMs: 0,
@@ -462,6 +467,7 @@ describe("runSummary", () => {
 
   it("says a transient API failure, not the rate limit, released a Ticket it stopped", () => {
     const summary = runSummary({
+      credential: "subscription",
       version: VERSION,
       runId: "r1",
       durationMs: 0,
@@ -476,6 +482,7 @@ describe("runSummary", () => {
 
   it("says a failing Base branch released a Ticket, and names it, the command and the commit last", () => {
     const summary = runSummary({
+      credential: "subscription",
       version: VERSION,
       runId: "r1",
       durationMs: 0,
@@ -515,6 +522,7 @@ describe("runSummary", () => {
 
   it("names the guard that passed a candidate over", () => {
     const summary = runSummary({
+      credential: "subscription",
       version: VERSION,
       runId: "r1",
       durationMs: 0,
@@ -530,6 +538,7 @@ describe("runSummary", () => {
 
   it("says the Frontier is empty when nothing was left blocked", () => {
     const summary = runSummary({
+      credential: "subscription",
       version: VERSION,
       runId: "r1",
       durationMs: 0,
@@ -542,6 +551,7 @@ describe("runSummary", () => {
 
   it("says the Frontier is blocked when candidates were held back", () => {
     const summary = runSummary({
+      credential: "subscription",
       version: VERSION,
       runId: "r1",
       durationMs: 0,
@@ -554,6 +564,7 @@ describe("runSummary", () => {
 
   it("says the rate limit stopped a Run a Release ended", () => {
     const summary = runSummary({
+      credential: "subscription",
       version: VERSION,
       runId: "r1",
       durationMs: 0,
@@ -566,6 +577,7 @@ describe("runSummary", () => {
 
   it("says when the limit resets, in UTC to the minute, where the CLI said", () => {
     const summary = runSummary({
+      credential: "subscription",
       version: VERSION,
       runId: "r1",
       durationMs: 0,
@@ -582,6 +594,7 @@ describe("runSummary", () => {
     // A Run stopped this way cannot say a candidate was held back all Run, so
     // the stop carries no candidates to skip and the summary skips none.
     const summary = runSummary({
+      credential: "subscription",
       version: VERSION,
       runId: "r1",
       durationMs: 0,
@@ -594,6 +607,7 @@ describe("runSummary", () => {
 
   it("says when a Stop arrived and what its Lanes were finishing", () => {
     const summary = runSummary({
+      credential: "subscription",
       version: VERSION,
       runId: "r1",
       durationMs: 0,
@@ -606,6 +620,7 @@ describe("runSummary", () => {
 
   it("says no Lane was busy when the Stop arrived to an idle Run", () => {
     const summary = runSummary({
+      credential: "subscription",
       version: VERSION,
       runId: "r1",
       durationMs: 0,
@@ -620,6 +635,7 @@ describe("runSummary", () => {
     // Like a Run the limit stopped, it ended before it could say a candidate
     // was held back all Run, so it says nothing about one.
     const summary = runSummary({
+      credential: "subscription",
       version: VERSION,
       runId: "r1",
       durationMs: 0,
@@ -632,6 +648,7 @@ describe("runSummary", () => {
 
   it("says so when a Run found nothing to take", () => {
     const summary = runSummary({
+      credential: "subscription",
       version: VERSION,
       runId: "r1",
       durationMs: 0,
@@ -644,6 +661,7 @@ describe("runSummary", () => {
 
   it("says why each Ticket a narrowed Run was given and never took was skipped", () => {
     const summary = runSummary({
+      credential: "subscription",
       version: VERSION,
       runId: "r1",
       durationMs: 0,
@@ -660,6 +678,74 @@ describe("runSummary", () => {
       "  skipped  #57 pull-request",
       "  skipped  #99 no-issue",
       "  skipped  #13 blocked",
+    ]);
+  });
+
+  describe("of a Run on the API key", () => {
+    /** A summary of a Run started with `--api-key`, with nothing in it but what is given. */
+    function onTheKey(overrides: Partial<Parameters<typeof runSummary>[0]> = {}): string {
+      return runSummary({
+        credential: "api-key",
+        version: VERSION,
+        runId: "r1",
+        durationMs: 0,
+        outcomes: [],
+        stop: { reason: "frontier", blocked: [] },
+        ...overrides,
+      });
+    }
+
+    it("names the API key in its header", () => {
+      expect(onTheKey().split("\n")[0]).toBe(`ticket-runner ${VERSION} run r1 · 0m · API key`);
+    });
+
+    it("says a Ticket was released out of API budget, and ends on it", () => {
+      const summary = onTheKey({
+        outcomes: [{ ...released, cause: "out-of-budget" }],
+        stop: { reason: "out-of-budget" },
+      });
+
+      expect(summary).toContain(
+        "  released #6 Rebase conflict resolution · out of API budget at implement",
+      );
+      expect(summary.trimEnd().split("\n").at(-1)).toBe("Out of API budget.");
+    });
+
+    it("puts its rate limit down to the API's", () => {
+      const summary = onTheKey({
+        outcomes: [released],
+        stop: { reason: "rate-limited", resetsAt: "2026-09-20T03:40:00.000Z" },
+      });
+
+      expect(summary).toContain("  released #6 Rebase conflict resolution · API rate limit at implement");
+      expect(summary.trimEnd().split("\n").at(-1)).toBe(
+        "API rate limited · resets 2026-09-20 03:40 UTC.",
+      );
+      expect(onTheKey({ outcomes: [released], stop: { reason: "rate-limited" } })).toMatch(
+        /\nAPI rate limited\.\n$/,
+      );
+    });
+  });
+
+  it("names each Stage that ran on another credential, after its own Ticket's rows", () => {
+    const summary = runSummary({
+      credential: "subscription",
+      version: VERSION,
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [merged, handed],
+      strayStages: [
+        { ticket: 5, stage: "verify", apiKeySource: "apiKeyHelper" },
+        { ticket: 3, stage: "implement", apiKeySource: "ANTHROPIC_API_KEY" },
+      ],
+      stop: { reason: "frontier", blocked: [] },
+    });
+
+    expect(summary.split("\n").slice(2, 6)).toEqual([
+      "  merged   #3 Run: drain the Frontier (PR #12)",
+      "  billed   #3 implement · apiKeySource ANTHROPIC_API_KEY",
+      "  handed   #5 Fix Stage with a single retry · verify · 1 unmet",
+      "  billed   #5 verify · apiKeySource apiKeyHelper",
     ]);
   });
 });
@@ -922,6 +1008,7 @@ describe("Notes in a Run summary", () => {
 
   it("follows the row of the Ticket whose Stage made it", () => {
     const summary = runSummary({
+      credential: "subscription",
       version: VERSION,
       runId: "r1",
       durationMs: 0,
@@ -938,6 +1025,7 @@ describe("Notes in a Run summary", () => {
 
   it("reports a Note the verify Stage made the way it reports the others", () => {
     const summary = runSummary({
+      credential: "subscription",
       version: VERSION,
       runId: "r1",
       durationMs: 0,
@@ -952,6 +1040,7 @@ describe("Notes in a Run summary", () => {
 
   it("says when the Note opened an issue of its own", () => {
     const summary = runSummary({
+      credential: "subscription",
       version: VERSION,
       runId: "r1",
       durationMs: 0,
@@ -967,6 +1056,7 @@ describe("Notes in a Run summary", () => {
   it("trims a long Note to one line", () => {
     const long = `worktrees ${"pile ".repeat(40)}up`;
     const summary = runSummary({
+      credential: "subscription",
       version: VERSION,
       runId: "r1",
       durationMs: 0,
@@ -981,7 +1071,7 @@ describe("Notes in a Run summary", () => {
   });
 
   it("says nothing extra for a Ticket whose Stages found nothing", () => {
-    const summary = runSummary({ version: VERSION, runId: "r1", durationMs: 0, outcomes: [merged], stop: FRONTIER_EMPTY });
+    const summary = runSummary({ credential: "subscription", version: VERSION, runId: "r1", durationMs: 0, outcomes: [merged], stop: FRONTIER_EMPTY });
 
     expect(summary).not.toContain("noted");
   });

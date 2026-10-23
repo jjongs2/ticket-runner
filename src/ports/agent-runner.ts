@@ -1,3 +1,5 @@
+import type { Credential } from "../credential.js";
+
 /**
  * One Claude Code session per Stage (ADR-0002).
  *
@@ -25,14 +27,16 @@ export const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"] as const;
 export type Effort = (typeof EFFORT_LEVELS)[number];
 
 /**
- * Why a Stage did not finish cleanly. `rate-limited` and `api-error` are singled
- * out because the pipeline releases a claim rather than blaming the Ticket for
- * either: one is the subscription running out of room, the other the API failing
- * on its side after the CLI had given up retrying it.
+ * Why a Stage did not finish cleanly. `rate-limited`, `api-error` and
+ * `out-of-budget` are singled out because the pipeline releases a claim rather
+ * than blaming the Ticket for any of them: the rate limit, the API failing on
+ * its side after the CLI had given up retrying it, and the API key's
+ * organization out of credit or its workspace past its spend limit.
  */
 export type StageFailure =
   | "rate-limited"
   | "api-error"
+  | "out-of-budget"
   | "timed-out"
   | "turn-capped"
   | "nonzero-exit"
@@ -48,6 +52,11 @@ export interface StageRequest {
   maxTurns: number;
   maxMinutes: number;
   permissionMode: PermissionMode;
+  /**
+   * What the session is billed to: the subscription, with the Host's API key
+   * kept out of its environment, or that key.
+   */
+  credential: Credential;
   /** Where the command line, stdout, stderr and transcript are written. */
   logDir: string;
   /** When set, the Stage is asked for structured output matching this schema. */
@@ -80,6 +89,13 @@ export interface StageResult {
    * when the CLI said.
    */
   limitResetsAt?: string;
+  /**
+   * What the session said it was billed to, as its `system/init` event's
+   * `apiKeySource` names it: `none` for the subscription login,
+   * `ANTHROPIC_API_KEY`, `apiKeyHelper` and so on for a key. Absent where the
+   * session printed no such event.
+   */
+  apiKeySource?: string;
 }
 
 /**

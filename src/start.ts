@@ -1,6 +1,7 @@
 import { resolveBaseBranch } from "./base-branch.js";
 import type { Config } from "./config.js";
-import { hostKind } from "./host.js";
+import { type Credential, credentialRefusal } from "./credential.js";
+import { type HostKind, hostKind } from "./host.js";
 import { BaseBranchChecks } from "./failing-base.js";
 import { Landing } from "./landing.js";
 import { StandingNotes } from "./notes.js";
@@ -36,11 +37,15 @@ import { runSummary } from "./templates.js";
  * because how many Tickets a Host can carry at once is the Host's business, not
  * the Target's (ADR-0008). It may also be narrowed to the Tickets a human
  * named, ascending and each once; with none it drains the whole Frontier.
+ * It runs its Stages on the Host's API key only when it was started with
+ * `--api-key`, for the same reason: whose money a Run spends is the Host's
+ * business.
  */
 export interface Work {
   command: "run";
   lanes?: number;
   tickets?: number[];
+  apiKey?: true;
 }
 
 export interface StartOptions {
@@ -68,15 +73,21 @@ export interface StartOptions {
   error?: (line: string) => void;
   /** Where SIGTERM comes from. The process itself, unless a test is watching. */
   signals?: StopSource;
+  /**
+   * The Host's environment, which says what kind of Host this is and whether it
+   * exports a key. The process's own, unless a test says otherwise.
+   */
+  env?: Record<string, string | undefined>;
 }
 
 /**
  * Start a Run, and answer with the exit code it earned.
  *
- * Every refusal comes before the lock: a Target `init` has not set up, one
- * holding State files an earlier pipeline left in the checkout, and one with
- * nothing to gate a merge. None is a Run that went wrong, so none should leave
- * a lock behind for the next one to reclaim.
+ * Every refusal comes before the lock: an `--api-key` the Host cannot honour,
+ * a Target `init` has not set up, one holding State files an earlier pipeline
+ * left in the checkout, and one with nothing to gate a merge. None is a Run
+ * that went wrong, so none should leave a lock behind for the next one to
+ * reclaim.
  */
 export async function startRun(given: StartOptions): Promise<number> {
   // The count a Run was told is folded into the config once, here, so
@@ -87,6 +98,17 @@ export async function startRun(given: StartOptions): Promise<number> {
   const { repoRoot, config, tracker, workspace } = options;
   const log = options.log ?? ((line: string) => console.log(line));
   const error = options.error ?? ((line: string) => console.error(line));
+  const env = options.env ?? process.env;
+
+  // First, because it asks nothing of the Target: the Host either can or
+  // cannot run the Stages on the credential the Run was started with.
+  const credential: Credential = options.work.apiKey === true ? "api-key" : "subscription";
+  const host = hostKind(env);
+  const refusedCredential = credentialRefusal(credential, host, env);
+  if (refusedCredential !== undefined) {
+    error(refusedCredential);
+    return 2;
+  }
 
   const notReady = await readinessRefusal({ repoRoot, labels: config.labels, tracker });
   if (notReady !== undefined) {
@@ -140,7 +162,7 @@ export async function startRun(given: StartOptions): Promise<number> {
   const stopping = new StopSignal();
   const deafen = listenForStop(stopping, options.signals);
   try {
-    return await execute(options, log, stopping);
+    return await execute(options, { credential, host }, log, stopping);
   } finally {
     // The lock goes first: SIGTERM between the two is a kill again, and a kill
     // that leaves the lock behind costs the next Run a stale holder to reclaim,
@@ -159,6 +181,7 @@ export async function startRun(given: StartOptions): Promise<number> {
 
 async function execute(
   options: StartOptions,
+  { credential, host }: { credential: Credential; host: HostKind },
   log: (line: string) => void,
   stopping: StopSignal,
 ): Promise<number> {
@@ -199,7 +222,9 @@ async function execute(
     repoRoot,
     runId,
     version,
-    host: hostKind(process.env),
+    host,
+    credential,
+    strayStages: [],
     baseBranch,
     // Once per Run as well, and for the same reason: the Tickets of one Run
     // take turns between their rebase and their merge, and a Landing made per
@@ -223,7 +248,9 @@ async function execute(
       version,
       runId,
       durationMs: Date.now() - startedAt,
+      credential,
       outcomes,
+      strayStages: pipeline.strayStages,
       ...(newer === undefined ? {} : { newer }),
       stop,
     });

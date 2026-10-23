@@ -79,6 +79,38 @@ describe("the Lane count a Run is started with", () => {
   });
 });
 
+describe("the credential a Run is started with", () => {
+  it("reads `run --api-key` as a Run on the API key, and `run` alone as one without it", () => {
+    expect(readCommandLine(["run", "--api-key"])).toEqual({
+      kind: "work",
+      work: { command: "run", apiKey: true },
+    });
+    expect(readCommandLine(["run"])).toEqual({ kind: "work", work: { command: "run" } });
+  });
+
+  it("reads it beside `--lanes` and the numbers", () => {
+    expect(readCommandLine(["run", "12", "--api-key", "--lanes", "2"])).toEqual({
+      kind: "work",
+      work: { command: "run", lanes: 2, tickets: [12], apiKey: true },
+    });
+  });
+
+  it.each([["init"], ["stop"], ["remove"], ["remove", "-y"]])(
+    "refuses `--api-key` with `%s`, with the usage",
+    (...command) => {
+      const read = readCommandLine([...command, "--api-key"]);
+
+      expect(read.kind).toBe("refused");
+      expect(read.kind === "refused" && read.message).toMatch(/^`--api-key` is for `run` only/);
+      expect(read.kind === "refused" && read.message.endsWith(USAGE)).toBe(true);
+    },
+  );
+
+  it("is documented in the usage", () => {
+    expect(USAGE).toMatch(/^ {2}--api-key {2,}With `run`/m);
+  });
+});
+
 describe("the Tickets a Run is narrowed to", () => {
   it("reads the numbers after `run` as the only Tickets it takes", () => {
     expect(readCommandLine(["run", "12", "13"])).toEqual({

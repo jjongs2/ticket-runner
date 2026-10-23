@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { API_KEY_ENV_VAR } from "../credential.js";
 import {
   type AgentPreflight,
   type AgentRunner,
@@ -77,6 +78,16 @@ interface ResultEvent {
 }
 
 /**
+ * The `system/init` event a stream-json run opens with, as far as we rely on
+ * it: what the session says it is billed to.
+ */
+interface InitEvent {
+  type: "system";
+  subtype?: string;
+  apiKeySource?: unknown;
+}
+
+/**
  * A `rate_limit_event` of a stream-json run: the CLI's own word on where the
  * subscription stands, printed as each request's answer comes back.
  */
@@ -141,6 +152,7 @@ export class ClaudeAgentRunner implements AgentRunner {
         cwd: request.cwd,
         timeoutMs: request.maxMinutes * 60_000,
         extraEnv: env,
+        ...(request.credential === "subscription" ? { unsetEnv: [API_KEY_ENV_VAR] } : {}),
         mark: session,
         onStdout: log.appendStdout,
         onStderr: log.appendStderr,
@@ -154,7 +166,7 @@ export class ClaudeAgentRunner implements AgentRunner {
     const args = buildArgs(request);
     const session = { name: SESSION_ENV_VAR, value: randomUUID() };
     const env = this.stageEnv(request, session);
-    const commandLine = quoteCommand(env, this.binary, args);
+    const commandLine = quoteCommand(request, env, this.binary, args);
     const startedAt = Date.now();
 
     // Started before the child, so a Run killed mid-Stage still leaves the
@@ -170,6 +182,7 @@ export class ClaudeAgentRunner implements AgentRunner {
     const structured = request.jsonSchema === undefined ? undefined : structuredOutput(results);
     const turns = countTurns(results);
     const resetsAt = failure === "rate-limited" ? limitResetsAt(events) : undefined;
+    const apiKeySource = keySource(events);
 
     return {
       ok: failure === undefined,
@@ -179,6 +192,7 @@ export class ClaudeAgentRunner implements AgentRunner {
       transcriptPath: log.transcriptPath,
       ...(turns === undefined ? {} : { turns }),
       ...(resetsAt === undefined ? {} : { limitResetsAt: resetsAt }),
+      ...(apiKeySource === undefined ? {} : { apiKeySource }),
       // The clock is the runner's own. A session that woke for a background
       // agent reports one `duration_ms` per waking, and the time it spent
       // waiting for that agent belongs to none of them.
@@ -328,6 +342,19 @@ function isResultEvent(event: unknown): event is ResultEvent {
   return isEvent(event, "result");
 }
 
+function isInitEvent(event: unknown): event is InitEvent {
+  return isEvent(event, "system") && (event as InitEvent).subtype === "init";
+}
+
+/**
+ * What the session said it was billed to: the first init event's word on it.
+ * A waking for a background agent is the same session on the same credential.
+ */
+function keySource(events: unknown[]): string | undefined {
+  const source = events.find(isInitEvent)?.apiKeySource;
+  return typeof source === "string" ? source : undefined;
+}
+
 function isRateLimitEvent(event: unknown): event is RateLimitEvent {
   return isEvent(event, "rate_limit_event");
 }
@@ -357,6 +384,8 @@ function classify(
   // still succeeds.
   const failed = execution.exitCode !== 0 || result?.is_error === true || result === undefined;
   if (failed) {
+    // Before the rate limit, whose wording the spend limit's message matches.
+    if (outOfBudget(result)) return "out-of-budget";
     if (rateLimited(execution, events, result)) return "rate-limited";
     if (transientApiFailure(result)) return "api-error";
     return "nonzero-exit";
@@ -374,7 +403,20 @@ function classify(
 }
 
 /**
- * Whether a session that failed was stopped by the subscription rate limit.
+ * Whether a session that failed was refused because its API key's organization
+ * is out of credit, or its workspace reached the spend limit set in the
+ * Console. Both are a 400, as a malformed request is, and the spend limit's
+ * `error` is `unknown`, so the message is what tells them apart: either
+ * wording of the credit balance, or the workspace's usage limits.
+ */
+function outOfBudget(result: ResultEvent | undefined): boolean {
+  if (result?.api_error_status !== 400) return false;
+  return /credit balance is too low|workspace API usage limits/i.test(String(result.result ?? ""));
+}
+
+/**
+ * Whether a session that failed was stopped by the rate limit: the
+ * subscription's, or the API's on a Stage run on a key.
  *
  * The CLI says so in three places, and any one of them is enough: the `result`
  * event carries the API's 429, a `rate_limit_event` reports the request
@@ -469,14 +511,25 @@ function structuredOutputOf(result: ResultEvent): unknown {
 /**
  * Shell-quote the command so a human can paste it back into a terminal, with
  * the Stage's environment in front of it so the reproduction is exact.
+ *
+ * How the environment differed from the Host's leads it: a subscription Stage
+ * ran without the Host's key, which `env -u` removes again, and an API-key
+ * Stage ran on it, which is named and left for the shell to fill in. Its value
+ * is never written: command files reach the Target's remote with a hand-off.
  */
 function quoteCommand(
+  request: StageRequest,
   extraEnv: Record<string, string>,
   binary: string,
   args: string[],
 ): string {
   const assignments = Object.entries(extraEnv).map(([name, value]) => `${name}=${value}`);
-  return [...assignments, binary, ...args]
+  const credential =
+    request.credential === "subscription"
+      ? `env -u ${API_KEY_ENV_VAR}`
+      : `${API_KEY_ENV_VAR}="$${API_KEY_ENV_VAR}"`;
+  const quoted = [...assignments, binary, ...args]
     .map((part) => (/^[\w./:=-]+$/.test(part) ? part : `'${part.replaceAll("'", `'\\''`)}'`))
     .join(" ");
+  return `${credential} ${quoted}`;
 }

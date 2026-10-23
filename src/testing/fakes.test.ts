@@ -13,6 +13,7 @@ function request(stage: StageName): StageRequest {
     maxTurns: 10,
     maxMinutes: 5,
     permissionMode: "auto",
+    credential: "subscription",
     logDir: "/repo/.ticket-runner/logs",
   };
 }

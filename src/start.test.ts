@@ -77,6 +77,7 @@ async function start(
   work: Work = { command: "run" },
   signals?: StopSource,
   repository?: string,
+  env: Record<string, string | undefined> = {},
 ) {
   const out: string[] = [];
   const err: string[] = [];
@@ -91,6 +92,7 @@ async function start(
     version: VERSION,
     ...(repository === undefined ? {} : { repository }),
     command: "ticket-runner run",
+    env,
     log: (line) => out.push(line),
     error: (line) => err.push(line),
     ...(signals === undefined ? {} : { signals }),
@@ -482,6 +484,90 @@ describe("the exit code", () => {
   });
 });
 
+describe("the credential a Run's Stages run on", () => {
+  /** A Host that exports a key, as a shell with one in its profile does. */
+  const KEYED = { ANTHROPIC_API_KEY: "sk-ant-host-key" };
+
+  it("is the subscription without `--api-key`, even on a Host that exports a key", async () => {
+    tracker.addIssue({ number: 4 });
+
+    const { code, lines } = await start({ command: "run" }, undefined, undefined, KEYED);
+
+    expect(code).toBe(0);
+    expect(runner.requests.map((request) => request.credential)).toEqual([
+      "subscription",
+      "subscription",
+    ]);
+    expect(lines.at(-1)?.split("\n")[1]).toBe(
+      `ticket-runner ${VERSION} run run-1 · 0m · subscription`,
+    );
+  });
+
+  it("is the Host's key for every Stage of a Run started with `--api-key`", async () => {
+    tracker.addIssue({ number: 4 });
+
+    const { code, lines } = await start(
+      { command: "run", apiKey: true },
+      undefined,
+      undefined,
+      KEYED,
+    );
+
+    expect(code).toBe(0);
+    expect(runner.requests.map((request) => request.credential)).toEqual(["api-key", "api-key"]);
+    expect(lines.at(-1)?.split("\n")[1]).toBe(`ticket-runner ${VERSION} run run-1 · 0m · API key`);
+  });
+
+  it.each([{}, { ANTHROPIC_API_KEY: "" }])(
+    "refuses `--api-key` on a Host that exports no key, before the lock",
+    async (env) => {
+      tracker.addIssue({ number: 4 });
+
+      const { code, err } = await start({ command: "run", apiKey: true }, undefined, undefined, env);
+
+      expect(code).toBe(2);
+      expect(err).toMatch(/^`--api-key` runs every Stage on the `ANTHROPIC_API_KEY`/);
+      expect(lockTaken()).toBe(false);
+      expect(tracker.calls).toEqual([]);
+      expect(runner.requests).toEqual([]);
+    },
+  );
+
+  it("refuses `--api-key` on a cloud Host, key or no key, before the lock", async () => {
+    tracker.addIssue({ number: 4 });
+
+    const { code, err } = await start({ command: "run", apiKey: true }, undefined, undefined, {
+      ...KEYED,
+      CLAUDE_CODE_REMOTE: "true",
+    });
+
+    expect(code).toBe(2);
+    expect(err).toMatch(/^`--api-key` needs a workstation Host/);
+    expect(lockTaken()).toBe(false);
+    expect(tracker.calls).toEqual([]);
+  });
+
+  it("names a Stage that ran on another credential in the log and the summary", async () => {
+    tracker.addIssue({ number: 4 });
+    runner.queue("implement", { apiKeySource: "apiKeyHelper" });
+
+    const { out } = await start();
+
+    expect(out).toContain("#4 implement ran on apiKeySource apiKeyHelper, not the subscription (none)");
+    expect(out).toContain("  billed   #4 implement · apiKeySource apiKeyHelper");
+  });
+
+  it("starts a subscription Run on a cloud Host as before", async () => {
+    tracker.addIssue({ number: 4 });
+
+    const { code } = await start({ command: "run" }, undefined, undefined, {
+      CLAUDE_CODE_REMOTE: "true",
+    });
+
+    expect(code).toBe(0);
+  });
+});
+
 describe("the Run lock", () => {
   const holder = {
     host: THIS_HOST,
@@ -630,7 +716,9 @@ describe("the Version a Run ran", () => {
   it("heads the summary the Run ends with", async () => {
     const { lines } = await start();
 
-    expect(lines.at(-1)?.split("\n")[1]).toBe(`ticket-runner ${VERSION} run run-1 · 0m`);
+    expect(lines.at(-1)?.split("\n")[1]).toBe(
+      `ticket-runner ${VERSION} run run-1 · 0m · subscription`,
+    );
   });
 
   it("is the same string the Progress comment on its Ticket carries", async () => {

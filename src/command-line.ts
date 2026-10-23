@@ -34,6 +34,10 @@ Usage:
 Options:
   --lanes <n>                  With \`run\`: work on up to <n> issues at once,
                                whatever \`lanes\` in ticket-runner.json says.
+  --api-key                    With \`run\`: bill every session to the
+                               ANTHROPIC_API_KEY this shell exports. Without
+                               it, sessions run on your Claude login and the
+                               key is kept from them. Not on a cloud session.
   -y, --yes                    With \`remove\`: go ahead without asking.
   -h, --help                   Show this message.
   -v, --version                Show which version this pipeline is.`;
@@ -75,6 +79,11 @@ export function readCommandLine(argv: string[]): CommandLine {
     return refused("`--lanes` is for `run` only, which has a Frontier to share out.");
   }
 
+  // The same for `--api-key`: only `run` starts the sessions it would bill.
+  if (values["api-key"] === true && command !== "run") {
+    return refused("`--api-key` is for `run` only, the one command that starts Stages.");
+  }
+
   // The same for `--yes` everywhere but `remove`, the one command that asks
   // before it acts: given to any other, it answers a question nobody asks.
   if (values.yes === true && command !== "remove") {
@@ -101,6 +110,7 @@ export function readCommandLine(argv: string[]): CommandLine {
       command: "run",
       ...(lanes === undefined ? {} : { lanes }),
       ...(tickets.length === 0 ? {} : { tickets }),
+      ...(values["api-key"] === true ? { apiKey: true as const } : {}),
     },
   };
 }
@@ -148,7 +158,13 @@ function refused(complaint: string): CommandLine {
 /** What `parseArgs` makes of the arguments: the options, and the rest. */
 interface ParsedArgs {
   positionals: string[];
-  values: { help?: boolean; version?: boolean; lanes?: string; yes?: boolean };
+  values: {
+    help?: boolean;
+    version?: boolean;
+    lanes?: string;
+    "api-key"?: boolean;
+    yes?: boolean;
+  };
 }
 
 /**
@@ -169,6 +185,7 @@ function parseCommandLine(argv: string[]): ParsedArgs | string {
         help: { type: "boolean", short: "h" },
         version: { type: "boolean", short: "v" },
         lanes: { type: "string" },
+        "api-key": { type: "boolean" },
         yes: { type: "boolean", short: "y" },
       },
       allowPositionals: true,
