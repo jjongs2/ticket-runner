@@ -5,9 +5,9 @@ description: Every field of ticket-runner.json, its default, and what it changes
 
 # Configuration
 
-A Target should work with no settings at all, so every field is optional and `init` writes the file as `{}`. The file exists for what only the Target can know: which commands prove its code works, how long its CI takes, whether its Checks can share a machine, and what it calls its labels. How many Tickets a machine carries at once is the machine's business, so [`--lanes`](./running.md#lanes) overrides the one setting that is really about the Host. Whose money a Run spends is the Host's business too, so it is the [`--api-key`](./running.md#api-key) flag and no field at all.
+A Target should work with no settings at all, so every field is optional and `init` writes the file as `{}`. The file exists for what only the Target can know: which commands prove its code works, how long its CI takes, whether its Checks can share a machine, and what it calls its labels. What belongs to the Host rather than the Target is a flag of `run`: [`--lanes`](./running.md#lanes) overrides `lanes`, and [`--api-key`](./running.md#api-key) chooses what the Stages are billed to, which no field sets.
 
-The file is `ticket-runner.json` at the Target's root. It is plain JSON, read with `JSON.parse`, so it cannot hold comments.
+The file is `ticket-runner.json` at the Target's root. It is plain JSON, so it cannot hold comments.
 
 | Field | Default | What it changes |
 |---|---|---|
@@ -48,13 +48,13 @@ The schema is strict. An unknown key, a wrong type or an out-of-range value is r
 Invalid ticket-runner.json: stages: Unrecognized key: "implment". Refused by ticket-runner 0.5.2, so the key may be newer than this install.
 ```
 
-The second sentence is added only for an unknown key. On a machine with a stale install, a key a newer Version added looks exactly like a typo, so the refusal names the Version that refused it. The file itself carries no Version ([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
+The second sentence is added only for an unknown key: on a stale install, a key a newer Version added looks exactly like a typo, so check the spelling, then upgrade.
 
 ## `baseBranch`
 
 - `baseBranch`: string
 
-The [Base branch](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is what a Run branches each Ticket from, rebases it onto, targets its pull request at, and pulls the main checkout to after a merge. Without this field it is whatever GitHub calls the repository's default branch, so a Target on `master` needs no setting. It is resolved once at the start of a Run.
+The [Base branch](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is the one every Ticket starts from and merges into. Without this field it is whatever GitHub calls the repository's default branch, so a Target on `master` needs no setting. It is resolved once at the start of a Run.
 
 ## `lanes`
 
@@ -67,11 +67,11 @@ How many Tickets a Run holds at once, one per [Lane](https://github.com/jjongs2/
 - `checks`: array of strings
 - `checkTimeoutMinutes`: number > 0
 
-A [Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is a deterministic command the pipeline runs itself, never an agent's opinion. Each one runs through the shell in the Ticket's worktree, after the implement Stage, after a fix Stage and after a resolved rebase conflict. A non-zero exit fails the gate, and the Ticket spends its [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), unless the Base branch fails the same command: the failing command is run once more in a clean worktree at the branch's merge-base with the Base branch, and a failure there releases the Ticket instead (see [From Ticket to merge](./ticket-to-merge.md#the-checks)). A red CI runs every command there the same way, so the commands should be ones CI runs too.
+A [Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is a command the pipeline runs itself. Each one runs through the shell in the Ticket's worktree, after the implement Stage, after a fix Stage and after a resolved rebase conflict. A non-zero exit fails the gate, and the Ticket spends its [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), unless the Base branch fails the same command ([A failure the Base branch shares](./ticket-to-merge.md#a-failure-the-base-branch-shares)). That question is asked of a red CI by running these commands too, so they should be ones CI runs.
 
 Without this field the pipeline infers `npm test` and `npm run typecheck` from whichever of the `test` and `typecheck` scripts `package.json` defines.
 
-`checkTimeoutMinutes` is one limit for every command, and each command gets the whole of it, at the merge-base too. A command killed at the limit is a failed Check and spends the Fix budget like any other, because a suite that hangs is a defect in the branch's own code. The fix Stage is told that the Check hung rather than failed.
+`checkTimeoutMinutes` is one limit for every command, and each command gets the whole of it, at the merge-base too. A command killed at the limit is a failed Check and spends the Fix budget like any other.
 
 ## `gates`
 
@@ -112,20 +112,20 @@ Each Stage is one `claude -p` session. `stages` takes an object per Stage, and e
 | `maxMinutes` | number > 0 | per Stage, above | The wall-clock limit the session is killed at |
 | `extraPrompt` | string | `""` | Appended as the last section of the Stage's prompt |
 
-The model and effort are always passed, never left to the machine's own defaults, so a Stage's saved command line says exactly what ran it and reruns the same way. What a Stage that runs out of turns or time costs the Ticket is on [From Ticket to merge](./ticket-to-merge.md).
+The model and effort are always passed, so the machine's own `claude` defaults never apply. What a Stage that runs out of turns or time costs the Ticket is on [From Ticket to merge](./ticket-to-merge.md).
 
 ## `permissionMode`
 
 - `permissionMode`: `"auto"`, `"acceptEdits"` or `"bypassPermissions"`
 
-Passed to every Stage as `--permission-mode`. Every Stage also runs with `--permission-prompts none`: nobody is watching, so anything that would prompt is denied instead. The modes on offer are the ones that can do work unattended; `plan` and the prompting modes would guarantee a Stage that does nothing.
+Passed to every Stage as `--permission-mode`. Every Stage also runs with `--permission-prompts none`: nobody is watching, so anything that would prompt is denied instead.
 
 ## CI
 
 - `ciTimeoutMinutes`: number > 0
 - `ciGraceMinutes`: number > 0
 
-After the Landing opens a pull request, the Run waits up to `ciTimeoutMinutes` for its checks. CI that does not finish in time is a Hand-off that spends no Fix budget: it is somebody else's infrastructure, not a defect a fix Stage could mend.
+After the Landing opens a pull request, the Run waits up to `ciTimeoutMinutes` for its checks. CI that does not finish in time is a Hand-off that spends no Fix budget.
 
 `ciGraceMinutes` covers the gap before GitHub registers a check run, which has taken over three minutes. Until it passes, a pull request with no checks yet counts as pending rather than as having none. It never outlasts `ciTimeoutMinutes`. Raise it on a Target whose Actions queue slowly. A Target with no CI workflow waits it out once per merge, and since only one Lane is in the Landing at a time, that wait holds the other Lanes' merges too.
 

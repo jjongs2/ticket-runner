@@ -5,7 +5,7 @@ description: "What makes a GitHub issue a Ticket the pipeline will take: Specs a
 
 # Planning the work
 
-The pipeline does not plan. Deciding what to build takes judgement, and a wrong assumption made while planning hardens into a Spec, Tickets and merged code with no gate left to catch it. So Planning stays with humans, and the pipeline only takes what Planning hands it ([ADR-0001](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0001-humans-plan-the-pipeline-executes.md)). Because it trusts what it is handed, it reads only a few things off an issue, reads them strictly, and refuses an issue that gets one of them wrong rather than guess.
+The pipeline does not plan. Planning stays with humans, and the pipeline only takes what Planning hands it ([ADR-0001](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0001-humans-plan-the-pipeline-executes.md)). Because it trusts what it is handed, it reads only a few things off an issue, reads them strictly, and refuses an issue that gets one of them wrong rather than guess.
 
 | A Ticket needs | Why |
 |---|---|
@@ -28,7 +28,7 @@ Planning is a chain of skills from the `mattpocock-skills` plugin, run in your o
 | `to-tickets` | **Tickets**: native sub-issues of the Spec, each one agent session of work, labelled `ready-for-agent` |
 | `triage` | Tickets from issues that arrived some other way, with the brief (and its criteria) posted as a comment |
 
-A [Spec](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is never implemented itself; only its Tickets are. If a Spec is left labelled `ready-for-agent`, the `spec` Guard below takes the label off it. A [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) should be small enough for one implement Stage, which by default has 300 turns and 60 minutes ([Configuration](./configuration.md#stages)).
+A [Spec](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is only ever implemented through its Tickets. A [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) should be small enough for one implement Stage, which by default has 300 turns and 60 minutes ([Configuration](./configuration.md#stages)).
 
 To file one by hand with its parent and blockers in place:
 
@@ -48,13 +48,13 @@ The command must refuse bad input.              ← not: prose
 1. [ ] a numbered item                          ← not: no bullet
 ```
 
-Criteria may be in the issue body or in any comment, because `triage` posts its brief as a comment. The verify Stage grades each one as `met`, `unmet` or `unverifiable`. When the Ticket merges, the `met` ones are ticked where they are written; an `unverifiable` one stays unticked, since nobody gathered evidence for it. [From Ticket to merge](./ticket-to-merge.md) covers the grading.
+The verify Stage grades each one as `met`, `unmet` or `unverifiable` ([From Ticket to merge](./ticket-to-merge.md#the-verify-stage-and-its-verdict)).
 
 Write criteria that a session can check by running or reading code. A criterion that needs a human's eyes (a screenshot, a feel) comes back `unverifiable`.
 
 ## Blockers
 
-Only GitHub's native `blocked by` links count ([ADR-0003](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0003-github-native-relations-only.md)), so what a Run takes is what GitHub's own UI shows as unblocked. Reading the body as well would give the pipeline two sources of truth, and a stale body could silently block or unblock work.
+Only GitHub's native `blocked by` links count ([ADR-0003](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0003-github-native-relations-only.md)), so what a Run takes is what GitHub's own UI shows as unblocked.
 
 ```bash
 gh issue edit 23 --add-blocked-by 14,15      # add links to an existing issue
@@ -85,11 +85,11 @@ The labels are the triage state machine: one state label per issue at a time. `i
 | `ready-for-human` | A Hand-off | Leaves the Ticket alone until a human relabels it |
 | `wontfix` | Humans | Nothing |
 
-To keep the pipeline off a Ticket, take `ready-for-agent` off it, or assign someone: a candidate with any assignee is treated as claimed and passed over in silence.
+To keep the pipeline off a Ticket, take `ready-for-agent` off it, or assign someone: a candidate with any assignee is treated as claimed and passed over in silence. Do this before running the plugin's `/implement-spec` on a Spec in your own session: it leaves no mark on the Tickets it works, so a Run would take them too and do the same work again on other branches.
 
 ## Guards
 
-Planning goes wrong in a few known ways. `to-spec` can leave its Spec labelled `ready-for-agent`, an issue can arrive with no checkbox criteria, and `to-tickets` sometimes writes `Blocked by: #n` into the body without creating the native link. Taken as they are, these would have the pipeline implement a whole Spec as one giant Ticket, work on something verify cannot grade, or start a Ticket before its prerequisites exist. A [Guard](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) passes such a candidate over before it is claimed and says once why, so you fix the Planning output and run again.
+Planning goes wrong in a few known ways. A [Guard](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) passes such a candidate over before it is claimed and says once why, so you fix the Planning output and run again.
 
 ```mermaid
 flowchart TD
@@ -114,9 +114,7 @@ flowchart TD
 | `no-criteria` | No `- [ ]` line in its body or comments, so verify has nothing to grade | Skips it and keeps the label, since a comment can still add criteria |
 | `body-only-blockers` | Its `Blocked by` section names an issue with no native link | Skips it and keeps the label; the body line is never read as a blocker |
 
-Each skip posts one warning comment saying what to fix, and appears in the Run summary as `skipped  #<n> <reason>`. The warning carries a hidden `<!-- ticket-runner:guard:<reason> -->` marker, so it is posted at most once per reason: a nightly Run that meets the same unfixed issue again says nothing more. Fix the issue and the next Run takes it. The comment's wording is in [`docs/templates/guard-comment.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/guard-comment.md).
-
-The Guards also grade a [Stranded Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) before it is resumed, since they are about the issue, not about who holds it.
+Each skip posts one warning comment saying what to fix, at most once per reason, and appears in the Run summary as `skipped  #<n> <reason>`. Fix the issue and the next Run takes it.
 
 ## Related pages
 

@@ -1,13 +1,13 @@
 ---
 title: Internals
-description: The three ports and their adapters, a map of the modules in src/, how Versions are cut and stamped, the ADRs in brief, and how to work on the pipeline itself.
+description: The three ports and their adapters, a map of the modules in src/, how Versions are stamped, the ADRs in brief, and running the pipeline from a checkout.
 ---
 
 # Internals
 
 The pipeline touches three things outside itself: GitHub, Claude and git. Each is reached through a port, an interface the orchestrator depends on, so the whole unattended flow can be tested in memory, with no subscription spent and nothing written to GitHub. The adapters behind the ports are kept thin. They build arguments and parse output; decisions live in the modules above them.
 
-This page is for reading the source or changing it. To use the pipeline, start at [Installation](./installation.md).
+This page is for anyone curious how the pipeline works inside, and links the modules it names. To use the pipeline, start at [Install and remove](./installation.md).
 
 ## At a glance
 
@@ -70,28 +70,54 @@ claude --print <prompt> --output-format stream-json --verbose \
   | Variable | Value | Why |
   |---|---|---|
   | `ANTHROPIC_API_KEY` | removed, unless the Run was started with `--api-key` | under `-p` a key outranks the Claude login without asking, so a stray one would be billed |
-  | `TICKET_RUNNER_STAGE` | the Stage | the [Stage mark](./ticket-to-merge.md) |
+  | `TICKET_RUNNER_STAGE` | the Stage | the [Stage mark](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), which makes the CLI refuse inside a Stage |
   | `TICKET_RUNNER_SESSION` | a UUID per Stage session | the Session mark the [kill at `maxMinutes`](#smaller-adapters) looks for |
   | `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | `1` | the Host user's memory is about their projects, not the Target |
   | `CLAUDE_CODE_SHELL` | `/bin/bash`, only where it exists | a zsh shell aborts a command on a glob that matches nothing |
   `ANTHROPIC_AUTH_TOKEN` and every other variable are inherited as they are.
-- It writes `<stage>.command`, `.stdout`, `.stderr` and `.transcript.jsonl` from the moment the Stage starts. The command file opens with `env -u ANTHROPIC_API_KEY` for a Stage run without the key, or `ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"` for one run on it, never the value: command files reach the Target's remote with a Hand-off. For the same reason the key's value is replaced by `<ANTHROPIC_API_KEY>` wherever the session printed it.
+- It writes the [Stage's files](./running.md#logs-and-transcripts) from the moment the Stage starts, never with the key's value in them: command files reach the Target's remote with a Hand-off.
 - It reads the `apiKeySource` of the session's `system/init` event, which the orchestrator sets against the Run's credential.
-- It kills the child at `maxMinutes`, with everything it started, and classifies a failure as `rate-limited`, `api-error`, `out-of-budget`, `timed-out`, `turn-capped`, `nonzero-exit` or `invalid-result`.
+- It kills the child at `maxMinutes`, with everything it started, and classifies a failure as `rate-limited`, `api-error`, `out-of-budget`, `timed-out`, `turn-capped`, `nonzero-exit` or `invalid-result`. A session that succeeds is never any of the first three, and they are read off a failed one like this:
+
+  | Failure | Read off |
+  |---|---|
+  | `out-of-budget` | `api_error_status: 400` with a message naming `credit balance is too low` or `workspace API usage limits`; the spend limit's message also names a usage limit, but it is the budget |
+  | `rate-limited` | `api_error_status: 429`, a `rate_limit_event` whose status is `rejected` (a warning-only one is not a stop), or, read last because its wording has changed before, `usage limit`, `session limit`, `rate limit` or `rate_limit` in the result or stderr |
+  | `api-error` | `terminal_reason: "api_error"` with a 5xx `api_error_status` or none |
 
 ### `GitWorkspace`
 
-[`GitWorkspace`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts) keeps the worktrees under `.worktrees/`, a Ticket's and the detached one at a merge-base a failing Check runs again in, runs the Checks, rebases and pushes, and keeps the `ticket-runner/state` and `ticket-runner/lock` branches ([Stopping and resuming](./stopping-and-resuming.md)).
+[`GitWorkspace`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts) keeps the worktrees under `.worktrees/`, a Ticket's and the detached one at a merge-base a failing Check runs again in, runs the Checks, rebases and pushes, and keeps the `ticket-runner/state` and `ticket-runner/lock` branches ([Hand-offs, stopping and resuming](./stopping-and-resuming.md)).
 
-- Commands in the main checkout run one at a time, because git fails on a held ref or index lock rather than waiting.
-- Commands inside a worktree stay parallel.
+- Commands in the main checkout run one at a time, because git fails on a held ref or index lock rather than waiting. Commands inside a worktree stay parallel.
+- The state branch is rewritten as one snapshot commit with no parent, built from git objects and a scratch index so the main checkout's tree is never touched. It is pushed unsigned, with `--no-verify` and `--force-with-lease` on the tip it read, and an edit a newer snapshot beat is reapplied, up to three tries. Within one Run, changes take turns, so two Lanes never push snapshots that each miss the other's Ticket.
+- The lock is taken by compare-and-swap: each take and release is a commit on the tip it read, pushed with a lease on that tip.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Run on Host A
+    participant R as ticket-runner/lock on GitHub
+    participant B as Run on Host B
+    A->>R: fetch tip T (reads "free")
+    B->>R: fetch tip T (reads "free")
+    A->>R: push "held by A" on T, lease on T
+    R-->>A: accepted
+    B->>R: push "held by B" on T, lease on T
+    R-->>B: refused: tip is no longer T
+    B->>R: fetch again
+    R-->>B: held by A on another Host
+    Note over B: exits 2, naming Host A, its Run and start
+    A->>R: when its Lanes are back, push "free" on top
+```
+<!-- Sources: src/adapters/git-workspace.ts, src/lock.ts, src/start.ts -->
 
 ### Smaller adapters
 
 - [`exec.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/exec.ts) spawns a child with a timeout and streaming sinks. It reports `timedOut` separately, because a command may exit 124 on its own.
-- [`process-tree.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/process-tree.ts) kills a command at its time limit together with its descendants and the process groups they lead: SIGTERM, then SIGKILL after 5 seconds. The command's own group would not do, since a Stage shares the Run's ([ADR-0006](#adr-0006)) and Claude Code runs each Bash command in a session of its own. A background process whose shell has exited descends from nothing the Stage holds, so the kill also takes every process carrying the Stage's Session mark, read from `/proc/<pid>/environ` on Linux and `ps -wwE` on macOS. A process whose environment cannot be read is reached by parentage alone.
+- [`process-tree.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/process-tree.ts) kills a command at its time limit together with its descendants and the process groups they lead: SIGTERM, then SIGKILL after 5 seconds. The command's own group would not do, since a Stage shares the Run's ([ADR-0006](#adr-0006)) and Claude Code runs each Bash command in a session of its own. A background process whose shell has exited descends from nothing the Stage holds, so the kill also takes every process carrying the Stage's Session mark.
 - [`repo-root.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/repo-root.ts) finds the main checkout, even from inside a worktree, so the lock, `.worktrees/` and the logs land in one place per clone.
-- [`version.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts) reads which [Version](#versions) this copy is. It is an adapter because it runs git, though no port describes it.
+- [`version.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts) reads which [Version](#versions) this copy is.
 
 ## A map of `src/`
 
@@ -163,52 +189,13 @@ Tests sit beside each module as `*.test.ts`.
 | [`staleness.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/staleness.ts) | the newer-Version line and the conventions-document warning |
 | [`version-pr.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/version-pr.ts) | what a Version PR must get right; the notes a Release publishes |
 
-**Tests only**: [`testing/`](https://github.com/jjongs2/ticket-runner/blob/main/src/testing/fakes.ts) holds the fakes and helpers described next.
-
-## How the orchestrator is tested
-
-No test spawns `gh` or `claude`. Each layer is tested at the seam that suits it.
-
-| Layer | Tested against |
-|---|---|
-| `orchestrator.ts`, `run.ts`, `start.ts`, `stranded.ts` … | in-memory fakes of all three ports |
-| Lanes running side by side | the fakes, plus `Hold` and `settle` |
-| `GitWorkspace` | real git: a temporary repository with a bare remote |
-| `GhTracker`, `ClaudeAgentRunner` | recorded runs, through their `run` seam |
-
-- Each fake keeps an ordered `calls` log. Tests assert on it and on the resulting state, never on internal helpers. `FakeWorkspace` keeps the State and the lock in memory, and can play `THIS_HOST` or `ANOTHER_HOST`.
-- A `Hold` parks a Ticket at a chosen point, inside a Stage or a CI wait, until the test lets it go, so what another Lane does meanwhile can be observed.
-- The `GitWorkspace` tests run worktrees, rebases, leases and the state and lock branches for real.
-- For the other two adapters, `testing/executions.ts` builds the `Execution` a process would have returned.
-
-This is why every external effect goes through a port, the pipeline's own bookkeeping included: State and the lock are effects on the remote, so they are `Workspace` methods and the fakes cover them ([ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md), last amendment).
+**Tests only**: [`testing/`](https://github.com/jjongs2/ticket-runner/blob/main/src/testing/fakes.ts) holds the in-memory fakes of the three ports that the tests reach the orchestrator through; how each layer is tested is in [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md#code).
 
 ## Versions
 
-Without Versions, two installs could report the same number and run code weeks apart, so a bug read off a transcript could not be tied to a commit, and a stale install showed only when a Target behaved like last week's pipeline. Nothing the pipeline left in a Target said which pipeline wrote it either, so two machines on different installs rewrote the same conventions document back and forth.
-
 A [Version](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is a number that `main` carries as a tag `v<x.y.z>`, published to npm and with a GitHub Release. An installed copy reports it. Machines install a Version, never `main`, so two machines that report `0.5.2` run the same code ([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
 
-### How one is cut
-
-```mermaid
-flowchart LR
-    SK["/cut-a-version drafts the Version PR"] --> PR["version/‹number› · chore: version ‹number›"]
-    PR --> CK{"version-pr.yml check"}
-    CK -- refused --> PR
-    CK -- passes --> MG["human reviews and merges"]
-    MG --> TG["version-tag.yml: tag v‹number›"]
-    TG --> NP["npm: ticket-runner@‹number›, from the tag"]
-    NP --> RL["GitHub Release, body = the CHANGELOG section"]
-```
-<!-- Sources: src/version-pr.ts, scripts/version.ts, .github/workflows/version-pr.yml, .github/workflows/version-tag.yml -->
-
-- **The number.** It goes up by a minor when a Spec has closed since the last Version, and by a patch for everything else, a small feature included. The only question is whether a Spec closed. A human decides when to cut, because that is a Planning decision.
-- **The Version PR.** It raises `package.json` and the lock file, adds the Version's section to `CHANGELOG.md`, and re-marks this repository's own conventions document with `npx tsx scripts/version.ts mark`. The [`/cut-a-version`](https://github.com/jjongs2/ticket-runner/blob/main/.claude/skills/cut-a-version/SKILL.md) skill drafts it; it never merges.
-- **The check** lists every reason at once: the number is not above every tag, the lock file disagrees, the section is missing, or the section has no `### After upgrading` heading. A pull request that leaves the number alone passes untouched.
-- **The tag workflow** tags the merge commit, publishes the tagged commit to npm by trusted publishing, with no npm token anywhere, and then publishes the section as the Release, or GitHub's generated notes if the section is missing. It makes whichever of the three is missing, so a re-run heals a half-cut Version.
-
-release-please and Changesets were both turned down. The first needed a yearly-expiring token, a repository setting and a rule that only `feat`/`fix` cut a Version. The second would have put a changeset file into every Stage's job.
+A human cuts one by merging a Version PR, which [`/cut-a-version`](https://github.com/jjongs2/ticket-runner/blob/main/.claude/skills/cut-a-version/SKILL.md) drafts; the steps and the checks on it are in [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md#versions).
 
 ### The stamp
 
@@ -232,23 +219,11 @@ The same string is stamped on:
 | the conventions document's first line (the number only) | `init` and a Run can tell which side is behind |
 | the refusal of a config key the install does not know | a stale install is told apart from a wrong config |
 
-The summary's header reads `ticket-runner <version> run <runId> · <n>m`. The file is `.ticket-runner/runs/<runId>/version.txt`, and a Hand-off keeps it with the transcripts.
-
-The conventions document's mark, `<!-- ticket-runner:version <number> -->`, has a direction. An older pipeline leaves a newer document alone and asks to be upgraded. A Run behind the document warns, and a Run ahead of it names `init`. Neither ever refuses.
-
 ### The newer-Version check
 
 A Run and `init` each look up the highest published Version of the pipeline's own repository. They read it from `package.json`'s `repository` field, so a fork asks about itself. The lookup reads GitHub Releases rather than tags, skipping drafts and prereleases. The tag workflow makes a Release only once npm has the Version, so a Release names one the upgrade can install. Only numbers are compared, so a checkout running past the latest Version is not stale.
 
-When a newer one is out, [`staleness.ts` · `newerVersionLine`](https://github.com/jjongs2/ticket-runner/blob/main/src/staleness.ts) prints one line, at the top of the Run log and again at the head of the summary:
-
-```
-A newer Version is out: 0.6.0, and this is 0.5.2 — upgrade with `npm install -g ticket-runner`.
-```
-
-A lookup that cannot be made (no network, no `gh`, a repository nobody can see) prints nothing. Nothing is ever refused over it.
-
-Install and upgrade with `npm install -g ticket-runner`, or try it through `npx` without one ([Try it without installing](./installation.md#try-it-without-installing)). The GitHub tag range, `npm install -g "github:jjongs2/ticket-runner#semver:*"`, also installs the highest Version tag. See [Installation](./installation.md).
+What it prints is on [Install](./installation.md#install).
 
 ## The ADRs in brief
 
@@ -287,7 +262,7 @@ The full records are in [`docs/adr/`](https://github.com/jjongs2/ticket-runner/t
 ### [ADR-0006: Stop is a signal, and Ctrl+C stays a kill](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md) {#adr-0006}
 
 - **Decision**: A Stop is SIGTERM and nothing else, sent only from the Run's own Host; Ctrl+C stays a kill.
-- **Why**: A signal arrives at once and leaves nothing to clean up. The Stages share the Run's process group.
+- **Why**: A signal arrives at once and leaves nothing to clean up. The Stages share the Run's process group, so Ctrl+C reaches every `claude` session too, and making it graceful would mean detaching the Stages into their own group.
 - **Cost**: A Stop cannot be taken back, and a Run on another Host cannot be stopped from here.
 
 ### [ADR-0007: A Version is cut by a human, and installs follow tags](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md) {#adr-0007}
@@ -299,7 +274,7 @@ The full records are in [`docs/adr/`](https://github.com/jjongs2/ticket-runner/t
 ### [ADR-0008: A cloud Host is a Claude Code cloud session, and the Run lock lives on GitHub](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md) {#adr-0008}
 
 - **Decision**: A cloud Host is a Claude Code cloud session with an Operator; the Run lock lives on GitHub.
-- **Why**: No Actions minutes, and a Run steered from the app. Every Host must see the lock.
+- **Why**: No Actions minutes, and a Run steered from the app. Every Host must see the lock. A lease that expires unless renewed was rejected: a live Run would lose its Target to one missed heartbeat.
 - **Cost**: REST only. Nothing on the remote may depend on deleting a ref. A lock from a vanished Host needs a human to release it.
 
 ## Working on the pipeline itself
@@ -317,18 +292,11 @@ npm run typecheck                    # tsc --noEmit
 
 A checkout reports its commit beside the number (see [the stamp](#the-stamp)). CI runs `npm run typecheck` and `npm test` on every pull request, and the Version PR check beside them.
 
-This repository is a Target of its own pipeline, so it follows the same rules as any other Target. Read these before committing, not a copy here:
-
-- [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md): branches, commits, pull requests, Version PRs, issues, and code rules (strict ESM TypeScript, tests beside the code, every effect through a port, `scripts/` kept thin)
-- [`docs/agents/pipeline-conventions.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/agents/pipeline-conventions.md): what the pipeline requires of any Target
-- [`GLOSSARY.md`](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md): name things with the glossary; a concept that needs a new word goes there first
-- [`docs/templates/`](https://github.com/jjongs2/ticket-runner/tree/main/docs/templates): change a shape there before the code that writes it
-
-A Stage may not run the pipeline. Its shell carries `TICKET_RUNNER_STAGE`, and every command refuses while it is set, leaving the pipeline to the Run that started it. In this repository, a Stage's prompt also tells it to exercise the pipeline through the tests and fakes instead.
+This repository is a Target of its own pipeline. Its conventions are in [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md).
 
 ## Related pages
 
-- [Stopping and resuming](./stopping-and-resuming.md): the State branch and the Run lock that `GitWorkspace` keeps
+- [Hand-offs, stopping and resuming](./stopping-and-resuming.md): the State branch and the Run lock that `GitWorkspace` keeps
 - [From Ticket to merge](./ticket-to-merge.md): the lifecycle `orchestrator.ts` drives
 - [Running](./running.md): the commands `cli.ts` dispatches, and `-v`
 - [Installation](./installation.md): installing a Version, `init`, and `remove`

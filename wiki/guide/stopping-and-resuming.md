@@ -1,13 +1,11 @@
 ---
-title: Stopping and resuming
+title: Hand-offs, stopping and resuming
 description: What a Hand-off, a Release, a Stop and a kill each leave behind, and how a later Run on any Host picks the Ticket up from there.
 ---
 
-# Stopping and resuming
+# Hand-offs, stopping and resuming
 
 Nobody watches a Run, so it has to end well when something goes wrong: a Ticket it cannot finish, a subscription or an API key that runs out, a human who wants it to stop, a machine that disappears. Each of these leaves the Ticket where a later Run can pick it up, on this Host or another. That Run does not pay again for Stages already done, and no human has to unpick labels first.
-
-This page covers what each ending leaves behind, and how the pipeline gets back from it.
 
 ## At a glance
 
@@ -39,20 +37,18 @@ stateDiagram-v2
 ```
 <!-- Sources: src/orchestrator.ts, src/stranded.ts, src/run.ts, src/resume.ts -->
 
-A resumed Ticket carries on from the state it had reached. It does not start over.
-
 ## Hand-off
 
-A [Hand-off](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) gives a Ticket to a human. It is how every ending goes that is neither a merge nor a Release: a second failure after the Fix budget is spent, a Stage that timed out, CI that never finished, a branch in the way at setup. Not every one of them is somebody's defect.
+A [Hand-off](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) gives a Ticket to a human. It is how every ending goes that is neither a merge nor a Release: a second failure after the Fix budget is spent, a Stage that timed out, CI that never finished, a branch in the way at setup.
 
-A Hand-off does this, in order:
+A Hand-off leaves you:
 
-1. Opens a pull request, or reuses one. A pull request that is already open goes back into draft. Otherwise, when the worktree is one this Run may push from, the branch is pushed and a draft pull request opens under the title the State file holds, or the Ticket's title when it holds none. A failure here is logged; it never costs the relabel.
-2. Records the State file, with the draft pull request in it and the Fix budget unspent. Where no Stage of this Run could have left work, it removes the file instead (see below).
-3. Keeps the transcripts on the remote. It takes each Stage's `.command` and `.transcript.jsonl` file (the retries' too, under `retry/`) and the Run's `version.txt`, and puts them under `ticket-<n>/<runId>/` on the `ticket-runner/state` branch.
-4. Rewrites the draft's body so it names where the transcripts are.
-5. Posts the hand-off comment.
-6. Takes off `in-progress`, puts on `ready-for-human`, and unassigns.
+- a draft pull request of the branch's work, where there is work to push; a pull request already open goes back into draft
+- the hand-off comment below, saying where the Ticket failed and why
+- `ready-for-human` in place of `in-progress`, and no assignee
+- each Stage's command line and transcript, kept under `ticket-<n>/<runId>/` on the `ticket-runner/state` branch
+
+Its State file is kept, so a relabel resumes the Ticket ([Handing a Ticket back](#handing-a-ticket-back)), except where no Stage of this Run could have left work (below).
 
 The comment follows [`docs/templates/handoff-comment.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/handoff-comment.md):
 
@@ -69,8 +65,6 @@ The comment follows [`docs/templates/handoff-comment.md`](https://github.com/jjo
 </details>
 ```
 
-"On the remote" appears only when the remote has the branch. The worktree, pull request, transcripts and evidence parts are each dropped when there is nothing to name.
-
 ### When a Hand-off does less
 
 A Hand-off at `setup` pushes nothing: there is either nothing to push, or what is in the way may be a human's work or another Host's.
@@ -82,7 +76,7 @@ A Hand-off at `setup` pushes nothing: there is either nothing to push, or what i
 | Resumed, this Host's branch has parted from the remote's | none opened; an open one goes to draft | kept: both copies are the pipeline's |
 | Any failure after the worktree was ready | opened, or an open one back to draft | kept |
 
-The comment names a worktree wherever there is one: this Run's, or the one the branch in the way is checked out in. The failure line says what to do, for example `delete it with git branch -D <branch> if the work on it is abandoned, or finish it by hand, then relabel the Ticket ready-for-agent`. The State file goes only where no Stage of this Run worked on the branch. Keeping it over a branch in the way would let a later Run resume into a human's work and run an implement Stage over it.
+The comment names a worktree wherever there is one: this Run's, or the one the branch in the way is checked out in. The failure line says what to do, for example `delete it with git branch -D <branch> if the work on it is abandoned, or finish it by hand, then relabel the Ticket ready-for-agent`.
 
 ### What stays where
 
@@ -111,32 +105,20 @@ A few things differ from the Run that handed it off:
 
 Until the relabel, the State file is inert. No Frontier offers a `ready-for-human` Ticket, the sweep passes over it without a word, and a Run given its number skips it as `not-ready`. Once the issue closes, the sweep removes the file, so a Ticket finished by hand leaves nothing behind.
 
-Why a Hand-off keeps the State at all: the Run once misread the rate limit as an ordinary failure and handed off every Ticket it reached. Each of those cost a human a deleted branch. With the State kept, each costs one relabel ([ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md), second amendment).
-
 ## Release on a rate limit or an API failure {#release-on-a-rate-limit}
 
 A Stage that hits the rate limit has failed at nothing, and neither has one the API stopped on its own side. Handing the Ticket off would make a human relabel a Ticket nothing was wrong with, and a fix Stage would only meet the same limit or the same outage. So the Ticket is [released](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) instead: it goes back on the board, and the next Run resumes it from the last Stage it finished, with its Fix budget as it was.
 
-Both are read only off a session that failed. It was rate-limited on any one of three signs:
-
-| Sign | Why it is there |
-|---|---|
-| the `result` event carries `api_error_status: 429` | the API's own answer |
-| a `rate_limit_event` whose status is `rejected` | a warning-only event is not a stop: a session near the limit prints those and finishes |
-| the result or stderr says `usage limit`, `session limit`, `rate limit` or `rate_limit` | read last because its wording has changed before |
-
-A session that succeeds is never rate-limited, however often it mentions rate limits. On a Run started without `--api-key` the limit is the subscription's; on one started with it, the API's, and the summary row reads `API rate limit` and its last line `API rate limited.`.
-
-A session that failed and is not rate-limited is a transient API failure when its `result` event ends with `terminal_reason: "api_error"` and an `api_error_status` that is a 5xx or absent: `529 Overloaded`, say, or "No response from API". The CLI has already retried the request by the time it gives up, so the Stage is not retried in place. Any other status, and any other error, is the Stage's own and goes to the Fix budget or a Hand-off.
+On a Run started without `--api-key` the limit is the subscription's; on one started with it, the API's. A transient API failure is an API error with a 5xx status or none, such as `529 Overloaded`, which the CLI had already retried, so the Stage is not retried in place; any other error is the Stage's own. How each is told from the session is under [`ClaudeAgentRunner`](./internals.md#claudeagentrunner).
 
 What the Release does:
 
 - writes a `⏸ rate limited` or `⏸ API failure` row in the Progress comment, which is the whole report
 - brings the State file up to date: `claimed` if the implement Stage was stopped, `implemented` if a later Stage was. The Fix budget stays as it was, except that a fix Stage stopped this way spends nothing.
-- undoes the Claim: adds `ready-for-agent`, removes `in-progress`, then unassigns. The assignee comes off last because it is what another Run reads to tell a taken Ticket from a free one.
+- undoes the Claim: adds `ready-for-agent`, removes `in-progress`, and unassigns
 - posts no comment and opens no draft pull request
 
-The Run then claims nothing more, because what stopped one Stage would stop the next. The Lanes already busy finish their own Tickets, and the Run ends when the last one comes back. It does not wait for the limit to reset. The summary ends `Rate limited · resets 2026-09-20 03:40 UTC.`, the time the rejecting `rate_limit_event` gave, or `Rate limited.` when none gave one, and `API failure.` after an API failure. When the rate limit then releases a Ticket a busy Lane held, the rate limit outranks the API failure: the summary ends on the limit instead, since that line says when the next Run can start, and each Ticket's row keeps its own cause. A released Ticket counts as taken, so the exit code is `0` unless something was handed off.
+The Run then claims nothing more, because what stopped one Stage would stop the next. The busy Lanes finish their own Tickets, and the Run ends without waiting for the limit to reset. Its last line says why, and when the limit resets where the CLI said ([The summary](./running.md#the-summary)). A released Ticket counts as taken, so the exit code is `0` unless something was handed off.
 
 Start a Run once the limit has reset, or the API has recovered, and the Ticket is back on the Frontier, resumed from its State file.
 
@@ -144,22 +126,20 @@ Start a Run once the limit has reset, or the API has recovered, and the Ticket i
 
 A Stage of a Run started with [`--api-key`](./running.md#api-key) can be refused because the key's organization is out of credit, or because its workspace reached the spend limit set in the Console. Neither is the Ticket's doing, so the Ticket is released as on a rate limit, with these differences:
 
-- It is read off a failed session whose `result` carries `api_error_status: 400` and a message naming `credit balance is too low` or `workspace API usage limits`. Any other 400 is the Stage's own, as before. The spend limit's message also names a usage limit, but it is read as the budget, not the rate limit.
-- The Progress row is `⏸ out of API budget`, the summary row `out of API budget at <stage>`, and the last line `Out of API budget.`. It outranks the rate limit and an API failure on the last line, since it alone needs you.
+- The Progress row is `⏸ out of API budget`, and the Run's last line `Out of API budget.`, which outranks the other causes since it alone needs you.
 - The summary does not say when access returns, though the spend limit's message does: look at the Console, then start the next Run.
 
 ## Release over a failing Base branch {#release-over-a-failing-base-branch}
 
-A Check that fails on the Ticket's branch, or CI that fails on its pull request, may be a failure the branch inherited: a test on the Base branch that reads the wall clock fails on every branch at once. The pipeline runs the Check commands at the branch's merge-base with the Base branch ([From Ticket to merge](./ticket-to-merge.md#a-failure-the-base-branch-shares)), and when one fails there too, the Ticket is released as on a rate limit, with these differences:
+A failing Check or red CI that fails at the branch's merge-base too was inherited, not brought ([A failure the Base branch shares](./ticket-to-merge.md#a-failure-the-base-branch-shares)). The Ticket is released as on a rate limit, with these differences:
 
-- the Progress row reads ``⏸ `<command>` fails on the Base branch``, on the `checks` or `ci` row
-- the State file records `rebaseFirst`, so the next Run rebases the branch onto the Base branch before its Checks
-- the pipeline posts one Note on the standing Notes issue per Run per merge-base, naming the command and quoting the tail of its output. The Ticket itself gets no comment.
-- the summary ends ``Base branch `main` fails `npm test` at 1a2b3c4.``
+- the Progress row reads ``⏸ `<command>` fails on the Base branch``, and the Run's last line names the command and the merge-base
+- the pipeline posts one Note on the standing Notes issue with the tail of the command's output; the Ticket itself gets no comment
+- the next Run rebases the branch onto the Base branch before its Checks
 
 The Fix budget stays as it was, spent or not: a Ticket whose budget is already spent is released, not handed off. An open pull request stays open, and the next Run updates it.
 
-Mend the Check on the Base branch, then start a Run. Each released Ticket comes back through the Frontier, is rebased onto the mended Base branch (through the Landing, briefly), and goes on to its Checks. A rebase that conflicts goes to the Conflict Stage there and then, and one it cannot resolve spends the Fix budget, as at the Landing; left alone, the branch would keep the merge-base that fails and be released again. A Run started before the Base branch is mended releases the Ticket again, and costs one run of the failing Check.
+Mend the Check on the Base branch, then start a Run. Each released Ticket is rebased onto the mended Base branch before its Checks; a rebase that conflicts goes to the Conflict Stage, and one it cannot resolve spends the Fix budget, as at the Landing. A Run started before the Base branch is mended releases the Ticket again.
 
 ## Stop and kill
 
@@ -176,28 +156,9 @@ A Run can end early in two ways, and they leave opposite things behind ([ADR-000
 
 `ticket-runner stop` works only on the Run's own Host; on a cloud Host the Operator sends the signal. A lock a kill left behind is taken over by the next Run on the same Host by itself; from another Host it waits for a human ([The Run lock](#the-run-lock)).
 
-On a Stop the Run logs one line naming what its Lanes hold, `#4 #9 left to finish · stopped`. The summary ends `Stopped at 22:07 · finishing #4 #9.`, with the time in UTC like the run id. A second SIGTERM is ignored rather than turned into a kill. A Stop cannot be taken back: the lock stays held until the Lanes are back, and starting a new Run is how to carry on. A narrowed Run stopped before it took any of its Tickets exits `2`.
+A Stop cannot be taken back: the lock stays held until the Lanes are back, and starting a new Run is how to carry on. A narrowed Run stopped before it took any of its Tickets exits `2`.
 
-Ctrl+C stays a kill on purpose. The Stages run in the Run's own process group, so the terminal sends SIGINT to every `claude` session as well as to the Run. A signal sent to the Run's pid alone leaves the Stages running with nobody to read them. Making Ctrl+C graceful would mean detaching the Stages into their own group, which reopens a kill path that took two bugs to get right.
-
-### `ticket-runner stop`
-
-`ticket-runner stop` reads the Run lock and signals the process it names. It needs no config, no `gh` and no Target readiness: the Run it stops passed all of those when it started.
-
-```
-$ ticket-runner stop
-`ticket-runner run` (run 2026-09-17T09-00-00-000, pid 4321) will stop once the Tickets it holds are finished. It claims no more.
-Ctrl+C in that Run's own terminal stops it at once instead, at the cost of killing the Stages it is running and leaving their Tickets stranded for the next Run.
-```
-
-| Finds | Prints | Exit |
-|---|---|---|
-| a Run on this Host | the two lines above | `0` |
-| nobody holds the lock, or its Run on this Host is gone | `No Run to stop: …`. A dead lock is left for the next Run to take over. | `2` |
-| a Run on another Host | names the Host, the Run and its start; `Nothing was sent.` | `2` |
-| the signal could not be delivered | `Could not ask … to stop: <reason>` | `2` |
-
-There is no stop file, so a second `stop` prints the same thing as the first.
+Ctrl+C stays a kill on purpose ([ADR-0006](./internals.md#adr-0006)): end a Run gently with [`ticket-runner stop`](./running.md#stop).
 
 ## Stranded Tickets and the sweep
 
@@ -216,9 +177,7 @@ A [Stranded Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.
 
 An unreadable State file was probably written by a newer pipeline.
 
-Stranded Tickets fill free Lanes first, lowest number first, before anything the Frontier offers. While they fill every Lane, the Frontier is not asked for at all. With more than one Lane, a stranded Ticket and a Frontier Ticket can run side by side. A Run given Ticket numbers sweeps only those, and leaves every other stranded Ticket for the next unnarrowed Run.
-
-Nothing records a process id. Only one Run holds the [Run lock](#the-run-lock) at a time. A Run that holds it and sees this pipeline's Claim on a Ticket knows the Run that claimed it is not running: on this Host because the lock's own liveness check said so, and on another because a human released the lock that Run left.
+Stranded Tickets fill free Lanes before anything the Frontier offers ([Running](./running.md#run)).
 
 A kill still costs more than a Stop. Whatever the Stage had not yet committed and pushed is lost. A worktree left in the middle of a rebase is aborted back to the branch tip before the Checks grade it.
 
@@ -254,60 +213,21 @@ The file is JSON a human can read without the pipeline:
 | `rebaseFirst` | present only after a Release over a failing Base branch: rebase onto the Base branch before the Checks |
 | `runId`, `version`, `updatedAt` | which Run and which [Version](./internals.md#versions) wrote it, and when |
 
-There are only two states. Everything after the implement Stage (Checks, Verify, rebase, pull request, CI, merge) is run again from the Checks by a Run that resumes at `implemented`. None of those steps is worth a state a resume could land on halfway.
+There are only two states. Everything after the implement Stage (Checks, Verify, rebase, pull request, CI, merge) is run again from the Checks by a Run that resumes at `implemented`.
 
-| When | What happens to the file |
-|---|---|
-| the Claim, before any label changes | written. A remote that refuses it ends the Ticket at `setup` with nothing claimed. |
-| the implement Stage commits | `state` becomes `implemented` |
-| a code Stage gives a title | `title` |
-| a pull request opens | `pullRequest` |
-| a fix Stage comes back | `fixUsed: true` |
-| Release, Hand-off | updated, as above; a Release over a failing Base branch adds `rebaseFirst` |
-| the rebase `rebaseFirst` asks for is done | `rebaseFirst` dropped |
-| merge; sweep finds the issue closed; the branch is in neither the worktree here nor on the remote; Hand-off over a branch in the way | removed |
-
-Every write but the first is logged and nothing more when it fails. The remote then holds an earlier state of the same Ticket, and resuming from further back costs a Stage rather than being wrong.
+The file goes when the Ticket merges, its issue closes, or its branch is in neither the worktree here nor on the remote.
 
 ### The `ticket-runner/state` branch
 
-A State file kept in one checkout can be resumed only on that machine. A Ticket a cloud Run released, left stranded or handed off would be lost with the VM, and a Run on a workstation would never know of it. So the State lives on the Target's remote, where a Run on any Host can resume a Ticket another Host left ([ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md), last amendment). It is kept off the issue because the board is written for humans, and a machine record there would be noise and a second source of truth beside the labels.
-
-- Each change rewrites the branch as one snapshot commit with no parent. Nothing reads its history, and a branch that grew with every Stage would grow the Target with it.
-- The push uses `--force-with-lease` on the tip it read, so another writer's newer snapshot is never overwritten. It is read again and the edit reapplied, up to three tries.
-- It is built from git objects and a scratch index, so the main checkout's tree is never touched. It is pushed unsigned and with `--no-verify`, because it holds no code.
-- Within one Run, changes take turns, so two Lanes never push snapshots that each miss the other's Ticket.
-
-Never commit to this branch by hand while a Run is running.
-
-A Target upgraded from a pipeline that kept State files under `.ticket-runner/state/` is refused, with the Tickets named. Nothing migrates them: finish those Tickets with the old Version, or hand them to a human, then delete the directory.
+The State lives on the Target's remote, so a Run on any Host can resume a Ticket another Host left ([ADR-0004](./internals.md#adr-0004)). Each change rewrites the branch as one snapshot commit ([`GitWorkspace`](./internals.md#gitworkspace)). Never commit to it by hand while a Run is running.
 
 ## The Run lock
 
-Two Runs sharing a Target would fight over its Base branch, its Frontier and its worktrees. So one Run at a time holds a Target, whichever Host it is on. A lock only one machine's processes can see would not keep out a Run on another Host, so the lock lives on the Target's GitHub repository, where every Host and every human can see it ([ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)).
+One Run at a time holds a Target, whichever Host it is on, through a lock on the Target's GitHub repository, where every Host and every human can see it ([ADR-0008](./internals.md#adr-0008)).
 
 It is `lock.json` at the tip of the `ticket-runner/lock` branch. That branch always exists once a Run has started. The file names the holder: `host` (kind, id, name), `pid`, `command`, `runId`, `startedAt`, and the process's start time as the OS reports it. Otherwise it reads `{ "held": false }`. The commit message says the same thing in words, for example ``Held by run 2026-09-17T09-00-00-000 on the workstation `desk`: ticket-runner run`` or `Free`.
 
-Taking it is a compare-and-swap. Unlike the state branch, the lock keeps its history, so GitHub shows who held the Target and when:
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant A as Run on Host A
-    participant R as ticket-runner/lock on GitHub
-    participant B as Run on Host B
-    A->>R: fetch tip T (reads "free")
-    B->>R: fetch tip T (reads "free")
-    A->>R: push "held by A" on T, lease on T
-    R-->>A: accepted
-    B->>R: push "held by B" on T, lease on T
-    R-->>B: refused: tip is no longer T
-    B->>R: fetch again
-    R-->>B: held by A on another Host
-    Note over B: exits 2, naming Host A, its Run and start
-    A->>R: when its Lanes are back, push "free" on top
-```
-<!-- Sources: src/adapters/git-workspace.ts, src/lock.ts, src/start.ts -->
+Unlike the state branch, the lock keeps its history, so GitHub shows who held the Target and when. How two Runs racing for it are told apart is under [`GitWorkspace`](./internals.md#gitworkspace).
 
 What a Run makes of a held lock depends on where the holder is:
 
@@ -317,15 +237,13 @@ What a Run makes of a held lock depends on where the holder is:
 | on this Host, its process gone (or its pid reused by another program) | abandoned | takes the lock over by itself, so a Run ended by Ctrl+C costs nothing |
 | on another Host | elsewhere | refused, never presumed dead |
 
-Nothing on one Host can see another Host's processes. A lease that expires unless it is renewed was rejected: a live Run would lose its Target to one missed heartbeat. So a lock left from another Host stays until a human releases it. Ask an Operator, or commit a `lock.json` that reads `{ "held": false }` to the branch on GitHub, and only when no Run is running. A cloud VM reclaimed mid-Run costs exactly one such release.
+Nothing on one Host can see another Host's processes, so a lock left from another Host stays until a human releases it. Ask an Operator, or commit a `lock.json` that reads `{ "held": false }` to the branch on GitHub, and only when no Run is running. A cloud VM reclaimed mid-Run costs exactly one such release.
 
-A Host is told apart by a stable id. A workstation uses its machine id, or its hostname where it has none. A cloud Host uses its session id. A cloud Host that names no session gets a random id, so even its own later Runs see its lock as a stranger's.
-
-A Run's refusals come before the lock: a Target `init` has not set up, State files left in the checkout, no Check to run. None of them leaves a lock behind. A Run that cannot release the lock when it ends says so, and keeps its own exit code.
+A cloud Host is told apart by its session id; one that names no session gets a random id, so even its own later Runs see its lock as a stranger's. A Run that cannot release the lock when it ends says so, and keeps its own exit code.
 
 ## Resuming into a worktree
 
-The branch on the remote carries a Ticket's work between Hosts, so a resumed Ticket starts from it rather than from whatever this Host has. Every Stage that commits (implement, fix, conflict) pushes the branch at once, whatever became of the Stage, since a session the limit stopped may already have committed. A failed push is logged and nothing more.
+The branch on the remote carries a Ticket's work between Hosts, so a resumed Ticket starts from it rather than from whatever this Host has.
 
 Before resuming, a rebase that a killed Run left in progress is aborted. Then the pipeline compares this Host's copy with the remote branch:
 
@@ -349,8 +267,6 @@ flowchart TD
 <!-- Sources: src/adapters/git-workspace.ts, src/orchestrator.ts -->
 
 "Parted" means each side holds commits the other lacks: another Host moved on while this one held work it never pushed. The pipeline does not pick a side silently. The Hand-off names both copies and the two ways to make them one: throw this Host's copy away, or force-push it over the remote by hand. Then relabel the Ticket. Both copies are the pipeline's work, so the State file stays, and the next Run resumes from whichever side the human kept.
-
-Pushes use `--force-with-lease`, so a rebase can rewrite the branch but can never overwrite another Host's newer work.
 
 ## Related pages
 
