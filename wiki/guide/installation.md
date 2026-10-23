@@ -157,6 +157,7 @@ So `ticket-runner init && ticket-runner run` stops before a Run that could not w
 | 5 | `gh` is not installed; the refusal names the install before `init` |
 | 6 | A triage label is missing, as `labels` spells it |
 | 7 | The repository keeps a pull request's branch after it merges |
+| 8 | The remote's Base branch, such as `origin/main`, misses item 2, 3 or 4. Every worktree is made from it, so the refusal says to commit and push what `init` wrote, not to run `init` |
 
 ```text
 $ ticket-runner run

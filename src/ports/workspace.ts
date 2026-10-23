@@ -375,6 +375,20 @@ export interface Workspace {
    */
   hasRemoteBranch(branch: string): Promise<boolean>;
   /**
+   * The remote every branch is fetched from and pushed to, by the name a human
+   * types after `git push`, so a message can spell a branch on it as `origin/main`.
+   */
+  readonly remote: string;
+  /**
+   * The contents of `path` at the tip of `branch` as the remote holds it now,
+   * which is what every Ticket's worktree is made from, and nothing when the
+   * remote has no such branch or the branch no such file.
+   *
+   * Asked by Target readiness alone, before a Run takes the lock: a file `init`
+   * wrote and nobody pushed is in the checkout and in no Stage's worktree.
+   */
+  readRemoteFile(branch: string, path: string): Promise<string | undefined>;
+  /**
    * Delete `branch` on the remote; the PR is merged, so nothing references it.
    * A branch the remote already deleted, as GitHub does on merge when told to,
    * counts as deleted without a delete being sent, which a cloud Host could not.

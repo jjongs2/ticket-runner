@@ -4,6 +4,7 @@ import type { Labels } from "./config.js";
 import { CLAUDE_SECTION, CONVENTIONS_PATH, conventionsMark } from "./conventions.js";
 import { OPERATOR_SKILL_PATH } from "./operator-skill.js";
 import type { Authentication, Tracker } from "./ports/tracker.js";
+import type { Workspace } from "./ports/workspace.js";
 
 /**
  * What `ticket-runner init` must have left in a Target before a Run may start.
@@ -22,17 +23,26 @@ import type { Authentication, Tracker } from "./ports/tracker.js";
  * Version it names: an Operator installs the pipeline a cloud Host runs at that
  * Version, and a Target without one leaves it guessing (ADR-0008).
  *
- * The Target's own files are read here rather than through a port, which every
+ * The checkout's files are read here rather than through a port, which every
  * external effect of a Run goes through. What a port buys is a fake to drive the
- * state machine with, and there is no state machine here: this is five questions
+ * state machine with, and there is no state machine here: these are questions
  * asked of a directory before a Run exists, and the answers are already driven
  * from a temporary repository root, which is how the local state under
- * `.ticket-runner/` is tested too (ADR-0004). Widening the `Workspace` port for
- * them would put reads no Stage and no Ticket ever makes on the interface the
- * orchestrator depends on.
+ * `.ticket-runner/` is tested too (ADR-0004).
+ *
+ * The same files on the remote's Base branch are the one exception, read
+ * through `Workspace` like every other question about the remote: every
+ * Ticket's worktree is made from that branch, so a file `init` wrote and nobody
+ * pushed is in the checkout and in no Stage's worktree. The conventions
+ * document, the `CLAUDE.md` pointer and the Operator's skill are asked of it
+ * the same way they are asked of the checkout. The gitignore lines are not:
+ * the directories they cover exist only in the main checkout, and only its
+ * copy takes effect there.
  *
  * Every item is asked on every Host, the cloud's own needs included, so a
- * Target a workstation accepts is never one a cloud Run then refuses.
+ * Target a workstation accepts is never one a cloud Run then refuses. A cloud
+ * Host's checkout is a clone of the remote, so there the remote's answers are
+ * the checkout's.
  */
 
 /** The file every agent session in a Target reads first. */
@@ -148,6 +158,10 @@ export interface ReadinessOptions {
  * is refused without a network call at all. Whether `gh` is there to ask comes
  * next, so a Host without it is refused in words rather than with the spawn
  * error the first label lookup would crash on.
+ *
+ * What the remote's Base branch lacks is asked after all of these, by
+ * {@link unpushedRefusal}, once the Run has resolved which branch that is: the
+ * lookup may ask GitHub, which only a `gh` that runs can.
  */
 export async function readinessRefusal({
   repoRoot,
@@ -155,7 +169,7 @@ export async function readinessRefusal({
   tracker,
 }: ReadinessOptions): Promise<string | undefined> {
   const missing =
-    missingFileMessage(repoRoot) ??
+    (await missingFileMessage(repoRoot)) ??
     (await missingGhMessage(tracker)) ??
     (await missingLabelMessage(tracker, labels)) ??
     (await missingBranchDeletionMessage(tracker));
@@ -168,14 +182,56 @@ export async function readinessRefusal({
   ].join(" ");
 }
 
+export interface UnpushedOptions {
+  workspace: Pick<Workspace, "remote" | "readRemoteFile">;
+  /** The Run's Base branch, resolved once and carried on into the Run. */
+  baseBranch: string;
+}
+
+/**
+ * The message a Run is refused with when the remote's Base branch lacks a file
+ * the checkout has, and nothing when it has them all.
+ *
+ * Asked once {@link readinessRefusal} has found nothing missing, so a Target
+ * that never ran `init` is told to run it and only one that did is told to
+ * push. A Base branch the remote does not have lacks every file. The remedy is
+ * a commit and a push, which `init` leaves to the human, so this names no
+ * command of the pipeline's.
+ */
+export async function unpushedRefusal({
+  workspace,
+  baseBranch,
+}: UnpushedOptions): Promise<string | undefined> {
+  const remoteBase = `${workspace.remote}/${baseBranch}`;
+  const missing = await missingItemMessage((path) => workspace.readRemoteFile(baseBranch, path));
+  if (missing === undefined) return undefined;
+
+  return [
+    `This Target's \`${remoteBase}\` is not set up: ${missing}.`,
+    `Every Ticket's worktree is made from \`${remoteBase}\`, not from this checkout:`,
+    "commit and push what `init` wrote there, then start again.",
+  ].join(" ");
+}
+
 /** Names the first thing `init` writes into a Target that this one does not have. */
-function missingFileMessage(repoRoot: string): string | undefined {
+async function missingFileMessage(repoRoot: string): Promise<string | undefined> {
   const [unignored] = missingIgnoreLines(repoRoot);
   if (unignored !== undefined) {
     return `\`.gitignore\` does not ignore \`${unignored.line}\``;
   }
 
-  const conventions = readTargetFile(join(repoRoot, CONVENTIONS_PATH));
+  return missingItemMessage(async (path) => readTargetFile(join(repoRoot, path)));
+}
+
+/**
+ * Names the first of the items both the checkout and the remote's Base branch
+ * must carry that `read` does not find, asking each the same question in both
+ * places. Where it was asked is the refusal's to say.
+ */
+async function missingItemMessage(
+  read: (path: string) => Promise<string | undefined>,
+): Promise<string | undefined> {
+  const conventions = await read(CONVENTIONS_PATH);
   if (conventions === undefined) {
     return `\`${CONVENTIONS_PATH}\` is not there`;
   }
@@ -183,13 +239,13 @@ function missingFileMessage(repoRoot: string): string | undefined {
     return `\`${CONVENTIONS_PATH}\` carries no Version`;
   }
 
-  if (!hasClaudePointer(readTargetFile(join(repoRoot, CLAUDE_FILENAME)))) {
+  if (!hasClaudePointer(await read(CLAUDE_FILENAME))) {
     return `\`${CLAUDE_FILENAME}\` does not point at \`${CONVENTIONS_PATH}\``;
   }
 
   // Asked of a workstation too, though only a cloud session reads it: a Target
   // a local Run accepts is then one the app can run as well (ADR-0008).
-  if (readTargetFile(join(repoRoot, OPERATOR_SKILL_PATH)) === undefined) {
+  if ((await read(OPERATOR_SKILL_PATH)) === undefined) {
     return `the Operator's skill \`${OPERATOR_SKILL_PATH}\` is not there`;
   }
 
