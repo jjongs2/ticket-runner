@@ -163,7 +163,7 @@ Start a Run once the limit has reset, or the API has recovered, and the Ticket i
 
 A Stage of a Run started with [`--api-key`](./running.md#api-key) can be refused because the key's organization is out of credit, or because its workspace reached the spend limit set in the Console. Neither is the Ticket's doing, so the Ticket is released as on a rate limit, with these differences:
 
-- The Progress row is `⏸ out of API budget`, and the Run's last line `Out of API budget.`, which outranks the other causes since it alone needs you.
+- The Progress row is `⏸ out of API budget`, and the Run's last line `Out of API budget.`.
 - The summary does not say when access returns, though the spend limit's message does: look at the Console, then start the next Run.
 
 ## Release over a failing Base branch {#release-over-a-failing-base-branch}

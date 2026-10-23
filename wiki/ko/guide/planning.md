@@ -58,7 +58,7 @@ verify Stage는 기준마다 `met`, `unmet`, `unverifiable` 중 하나로 채점
 
 기준은 세션이 코드를 돌려 보거나 읽어서 확인할 수 있게 쓰세요. 사람의 눈이 필요한 기준(스크린샷, 느낌)은 `unverifiable`로 돌아옵니다.
 
-## Blocker {#blockers}
+## blocker {#blockers}
 
 GitHub의 네이티브 `blocked by` 연결만 셉니다([ADR-0003](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0003-github-native-relations-only.md)). 그래서 Run이 가져가는 것은 GitHub 화면에서 막힘이 풀렸다고 보이는 것과 같습니다.
 

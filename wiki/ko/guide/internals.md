@@ -11,7 +11,7 @@ description: 세 port와 그 adapter, src/ 모듈 지도, Version을 찍는 방�
 
 ## 한눈에 보기 {#at-a-glance}
 
-| Port | 격리하는 부수 효과 | Adapter · 테스트용 fake |
+| port | 격리하는 부수 효과 | adapter · 테스트용 fake |
 |---|---|---|
 | `Tracker` | GitHub: 이슈, 라벨, 코멘트, pull request, CI, merge | `GhTracker` · `FakeTracker` |
 | `AgentRunner` | Claude: Stage 세션 하나 | `ClaudeAgentRunner` · `FakeAgentRunner` |
@@ -42,7 +42,7 @@ flowchart LR
 
 adapter를 만드는 곳은 CLI 하나뿐입니다. `start.ts`부터 아래는 모두 인터페이스로 받습니다.
 
-## Adapter {#the-adapters}
+## adapter {#the-adapters}
 
 ### `GhTracker` {#ghtracker}
 
@@ -193,7 +193,7 @@ sequenceDiagram
 
 ## Version {#versions}
 
-[Version](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 `main`이 `v<x.y.z>` 태그로 달고, npm에 올리고, GitHub Release로 공개하는 번호입니다. 설치된 사본이 이 번호를 알려 줍니다. 머신에는 `main`이 아니라 Version을 설치하니, `0.5.2`라고 말하는 두 머신은 같은 코드를 돌립니다([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
+[Version](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 `main`이 `v<x.y.z>` tag로 달고, npm에 올리고, GitHub Release로 공개하는 번호입니다. 설치된 사본이 이 번호를 알려 줍니다. 머신에는 `main`이 아니라 Version을 설치하니, `0.5.2`라고 말하는 두 머신은 같은 코드를 돌립니다([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
 
 Version은 사람이 Version PR을 merge해서 끊고, 그 PR의 초안은 [`/cut-a-version`](https://github.com/jjongs2/ticket-runner/blob/main/.claude/skills/cut-a-version/SKILL.md)이 만듭니다. 단계와 거기 붙는 검사는 [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md#versions)에 있습니다.
 
@@ -221,7 +221,7 @@ Version은 CLI에서 한 번 정해서 아래로 넘깁니다. 그래서 한 Run
 
 ### 새 Version 확인 {#the-newer-version-check}
 
-Run과 `init`은 파이프라인 자신의 저장소에서 공개된 가장 높은 Version을 찾아봅니다. 저장소는 `package.json`의 `repository` 필드에서 읽으니, fork는 자기 자신을 묻습니다. 조회는 태그가 아니라 GitHub Release를 읽되 draft와 prerelease는 뺍니다. 태그 워크플로는 npm에 Version이 올라간 뒤에야 Release를 만드니, Release가 있는 Version은 업그레이드로 설치할 수 있습니다. 번호만 비교하므로, 최신 Version보다 앞선 commit을 돌리는 checkout도 낡은 것으로 보지 않습니다.
+Run과 `init`은 파이프라인 자신의 저장소에서 공개된 가장 높은 Version을 찾아봅니다. 저장소는 `package.json`의 `repository` 필드에서 읽으니, fork는 자기 자신을 묻습니다. 조회는 tag가 아니라 GitHub Release를 읽되 draft와 prerelease는 뺍니다. tag 워크플로는 npm에 Version이 올라간 뒤에야 Release를 만드니, Release가 있는 Version은 업그레이드로 설치할 수 있습니다. 번호만 비교하므로, 최신 Version보다 앞선 commit을 돌리는 checkout도 낡은 것으로 보지 않습니다.
 
 무엇을 출력하는지는 [설치](./installation.md#install)에 있습니다.
 
@@ -267,7 +267,7 @@ Run과 `init`은 파이프라인 자신의 저장소에서 공개된 가장 높�
 
 ### [ADR-0007: A Version is cut by a human, and installs follow tags](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md) {#adr-0007}
 
-- **결정**: Version은 사람이 Version PR을 merge해서 끊고, 태그 워크플로가 npm에 올리며, 설치는 npm에서 합니다. GitHub 태그 범위로 설치해도 됩니다.
+- **결정**: Version은 사람이 Version PR을 merge해서 끊고, tag 워크플로가 npm에 올리며, 설치는 npm에서 합니다. GitHub tag 범위로 설치해도 됩니다.
 - **이유**: 언제 끊을지는 Planning의 결정입니다. 같은 번호의 두 머신이 같은 코드를 돌려야 번호가 쓸모 있는 표시가 됩니다.
 - **비용**: Version notes는 에이전트의 도움을 받아 손으로 씁니다.
 

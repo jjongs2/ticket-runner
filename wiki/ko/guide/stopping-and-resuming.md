@@ -15,7 +15,7 @@ Run은 아무도 지켜보지 않는 사이에 돌아가니, 일이 틀어졌을
 | [Hand-off](#hand-off) | Fix budget으로 감당할 수 없는 실패 | `ready-for-human`, 코멘트, draft pull request. 작업과 State 유지 |
 | [Release](#release-on-a-rate-limit) | 요금제나 API의 rate limit, 일시적인 API 장애, [API 키의 예산 소진](#release-out-of-api-budget), 또는 [Base branch 실패](#release-over-a-failing-base-branch) | `ready-for-agent`, Ticket에 코멘트 없음. 작업과 State 유지 |
 | [Stop](#stop-and-kill) | `ticket-runner stop`(SIGTERM) | 새로 남는 것 없음 |
-| [Kill](#stop-and-kill) | Ctrl+C, SIGKILL, 사라진 Host | Claim, 마지막 push 시점의 작업, State |
+| [kill](#stop-and-kill) | Ctrl+C, SIGKILL, 사라진 Host | Claim, 마지막 push 시점의 작업, State |
 
 merge나 Hand-off 뒤에는 Run이 그 Lane을 다시 채웁니다. Release나 Stop 뒤에는 더 claim하지 않고, 바쁜 Lane만 쥔 일을 마칩니다. kill이면 그 자리에서 끝납니다.
 
@@ -85,7 +85,7 @@ Failure 줄은 무엇이 Ticket을 멈췄는지 말합니다. 그에 따라 할 
 
 `setup`에서의 Hand-off는 아무것도 push하지 않습니다. push할 것이 없거나, 앞을 막은 것이 사람의 작업이거나 다른 Host의 작업일 수 있기 때문입니다.
 
-| 경우 | Draft pull request | State file |
+| 경우 | draft pull request | State file |
 |---|---|---|
 | 이어 갈 것 없이 새로 시작했는데, worktree를 만들기 전에 실패 | 없음: push할 것이 없음 | **삭제**: 만들어진 branch가 없음 |
 | 새로 시작했는데, 같은 이름의 로컬 branch가 있음 | 없음 | **삭제**: 이 Run의 Stage가 거기서 일한 적 없음 |
@@ -103,7 +103,7 @@ Failure 줄은 무엇이 Ticket을 멈췄는지 말합니다. 그에 따라 할 
 | Ticket의 commit | remote의 `agent/<n>-<slug>` branch | merge되며 삭제될 때까지 |
 | State file | `ticket-runner/state`의 `ticket-<n>.json` | 작업이 merge되거나 파이프라인의 몫이 아니게 될 때까지([아래](#the-state-file)) |
 | Hand-off된 Stage의 transcript | `ticket-runner/state`의 `ticket-<n>/<runId>/` | State file이 사라질 때까지 |
-| Worktree | 그 Host의 `.worktrees/ticket-<n>` | merge되거나 사람이 지울 때까지 |
+| worktree | 그 Host의 `.worktrees/ticket-<n>` | merge되거나 사람이 지울 때까지 |
 | 모든 Stage의 전체 로그(stdout, stderr 포함) | 그 Host의 `.ticket-runner/runs/<runId>/<n>/` | 사람이 지울 때까지 |
 
 state branch는 바뀔 때마다 다시 쓰이니, 로컬 branch가 아니라 fetch한 것에서 읽으세요.
@@ -136,7 +136,7 @@ Ticket을 파이프라인에 돌려주려면 라벨을 `ready-for-human`에서 `
 넘겼던 Run 때와 달라지는 점이 몇 가지 있습니다.
 
 - **Fix budget**: 새로 채워집니다. Ticket이 사람 손을 거쳤으니, 그 사람이 한 일에 새 budget을 쓰라는 뜻입니다. 예전 코멘트에는 budget을 썼다고 그대로 남습니다. 실제로 썼으니까요.
-- **Draft pull request**: CI를 기다리기 전에 draft를 풉니다. draft에서는 워크플로가 아예 돌지 않는 일이 많아서, 그대로 기다리면 "no checks"로 읽히기 때문입니다. 사람이 닫아 버린 pull request처럼 draft가 풀리지 않으면 `pr`에서 Hand-off합니다. 닫았다는 건 이어 가지 말라는 뜻이니까요.
+- **draft pull request**: CI를 기다리기 전에 draft를 풉니다. draft에서는 워크플로가 아예 돌지 않는 일이 많아서, 그대로 기다리면 "no checks"로 읽히기 때문입니다. 사람이 닫아 버린 pull request처럼 draft가 풀리지 않으면 `pr`에서 Hand-off합니다. 닫았다는 건 이어 가지 말라는 뜻이니까요.
 - **Hand-off 코멘트**: 각 코멘트의 마커 바로 아래에 `_Taken again by a later Run; this hand-off is history._`가 붙습니다. 알림은 가지 않습니다.
 - **Progress comment**: 새로 하나 답니다. 사람이 읽었던 코멘트는 읽은 모습 그대로 둡니다.
 
@@ -163,7 +163,7 @@ Release가 하는 일:
 
 [`--api-key`](./running.md#api-key)로 시작한 Run의 Stage는 키의 조직에 크레딧이 없거나, 워크스페이스가 Console에서 건 지출 한도에 닿으면 거절당할 수 있습니다. 어느 쪽도 Ticket 탓이 아니니 rate limit 때처럼 Release하되, 다음이 다릅니다.
 
-- Progress 줄은 `⏸ out of API budget`, Run의 마지막 줄은 `Out of API budget.`입니다. 사람이 손써야 하는 것은 이것뿐이라 다른 원인보다 앞섭니다.
+- Progress 줄은 `⏸ out of API budget`, Run의 마지막 줄은 `Out of API budget.`입니다.
 - 지출 한도 메시지에는 접근이 돌아오는 시각이 있지만 요약은 말하지 않습니다. Console을 확인한 뒤 다음 Run을 시작하세요.
 
 ## Base branch가 실패할 때의 Release {#release-over-a-failing-base-branch}
@@ -182,7 +182,7 @@ Base branch에서 Check를 고친 뒤 Run을 시작하세요. Release된 Ticket�
 
 Run을 일찍 끝내는 방법은 두 가지이고, 남기는 것은 정반대입니다([ADR-0006](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md)).
 
-| | Stop | Kill |
+| | Stop | kill |
 |---|---|---|
 | 보내는 방법 | SIGTERM. `ticket-runner stop`이나 Operator가 보냄 | Ctrl+C, SIGKILL, 메모리 부족, 사라진 Host |
 | 바쁜 Lane | merge, Hand-off, Release까지 마무리 | Run과 함께 끝남 |
