@@ -305,11 +305,18 @@ function startStageLog(
   writeFileSync(path("stderr"), "");
 
   const appended = { stdout: 0, stderr: 0 };
+  // The tail of each stream that may be the start of a key the next chunk
+  // finishes. It stays off disk until that chunk shows it is not, so a Run
+  // killed between the two chunks leaves no part of the key behind.
+  const heldBack = { stdout: "", stderr: "" };
   // Appending happens inside the child's stream handler, where a throw would
   // take the whole Run down. A write that fails is left to `close` to redo.
   const append = (suffix: "stdout" | "stderr") => (chunk: string) => {
     try {
-      appendFileSync(path(suffix), redact(chunk));
+      const text = redact(heldBack[suffix] + chunk);
+      const held = keyPrefixAtEnd(text, key);
+      heldBack[suffix] = text.slice(text.length - held);
+      appendFileSync(path(suffix), text.slice(0, text.length - held));
       appended[suffix] += chunk.length;
     } catch {
       // Nothing is lost: the chunk is still part of the Execution.
@@ -325,7 +332,7 @@ function startStageLog(
       // delivered no chunks at all — is written back whole here, so a Stage
       // that ran to the end always has its full output on disk. Where the
       // Host has a key, both are written back whole whatever was appended,
-      // since a key split across two chunks is redacted in neither.
+      // which also puts the tail held back from the last chunk on disk.
       const keyed = key !== undefined && key !== "";
       if (keyed || appended.stdout !== execution.stdout.length) {
         writeFileSync(path("stdout"), redact(execution.stdout));
@@ -341,6 +348,18 @@ function startStageLog(
       );
     },
   };
+}
+
+/**
+ * How many characters at the end of `text` could be the start of `key`, so a
+ * key split across two chunks is redacted once the second arrives.
+ */
+function keyPrefixAtEnd(text: string, key: string | undefined): number {
+  if (key === undefined || key === "") return 0;
+  for (let length = Math.min(key.length - 1, text.length); length > 0; length--) {
+    if (text.endsWith(key.slice(0, length))) return length;
+  }
+  return 0;
 }
 
 function parseEvents(stdout: string): unknown[] {

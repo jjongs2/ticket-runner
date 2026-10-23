@@ -331,6 +331,28 @@ describe("the credential a Stage runs on", () => {
     );
   });
 
+  it("leaves no part of a key split across two chunks on disk between them", async () => {
+    const split = Math.floor(KEY.length / 2);
+    const stdout = `ANTHROPIC_API_KEY=${KEY}\n${SUCCESS}`;
+    const between: string[] = [];
+    const printing = new ClaudeAgentRunner({
+      run: async (_command, _args, options) => {
+        // A Run killed here would leave the disk as it is now.
+        options.onStdout?.(`ANTHROPIC_API_KEY=${KEY.slice(0, split)}`);
+        between.push(readFileSync(stageFile("stdout"), "utf8"));
+        options.onStdout?.(`${KEY.slice(split)}\n${SUCCESS}`);
+        between.push(readFileSync(stageFile("stdout"), "utf8"));
+        return execution({ stdout });
+      },
+    });
+
+    await printing.run(request({ credential: "api-key" }));
+
+    expect(between[0]).toBe("ANTHROPIC_API_KEY=");
+    expect(between[1]).toBe(`ANTHROPIC_API_KEY=<ANTHROPIC_API_KEY>\n${SUCCESS}`);
+    expect(readFileSync(stageFile("stdout"), "utf8")).toBe(between[1]);
+  });
+
   it("reports what the session said it ran on, from its init event", async () => {
     const stdout = transcript(
       { type: "system", subtype: "init", apiKeySource: "apiKeyHelper" },
