@@ -173,7 +173,7 @@ The header ends with what the Stages were billed to: `subscription`, or `API key
 | `handed` | Handed off to a human: the Stage it stopped at, and why |
 | `released` | Released at the named Stage by the `rate limit` (`API rate limit` on an `--api-key` Run), an `API failure`, a 5xx or unanswered API error the CLI had given up retrying, or `out of API budget`, or at `checks` or `ci` by a `failing Base branch`. Nobody has to do anything about the Ticket |
 | `skipped` | Passed over, with the reason ([Guards](./planning.md#guards), or the table above) |
-| `billed` | A Stage of the row above that said, in its `apiKeySource`, it ran on another credential than the header's: an `apiKeyHelper` in the Host's settings, say, which no environment variable removes |
+| `billed` | A Stage of the Ticket above that said, in its `apiKeySource`, it ran on another credential than the header's: an `apiKeyHelper` in the Host's settings, say, which no environment variable removes |
 | `noted` | A [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) the row above made, `from #<n> pipeline` when it is the pipeline's own about a failing Base branch, and where it went: `comment` on an issue already there, the Notes issue included, or `new` for the one Note that opened the Notes issue |
 
 | Last line | Why the Run ended |

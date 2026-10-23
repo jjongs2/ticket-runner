@@ -126,6 +126,7 @@ claude --print <prompt> --output-format stream-json --verbose \
 | [`stop.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stop.ts) | `ticket-runner stop`, 그리고 Run 쪽에서 받는 SIGTERM |
 | [`lock.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lock.ts) | Run lock 파일의 내용, 쥔 쪽이 살아 있는지 |
 | [`host.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/host.ts) | workstation인지 cloud인지, 어느 것인지 |
+| [`credential.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/credential.ts) | 구독인지 API 키인지, Stage마다 보고해야 할 것, `--api-key`를 거절하는 경우 |
 
 **Stage에 주는 것과 Stage가 답하는 것**
 

@@ -173,7 +173,7 @@ Frontier blocked.
 | `handed` | 사람에게 Hand-off됨. 멈춘 Stage와 이유가 붙음 |
 | `released` | 해당 Stage에서 `rate limit`(`--api-key` Run이면 `API rate limit`), `API failure`(CLI가 재시도를 포기한 5xx 또는 응답 없는 API 오류), `out of API budget`으로, 또는 `checks`나 `ci`에서 `failing Base branch`로 Release됨. Ticket에 대해서는 누구도 할 일이 없음 |
 | `skipped` | 이유와 함께 넘어감([Guard](./planning.md#guards), 또는 위의 표) |
-| `billed` | 바로 윗줄의 Stage가 `apiKeySource`로 머리 줄과 다른 과금처를 댐. 예를 들어 Host 설정의 `apiKeyHelper`가 준 키인데, 이것은 환경 변수로 뺄 수 없음 |
+| `billed` | 위 Ticket의 Stage가 `apiKeySource`로 머리 줄과 다른 과금처를 댐. 예를 들어 Host 설정의 `apiKeyHelper`가 준 키인데, 이것은 환경 변수로 뺄 수 없음 |
 | `noted` | 바로 윗줄이 남긴 [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)와 간 곳. Base branch 실패에 대한 파이프라인 자신의 Note면 `from #<n> pipeline`. 이미 있는 이슈(열려 있던 Notes 이슈 포함)면 `comment`, Notes 이슈를 새로 연 Note 하나만 `new` |
 
 | 마지막 줄 | Run이 끝난 이유 |

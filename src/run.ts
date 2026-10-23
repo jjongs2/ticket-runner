@@ -167,13 +167,13 @@ export async function processRun(
    * Put a Ticket in a Lane, and record what came back when it ends.
    *
    * The line about the Run stopping is logged by the Release that stopped it and
-   * by no other, even where a later Release outranks it on the last line. The Ticket's own release is already logged where it
-   * happened; this says the Run goes no further, so a transcript shows the
-   * Frontier was left alone rather than found empty, and a Release into a Run
-   * that an earlier Release or a Stop had stopped already claims to have
-   * stopped nothing. It leads with the Ticket's number all the same: a
-   * transcript of interleaved Lanes must not lose the line that explains why
-   * one Lane was the last to be filled.
+   * by no other, even where a later Release outranks it on the last line. The
+   * Ticket's own release is already logged where it happened; this says the Run
+   * goes no further, so a transcript shows the Frontier was left alone rather
+   * than found empty, and a Release into a Run that an earlier Release or a
+   * Stop had stopped already claims to have stopped nothing. It leads with the
+   * Ticket's number all the same: a transcript of interleaved Lanes must not
+   * lose the line that explains why one Lane was the last to be filled.
    */
   function fillLane(ticket: Taken): void {
     taken.add(ticket.number);
@@ -293,7 +293,8 @@ function outranks(
       return stop.reason === "rate-limited" || stop.reason === "api-error";
     case "rate-limited":
       return (
-        stop.reason === "api-error" || (stop.reason === "rate-limited" && stop.resetsAt === undefined)
+        stop.reason === "api-error" ||
+        (stop.reason === "rate-limited" && stop.resetsAt === undefined)
       );
     default:
       return false;

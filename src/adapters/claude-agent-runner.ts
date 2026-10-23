@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { API_KEY_ENV_VAR } from "../credential.js";
+import { API_KEY_ENV_VAR, type Credential } from "../credential.js";
 import {
   type AgentPreflight,
   type AgentRunner,
@@ -166,7 +166,7 @@ export class ClaudeAgentRunner implements AgentRunner {
     const args = buildArgs(request);
     const session = { name: SESSION_ENV_VAR, value: randomUUID() };
     const env = this.stageEnv(request, session);
-    const commandLine = quoteCommand(request, env, this.binary, args);
+    const commandLine = quoteCommand(request.credential, env, this.binary, args);
     const startedAt = Date.now();
 
     // Started before the child, so a Run killed mid-Stage still leaves the
@@ -518,18 +518,18 @@ function structuredOutputOf(result: ResultEvent): unknown {
  * is never written: command files reach the Target's remote with a hand-off.
  */
 function quoteCommand(
-  request: StageRequest,
+  credential: Credential,
   extraEnv: Record<string, string>,
   binary: string,
   args: string[],
 ): string {
   const assignments = Object.entries(extraEnv).map(([name, value]) => `${name}=${value}`);
-  const credential =
-    request.credential === "subscription"
+  const differed =
+    credential === "subscription"
       ? `env -u ${API_KEY_ENV_VAR}`
       : `${API_KEY_ENV_VAR}="$${API_KEY_ENV_VAR}"`;
   const quoted = [...assignments, binary, ...args]
     .map((part) => (/^[\w./:=-]+$/.test(part) ? part : `'${part.replaceAll("'", `'\\''`)}'`))
     .join(" ");
-  return `${credential} ${quoted}`;
+  return `${differed} ${quoted}`;
 }

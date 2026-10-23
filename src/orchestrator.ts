@@ -1,15 +1,15 @@
 import { branchName, worktreePath } from "./branch.js";
 import type { Config } from "./config.js";
-import { tickMetCriteria } from "./criteria.js";
-import type { BaseBranchChecks, FailingBase } from "./failing-base.js";
-import { type SkipReason, isGuardReason, skipReason } from "./guards.js";
-import { markHandoffsTaken } from "./handoff.js";
 import {
   CREDENTIAL_WORDS,
   type Credential,
   type StrayStage,
   expectedKeySource,
 } from "./credential.js";
+import { tickMetCriteria } from "./criteria.js";
+import type { BaseBranchChecks, FailingBase } from "./failing-base.js";
+import { type SkipReason, isGuardReason, skipReason } from "./guards.js";
+import { markHandoffsTaken } from "./handoff.js";
 import type { HostKind } from "./host.js";
 import type { Landing, LandingTurn } from "./landing.js";
 import type { FailureKind, FailurePoint } from "./lifecycle.js";

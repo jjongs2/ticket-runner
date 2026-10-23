@@ -102,7 +102,7 @@ Every prompt then carries the Stage boundary guidance (never run `ticket-runner`
 |---|---|---|
 | `timed-out` | `❌ timed out` | Killed at `maxMinutes` |
 | `turn-capped` | `❌ turn capped` | Reached `maxTurns` |
-| `out-of-budget` | `⏸ out of API budget` | A 400 whose message names the credit balance or the workspace's API usage limits, on an `--api-key` Run. Releases the Ticket |
+| `out-of-budget` | `⏸ out of API budget` | A 400 whose message names the credit balance or the workspace's API usage limits, which only a Stage billed to a key meets. Releases the Ticket |
 | `rate-limited` | `⏸ rate limited`, `⏸ API rate limited` on an `--api-key` Run | A 429, a rejected `rate_limit_event`, or a message naming the limit. Releases the Ticket |
 | `api-error` | `⏸ API failure` | `terminal_reason: "api_error"` with a 5xx `api_error_status` or none, after the CLI's own retries. Releases the Ticket |
 | `nonzero-exit` | `❌ exited non-zero` | Any other failed session |

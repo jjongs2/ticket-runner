@@ -102,7 +102,7 @@ fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종�
 |---|---|---|
 | `timed-out` | `❌ timed out` | `maxMinutes`에서 kill됨 |
 | `turn-capped` | `❌ turn capped` | `maxTurns`에 도달함 |
-| `out-of-budget` | `⏸ out of API budget` | `--api-key` Run에서, 메시지가 크레딧 잔액이나 워크스페이스의 API 사용 한도를 말하는 400. Ticket을 release함 |
+| `out-of-budget` | `⏸ out of API budget` | 메시지가 크레딧 잔액이나 워크스페이스의 API 사용 한도를 말하는 400. 키로 과금된 Stage만 겪음. Ticket을 release함 |
 | `rate-limited` | `⏸ rate limited`, `--api-key` Run이면 `⏸ API rate limited` | 429, 거절된 `rate_limit_event`, 또는 한도를 언급한 메시지. Ticket을 release함 |
 | `api-error` | `⏸ API failure` | CLI가 재시도를 마친 뒤 `terminal_reason: "api_error"`로 끝나고 `api_error_status`가 5xx이거나 없음. Ticket을 release함 |
 | `nonzero-exit` | `❌ exited non-zero` | 그 밖에 실패한 세션 |

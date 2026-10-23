@@ -126,6 +126,7 @@ Tests sit beside each module as `*.test.ts`.
 | [`stop.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stop.ts) | `ticket-runner stop`, and the Run's end of SIGTERM |
 | [`lock.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lock.ts) | what the Run lock file says, and whether its holder is alive |
 | [`host.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/host.ts) | workstation or cloud, and which one |
+| [`credential.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/credential.ts) | the subscription or the API key, what each Stage should report, and when `--api-key` is refused |
 
 **What Stages are told and what they answer**
 

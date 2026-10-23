@@ -44,9 +44,8 @@ Tickets in flight at once, and each takes as long as its own Stages take.
 
 `released` is a Ticket the rate limit or a transient API failure stopped
 mid-flight — an API error with a 5xx status or none, after the CLI had given up
-retrying it — or, on a Run started with `--api-key`, the key running out of
-budget: its Claim was undone, and the State file it has been
-keeping since it was claimed says where the next Run resumes it from. Nobody has to do anything about it, which is
+retrying it — or the API key running out of budget: its Claim was undone, and
+the State file it has been keeping since it was claimed says where the next Run resumes it from. Nobody has to do anything about it, which is
 why it is not `handed`. It stops the Run filling Lanes, so no Ticket is claimed
 after it; the Lanes still busy finish what they hold, and whatever they end as
 has its row after the `released` one:
@@ -73,8 +72,9 @@ with `--api-key` it is the API's, and is named so: its row reads `API rate
 limit` and its last line `API rate limited.`, with the reset time where a Stage
 was told one.
 
-A Stage of an `--api-key` Run that ends on a 400 whose message names the credit
-balance or the workspace's API usage limits is out of API budget: the key's
+A Stage that ends on a 400 whose message names the credit balance or the
+workspace's API usage limits is out of API budget, on an `--api-key` Run or on
+a key the Stage was billed to anyway (see `billed` below): the key's
 organization is out of credit, or its workspace reached the spend limit set in
 the Console. Its Ticket is released the same way, and the last line names the
 budget but not when access returns, since the human looks at the Console either
