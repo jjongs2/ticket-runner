@@ -1,6 +1,6 @@
 ---
 title: Running
-description: Starting a Run, giving it Lanes, narrowing it to named Tickets, stopping it, reading its summary, exit codes and transcripts, and running it from the Claude app.
+description: Starting a Run, giving it Lanes, billing it to an API key, narrowing it to named Tickets, stopping it, reading its summary, exit codes and transcripts, and running it from the Claude app.
 ---
 
 # Running
@@ -12,6 +12,7 @@ A [Run](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) exists s
 | `ticket-runner run` | Drains the Frontier | `0` · `1` a Hand-off · `2` nothing taken |
 | `ticket-runner run 3 7` | The same Run, narrowed to #3 and #7 | as above |
 | `ticket-runner run --lanes 2` | The same Run, two Tickets at once | as above |
+| `ticket-runner run --api-key` | The same Run, billed to the `ANTHROPIC_API_KEY` your shell exports | as above |
 | `ticket-runner stop` | Asks the Run in this Target to finish what it holds and take no more | `0` sent · `2` nobody to send it to |
 | `ticket-runner -v` | Prints which Version this is | `0` |
 | `ticket-runner -h` | Prints the usage | `0` (`2` when no command is given) |
@@ -35,7 +36,7 @@ The two do not share a Spec. `/implement-spec` leaves no mark on the Tickets it 
 
 ## `run`
 
-`run` drains the [Frontier](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md): the open Tickets labelled `ready-for-agent` that nobody is assigned to and whose native blockers have all closed ([Planning](./planning.md)). Before it takes anything it passes, in order, every refusal a Run can meet: [Target readiness](./installation.md#target-readiness-what-run-refuses), leftover local State files, a missing Check, and the Run lock. Each of these exits `2` and leaves nothing behind.
+`run` drains the [Frontier](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md): the open Tickets labelled `ready-for-agent` that nobody is assigned to and whose native blockers have all closed ([Planning](./planning.md)). Before it takes anything it passes, in order, every refusal a Run can meet: an [`--api-key`](#api-key) the Host cannot honour, [Target readiness](./installation.md#target-readiness-what-run-refuses), leftover local State files, a missing Check, and the Run lock. Each of these exits `2` and leaves nothing behind.
 
 It then takes Tickets through its [Lanes](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), one Ticket per Lane, one Lane by default:
 
@@ -59,7 +60,7 @@ flowchart TD
 
 - **The Frontier is listed again at every refill**, never snapshotted. A merge that closes a blocker puts the Ticket it unblocked into the same Run.
 - **A Ticket that fails is handed off** and its Lane takes the next one; one bad Ticket does not cost the rest of the night.
-- **A Release stops the filling.** A Ticket the rate limit or a transient API failure stopped is released, and so is one whose failing Check the Base branch fails too. The Run claims nothing else, since the same cause would stop the next Ticket too. The Lanes still busy finish what they hold. The Run does not wait for the limit to reset or the Base branch to be mended; it says when the limit resets, or which Check the Base branch fails, and a human or an Operator starts the next Run.
+- **A Release stops the filling.** A Ticket the rate limit, a transient API failure or, on an [`--api-key`](#api-key) Run, the key's budget stopped is released, and so is one whose failing Check the Base branch fails too. The Run claims nothing else, since the same cause would stop the next Ticket too. The Lanes still busy finish what they hold. The Run does not wait for the limit to reset or the Base branch to be mended; it says when the limit resets, or which Check the Base branch fails, and a human or an Operator starts the next Run.
 - **The Run ends** when no Lane is busy and nothing is left to take: the Frontier is empty, or everything on it is blocked.
 
 What happens to each Ticket inside a Lane is on [From Ticket to merge](./ticket-to-merge.md). Stranded Tickets and Releases are on [Stopping and resuming](./stopping-and-resuming.md).
@@ -71,6 +72,19 @@ With one Lane a Run takes the Frontier one Ticket at a time. Most of a Ticket's 
 `--lanes <n>` gives this one Run `n` Lanes, over whatever [`lanes`](./configuration.md#lanes) in `ticket-runner.json` says. How many Tickets a machine can carry at once is that machine's business, not the repository's, so the override lives on the command line. It may go before or after Ticket numbers, and a count above the number of Tickets named is not refused.
 
 Lanes run their Checks at the same time in separate worktrees. Keep one Lane on a Target whose Checks need a port, a database or anything else they would share.
+
+### `--api-key`
+
+Every Stage is a `claude -p` session. Under `-p` an `ANTHROPIC_API_KEY` outranks your Claude login without asking, so a Run starts each Stage without that key, whatever your shell exports, and the Stages run on your plan. `ANTHROPIC_AUTH_TOKEN` is passed on as it is, for a gateway or proxy.
+
+`--api-key` bills every Stage of this one Run to the `ANTHROPIC_API_KEY` your shell exports instead. It is how the monthly API credits of a Max or Team plan are spent: they cover `claude -p` only on a key. Like `--lanes` it is the machine's business, so it is a flag for `run` only and no config field. It is refused before the lock where no key is exported and on a cloud Host ([Refused before it starts](#refused-before-it-starts)). A Run the plan's limit stops does not switch to the key by itself.
+
+| On an `--api-key` Run | What happens |
+|---|---|
+| The key's organization is out of credit, or its workspace reached its spend limit | The Ticket is released, and the Run ends `Out of API budget.` |
+| A 429 | Released as the API's rate limit, not the plan's: `API rate limit` |
+
+The pipeline keeps no budget of its own. Give the key a workspace of its own in the Console, with a spend limit. The limit is not exact: a Run can spend past it before the API refuses, further with several Lanes at once.
 
 ### A narrowed Run
 
@@ -128,6 +142,8 @@ The same string heads the Run summary, every Progress comment, the `init` report
 | Another Run holds the Target, on this Host | ``Another ticket-runner is running on this Host: `ticket-runner run` as run … Wait for it to finish, or ask it to with `ticket-runner stop`.`` |
 | Another Run holds the Target, on another Host | The Host, the Run and when it started, and how to release the lock if that Run is gone |
 | The shell belongs to a Stage | ``Refusing to start: TICKET_RUNNER_STAGE is set to `implement`, …`` |
+| `--api-key` with no key exported | `` `--api-key` runs every Stage on the `ANTHROPIC_API_KEY` this shell exports, and it exports none. … `` |
+| `--api-key` on a cloud Host | `` `--api-key` needs a workstation Host: a cloud session runs every Stage on the subscription, … `` |
 
 One Run at a time per Target, whichever Host it is on. A lock left by a Run on this same Host whose process has gone (a Run ended by Ctrl+C) is taken over by the next Run here by itself. The lock, and releasing one another Host left: [Stopping and resuming](./stopping-and-resuming.md).
 
@@ -138,7 +154,7 @@ Every Stage session runs with `TICKET_RUNNER_STAGE` set to its Stage's name, and
 When a Run ends it prints one row per Ticket, in the order the Tickets ended, then one line saying why it stopped:
 
 ```text
-ticket-runner 0.5.2 run 2026-09-17T09-00-00-000 · 84m
+ticket-runner 0.5.2 run 2026-09-17T09-00-00-000 · 84m · subscription
 
   merged   #4 Planning guards (PR #12)
   noted    #8 comment · from #4 implement · the CLI help drifts
@@ -149,22 +165,24 @@ ticket-runner 0.5.2 run 2026-09-17T09-00-00-000 · 84m
 Frontier blocked.
 ```
 
-A newer-Version line, when there is one, comes above the header ([Install and remove](./installation.md#install)). A Run that took nothing prints `  nothing to do` in place of the rows.
+The header ends with what the Stages were billed to: `subscription`, or `API key` on an `--api-key` Run. A newer-Version line, when there is one, comes above the header ([Install and remove](./installation.md#install)). A Run that took nothing prints `  nothing to do` in place of the rows.
 
 | Row | Meaning |
 |---|---|
 | `merged` | Merged; the pull request is named |
 | `handed` | Handed off to a human: the Stage it stopped at, and why |
-| `released` | Released at the named Stage by the `rate limit` or an `API failure`, a 5xx or unanswered API error the CLI had given up retrying, or at `checks` or `ci` by a `failing Base branch`. Nobody has to do anything about the Ticket |
+| `released` | Released at the named Stage by the `rate limit` (`API rate limit` on an `--api-key` Run), an `API failure`, a 5xx or unanswered API error the CLI had given up retrying, or `out of API budget`, or at `checks` or `ci` by a `failing Base branch`. Nobody has to do anything about the Ticket |
 | `skipped` | Passed over, with the reason ([Guards](./planning.md#guards), or the table above) |
+| `billed` | A Stage of the row above that said, in its `apiKeySource`, it ran on another credential than the header's: an `apiKeyHelper` in the Host's settings, say, which no environment variable removes |
 | `noted` | A [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) the row above made, `from #<n> pipeline` when it is the pipeline's own about a failing Base branch, and where it went: `comment` on an issue already there, the Notes issue included, or `new` for the one Note that opened the Notes issue |
 
 | Last line | Why the Run ended |
 |---|---|
 | `Frontier empty.` | Nothing left to take |
 | `Frontier blocked.` | Everything left has an open blocker |
-| `Rate limited · resets 2026-09-20 03:40 UTC.` | A Release by the rate limit stopped it. The time is the one the CLI gave for the limit's reset, in UTC; a Run it gave none ends `Rate limited.` |
+| `Rate limited · resets 2026-09-20 03:40 UTC.` | A Release by the rate limit stopped it. The time is the one the CLI gave for the limit's reset, in UTC; a Run it gave none ends `Rate limited.`. An `--api-key` Run says `API rate limited` |
 | `API failure.` | A Release by a transient API failure stopped it, and the rate limit released no Ticket after it: the rate limit outranks an API failure on the last line |
+| `Out of API budget.` | A Release by the key's credit or spend limit stopped it. It outranks the rate limit and an API failure, since only it needs you: look at the Console |
 | ``Base branch `main` fails `npm test` at 1a2b3c4.`` | A Release over a failing Base branch stopped it: the Check, and the merge-base it failed at. Mend it on the Base branch; the Note on the standing Notes issue has its output |
 | `Stopped at 22:07 · finishing #4 #9.` | A Stop arrived at that time (UTC), while those Tickets were in its Lanes |
 
@@ -182,14 +200,14 @@ A stopped Run exits with its outcomes' code as usual. `stop` exits `0` when the 
 
 ## Logs and transcripts
 
-The Run's own lines go to the terminal. It opens with `ticket-runner run <runId> · 1 lane`, adding the named Tickets for a narrowed Run, and every line about a Ticket starts with its number, so interleaved Lanes can be read one Ticket at a time. Warnings and refusals go to stderr.
+The Run's own lines go to the terminal. It opens with `ticket-runner run <runId> · 1 lane`, adding the named Tickets for a narrowed Run, and every line about a Ticket starts with its number, so interleaved Lanes can be read one Ticket at a time. A Stage that ran on another credential than the Run's is named as it comes back: `#4 implement ran on apiKeySource apiKeyHelper, not the subscription (none)`. Warnings and refusals go to stderr.
 
 Everything a Stage did goes to disk, under the Target's gitignored `.ticket-runner/`. The run id is the start time in UTC, such as `2026-09-17T09-00-00-000`.
 
 | Path under `.ticket-runner/runs/<runId>/` | Holds |
 |---|---|
 | `version.txt` | The Version that ran, written before the first Stage |
-| `<n>/<stage>.command` | The exact command line, environment included, to rerun the Stage by hand |
+| `<n>/<stage>.command` | The exact command line, environment included, to rerun the Stage by hand: `env -u ANTHROPIC_API_KEY …` for a Stage run without the key, `ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" …` for one run on it, never its value |
 | `<n>/<stage>.stdout`, `<n>/<stage>.stderr` | Output as the Stage printed it, appended live |
 | `<n>/<stage>.transcript.jsonl` | The session's stream-json events |
 | `<n>/retry/` | The fix Stage and the pass it bought, so the failing pass's files survive beside them |
@@ -205,6 +223,7 @@ On a workstation, a Run lasts only while the machine stays on: one that sleeps, 
 | "run it" | Readies the Host, then starts `ticket-runner run` in the background |
 | "run 12 and 14" | Starts `ticket-runner run 12 14` |
 | "three at once" | Passes `--lanes 3`, so the cloud can carry a different count from your workstation |
+| "on my API key" | Passes `--api-key` only when you ask, and tells you such a Run needs a workstation: the cloud Host refuses it |
 | "stop" | Runs `ticket-runner stop` and keeps reporting until the Run ends |
 | "release the lock" | Commits a free `lock.json` to `ticket-runner/lock`, only when no Run of its own is running |
 
@@ -223,6 +242,7 @@ A cloud Host differs from a workstation in a few ways the pipeline accounts for:
 - **Every issue body, comment and pull request body gets a "Generated by Claude Code" line**, which the proxy appends and nobody can turn off. The squash commit is composed by the pipeline, so none of it reaches the base branch.
 - **A reclaimed VM is a kill.** It leaves Stranded Tickets, which the next Run on any Host resumes, and a lock no other Host will presume dead: a human releases it, through an Operator or on GitHub.
 - **Transcripts go with the VM**, except a handed-off Ticket's, which are kept on the State branch.
+- **Stages always run on your plan.** A cloud session ignores `ANTHROPIC_API_KEY`, so `--api-key` is refused there rather than accepted and not honoured.
 
 ## Related pages
 
@@ -235,6 +255,7 @@ A cloud Host differs from a workstation in a few ways the pipeline accounts for:
 ## References
 
 - [`src/cli.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/cli.ts), [`src/command-line.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/command-line.ts), [`src/start.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts), [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts)
+- [`src/credential.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/credential.ts), [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts)
 - [`src/stop.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stop.ts), [`src/lock.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lock.ts), [`src/stage-guard.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stage-guard.ts), [`src/host.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/host.ts)
 - [`src/templates.ts` · `runSummary`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts), [`src/run-log.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run-log.ts), [`src/adapters/version.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts)
 - [`docs/templates/run-summary.txt`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/run-summary.txt), [`docs/templates/stop-report.txt`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/stop-report.txt), [`docs/templates/operator-skill.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/operator-skill.md)

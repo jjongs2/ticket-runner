@@ -68,7 +68,7 @@ flowchart LR
     L -. red CI .-> X
     X --> K
     X -. fails again .-> H["Hand-off: ready-for-human"]
-    I -. rate limit, API failure .-> RL["Release: ready-for-agent"]
+    I -. rate limit, API failure, API budget .-> RL["Release: ready-for-agent"]
     K -. Base branch fails too .-> RL
   end
   R --> F
@@ -78,7 +78,7 @@ flowchart LR
 ```
 <!-- Sources: src/run.ts, src/orchestrator.ts, src/frontier.ts, src/guards.ts -->
 
-Any Stage can be stopped by the rate limit or a transient API failure, not only implement; every one of them ends in a Release. So does a failing Check or red CI that the Base branch fails too: the branch inherited it, so no fix Stage is spent on it. [From Ticket to merge](./guide/ticket-to-merge.md) walks the Execution half one step at a time.
+Any Stage can be stopped by the rate limit, a transient API failure or, on a Run started with `--api-key`, the key running out of budget, not only implement; every one of them ends in a Release. So does a failing Check or red CI that the Base branch fails too: the branch inherited it, so no fix Stage is spent on it. [From Ticket to merge](./guide/ticket-to-merge.md) walks the Execution half one step at a time.
 
 ## The guide
 
@@ -86,7 +86,7 @@ Any Stage can be stopped by the rate limit or a transient API failure, not only 
 |---|---|
 | [Install and remove](./guide/installation.md) | Requirements, the npm install, `init`, what a Run requires of a Target, `remove`, uninstalling |
 | [Planning the work](./guide/planning.md) | What makes an issue a Ticket: Specs, Acceptance Criteria, native blockers, labels, the Guards |
-| [Running](./guide/running.md) | `run`, `--lanes`, a narrowed Run, `stop`, `-v`, the summary and exit codes, logs, running from the Claude app |
+| [Running](./guide/running.md) | `run`, `--lanes`, `--api-key`, a narrowed Run, `stop`, `-v`, the summary and exit codes, logs, running from the Claude app |
 | [Configuration](./guide/configuration.md) | Every field of `ticket-runner.json` |
 | [From Ticket to merge](./guide/ticket-to-merge.md) | The Stages, the Fix budget, Lanes and the Landing, rebase conflicts, what the board is told, Notes |
 | [Stopping and resuming](./guide/stopping-and-resuming.md) | Hand-off, Release, Stop against kill, Stranded Tickets, handing a Ticket back, the Run lock and the State branch |

@@ -69,12 +69,15 @@ claude --print <prompt> --output-format stream-json --verbose \
 
   | 변수 | 값 | 이유 |
   |---|---|---|
+  | `ANTHROPIC_API_KEY` | Run을 `--api-key`로 시작하지 않았으면 뺌 | `-p`에서는 키가 묻지도 않고 Claude 로그인보다 앞서니, 남은 키가 그대로 과금됨 |
   | `TICKET_RUNNER_STAGE` | Stage 이름 | [Stage mark](./ticket-to-merge.md) |
   | `TICKET_RUNNER_SESSION` | Stage 세션마다 다른 UUID | [`maxMinutes`의 kill](#smaller-adapters)이 찾는 Session mark |
   | `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | `1` | Host 사용자의 memory는 Target이 아닌 그 사람의 프로젝트에 관한 것 |
   | `CLAUDE_CODE_SHELL` | `/bin/bash`, 있을 때만 | zsh는 아무것도 맞지 않는 glob 하나에 명령 전체를 멈춤 |
-- Stage가 시작되는 순간부터 `<stage>.command`, `.stdout`, `.stderr`, `.transcript.jsonl`을 씁니다.
-- `maxMinutes`가 지나면 자식과 자식이 띄운 프로세스를 모두 죽이고, 실패를 `rate-limited`, `api-error`, `timed-out`, `turn-capped`, `nonzero-exit`, `invalid-result`로 분류합니다.
+  `ANTHROPIC_AUTH_TOKEN`을 비롯한 다른 변수는 그대로 물려받습니다.
+- Stage가 시작되는 순간부터 `<stage>.command`, `.stdout`, `.stderr`, `.transcript.jsonl`을 씁니다. 명령 파일은 키 없이 돈 Stage면 `env -u ANTHROPIC_API_KEY`로, 키로 돈 Stage면 `ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"`로 시작하고 키 값은 적지 않습니다. 명령 파일은 Hand-off 때 Target의 원격으로 가기 때문입니다.
+- 세션의 `system/init` 이벤트에서 `apiKeySource`를 읽고, orchestrator가 이를 Run의 과금처와 맞춰 봅니다.
+- `maxMinutes`가 지나면 자식과 자식이 띄운 프로세스를 모두 죽이고, 실패를 `rate-limited`, `api-error`, `out-of-budget`, `timed-out`, `turn-capped`, `nonzero-exit`, `invalid-result`로 분류합니다.
 
 ### `GitWorkspace` {#gitworkspace}
 

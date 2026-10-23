@@ -48,6 +48,7 @@ Start what the human asked for as a background command, so the session stays fre
 - `ticket-runner run` to work through every Ticket that is ready.
 - `ticket-runner run <n>...` when the human names Tickets, one number each. The Run takes only those, lowest number first whatever order they were named in, and leaves every other Ticket alone.
 - `ticket-runner run --lanes <count>` when the human asks for a number of Tickets at once, with or without numbers. Pass it only when they do; otherwise the repository's own config decides.
+- `ticket-runner run --api-key` when the human asks for the Run to bill their API key rather than their Claude plan, beside numbers or `--lanes` or without. Pass it only when they do. Tell them an API-key Run needs a workstation Host: a cloud Host refuses it, because a cloud session runs every Stage on the subscription whatever key it exports.
 
 Start one at a time. While a Run of yours is running, start no other.
 

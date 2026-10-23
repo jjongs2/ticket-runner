@@ -68,7 +68,7 @@ flowchart LR
     L -. CI 실패 .-> X
     X --> K
     X -. 또 실패 .-> H["Hand-off: ready-for-human"]
-    I -. rate limit, API 장애 .-> RL["Release: ready-for-agent"]
+    I -. rate limit, API 장애, API 예산 .-> RL["Release: ready-for-agent"]
     K -. Base branch도 실패 .-> RL
   end
   R --> F
@@ -78,7 +78,7 @@ flowchart LR
 ```
 <!-- Sources: src/run.ts, src/orchestrator.ts, src/frontier.ts, src/guards.ts -->
 
-rate limit이나 일시적인 API 장애는 implement만이 아니라 어느 Stage에서든 일어날 수 있고, 어디서 일어나든 Release로 끝납니다. Base branch에서도 똑같이 실패하는 Check나 빨간 CI도 Release로 끝납니다. branch가 물려받은 실패이니 fix Stage를 쓰지 않습니다. 실행 쪽 절반은 [Ticket 하나가 merge되기까지](./guide/ticket-to-merge.md)에서 한 단계씩 따라가 봅니다.
+rate limit, 일시적인 API 장애, 그리고 `--api-key`로 시작한 Run에서 키의 예산 소진은 implement만이 아니라 어느 Stage에서든 일어날 수 있고, 어디서 일어나든 Release로 끝납니다. Base branch에서도 똑같이 실패하는 Check나 빨간 CI도 Release로 끝납니다. branch가 물려받은 실패이니 fix Stage를 쓰지 않습니다. 실행 쪽 절반은 [Ticket 하나가 merge되기까지](./guide/ticket-to-merge.md)에서 한 단계씩 따라가 봅니다.
 
 ## 가이드 {#the-guide}
 
@@ -86,7 +86,7 @@ rate limit이나 일시적인 API 장애는 implement만이 아니라 어느 Sta
 |---|---|
 | [설치와 제거](./guide/installation.md) | 요구 사항, npm 설치, `init`, Run이 Target에 요구하는 것, `remove`, 삭제 |
 | [일 계획하기](./guide/planning.md) | 이슈를 Ticket으로 만드는 것: Spec, Acceptance Criteria, 네이티브 blocker, 라벨, Guard |
-| [실행하기](./guide/running.md) | `run`, `--lanes`, 좁힌 Run, `stop`, `-v`, 요약과 종료 코드, 로그, Claude 앱에서 실행하기 |
+| [실행하기](./guide/running.md) | `run`, `--lanes`, `--api-key`, 좁힌 Run, `stop`, `-v`, 요약과 종료 코드, 로그, Claude 앱에서 실행하기 |
 | [설정](./guide/configuration.md) | `ticket-runner.json`의 모든 필드 |
 | [Ticket 하나가 merge되기까지](./guide/ticket-to-merge.md) | Stage, Fix budget, Lane과 Landing, rebase 충돌, 보드에 남기는 것, Note |
 | [멈추고 이어 하기](./guide/stopping-and-resuming.md) | Hand-off, Release, Stop과 kill, Stranded Ticket, Ticket 돌려주기, Run lock과 State branch |

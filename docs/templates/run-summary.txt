@@ -1,4 +1,4 @@
-ticket-runner <version> run <runId> · <duration>
+ticket-runner <version> run <runId> · <duration> · <credential>
 
   merged   #3 Run: drain the Frontier (PR #12)
   noted    #8 comment · from #3 implement · the CLI help drifts from the README
@@ -12,6 +12,11 @@ Frontier empty.
 The verb is padded to nine columns so the Ticket numbers line up. A Run that
 took no Ticket prints `  nothing to do` in place of the rows.
 
+`<credential>` is what the Run's Stages were billed to: `subscription`, the
+Claude login, or `API key`, the `ANTHROPIC_API_KEY` the Host exports, for a Run
+started with `--api-key`. A subscription Run starts its Stages without that
+key, whatever the Host exports.
+
 `<version>` is the Version the Run ran (ADR-0007): the number alone from an
 installed copy, and the number, the commit and a `dirty` mark from a development
 checkout — `0.4.0`, `0.4.0+331d79c`, `0.4.0+331d79c.dirty`. Every stamp of one
@@ -22,7 +27,7 @@ A Run whose Version is below the highest one published on GitHub gains a line
 above that header, which is also the first thing it logged hours earlier:
 
 A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g ticket-runner`.
-ticket-runner <version> run <runId> · <duration>
+ticket-runner <version> run <runId> · <duration> · <credential>
 
   merged   #3 Run: drain the Frontier (PR #12)
 
@@ -37,15 +42,16 @@ The rows are in the order the Tickets ended, which is the order they were
 claimed in only for a Run with one Lane. A Run with more than one has several
 Tickets in flight at once, and each takes as long as its own Stages take.
 
-`released` is a Ticket the subscription rate limit or a transient API failure
-stopped mid-flight — an API error with a 5xx status or none, after the CLI had
-given up retrying it: its Claim was undone, and the State file it has been
+`released` is a Ticket the rate limit or a transient API failure stopped
+mid-flight — an API error with a 5xx status or none, after the CLI had given up
+retrying it — or, on a Run started with `--api-key`, the key running out of
+budget: its Claim was undone, and the State file it has been
 keeping since it was claimed says where the next Run resumes it from. Nobody has to do anything about it, which is
 why it is not `handed`. It stops the Run filling Lanes, so no Ticket is claimed
 after it; the Lanes still busy finish what they hold, and whatever they end as
 has its row after the `released` one:
 
-ticket-runner <version> run <runId> · <duration>
+ticket-runner <version> run <runId> · <duration> · <credential>
 
   released #6 Rebase conflict resolution · rate limit at implement
   merged   #3 Run: drain the Frontier (PR #12)
@@ -62,11 +68,28 @@ transient API failure stopped says which it was and nothing of when:
 
 API failure.
 
-When a Ticket a busy Lane held is released too, the rate limit outranks an
-API failure: a Ticket the limit released afterwards puts its own last line in
-place of `API failure.`, with the reset time where a Stage was told one,
-because that is the line that says when the next Run can start. Each
-`released` row keeps its own cause.
+The rate limit is the subscription's on a subscription Run. On a Run started
+with `--api-key` it is the API's, and is named so: its row reads `API rate
+limit` and its last line `API rate limited.`, with the reset time where a Stage
+was told one.
+
+A Stage of an `--api-key` Run that ends on a 400 whose message names the credit
+balance or the workspace's API usage limits is out of API budget: the key's
+organization is out of credit, or its workspace reached the spend limit set in
+the Console. Its Ticket is released the same way, and the last line names the
+budget but not when access returns, since the human looks at the Console either
+way:
+
+  released #6 Rebase conflict resolution · out of API budget at implement
+
+Out of API budget.
+
+When a Ticket a busy Lane held is released too, out of API budget outranks the
+rate limit and an API failure, because it alone needs the human to act, and the
+rate limit outranks an API failure: a Ticket the limit released afterwards puts
+its own last line in place of `API failure.`, with the reset time where a Stage
+was told one, because that is the line that says when the next Run can start.
+Each `released` row keeps its own cause.
 
 A Ticket whose failing Check or red CI the Base branch fails too is released
 the same way, its Fix budget as it was: the pipeline ran the Check commands at
@@ -96,7 +119,7 @@ A Run given Ticket numbers, `ticket-runner run 12 13 57 99`, has a row for every
 one of them. The ones it took end like any other; each one it did not take is
 `skipped` with its reason, after the rows of the Tickets it took:
 
-ticket-runner <version> run <runId> · <duration>
+ticket-runner <version> run <runId> · <duration> · <credential>
 
   merged   #12 Run: drain the Frontier (PR #14)
   skipped  #57 pull-request
@@ -125,11 +148,22 @@ row shows the Note's summary trimmed to one line; the whole Note is on GitHub.
 
 The last line says why the Run stopped: `Frontier empty.` when nothing is left,
 `Frontier blocked.` when every remaining candidate has an open blocker,
-`Rate limited.`, with the reset time where the CLI gave one, `API failure.`, or
+`Rate limited.` or `API rate limited.`, with the reset time where the CLI gave
+one, `API failure.`, `Out of API budget.`, or
 ``Base branch `<base>` fails `<command>` at <commit>.`` when a Release ended the
 Run, and `Stopped at <hh:mm> · ...`
 when a human stopped it. Where Releases differ, the first one's last line
-stands, except that the rate limit outranks an API failure.
+stands, except that out of API budget outranks the rate limit and an API
+failure, and the rate limit outranks an API failure.
+
+`billed` is a Stage whose `system/init` event named another `apiKeySource` than
+the Run's credential: anything but `none` on a subscription Run, anything but
+`ANTHROPIC_API_KEY` on an `--api-key` Run. It follows its Ticket's rows, and the
+Run's log named it when the Stage came back. A key an `apiKeyHelper` in the
+Host's settings supplies is one, which no environment variable removes:
+
+  merged   #3 Run: drain the Frontier (PR #12)
+  billed   #3 implement · apiKeySource apiKeyHelper
 
 A Run a Release stopped prints no `skipped  #<n> blocked` rows and no rows for
 the Frontier Tickets it never reached: it stopped before it could say a
@@ -145,7 +179,7 @@ arrived finish what they hold. Its last line names the clock time the Stop
 arrived and the Tickets those Lanes were holding, so the rows above it can be
 read as everything the Run had left to do:
 
-ticket-runner <version> run <runId> · <duration>
+ticket-runner <version> run <runId> · <duration> · <credential>
 
   merged   #3 Run: drain the Frontier (PR #12)
   merged   #6 Rebase conflict resolution (PR #14)

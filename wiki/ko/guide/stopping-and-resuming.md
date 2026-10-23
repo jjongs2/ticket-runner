@@ -5,7 +5,7 @@ description: Hand-off, Release, Stop, kill이 각각 무엇을 남기는지, 그
 
 # 멈추고 이어 하기
 
-Run은 아무도 지켜보지 않는 사이에 돌아가니, 일이 틀어졌을 때도 깔끔하게 끝나야 합니다. 끝내지 못한 Ticket, 바닥난 구독 한도, 그만 멈추라는 사람의 요청, 갑자기 사라진 머신 같은 경우 말이지요. 어느 경우든 Ticket은 다음 Run이 이어받을 수 있는 자리에 남습니다. 같은 Host든 다른 Host든 상관없습니다. 이어받은 Run은 이미 끝낸 Stage에 비용을 다시 치르지 않고, 사람이 라벨을 먼저 손봐 줄 필요도 없습니다.
+Run은 아무도 지켜보지 않는 사이에 돌아가니, 일이 틀어졌을 때도 깔끔하게 끝나야 합니다. 끝내지 못한 Ticket, 바닥난 구독 한도나 API 키, 그만 멈추라는 사람의 요청, 갑자기 사라진 머신 같은 경우 말이지요. 어느 경우든 Ticket은 다음 Run이 이어받을 수 있는 자리에 남습니다. 같은 Host든 다른 Host든 상관없습니다. 이어받은 Run은 이미 끝낸 Stage에 비용을 다시 치르지 않고, 사람이 라벨을 먼저 손봐 줄 필요도 없습니다.
 
 이 페이지에서는 각 끝맺음이 무엇을 남기는지, 그리고 파이프라인이 거기서 어떻게 돌아오는지를 다룹니다.
 
@@ -15,7 +15,7 @@ Run은 아무도 지켜보지 않는 사이에 돌아가니, 일이 틀어졌을
 |---|---|---|
 | merge | 모든 관문을 초록으로 통과 | 닫힌 issue. branch와 State file은 사라짐 |
 | [Hand-off](#hand-off) | Fix budget으로 감당할 수 없는 실패 | `ready-for-human`, 코멘트, draft pull request. 작업과 State 유지 |
-| [Release](#release-on-a-rate-limit) | 구독 rate limit, 일시적인 API 장애, 또는 [Base branch 실패](#release-over-a-failing-base-branch) | `ready-for-agent`, Ticket에 코멘트 없음. 작업과 State 유지 |
+| [Release](#release-on-a-rate-limit) | 구독이나 API의 rate limit, 일시적인 API 장애, [API 키의 예산 소진](#release-out-of-api-budget), 또는 [Base branch 실패](#release-over-a-failing-base-branch) | `ready-for-agent`, Ticket에 코멘트 없음. 작업과 State 유지 |
 | [Stop](#stop-and-kill) | `ticket-runner stop`(SIGTERM) | 새로 남는 것 없음 |
 | [Kill](#stop-and-kill) | Ctrl+C, SIGKILL, 사라진 Host | Claim, 마지막 push 시점의 작업, State |
 
@@ -115,7 +115,7 @@ Hand-off가 State를 남기는 이유가 있습니다. 예전에 Run이 rate lim
 
 ## rate limit이나 API 장애로 멈췄을 때의 Release {#release-on-a-rate-limit}
 
-구독 rate limit에 걸린 Stage는 무언가를 잘못한 게 아닙니다. API가 자기 쪽 문제로 멈춰 세운 Stage도 마찬가지입니다. 이걸 Hand-off로 처리하면 아무 문제 없는 Ticket의 라벨을 사람이 다시 바꿔야 하고, fix Stage를 돌려 봐야 같은 한도나 같은 장애에 또 걸릴 뿐입니다. 그래서 Ticket을 [Release](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)합니다. Ticket은 보드로 돌아가고, 다음 Run은 마지막으로 끝낸 Stage에서부터 Fix budget도 그대로인 채 이어 갑니다.
+rate limit에 걸린 Stage는 무언가를 잘못한 게 아닙니다. API가 자기 쪽 문제로 멈춰 세운 Stage도 마찬가지입니다. 이걸 Hand-off로 처리하면 아무 문제 없는 Ticket의 라벨을 사람이 다시 바꿔야 하고, fix Stage를 돌려 봐야 같은 한도나 같은 장애에 또 걸릴 뿐입니다. 그래서 Ticket을 [Release](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)합니다. Ticket은 보드로 돌아가고, 다음 Run은 마지막으로 끝낸 Stage에서부터 Fix budget도 그대로인 채 이어 갑니다.
 
 두 판단 모두 실패한 세션에 대해서만 합니다. rate limit은 아래 셋 중 하나만 있어도 됩니다.
 
@@ -125,7 +125,7 @@ Hand-off가 State를 남기는 이유가 있습니다. 예전에 Run이 rate lim
 | status가 `rejected`인 `rate_limit_event` | 경고만 하는 이벤트는 멈춤이 아닙니다. 한도 근처의 세션은 그런 이벤트를 찍고도 끝까지 갑니다. |
 | result나 stderr에 `usage limit`, `session limit`, `rate limit`, `rate_limit`이 있음 | 문구가 바뀐 적이 있어서 마지막에 봅니다 |
 
-성공한 세션은 rate limit 이야기를 아무리 많이 해도 rate-limited로 보지 않습니다.
+성공한 세션은 rate limit 이야기를 아무리 많이 해도 rate-limited로 보지 않습니다. `--api-key` 없이 시작한 Run에서는 구독의 한도이고, `--api-key`로 시작한 Run에서는 API의 한도입니다. 그때 요약의 줄은 `API rate limit`, 마지막 줄은 `API rate limited.`입니다.
 
 실패했지만 rate limit은 아닌 세션의 `result` 이벤트가 `terminal_reason: "api_error"`로 끝나고 `api_error_status`가 5xx이거나 없으면, 일시적인 API 장애로 봅니다. `529 Overloaded`나 "No response from API" 같은 경우입니다. CLI가 포기할 때는 이미 요청을 재시도한 뒤이므로, Stage를 그 자리에서 다시 돌리지 않습니다. 그 밖의 status와 다른 오류는 Stage 자신의 실패이고, Fix budget이나 Hand-off로 갑니다.
 
@@ -139,6 +139,14 @@ Release가 하는 일:
 그 뒤로 Run은 더 claim하지 않습니다. 한 Stage를 멈춘 원인은 다음 Stage도 멈출 테니까요. 이미 바쁜 Lane은 자기 Ticket을 끝까지 마치고, 마지막 Lane이 돌아오면 Run이 끝납니다. 한도가 풀리기를 기다리지는 않습니다. 요약의 마지막 줄은 `Rate limited · resets 2026-09-20 03:40 UTC.`처럼, 요청을 거절한 `rate_limit_event`가 알려 준 시각을 담습니다. 시각을 알려 준 이벤트가 없으면 `Rate limited.`이고, API 장애였으면 `API failure.`입니다. 다만 그 뒤에 바쁜 Lane의 Ticket이 rate limit으로 Release되면 rate limit이 API 장애보다 앞섭니다. 다음 Run을 언제 시작할지 알려 주는 쪽이니 요약은 rate limit 줄로 끝나고, 각 Ticket 줄은 저마다의 원인을 그대로 보여 줍니다. Release된 Ticket도 가져간 것으로 치니, Hand-off가 없으면 exit code는 `0`입니다.
 
 한도가 풀리거나 API가 회복된 뒤 Run을 시작하면 그 Ticket이 Frontier에 돌아와 있고, State file에서 이어 갑니다.
+
+## API 예산 소진으로 인한 Release {#release-out-of-api-budget}
+
+[`--api-key`](./running.md#api-key)로 시작한 Run의 Stage는 키의 조직에 크레딧이 없거나, 워크스페이스가 Console에서 건 사용 한도에 닿으면 거절당할 수 있습니다. 어느 쪽도 Ticket 탓이 아니니 rate limit 때처럼 Release하되, 다음이 다릅니다.
+
+- 실패한 세션의 `result`가 `api_error_status: 400`이고 메시지가 `credit balance is too low`나 `workspace API usage limits`를 말할 때로 봅니다. 그 밖의 400은 전처럼 Stage 자신의 실패입니다. 사용 한도 메시지는 usage limit이라는 말도 담고 있지만 rate limit이 아니라 예산으로 읽습니다.
+- Progress 줄은 `⏸ out of API budget`, 요약 줄은 `out of API budget at <stage>`, 마지막 줄은 `Out of API budget.`입니다. 사람이 손써야 하는 것은 이것뿐이라 마지막 줄에서 rate limit과 API 장애보다 앞섭니다.
+- 사용 한도 메시지에는 접근이 돌아오는 시각이 있지만 요약은 말하지 않습니다. Console을 확인한 뒤 다음 Run을 시작하세요.
 
 ## Base branch가 실패할 때의 Release {#release-over-a-failing-base-branch}
 
@@ -362,7 +370,7 @@ push는 `--force-with-lease`를 쓰니, rebase가 branch를 다시 쓸 수는 �
 - [`src/stop.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stop.ts): `requestStop`, `StopSignal`, `listenForStop`
 - [`src/lock.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lock.ts), [`src/host.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/host.ts), [`src/start.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts): `startRun`
 - [`src/adapters/git-workspace.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts): `worktreeFromRemote`, `changeState`, `acquireLock`, `keepTranscripts`
-- [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts): `rateLimited`
+- [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts): `rateLimited`, `outOfBudget`
 - [`src/run-log.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run-log.ts): `transcriptFiles`
 - [`docs/templates/handoff-comment.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/handoff-comment.md), [`docs/templates/draft-pr-body.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/draft-pr-body.md), [`docs/templates/stop-report.txt`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/stop-report.txt)
 - [ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md), [ADR-0006](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md), [ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)
