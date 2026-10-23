@@ -73,6 +73,8 @@ A [Stage](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is one
 
 Every Stage runs in the Ticket's worktree with `--permission-prompts none`, the configured `permissionMode`, and its own `model`, `effort`, `maxTurns` and `maxMinutes` (see [Configuration](./configuration.md)). The wall-clock limit is enforced by killing the process and everything it started.
 
+**What a Stage sees.** The branch's files, the Target's `CLAUDE.md` among them, so what `init` wrote reaches a Stage once it is on the Base branch. No MCP server, the claude.ai connectors included, no auto memory, and none of the tools that act beyond the session, such as scheduling. Work that needs an MCP server cannot be done by a Stage.
+
 | Stage | Prompt opens with | Structured answer |
 |---|---|---|
 | implement | `/mattpocock-skills:implement <issue URL>` | optional `title` and [`notes`](#notes) |
@@ -319,7 +321,7 @@ A Stage keeps meeting defects that are not its Ticket's. Fixing them widens the 
 | A closed, claimed (`in-progress`) or Spec issue | The standing Notes issue, saying which Ticket it was meant for and why it did not go there |
 | A number that will not take the comment (invented, locked) | The standing Notes issue, with the number it was meant for |
 
-**The standing Notes issue** is one open `needs-triage` issue, titled "Notes from the pipeline", that collects Notes as comments. It is found by a marker in its body, not by its title, so renaming it opens no second one. It is opened by the first Note that needs it and shared by every Lane of the Run. Triage empties it by hand and closes it, and the next Note opens a fresh one. When one is open, each noting Stage's prompt carries its number, so the Stage can read what is already reported and add only what would change a reader's action.
+**The standing Notes issue** is one open `needs-triage` issue, titled "Notes from the pipeline", that collects Notes as comments. It is found by a marker in its body, not by its title, so renaming it opens no second one. It is opened by the first Note that needs it and shared by every Lane of the Run. Work through it as triage does: turn each Note worth doing into a Ticket, or a comment on one, then close the issue. The next Note opens a fresh one. When one is open, each noting Stage's prompt carries its number, so the Stage can read what is already reported and add only what would change a reader's action.
 
 A `- [ ]` at the head of a line in a Note is escaped, so a Note is never read as Acceptance Criteria. The Run summary lists each Note as a `noted` row under the Ticket that made it.
 

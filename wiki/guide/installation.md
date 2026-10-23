@@ -22,14 +22,17 @@ A Run works unattended, so anything missing has to be caught before it starts, n
 | Node 22 or newer | The package's `engines` field | npm, at install |
 | `git` | Every Ticket gets its own worktree and branch | – |
 | [`gh`](https://cli.github.com/), authenticated for the Target | Every GitHub call goes through `gh api` | `init` reports it; `run` refuses a Host without `gh` |
-| `claude`, with the `mattpocock-skills` plugin, version 1.2.3 or later | Each Stage is a `claude -p` session, and the implement Stage drives the plugin's skills ([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)) | `init` reports both |
+| `claude`, with the `mattpocock-skills` plugin, version 1.2.3 or later | Each Stage is a `claude -p` session, and the implement Stage drives the plugin's skills ([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)) | `init` reports both, the plugin by name only |
 | `claude` logged in with your Claude plan | A Stage runs on that login and never sees the `ANTHROPIC_API_KEY` your shell exports, unless the Run is started with [`--api-key`](./running.md#api-key) | – |
 | A GitHub repository with Tickets planned for it | The board is where Tickets come from; see [Planning](./planning.md) | – |
-| `/setup-matt-pocock-skills`, run once in the repository with GitHub Issues as the tracker | The planning skills file Specs and Tickets as GitHub issues because of it | – |
+| `/setup-matt-pocock-skills`, run once in the repository with GitHub Issues as the tracker | The planning skills file Specs and Tickets as GitHub issues because of it. It asks before it writes `docs/agents/issue-tracker.md` and an `## Agent skills` block in `CLAUDE.md`, which show it ran | – |
 | A CI workflow in `.github/workflows` | A pull request with no checks is never merged, unless [`gates.ci`](./configuration.md#gates) is off | `init` reports it |
 | A Check the pipeline can run itself | `test` and `typecheck` scripts in `package.json`, or commands in [`checks`](./configuration.md#checks) | `init` reports it; `run` refuses without one |
+| The Target's own dependencies, installed in the main checkout | A Ticket's worktree finds them there, and nothing installs them for it. Without them every Check fails, at the merge-base too, and the Run ends on a [failing Base branch](./stopping-and-resuming.md#release-over-a-failing-base-branch) | – |
 
-The plugin comes from Anthropic's official marketplace, which is how an [Operator](./running.md#from-the-claude-app) installs it on a cloud Host:
+A merge only pulls the Base branch into the main checkout, so after a Ticket that adds a dependency, install again there before the next Run.
+
+The plugin comes from Anthropic's official marketplace, on a workstation as an [Operator](./running.md#from-the-claude-app) installs it on a cloud Host. `claude plugin list` shows the version installed:
 
 ```bash
 claude plugin marketplace add anthropics/claude-plugins-official
@@ -82,7 +85,7 @@ cd ~/code/acme
 ticket-runner init
 ```
 
-It commits nothing, so what it wrote reaches the Target's history through whatever review that repository uses. It takes no [Run lock](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), because it claims no Ticket.
+It commits nothing. Commit what it wrote and push it to the Base branch before the first Run: a Ticket's worktree is branched from the remote, so a Stage reads the conventions document only once the Base branch carries it, and a cloud Host sees only what is pushed. It takes no [Run lock](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), because it claims no Ticket.
 
 ### What it writes
 
@@ -104,7 +107,7 @@ The conventions document and the skill are the pipeline's own text, so an edit t
 | Squash merging | Turns it on; no other merge method is touched |
 | Deleting a pull request's branch when it merges | Switches it on, since a cloud Host cannot delete a branch itself ([ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)) |
 
-When `gh` is not authenticated, nothing on GitHub is done and the report says so.
+When `gh` is not authenticated, nothing on GitHub is done and the report says so. Changing these settings takes a `gh` user allowed to change the repository's settings. GitHub tells only such a user whether branches are deleted on merge, so a Run started by anyone else is refused as if that setting were off.
 
 ### What it only reports
 

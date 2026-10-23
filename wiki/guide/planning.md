@@ -30,6 +30,12 @@ Planning is a chain of skills from the `mattpocock-skills` plugin, run in your o
 
 A [Spec](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is only ever implemented through its Tickets. A [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) should be small enough for one implement Stage, which by default has 300 turns and 60 minutes ([Configuration](./configuration.md#stages)).
 
+After `to-tickets`, check what a Guard would otherwise refuse:
+
+- each Ticket has `- [ ]` criteria and the `ready-for-agent` label
+- every issue a body names under `Blocked by` is a native link too ([Blockers](#blockers))
+- the Spec carries no `ready-for-agent`: `to-spec` puts it on, and the Spec is skipped as `no-criteria` until its Tickets exist, when the `spec` Guard takes it off
+
 To file one by hand with its parent and blockers in place:
 
 ```bash
@@ -61,7 +67,7 @@ gh issue edit 23 --add-blocked-by 14,15      # add links to an existing issue
 gh issue edit 23 --remove-blocked-by 15      # take one off
 ```
 
-A Ticket waits while any of its blockers is open. A blocker that another Lane of the same Run is still working on is open too, and that is the whole of what keeps two Tickets out of each other's way: nothing else decides which Tickets are safe to run side by side. The moment a blocker merges, the Ticket it held back can be taken in the same Run.
+A Ticket waits while any of its blockers is open. A blocker that another Lane of the same Run is still working on is open too, and that is the whole of what keeps two Tickets out of each other's way: nothing else decides which Tickets are safe to run side by side. The moment a blocker merges, the Ticket it held back can be taken in the same Run. So link a blocker between Tickets that change the same code: the second is then built on the first, where without one they run side by side and the later one's rebase goes to the [Conflict Stage](./ticket-to-merge.md#the-conflict-stage).
 
 A `Blocked by` section in the body is fine as a human-readable copy, as long as every issue it names has a native link as well. When it names one without, the `body-only-blockers` Guard refuses the Ticket. The Guard reads only the section itself, so issue references elsewhere in the body are prose:
 

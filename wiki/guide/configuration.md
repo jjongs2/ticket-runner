@@ -7,7 +7,7 @@ description: Every field of ticket-runner.json, its default, and what it changes
 
 A Target should work with no settings at all, so every field is optional and `init` writes the file as `{}`. The file exists for what only the Target can know: which commands prove its code works, how long its CI takes, whether its Checks can share a machine, and what it calls its labels. What belongs to the Host rather than the Target is a flag of `run`: [`--lanes`](./running.md#lanes) overrides `lanes`, and [`--api-key`](./running.md#api-key) chooses what the Stages are billed to, which no field sets.
 
-The file is `ticket-runner.json` at the Target's root. It is plain JSON, so it cannot hold comments.
+The file is `ticket-runner.json` at the Target's root. It is plain JSON, so it cannot hold comments. A Run reads it once, as it starts, from the main checkout's working tree, so an edit applies from the next Run.
 
 | Field | Default | What it changes |
 |---|---|---|
@@ -106,7 +106,7 @@ Each Stage is one `claude -p` session. `stages` takes an object per Stage, and e
 
 | Key | Type | Default | Passed as |
 |---|---|---|---|
-| `model` | string | `"claude-opus-5-5"` | `--model` |
+| `model` | string, anything `claude --model` takes, such as `sonnet` | `"claude-opus-5-5"` | `--model` |
 | `effort` | `"low"`, `"medium"`, `"high"`, `"xhigh"` or `"max"` | `"high"` | `--effort` |
 | `maxTurns` | whole number ≥ 1 | per Stage, above | `--max-turns` |
 | `maxMinutes` | number > 0 | per Stage, above | The wall-clock limit the session is killed at |

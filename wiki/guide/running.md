@@ -61,6 +61,7 @@ flowchart TD
 - **A Ticket that fails is handed off** and its Lane takes the next one; one bad Ticket does not cost the rest of the night.
 - **A [Release](./stopping-and-resuming.md#release-on-a-rate-limit) stops the filling**: the busy Lanes finish, and the next Run is yours or an Operator's to start.
 - **The Run ends** when no Lane is busy and nothing is left to take: the Frontier is empty, or everything on it is blocked.
+- **Leave the main checkout to the Run.** It pulls the Base branch there before each rebase and after each merge. Uncommitted changes the pull would overwrite hand the Ticket off, and commits on a checked-out Base branch that the remote lacks are rebased into the next pull request. Work in a worktree of your own meanwhile.
 
 What happens to each Ticket inside a Lane is on [From Ticket to merge](./ticket-to-merge.md). Stranded Tickets and Releases are on [Hand-offs, stopping and resuming](./stopping-and-resuming.md).
 
@@ -193,7 +194,16 @@ A stopped Run exits with its outcomes' code as usual. The codes of the other com
 
 ## Logs and transcripts
 
-The Run's own lines go to the terminal. It opens with `ticket-runner run <runId> · 1 lane`, adding the named Tickets for a narrowed Run, and every line about a Ticket starts with its number, so interleaved Lanes can be read one Ticket at a time. A Stage that ran on another credential than the Run's is named as it comes back: `#4 implement ran on apiKeySource apiKeyHelper, not the subscription (none)`. Warnings and refusals go to stderr.
+The Run's own lines go to the terminal, every line about a Ticket starting with its number, so interleaved Lanes can be read one Ticket at a time:
+
+```text
+ticket-runner run 2026-09-17T09-00-00-000 · 1 lane
+#4 claimed · agent/4-planning-guards
+#4 verified · 6 met · 1 unverifiable
+#4 merged · PR #12
+```
+
+Nothing is printed while a Stage runs or CI is awaited, which can take an hour; a Stage's own output is in its `.stdout` file below. A narrowed Run's first line adds the Tickets named, and a resumed Ticket says `resumed from <state>` in place of `claimed`. A Stage that ran on another credential than the Run's is named as it comes back: `#4 implement ran on apiKeySource apiKeyHelper, not the subscription (none)`. Warnings and refusals go to stderr.
 
 Everything a Stage did goes to disk, under the Target's gitignored `.ticket-runner/`. The run id is the start time in UTC, such as `2026-09-17T09-00-00-000`.
 
@@ -209,7 +219,14 @@ The command line is written before the Stage starts and output as it arrives, so
 
 ## From the Claude app
 
-On a workstation, a Run lasts only while the machine stays on: one that sleeps, reboots or is switched off stops the Frontier draining until you are back, and the Run can be watched or stopped only from the terminal that started it. A Run started from the Claude app has neither limit: open a Claude Code cloud session on the Target from the app and say "run it". The session's own Claude is the [Operator](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md): it follows the skill `init` wrote into the Target, `.claude/skills/ticket-runner/SKILL.md`, because a cloud session carries nothing over but the repository ([ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)).
+On a workstation, a Run lasts only while the machine stays on: one that sleeps, reboots or is switched off stops the Frontier draining until you are back, and the Run can be watched or stopped only from the terminal that started it. A Run started from the Claude app goes on with your machine off and can be followed from any device, though its VM can still be reclaimed (below): open a Claude Code cloud session on the Target from the app and say "run it". The session's own Claude is the [Operator](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md): it follows the skill `init` wrote into the Target, `.claude/skills/ticket-runner/SKILL.md`, because a cloud session carries nothing over but the repository ([ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)).
+
+Before the first Run from the app:
+
+1. Run `init` on a workstation, and commit and push what it wrote to the Base branch. The cloud session sees only the repository.
+2. Let the cloud environment reach npm, GitHub, apt and your Target's own package registry, which readying the Host installs from.
+
+`gh` needs nothing: the cloud session authenticates it.
 
 | You say | The Operator |
 |---|---|

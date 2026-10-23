@@ -65,14 +65,28 @@ The comment follows [`docs/templates/handoff-comment.md`](https://github.com/jjo
 </details>
 ```
 
+The Failure line says what stopped the Ticket. What it asks of you:
+
+| Failure | What to change before handing it back |
+|---|---|
+| A Stage ran past its minute limit, or hit its turn limit | Raise that Stage's `maxMinutes` or `maxTurns` in [`stages`](./configuration.md#stages), or split the Ticket |
+| implement left no commits | Read its transcript, then make the Ticket smaller or clearer |
+| Criteria unmet after the fix, or no evidence | Mend the code by hand, or rewrite the criteria so a session can check them by running or reading code ([Acceptance Criteria](./planning.md#acceptance-criteria)) |
+| CI timed out | Raise [`ciTimeoutMinutes`](./configuration.md#ci) |
+| No checks | Add a CI workflow, raise `ciGraceMinutes` if checks register slowly, or turn [`gates.ci`](./configuration.md#gates) off |
+| The pull request is conflicting | Nothing: the next Run rebases it again, and the Conflict Stage takes the conflict |
+| The Base branch could not be pulled | Clear what is in the way in the main checkout ([Running](./running.md#run)) |
+| The merge failed | Put right the repository setting GitHub's refusal names, such as a branch protection rule |
+| A branch in the way, or copies that have parted | Run the command the Failure line names |
+
 ### When a Hand-off does less
 
 A Hand-off at `setup` pushes nothing: there is either nothing to push, or what is in the way may be a human's work or another Host's.
 
 | Case | Draft pull request | State file |
 |---|---|---|
-| Taken from the top, failed before its worktree existed | none: nothing to push | **removed**: nothing was branched |
-| Taken from the top, a local branch of that name exists | none | **removed**: no Stage of this Run worked there |
+| Started fresh, with nothing to resume, and failed before its worktree existed | none: nothing to push | **removed**: nothing was branched |
+| Started fresh, and a local branch of that name exists | none | **removed**: no Stage of this Run worked there |
 | Resumed, this Host's branch has parted from the remote's | none opened; an open one goes to draft | kept: both copies are the pipeline's |
 | Any failure after the worktree was ready | opened, or an open one back to draft | kept |
 
@@ -90,9 +104,30 @@ The Host a Ticket was worked on may be gone by the time a human looks, for examp
 | Worktree | `.worktrees/ticket-<n>` on that Host | the merge, or a human deletes it |
 | Every Stage's full log (stdout, stderr too) | `.ticket-runner/runs/<runId>/<n>/` on that Host | a human deletes it |
 
+The state branch is rewritten on every change, so read it from a fetch rather than a local branch:
+
+```bash
+git fetch origin ticket-runner/state
+git ls-tree -r --name-only FETCH_HEAD ticket-8/
+git show FETCH_HEAD:ticket-8/2026-09-17T09-00-00-000/verify.transcript.jsonl
+```
+
 Every Stage that commits pushes the branch. `.worktrees/` and `.ticket-runner/` are safe to delete whenever no Run is running: everything a Run needs is on the remote, and the next Run remakes a worktree from it.
 
 ## Handing a Ticket back
+
+A handed-off Ticket is yours to end one of four ways:
+
+| You | Then |
+|---|---|
+| Change the Ticket, its criteria or the config, and hand it back | The next Run grades it against what the issue says then |
+| Push commits to its branch on the remote, and hand it back | The next Run brings its copy up to that tip. A rewritten history parts the copies instead |
+| Finish it yourself: mark the draft ready and merge it | The issue closes. Take `ready-for-human` off yourself, and delete the worktree and local branch on the Host that made them |
+| Drop it: close the issue | The draft pull request and the branch stay until you close and delete them |
+
+```bash
+gh issue edit 8 --remove-label ready-for-human --add-label ready-for-agent   # hand it back
+```
 
 To hand a Ticket back, move its label from `ready-for-human` to `ready-for-agent`. The next Run finds it on the Frontier, reads its State file and carries on from what it reached. A Ticket that reached `implemented` goes straight to the Checks, so the implement Stage is not paid for twice.
 
@@ -103,7 +138,7 @@ A few things differ from the Run that handed it off:
 - **Hand-off comments**: each is marked `_Taken again by a later Run; this hand-off is history._` under its marker, which notifies nobody.
 - **Progress comment**: a new one. The comment the human read is left exactly as they read it.
 
-Until the relabel, the State file is inert. No Frontier offers a `ready-for-human` Ticket, the sweep passes over it without a word, and a Run given its number skips it as `not-ready`. Once the issue closes, the sweep removes the file, so a Ticket finished by hand leaves nothing behind.
+Until the relabel, the State file is inert. No Frontier offers a `ready-for-human` Ticket, the sweep passes over it without a word, and a Run given its number skips it as `not-ready`. Once the issue closes, the next Run's sweep removes the file and its transcripts.
 
 ## Release on a rate limit or an API failure {#release-on-a-rate-limit}
 
@@ -237,7 +272,7 @@ What a Run makes of a held lock depends on where the holder is:
 | on this Host, its process gone (or its pid reused by another program) | abandoned | takes the lock over by itself, so a Run ended by Ctrl+C costs nothing |
 | on another Host | elsewhere | refused, never presumed dead |
 
-Nothing on one Host can see another Host's processes, so a lock left from another Host stays until a human releases it. Ask an Operator, or commit a `lock.json` that reads `{ "held": false }` to the branch on GitHub, and only when no Run is running. A cloud VM reclaimed mid-Run costs exactly one such release.
+Nothing on one Host can see another Host's processes, so a lock left from another Host stays until a human releases it. The lock's last commit on GitHub names its holder, `Held by run <id> on <host>: …`; look on that Host, and release the lock only once its Run is gone. Ask an Operator, or commit a `lock.json` that reads `{ "held": false }` to the branch on GitHub, and only when no Run is running. A cloud VM reclaimed mid-Run costs exactly one such release.
 
 A cloud Host is told apart by its session id; one that names no session gets a random id, so even its own later Runs see its lock as a stranger's. A Run that cannot release the lock when it ends says so, and keeps its own exit code.
 
@@ -266,7 +301,7 @@ flowchart TD
 ```
 <!-- Sources: src/adapters/git-workspace.ts, src/orchestrator.ts -->
 
-"Parted" means each side holds commits the other lacks: another Host moved on while this one held work it never pushed. The pipeline does not pick a side silently. The Hand-off names both copies and the two ways to make them one: throw this Host's copy away, or force-push it over the remote by hand. Then relabel the Ticket. Both copies are the pipeline's work, so the State file stays, and the next Run resumes from whichever side the human kept.
+"Parted" means each side holds commits the other lacks: another Host moved on while this one held work it never pushed. The pipeline does not pick a side silently. The Hand-off names both copies and the two ways to make them one: throw this Host's copy away with the command it gives, or force-push it over the remote's from its worktree (`git push --force-with-lease origin <branch>`). Then relabel the Ticket. Both copies are the pipeline's work, so the State file stays, and the next Run resumes from whichever side the human kept.
 
 ## Related pages
 
