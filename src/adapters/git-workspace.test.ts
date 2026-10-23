@@ -675,6 +675,39 @@ describe("rebaseState", () => {
   });
 });
 
+describe("a file on the remote's Base branch", () => {
+  it("reads a file the remote's Base branch carries", async () => {
+    expect(await workspace.readRemoteFile("main", "README.md")).toBe("hello\n");
+  });
+
+  it("reads nothing of a file committed here and never pushed", async () => {
+    mkdirSync(join(repo, "docs"), { recursive: true });
+    commit(repo, "docs/conventions.md", "unpushed\n", "docs: add conventions (#2)");
+
+    expect(await workspace.readRemoteFile("main", "docs/conventions.md")).toBeUndefined();
+  });
+
+  it("reads what another clone pushed since this checkout last fetched", async () => {
+    const other = mkdtempSync(join(tmpdir(), "ticket-runner-other-"));
+    created.push(other);
+    git(other, "clone", remote, ".");
+    git(other, "config", "user.email", "human@example.com");
+    git(other, "config", "user.name", "human");
+    commit(other, "CLAUDE.md", "pushed\n", "docs: add CLAUDE.md (#2)");
+    git(other, "push", "origin", "main");
+
+    expect(await workspace.readRemoteFile("main", "CLAUDE.md")).toBe("pushed\n");
+  });
+
+  it("reads nothing at a branch the remote does not have", async () => {
+    expect(await workspace.readRemoteFile("release", "README.md")).toBeUndefined();
+  });
+
+  it("names the remote it reads from", () => {
+    expect(workspace.remote).toBe("origin");
+  });
+});
+
 describe("push and pullBase", () => {
   it("pushes the branch to the remote", async () => {
     const path = join(repo, ".worktrees", "ticket-2");

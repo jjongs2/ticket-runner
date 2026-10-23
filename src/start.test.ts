@@ -58,6 +58,8 @@ beforeEach(() => {
   tracker.deleteBranchOnMergeEnabled = true;
   runner = new FakeAgentRunner({ verify: stageResult({ result: PASSING_VERDICT }) });
   workspace = new FakeWorkspace();
+  // And pushed, so every Ticket's worktree has them too.
+  pushInitFiles("main");
 });
 
 afterEach(() => {
@@ -67,6 +69,13 @@ afterEach(() => {
 function write(path: string, contents: string): void {
   mkdirSync(dirname(join(repoRoot, path)), { recursive: true });
   writeFileSync(join(repoRoot, path), contents);
+}
+
+/** The three files readiness asks of the remote, pushed to `branch` as `init` wrote them. */
+function pushInitFiles(branch: string): void {
+  workspace.pushFile(branch, CONVENTIONS_PATH, conventionsDoc(VERSION));
+  workspace.pushFile(branch, "CLAUDE.md", CLAUDE_SECTION);
+  workspace.pushFile(branch, OPERATOR_SKILL_PATH, operatorSkill());
 }
 
 /** The pipeline's own repository, as the CLI reads it off the package. */
@@ -310,6 +319,124 @@ describe("a Target init has not set up", () => {
  * A Target an earlier pipeline left State files in, under the run directory:
  * resume state lives on the remote now, and nothing migrates them (ADR-0004).
  */
+describe("a Target whose remote lacks what init wrote", () => {
+  it("refuses a Target that pushed none of it, saying to push rather than to run init", async () => {
+    workspace.remoteFiles.clear();
+
+    const { code, err } = await start();
+
+    expect(code).toBe(2);
+    expect(err).toContain(CONVENTIONS_PATH);
+    expect(err).toContain("`origin/main`");
+    expect(err).toContain("push");
+    expect(err).not.toContain("ticket-runner init");
+    expect(lockTaken()).toBe(false);
+  });
+
+  it.each([
+    [CONVENTIONS_PATH, CONVENTIONS_PATH],
+    ["CLAUDE.md", "`CLAUDE.md`"],
+    [OPERATOR_SKILL_PATH, OPERATOR_SKILL_PATH],
+  ])("refuses a remote missing only %s, naming it", async (path, named) => {
+    workspace.remoteFiles.get("main")?.delete(path);
+
+    const { code, err } = await start();
+
+    expect(code).toBe(2);
+    expect(err).toContain(named);
+    expect(err).toContain("`origin/main`");
+    expect(lockTaken()).toBe(false);
+  });
+
+  it("refuses a remote whose conventions document carries no Version stamp", async () => {
+    workspace.pushFile("main", CONVENTIONS_PATH, "# Pipeline conventions\n");
+
+    const { code, err } = await start();
+
+    expect(code).toBe(2);
+    expect(err).toContain(CONVENTIONS_PATH);
+    expect(err).toContain("carries no Version");
+    expect(lockTaken()).toBe(false);
+  });
+
+  it("refuses a remote whose `CLAUDE.md` does not point at the conventions document", async () => {
+    workspace.pushFile("main", "CLAUDE.md", "# Acme\n");
+
+    const { code, err } = await start();
+
+    expect(code).toBe(2);
+    expect(err).toContain("`CLAUDE.md`");
+    expect(err).toContain("`origin/main`");
+  });
+
+  it("still names init for a checkout missing an item, whatever the remote holds", async () => {
+    rmSync(join(repoRoot, OPERATOR_SKILL_PATH));
+    workspace.remoteFiles.clear();
+
+    const { code, err } = await start();
+
+    expect(code).toBe(2);
+    expect(err).toContain(OPERATOR_SKILL_PATH);
+    expect(err).toContain("ticket-runner init");
+    expect(err).not.toContain("origin/main");
+  });
+
+  it("asks nothing of the remote about the gitignore, which only the checkout's copy governs", async () => {
+    // Nothing seeded `.gitignore` on the remote, and the Run starts anyway.
+    const { code } = await start();
+
+    expect(code).toBe(0);
+    expect(lockTaken()).toBe(true);
+  });
+
+  it("starts a Run it refused once the three files are pushed", async () => {
+    workspace.remoteFiles.clear();
+    expect((await start()).code).toBe(2);
+
+    pushInitFiles("main");
+    const { code } = await start();
+
+    expect(code).toBe(0);
+    expect(lockTaken()).toBe(true);
+  });
+
+  it("refuses a remote without the Base branch at all as missing the items", async () => {
+    tracker.defaultBranchName = "master";
+
+    const { code, err } = await start();
+
+    expect(code).toBe(2);
+    expect(err).toContain(CONVENTIONS_PATH);
+    expect(err).toContain("`origin/master`");
+    expect(lockTaken()).toBe(false);
+  });
+
+  it("asks the Base branch the config file names, and works against it", async () => {
+    write(CONFIG_FILENAME, JSON.stringify({ baseBranch: "release" }));
+    workspace.remoteFiles.clear();
+    pushInitFiles("release");
+    tracker.addIssue({ number: 4, labels: ["ready-for-agent"] });
+
+    const { code } = await start();
+
+    expect(code).toBe(0);
+    expect(workspace.branchedFrom).toEqual(["release"]);
+  });
+
+  it("resolves the Base branch once, and readiness and the Run use the same one", async () => {
+    tracker.defaultBranchName = "master";
+    workspace.remoteFiles.clear();
+    pushInitFiles("master");
+    tracker.addIssue({ number: 4, labels: ["ready-for-agent"] });
+
+    const { code } = await start();
+
+    expect(code).toBe(0);
+    expect(tracker.defaultBranchLookups).toBe(1);
+    expect(workspace.branchedFrom).toEqual(["master"]);
+  });
+});
+
 describe("a Target with State files left in its checkout", () => {
   it("refuses to start, naming the Tickets they belong to, and takes nothing", async () => {
     write(".ticket-runner/state/ticket-9.json", "{}");

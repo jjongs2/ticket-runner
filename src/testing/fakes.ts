@@ -72,6 +72,8 @@ export class FakeTracker implements Tracker {
   deleteBranchOnMergeEnabled = false;
   /** What GitHub calls this Target's default branch; the Run resolves from it. */
   defaultBranchName = "main";
+  /** How many times the default branch was asked for, which a Run does once. */
+  defaultBranchLookups = 0;
   /**
    * The Target's repository as `owner/name`, as {@link repository} answers. The
    * repository the fake's issue URLs name, which is not the pipeline's own.
@@ -164,6 +166,7 @@ export class FakeTracker implements Tracker {
   // Not in `calls`: like the other reads, and a Run resolves the base branch
   // before it touches a Ticket, where the log is about what it wrote.
   async defaultBranch(): Promise<string> {
+    this.defaultBranchLookups += 1;
     return this.defaultBranchName;
   }
 
@@ -509,6 +512,14 @@ export class FakeWorkspace implements Workspace {
    * that moved on while this one held work it never pushed.
    */
   partedBranches = new Set<string>();
+  /**
+   * The files each branch carries on the remote, by path, as a Run reads them
+   * at the Base branch's tip. A test seeds the ones a human pushed; a branch
+   * with no entry is one the remote does not have.
+   */
+  remoteFiles = new Map<string, Map<string, string>>();
+  /** The remote the Target's branches are fetched from and pushed to. */
+  readonly remote = "origin";
   calls: string[] = [];
   /** The branch's commit subjects, oldest first, as an implement Stage leaves them. */
   commits = ["feat(cli): do the thing (#2)", "test(cli): cover the thing (#2)"];
@@ -616,6 +627,7 @@ export class FakeWorkspace implements Workspace {
     const other = new FakeWorkspace();
     other.host = ANOTHER_HOST;
     other.remoteBranches = this.remoteBranches;
+    other.remoteFiles = this.remoteFiles;
     other.states = this.states;
     other.transcripts = this.transcripts;
     other.remoteLock = this.remoteLock;
@@ -631,6 +643,14 @@ export class FakeWorkspace implements Workspace {
   /** Seed the State an earlier Run left for its Ticket. */
   recordState(state: TicketState): this {
     this.states.set(state.ticket, { readable: true, state: { ...state } });
+    return this;
+  }
+
+  /** Seed a file a human pushed to `branch`, replacing what was there. */
+  pushFile(branch: string, path: string, contents: string): this {
+    const files = this.remoteFiles.get(branch) ?? new Map<string, string>();
+    files.set(path, contents);
+    this.remoteFiles.set(branch, files);
     return this;
   }
 
@@ -838,6 +858,11 @@ export class FakeWorkspace implements Workspace {
     if (branch === STATE_BRANCH) return this.states.size > 0 || this.transcripts.size > 0;
     if (branch === LOCK_BRANCH) return this.remoteLock.branch === true;
     return this.remoteBranches.has(branch);
+  }
+
+  /** Not in `calls`: a read, and one a Run makes before it takes the lock. */
+  async readRemoteFile(branch: string, path: string): Promise<string | undefined> {
+    return this.remoteFiles.get(branch)?.get(path);
   }
 
   /** The state and lock branches go with everything on them. */

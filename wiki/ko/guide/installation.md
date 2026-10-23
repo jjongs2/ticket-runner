@@ -157,6 +157,7 @@ Not ready: 1 item is yours to put right.
 | 5 | `gh`가 설치되어 있지 않음. 이때는 `init`보다 설치를 먼저 안내 |
 | 6 | `labels`가 정한 이름의 triage 라벨이 하나라도 없음 |
 | 7 | 저장소가 merge된 pull request의 branch를 남겨 둠 |
+| 8 | remote의 Base branch(예: `origin/main`)에 2, 3, 4번 항목 중 하나가 없음. worktree는 모두 여기서 만들어지므로, `init`을 다시 돌리라는 대신 `init`이 쓴 것을 commit하고 push하라고 안내 |
 
 ```text
 $ ticket-runner run

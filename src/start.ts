@@ -10,7 +10,7 @@ import type { Pipeline, TicketOutcome } from "./orchestrator.js";
 import type { AgentRunner } from "./ports/agent-runner.js";
 import type { Tracker } from "./ports/tracker.js";
 import type { Workspace } from "./ports/workspace.js";
-import { readinessRefusal } from "./readiness.js";
+import { readinessRefusal, unpushedRefusal } from "./readiness.js";
 import { LOCAL_STATE_DIR, localStateTickets } from "./resume.js";
 import { writeRunVersion } from "./run-log.js";
 import { type RunStop, processRun } from "./run.js";
@@ -84,7 +84,8 @@ export interface StartOptions {
  * Start a Run, and answer with the exit code it earned.
  *
  * Every refusal comes before the lock: an `--api-key` the Host cannot honour,
- * a Target `init` has not set up, one holding State files an earlier pipeline
+ * a Target `init` has not set up, one whose remote lacks what `init` wrote, one
+ * holding State files an earlier pipeline
  * left in the checkout, and one with nothing to gate a merge. None is a Run
  * that went wrong, so none should leave a lock behind for the next one to
  * reclaim.
@@ -113,6 +114,18 @@ export async function startRun(given: StartOptions): Promise<number> {
   const notReady = await readinessRefusal({ repoRoot, labels: config.labels, tracker });
   if (notReady !== undefined) {
     error(notReady);
+    return 2;
+  }
+
+  // Once per Run, and here rather than with the rest of the Run's setup:
+  // readiness asks the remote's copy of this branch for what `init` wrote, and
+  // every branch, rebase, pull request and pull of the Run goes to the same one.
+  // After readiness's own questions, since the lookup may ask GitHub, which only
+  // a `gh` that runs can.
+  const baseBranch = await resolveBaseBranch(tracker, config);
+  const notPushed = await unpushedRefusal({ workspace, baseBranch });
+  if (notPushed !== undefined) {
+    error(notPushed);
     return 2;
   }
 
@@ -162,7 +175,7 @@ export async function startRun(given: StartOptions): Promise<number> {
   const stopping = new StopSignal();
   const deafen = listenForStop(stopping, options.signals);
   try {
-    return await execute(options, { credential, host }, log, stopping);
+    return await execute(options, { credential, host, baseBranch }, log, stopping);
   } finally {
     // The lock goes first: SIGTERM between the two is a kill again, and a kill
     // that leaves the lock behind costs the next Run a stale holder to reclaim,
@@ -181,7 +194,11 @@ export async function startRun(given: StartOptions): Promise<number> {
 
 async function execute(
   options: StartOptions,
-  { credential, host }: { credential: Credential; host: HostKind },
+  {
+    credential,
+    host,
+    baseBranch,
+  }: { credential: Credential; host: HostKind; baseBranch: string },
   log: (line: string) => void,
   stopping: StopSignal,
 ): Promise<number> {
@@ -206,11 +223,7 @@ async function execute(
     repository: options.repository,
   });
 
-  // Once per Run, before any Ticket: every branch, rebase, pull request and
-  // pull of this Run goes to the branch this answers.
-  const baseBranch = await resolveBaseBranch(tracker, config);
-
-  // Once per Run as well: only a Target that is the pipeline's own repository
+  // Once per Run: only a Target that is the pipeline's own repository
   // has a checkout that is the pipeline, and every Stage is told which it is in.
   const selfHosted = await isPipelineRepository(tracker, options.repository);
 

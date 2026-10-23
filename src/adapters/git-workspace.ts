@@ -147,7 +147,7 @@ export class GitWorkspace implements Workspace {
 
   constructor(
     private readonly repoRoot: string,
-    private readonly remote = "origin",
+    readonly remote = "origin",
     { host = currentHost(process.env), checkProcess = checkProcessTable }: LockOptions = {},
   ) {
     this.host = host;
@@ -573,6 +573,15 @@ export class GitWorkspace implements Workspace {
       `refs/heads/${branch}`,
     ]);
     return stdout.trim() !== "";
+  }
+
+  async readRemoteFile(branch: string, path: string): Promise<string | undefined> {
+    // Fetched first, as a worktree is made from it: the checkout's own
+    // remote-tracking ref may predate a push another clone made.
+    const tracking = await this.fetchBranch(branch);
+    if (tracking === undefined) return undefined;
+    const read = await this.tryGit(["cat-file", "blob", `${tracking}:${path}`]);
+    return read.exitCode === 0 ? read.stdout : undefined;
   }
 
   async deleteRemoteBranch(branch: string): Promise<void> {
