@@ -76,7 +76,7 @@ claude --print <prompt> --output-format stream-json --verbose \
   | `CLAUDE_CODE_SHELL` | `/bin/bash`, only where it exists | a zsh shell aborts a command on a glob that matches nothing |
   `ANTHROPIC_AUTH_TOKEN` and every other variable are inherited as they are.
 - It writes the [Stage's files](./running.md#logs-and-transcripts) from the moment the Stage starts, never with the key's value in them: command files reach the Target's remote with a Hand-off.
-- It reads the `apiKeySource` of the session's `system/init` event, which the orchestrator sets against the Run's credential.
+- It reads the `apiKeySource` of the session's `system/init` event, which the orchestrator sets against the Run's Credential.
 - It kills the child at `maxMinutes`, with everything it started, and classifies a failure as `rate-limited`, `api-error`, `out-of-budget`, `timed-out`, `turn-capped`, `nonzero-exit` or `invalid-result`. A session that succeeds is never any of the first three, and they are read off a failed one like this:
 
   | Failure | Read off |
@@ -139,8 +139,8 @@ Tests sit beside each module as `*.test.ts`.
 |---|---|
 | [`run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts) | fills Lanes from the Stranded Tickets, then the Frontier; stops claiming on a Release or Stop |
 | [`orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts) | one Ticket from guards to merge, Hand-off or Release, with the Fix budget |
-| [`frontier.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts) | splits candidates into the Frontier and the blocked |
-| [`guards.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/guards.ts) | why a candidate is skipped: the Guards and the refusals |
+| [`frontier.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts) | splits Candidates into the Frontier and the blocked |
+| [`guards.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/guards.ts) | why a Candidate is skipped: the Guards and the refusals |
 | [`landing.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/landing.ts) | the Landing: one Lane between rebase and pull at a time, in arrival order |
 | [`lifecycle.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lifecycle.ts) | where a Ticket failed, and which failures a fix Stage may mend |
 | [`failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts) | runs a failing Check at the merge-base, once per Run per commit, and its Note once |

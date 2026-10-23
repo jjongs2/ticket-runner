@@ -86,16 +86,16 @@ The labels are the triage state machine: one state label per issue at a time. `i
 |---|---|---|
 | `needs-triage` | Humans; the pipeline on its standing Notes issue | Nothing, except opening the Notes issue with it |
 | `needs-info` | Humans | Nothing |
-| `ready-for-agent` | Planning; a Release; a human handing a Ticket back | Takes the issue as a candidate. Removed at the Claim |
+| `ready-for-agent` | Planning; a Release; a human handing a Ticket back | Takes the issue as a Candidate. Removed at the Claim |
 | `in-progress` | Only a Run, at the Claim | Marks a Ticket a Run holds. Removed at merge, Hand-off and Release |
 | `ready-for-human` | A Hand-off | Leaves the Ticket alone until a human relabels it |
 | `wontfix` | Humans | Nothing |
 
-To keep the pipeline off a Ticket, take `ready-for-agent` off it, or assign someone: a candidate with any assignee is treated as claimed and passed over in silence. Do this before running the plugin's `/implement-spec` on a Spec in your own session: it leaves no mark on the Tickets it works, so a Run would take them too and do the same work again on other branches.
+To keep the pipeline off a Ticket, take `ready-for-agent` off it, or assign someone: a Candidate with any assignee is treated as claimed and passed over in silence. Do this before running the plugin's `/implement-spec` on a Spec in your own session: it leaves no mark on the Tickets it works, so a Run would take them too and do the same work again on other branches.
 
 ## Guards
 
-Planning goes wrong in a few known ways. A [Guard](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) passes such a candidate over before it is claimed and says once why, so you fix the Planning output and run again.
+Planning goes wrong in a few known ways. A [Guard](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) passes such a Candidate over before it is claimed and says once why, so you fix the Planning output and run again.
 
 ```mermaid
 flowchart TD
@@ -114,7 +114,7 @@ flowchart TD
 ```
 <!-- Sources: src/frontier.ts, src/guards.ts, src/orchestrator.ts -->
 
-| Reason | What the candidate did | What the pipeline does |
+| Reason | What the Candidate did | What the pipeline does |
 |---|---|---|
 | `spec` | It has native sub-issues, so it is a Spec | Skips it and removes `ready-for-agent`: its Tickets are picked up one by one |
 | `no-criteria` | No `- [ ]` line in its body or comments, so verify has nothing to grade | Skips it and keeps the label, since a comment can still add criteria |

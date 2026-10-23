@@ -84,7 +84,7 @@ Every Stage runs in the Ticket's worktree with `--permission-prompts none`, the 
 
 The prompt ends with the Stage's [`extraPrompt`](./configuration.md#stages).
 
-**The credential.** A Stage runs on the Claude login, with the Host's `ANTHROPIC_API_KEY` taken out of its environment, unless the Run was started with [`--api-key`](./running.md#api-key), when it runs on that key. When the session's `apiKeySource` says otherwise, the Run's log and summary name the Stage.
+**The Credential.** A Stage runs on the Claude login, with the Host's `ANTHROPIC_API_KEY` taken out of its environment, unless the Run was started with [`--api-key`](./running.md#api-key), when it runs on that key. When the session's `apiKeySource` says otherwise, the Run's log and summary name the Stage.
 
 What each Stage leaves on disk is on [Logs and transcripts](./running.md#logs-and-transcripts).
 

@@ -40,7 +40,7 @@ Acceptance Criteria 체크리스트가 달리고, blocker가 연결됩니다. **
   [`mattpocock-skills`](https://github.com/mattpocock/skills) 플러그인 1.2.3 이상 버전을 설치한 `claude`가
   있습니다.
 
-파이프라인은 묻지 않고 base branch에 merge합니다. 그걸 원하는 저장소에 쓰세요.
+파이프라인은 묻지 않고 Base branch에 merge합니다. 그걸 원하는 저장소에 쓰세요.
 
 ## 써 보기
 
@@ -55,7 +55,7 @@ npx ticket-runner run    # 준비된 이슈를 모두 처리합니다
 
 `init`은 검토하고 commit할 파일 몇 개를 씁니다. `.gitignore` 줄, conventions 문서, `CLAUDE.md`의 한
 섹션, Claude skill 하나입니다. 또 triage 라벨을 만들고, squash merge와 merge 시 branch 삭제를 켭니다.
-commit은 하지 않습니다. 세션은 이 파일들이 base branch에 올라간 뒤에야 읽으므로, 첫 `run` 전에
+commit은 하지 않습니다. 세션은 이 파일들이 Base branch에 올라간 뒤에야 읽으므로, 첫 `run` 전에
 push하세요.
 
 계속 쓰려면 전역으로 설치하세요.
