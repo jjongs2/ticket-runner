@@ -38,8 +38,11 @@ npm install -g ticket-runner
 
 cd ~/code/acme        # the repository you want it to work in
 ticket-runner init    # set it up, and report what only you can fix
+git add -A && git commit -m "chore: set up ticket-runner" && git push
 ticket-runner run     # take every ready Ticket to a merge
 ```
+
+A Stage reads what `init` wrote only once it is on the Base branch, so push it before the first Run, through a pull request if the repository asks for one.
 
 To try it before installing anything, type `npx ticket-runner` wherever these pages say `ticket-runner`: see [Try it without installing](./guide/installation.md#try-it-without-installing).
 

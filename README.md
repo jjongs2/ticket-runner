@@ -50,12 +50,14 @@ In the repository you want it to work in (the **Target**):
 
 ```bash
 npx ticket-runner init   # set the Target up and report what is still missing
+git add -A && git commit -m "chore: set up ticket-runner" && git push
 npx ticket-runner run    # work through every ready issue
 ```
 
 `init` writes a few files for you to review and commit: `.gitignore` lines, a conventions
 document, a section in `CLAUDE.md` and a Claude skill. It also creates the triage labels and
-turns on squash merging and branch deletion on merge. It commits nothing.
+turns on squash merging and branch deletion on merge. It commits nothing, and a session reads
+those files only once they are on your base branch, so push them before the first `run`.
 
 To keep it, install it globally:
 
