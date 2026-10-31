@@ -3820,6 +3820,22 @@ describe("the progress comment", () => {
     expect(progressTable()).toContain("| merge | ✅ #100 | – | – |");
   });
 
+  it("says the checks row found no checks when no Check command ran", async () => {
+    await run({ checks: [], gates: { checks: false, ci: true } });
+
+    expect(progressTable()).toContain("| checks | ⚠️ no checks | – | 0m |");
+    expect(progressTable()).not.toContain("| checks | ✅ passed |");
+  });
+
+  it("says so again on the Checks that re-grade a resolved conflict", async () => {
+    workspace.conflictOnce(CONFLICT);
+
+    await run({ checks: [], gates: { checks: false, ci: true } });
+
+    expect(progressTable().match(/^\| checks \| ⚠️ no checks \|/gm)).toHaveLength(2);
+    expect(progressTable()).not.toContain("| checks | ✅ passed |");
+  });
+
   it("names the Run and the branch it is reporting on", async () => {
     await run();
 
