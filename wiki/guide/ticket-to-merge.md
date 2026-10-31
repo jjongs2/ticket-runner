@@ -115,7 +115,7 @@ Two gates, run by the pipeline itself rather than by an agent:
 1. **Nothing uncommitted.** A worktree holding changes no commit carries fails, naming every path. Gitignored files, such as installed dependencies, do not count.
 2. **The Check commands**, in order, each through a shell in the worktree, each under `checkTimeoutMinutes` (default 15). The first failure stops the rest. A command killed at the limit is reported as timed out, with a line appended to its output saying it hung rather than failed.
 
-The commands are [`checks`](./configuration.md#checks). Both failures spend the Fix budget.
+The commands are [`checks`](./configuration.md#checks). Both failures spend the Fix budget. An empty `checks`, which only [`gates.checks`](./configuration.md#gates) off allows, runs nothing, so the row reads `⚠️ no checks` rather than `✅ passed`, here and after a Conflict Stage alike.
 
 ### A failure the Base branch shares
 

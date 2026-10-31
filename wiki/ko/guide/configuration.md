@@ -80,7 +80,7 @@ Run이 동시에 맡는 Ticket 수입니다. [Lane](https://github.com/jjongs2/t
 
 | 설정 | 켜져 있을 때(기본) | `false`일 때 |
 |---|---|---|
-| `gates.checks` | 설정하거나 추론한 Check 명령이 하나도 없으면 Run이 시작을 거절 | 경고와 함께 그대로 시작. 있는 Check 명령은 그대로 실행됨 |
+| `gates.checks` | 설정하거나 추론한 Check 명령이 하나도 없으면 Run이 시작을 거절 | 경고와 함께 그대로 시작. 있는 Check 명령은 그대로 실행되고, 하나도 없으면 Ticket의 checks 줄이 `⚠️ no checks` |
 | `gates.ci` | CI check가 하나도 없는 pull request는 Hand-off | 시작할 때 경고하고, merge하면서 Ticket에 `⚠️ no checks` 줄을 남김 |
 
 `gates.ci`를 꺼도 봐주는 것은 check가 *하나도 없는* pull request뿐입니다. CI 실패, CI 시간 초과, Base branch와 충돌하는 pull request는 `gates` 설정과 상관없이 Ticket을 끝냅니다.
@@ -123,11 +123,11 @@ Stage 하나는 `claude -p` 세션 하나입니다. `stages`는 Stage마다 객�
 ## CI {#ci}
 
 - `ciTimeoutMinutes`: 0보다 큰 수
-- `ciGraceMinutes`: 0보다 큰 수
+- `ciGraceMinutes`: 0 이상인 수
 
 Landing이 pull request를 연 뒤, Run은 최대 `ciTimeoutMinutes` 동안 check를 기다립니다. 시간 안에 끝나지 않는 CI는 Fix budget을 쓰지 않는 Hand-off입니다.
 
-`ciGraceMinutes`는 GitHub가 check run을 등록하기 전의 틈을 메웁니다. 이 틈이 3분을 넘긴 적도 있습니다. 이 시간이 지나기 전까지는 check가 아직 없는 pull request를 "없음"이 아니라 대기 중으로 봅니다. `ciTimeoutMinutes`보다 길어지지는 않습니다. Actions 대기열이 느린 Target이라면 늘리세요. CI 워크플로가 없는 Target은 merge할 때마다 이 시간을 한 번씩 기다리고, Landing에는 한 번에 Lane 하나만 들어가니 그동안 다른 Lane의 merge도 함께 기다립니다.
+`ciGraceMinutes`는 GitHub가 check run을 등록하기 전의 틈을 메웁니다. 이 틈이 3분을 넘긴 적도 있습니다. 이 시간이 지나기 전까지는 check가 아직 없는 pull request를 "없음"이 아니라 대기 중으로 봅니다. `ciTimeoutMinutes`보다 길어지지는 않습니다. Actions 대기열이 느린 Target이라면 늘리세요. CI가 없는 Target은 `0`으로 두세요. 그러면 첫 확인에서 바로 답이 나옵니다. 기본값 그대로면 merge할 때마다 이 시간을 한 번씩 기다리고, Landing에는 한 번에 Lane 하나만 들어가니 그동안 다른 Lane의 merge도 함께 기다립니다. `0`은 CI가 아예 없는 Target에만 쓰세요. GitHub의 답으로는 CI가 없는 것과 아직 등록되지 않은 것을 구별할 수 없어서, `0`이면 늦게 뜨는 check run도 없는 것으로 읽힙니다.
 
 ## `labels` {#labels}
 
