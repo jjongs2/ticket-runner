@@ -1271,9 +1271,11 @@ async function runChecks(
       );
     }
   }
+  // No command is not a pass: only `gates.checks` off lets a Run start with
+  // none, and the row says so as the ci row does for a pull request with none.
   await progress.record({
     point: "checks",
-    outcome: "✅ passed",
+    outcome: pipeline.config.checks.length === 0 ? "⚠️ no checks" : "✅ passed",
     durationMs: Date.now() - startedAt,
   });
 }

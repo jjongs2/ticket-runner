@@ -78,7 +78,7 @@ Ticket for a later Run to resume.
 |---|---|
 | implement | `✅ committed`, `❌ no commits`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
 | fix | `✅ committed`, `❌ no commits`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
-| checks | `✅ passed`, `❌ uncommitted work`, ``❌ `<command>` failed``, ``❌ `<command>` timed out``, ``⏸ `<command>` fails on the Base branch`` |
+| checks | `✅ passed`, `⚠️ no checks`, `❌ uncommitted work`, ``❌ `<command>` failed``, ``❌ `<command>` timed out``, ``⏸ `<command>` fails on the Base branch`` |
 | verify | `✅ <k> met · <u> unverifiable`, `❌ <k> unmet`, `❌ no evidence`, `❌ no Verdict`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
 | conflict | `✅ rebased`, `❌ unresolved`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ unknown` |
 | ci | `✅ passed`, `❌ failed`, `❌ conflicting`, `❌ no checks`, `⚠️ no checks`, `❌ timed out`, ``⏸ `<command>` fails on the Base branch`` |
@@ -87,6 +87,12 @@ Ticket for a later Run to resume.
 A `checks` row tells a command that exited non-zero from one the wall-clock
 limit killed: both are the same failure to the fix budget, but a hang is not a
 failing assertion, and a fix Stage is told which it is mending.
+
+`⚠️ no checks` is the `checks` row for Checks that ran with no Check command,
+which only `gates.checks` off allows: nothing graded the branch, so it is not
+`✅ passed`. It is written wherever the Checks run, after a Stage that committed
+and again after the `conflict` Stage, and it is the outcome the `ci` row writes for a
+pull request with no checks; the Stage column tells the two apart.
 
 `❌ conflicting` is the `ci` row for a pull request GitHub reports as
 conflicting with the Base branch, which has moved since the rebase — a human

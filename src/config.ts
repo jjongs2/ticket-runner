@@ -53,7 +53,7 @@ const configSchema = z
       .optional(),
     permissionMode: z.enum(PERMISSION_MODES).optional(),
     ciTimeoutMinutes: z.number().positive().optional(),
-    ciGraceMinutes: z.number().positive().optional(),
+    ciGraceMinutes: z.number().nonnegative().optional(),
     checkTimeoutMinutes: z.number().positive().optional(),
     labels: z
       .object({
@@ -112,7 +112,8 @@ export interface Config {
   /**
    * How long a pull request GitHub has registered no check run for still counts
    * as pending. A Target whose Actions queue slowly raises it; a Target with no
-   * CI workflow pays it once per Landing, so it is not the CI timeout.
+   * CI sets it to zero, or else pays it once per Landing, so it is not the CI
+   * timeout.
    */
   ciGraceMinutes: number;
   /**

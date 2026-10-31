@@ -192,7 +192,13 @@ describe("loadConfig", () => {
     expect(loadConfig(root, VERSION).ciGraceMinutes).toBe(8);
   });
 
-  it.each([0, -5, "five"])(
+  it("takes a CI grace of zero, for a Target that knows it has no CI", () => {
+    const root = repoWith({ [CONFIG_FILENAME]: JSON.stringify({ ciGraceMinutes: 0 }) });
+
+    expect(loadConfig(root, VERSION).ciGraceMinutes).toBe(0);
+  });
+
+  it.each([-5, "five"])(
     "rejects %o as a CI grace with a message naming the field",
     (value) => {
       const root = repoWith({

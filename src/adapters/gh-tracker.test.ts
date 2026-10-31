@@ -1384,6 +1384,16 @@ describe("waiting for CI", () => {
     expect(readingsTaken()).toBeLessThan(4);
   });
 
+  it("reports no checks at the first reading when the grace is zero", async () => {
+    const outcome = await ci({ now: () => 0, checksGraceMs: 0 }, [{}, checks("pass")]).waitForCi(
+      12,
+      60_000 * 30,
+    );
+
+    expect(outcome).toEqual({ state: "none" });
+    expect(readingsTaken()).toBe(1);
+  });
+
   /** What GitHub says of a pull request that conflicts with its base. */
   const CONFLICTING = { mergeable: false, mergeable_state: "dirty" } as const;
 
