@@ -127,7 +127,7 @@ Passed to every Stage as `--permission-mode`. Every Stage also runs with `--perm
 
 After the Landing opens a pull request, the Run waits up to `ciTimeoutMinutes` for its checks. CI that does not finish in time is a Hand-off that spends no Fix budget.
 
-`ciGraceMinutes` covers the gap before GitHub registers a check run, which has taken over three minutes. Until it passes, a pull request with no checks yet counts as pending rather than as having none. It never outlasts `ciTimeoutMinutes`. Raise it on a Target whose Actions queue slowly. A Target with no CI sets it to `0`, so the wait answers at its first reading; left at the default, it waits the grace out once per merge, and since only one Lane is in the Landing at a time, that wait holds the other Lanes' merges too. Keep `0` to a Target with no CI at all: GitHub's answer cannot tell no CI from CI not registered yet, so under `0` a slow check run reads as none.
+`ciGraceMinutes` covers the gap before GitHub registers a check run, which has taken over three minutes. Until it passes, a pull request with no checks yet counts as pending rather than as having none. It never outlasts `ciTimeoutMinutes`. Raise it on a Target whose Actions queue slowly. A Target with no CI at all sets it to `0`, so the wait answers at its first reading; left at the default, it waits the grace out once per merge, and since only one Lane is in the Landing at a time, that wait holds the other Lanes' merges too. A Target with CI keeps a grace: GitHub's answer cannot tell no CI from CI not registered yet, so under `0` a slow check run reads as none.
 
 ## `labels`
 

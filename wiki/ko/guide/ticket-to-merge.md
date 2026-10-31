@@ -115,7 +115,7 @@ implement 스킬이 Ticket을 읽고, 만들고, 리뷰합니다. 세션이 끝�
 1. **commit 안 된 변경 없음.** 어떤 commit에도 없는 변경이 worktree에 있으면 실패이고, 해당 경로를 전부 알려 줍니다. 설치한 의존성 같은 gitignore 파일은 세지 않습니다.
 2. **Check 명령**을 순서대로, worktree의 셸에서, 각각 `checkTimeoutMinutes`(기본 15분) 안에 실행합니다. 처음 실패한 곳에서 멈춥니다. 한도에서 kill된 명령은 timed out으로 보고되고, 실패가 아니라 멈춰 있었다는 한 줄이 출력 뒤에 붙습니다.
 
-명령은 [`checks`](./configuration.md#checks)에 적은 것입니다. 두 실패 모두 Fix budget을 씁니다. `checks`가 비어 있으면 아무것도 돌지 않으니 `✅ passed`가 아니라 `⚠️ no checks` 줄을 남기고, Conflict Stage 뒤에 다시 돌 때도 같습니다. `checks`가 빌 수 있는 건 [`gates.checks`](./configuration.md#gates)를 껐을 때뿐입니다.
+명령은 [`checks`](./configuration.md#checks)에 적은 것입니다. 두 실패 모두 Fix budget을 씁니다. [`gates.checks`](./configuration.md#gates)를 껐을 때만 `checks`가 빌 수 있는데, 이때는 아무것도 돌지 않으니 `✅ passed`가 아니라 `⚠️ no checks` 줄을 남깁니다. Conflict Stage 뒤에 다시 돌 때도 같습니다.
 
 ### Base branch도 함께 실패할 때 {#a-failure-the-base-branch-shares}
 

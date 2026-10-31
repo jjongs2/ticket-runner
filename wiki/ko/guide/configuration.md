@@ -127,7 +127,7 @@ Stage 하나는 `claude -p` 세션 하나입니다. `stages`는 Stage마다 객�
 
 Landing이 pull request를 연 뒤, Run은 최대 `ciTimeoutMinutes` 동안 check를 기다립니다. 시간 안에 끝나지 않는 CI는 Fix budget을 쓰지 않는 Hand-off입니다.
 
-`ciGraceMinutes`는 GitHub가 check run을 등록하기 전의 틈을 메웁니다. 이 틈이 3분을 넘긴 적도 있습니다. 이 시간이 지나기 전까지는 check가 아직 없는 pull request를 "없음"이 아니라 대기 중으로 봅니다. `ciTimeoutMinutes`보다 길어지지는 않습니다. Actions 대기열이 느린 Target이라면 늘리세요. CI가 없는 Target은 `0`으로 두세요. 그러면 첫 확인에서 바로 답이 나옵니다. 기본값 그대로면 merge할 때마다 이 시간을 한 번씩 기다리고, Landing에는 한 번에 Lane 하나만 들어가니 그동안 다른 Lane의 merge도 함께 기다립니다. `0`은 CI가 아예 없는 Target에만 쓰세요. GitHub의 답으로는 CI가 없는 것과 아직 등록되지 않은 것을 구별할 수 없어서, `0`이면 늦게 뜨는 check run도 없는 것으로 읽힙니다.
+`ciGraceMinutes`는 GitHub가 check run을 등록하기 전의 틈을 메웁니다. 이 틈이 3분을 넘긴 적도 있습니다. 이 시간이 지나기 전까지는 check가 아직 없는 pull request를 "없음"이 아니라 대기 중으로 봅니다. `ciTimeoutMinutes`보다 길어지지는 않습니다. Actions 대기열이 느린 Target이라면 늘리세요. CI가 아예 없는 Target은 `0`으로 두세요. 그러면 첫 확인에서 바로 답이 나옵니다. 기본값 그대로면 merge할 때마다 이 시간을 한 번씩 기다리고, Landing에는 한 번에 Lane 하나만 들어가니 그동안 다른 Lane의 merge도 함께 기다립니다. CI가 있는 Target은 유예 시간을 남겨 두세요. GitHub의 답으로는 CI가 없는 것과 아직 등록되지 않은 것을 구별할 수 없어서, `0`이면 늦게 뜨는 check run도 없는 것으로 읽힙니다.
 
 ## `labels` {#labels}
 

@@ -53,7 +53,6 @@ const configSchema = z
       .optional(),
     permissionMode: z.enum(PERMISSION_MODES).optional(),
     ciTimeoutMinutes: z.number().positive().optional(),
-    // Zero is a Target saying it has no CI, so the wait answers at once.
     ciGraceMinutes: z.number().nonnegative().optional(),
     checkTimeoutMinutes: z.number().positive().optional(),
     labels: z

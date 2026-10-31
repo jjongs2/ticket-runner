@@ -91,7 +91,7 @@ failing assertion, and a fix Stage is told which it is mending.
 `⚠️ no checks` is the `checks` row for Checks that ran with no Check command,
 which only `gates.checks` off allows: nothing graded the branch, so it is not
 `✅ passed`. It is written wherever the Checks run, after a Stage that committed
-and again after a conflict Stage, and it is the outcome the `ci` row writes for a
+and again after the `conflict` Stage, and it is the outcome the `ci` row writes for a
 pull request with no checks; the Stage column tells the two apart.
 
 `❌ conflicting` is the `ci` row for a pull request GitHub reports as
