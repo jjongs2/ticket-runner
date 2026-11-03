@@ -23,7 +23,8 @@ its last `result` event, added up. A Stage that woke for background agents
 repeats the session's figure on every waking, so it counts once. A Run that ran
 no Stage on its key prints `$0.00`. A Stage on the key that reported no figure
 — one a Stop killed, the wall-clock limit stopped, or that crashed before its
-`result` event — makes the amount end `+`, at least that much:
+`result` event — or only part of its session's, having gone on past its last
+figure, makes the amount end `+`, at least that much:
 
 ticket-runner <version> run <runId> · <duration> · API key · $12.34+
 
@@ -36,8 +37,8 @@ extra usage, the header says so, still with no amount:
 
 ticket-runner <version> run <runId> · <duration> · subscription · extra usage
 
-No amount is printed anywhere else: not per Ticket, not in the Run's log, and
-not in the Progress comment.
+Beyond the header and the `billed` rows below, no amount is printed: not per
+Ticket, not in the Run's log, and not in the Progress comment.
 
 `<version>` is the Version the Run ran (ADR-0007): the number alone from an
 installed copy, and the number, the commit and a `dirty` mark from a development
@@ -184,7 +185,8 @@ the Run's credential: anything but `none` on a subscription Run, anything but
 Run's log named it when the Stage came back. A key an `apiKeyHelper` in the
 Host's settings supplies is one, which no environment variable removes. The
 row ends with that Stage's own amount where it reported one, on a subscription
-Run as on an `--api-key` Run, and that amount is not in the header's:
+Run as on an `--api-key` Run, `+` where that is only part of its session's,
+and that amount is not in the header's:
 
   merged   #3 Run: drain the Frontier (PR #12)
   billed   #3 implement · apiKeySource apiKeyHelper · $4.15

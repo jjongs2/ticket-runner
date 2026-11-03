@@ -43,6 +43,8 @@ export interface StrayStage {
   apiKeySource: string;
   /** What the CLI priced the Stage at, where it said. */
   costUsd?: number;
+  /** Present, and true, where {@link costUsd} is only part of the Stage's. */
+  costIncomplete?: true;
 }
 
 /**
@@ -54,30 +56,36 @@ export interface Billing {
   /** Every Stage that ran on something other than the Run's credential, in order. */
   strays: StrayStage[];
   /**
-   * The Spend, in dollars: the CLI's figure for every Stage of an `--api-key`
-   * Run that ran on the Run's own key, so the one that key's Console can be
-   * checked against. Always zero on a subscription Run, whose figure is an
-   * estimate at API prices and not money spent.
+   * The Spend, in dollars: the CLI's figures for the Stages of an `--api-key`
+   * Run that ran on the Run's own key, added up, which is the amount that key's
+   * Console can be checked against. Always zero on a subscription Run, whose
+   * figure is an estimate at API prices and not money spent.
    */
   spendUsd: number;
   /**
-   * Whether a Stage that ran on the Run's own key reported no figure — one a
-   * Stop killed, the wall-clock limit stopped or that crashed — so the Spend
-   * is at least {@link spendUsd}.
+   * Whether a Stage that ran on the Run's own key reported no figure, or only
+   * part of its session's — one the wall-clock limit stopped or that crashed —
+   * so the Spend is at least {@link spendUsd}.
    */
   spendUnreported: boolean;
   /** Whether any Stage said it ran on the subscription's extra usage. */
   extraUsage: boolean;
 }
 
+/** A Run's billing before any Stage has come back. */
 export function emptyBilling(): Billing {
   return { strays: [], spendUsd: 0, spendUnreported: false, extraUsage: false };
 }
 
 /** What a Stage said about what it was billed to, as far as {@link Billing} needs it. */
 export interface StageBilling {
+  /** What the Stage's `system/init` event said it ran on, absent where it printed none. */
   apiKeySource?: string;
+  /** What the CLI priced the Stage at, absent where no `result` event gave a figure. */
   costUsd?: number;
+  /** Present, and true, where {@link costUsd} is only part of the Stage's. */
+  costIncomplete?: true;
+  /** Present, and true, where the Stage ran on the subscription's extra usage. */
   extraUsage?: true;
 }
 
@@ -95,27 +103,28 @@ export function recordStage(
   credential: Credential,
   ticket: number,
   stage: string,
-  { apiKeySource, costUsd, extraUsage }: StageBilling,
+  { apiKeySource, costUsd, costIncomplete, extraUsage }: StageBilling,
 ): StrayStage | undefined {
   if (extraUsage === true) billing.extraUsage = true;
   if (apiKeySource === undefined) return undefined;
 
   if (apiKeySource !== expectedKeySource(credential)) {
-    const stray = { ticket, stage, apiKeySource, ...(costUsd === undefined ? {} : { costUsd }) };
+    const stray: StrayStage = {
+      ticket,
+      stage,
+      apiKeySource,
+      ...(costUsd === undefined ? {} : { costUsd }),
+      ...(costUsd !== undefined && costIncomplete === true ? { costIncomplete } : {}),
+    };
     billing.strays.push(stray);
     return stray;
   }
 
   if (credential === "api-key") {
-    if (costUsd === undefined) billing.spendUnreported = true;
-    else billing.spendUsd += costUsd;
+    if (costUsd === undefined || costIncomplete === true) billing.spendUnreported = true;
+    billing.spendUsd += costUsd ?? 0;
   }
   return undefined;
-}
-
-/** An amount of dollars as the Run summary prints one: `$12.34`. */
-export function dollars(usd: number): string {
-  return `$${usd.toFixed(2)}`;
 }
 
 /**

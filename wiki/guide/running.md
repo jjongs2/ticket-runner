@@ -159,7 +159,7 @@ ticket-runner 0.5.2 run 2026-09-17T09-00-00-000 · 84m · subscription
 Frontier blocked.
 ```
 
-The header ends with what the Stages were billed to: `subscription`, or `API key` on an `--api-key` Run. An `--api-key` Run follows it with its [Spend](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), `API key · $12.34`: what the Stages on that key cost, as the CLI prices them, which can differ from the Console's. It ends `+`, `$12.34+`, when a Stage stopped before reporting its figure, so the Run spent at least that much. A subscription Run shows no amount, and adds `extra usage` when a Stage ran on the plan's extra usage. A Run that took nothing prints `  nothing to do` in place of the rows.
+The header ends with what the Stages were billed to: `subscription`, or `API key` on an `--api-key` Run. An `--api-key` Run follows it with its [Spend](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), `API key · $12.34`: what that key was billed for the Stages that ran on it, as the CLI prices them, which can differ from the Console's. It ends `+`, `$12.34+`, when a Stage stopped before reporting all of its figure, so the Run spent at least that much. A subscription Run shows no amount, and adds `extra usage` when a Stage ran on the plan's extra usage. A Run that took nothing prints `  nothing to do` in place of the rows.
 
 | Row | Meaning |
 |---|---|

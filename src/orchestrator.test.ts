@@ -2327,6 +2327,16 @@ describe("what a Run's Stages were billed", () => {
     expect(billing.spendUnreported).toBe(true);
   });
 
+  it("adds a figure that is only part of a Stage's, and says the Spend is at least that", async () => {
+    runner.queue("implement", { apiKeySource: ON_KEY, costUsd: 6.2, costIncomplete: true });
+    runner.queue("verify", stageResult({ result: PASSING_VERDICT, apiKeySource: ON_KEY, costUsd: 0.42 }));
+
+    await run({}, "workstation", "api-key");
+
+    expect(billing.spendUsd).toBeCloseTo(6.62);
+    expect(billing.spendUnreported).toBe(true);
+  });
+
   it("leaves out a Stage that printed no init event, figure or none", async () => {
     runner.queue("implement", { costUsd: 3 });
 

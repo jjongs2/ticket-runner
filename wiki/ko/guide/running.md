@@ -159,7 +159,7 @@ ticket-runner 0.5.2 run 2026-09-17T09-00-00-000 · 84m · subscription
 Frontier blocked.
 ```
 
-머리 줄 끝은 Stage를 무엇으로 과금했는지입니다. `subscription`, 또는 `--api-key` Run이면 `API key`. `--api-key` Run은 그 뒤에 [Spend](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)를 붙입니다(`API key · $12.34`). 그 키로 돈 Stage의 비용을 CLI가 직접 매긴 값이라 Console의 금액과 다를 수 있습니다. 금액을 알리기 전에 멈춘 Stage가 있으면 `$12.34+`처럼 `+`로 끝나며, 적어도 그만큼 썼다는 뜻입니다. subscription Run은 금액을 보여 주지 않고, Stage가 요금제의 extra usage를 썼으면 `extra usage`를 붙입니다. 아무것도 가져가지 않은 Run은 줄 대신 `  nothing to do`를 출력합니다.
+머리 줄 끝은 Stage를 무엇으로 과금했는지입니다. `subscription`, 또는 `--api-key` Run이면 `API key`. `--api-key` Run은 그 뒤에 [Spend](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)를 붙입니다(`API key · $12.34`). 그 키로 실행한 Stage에 청구된 금액을 CLI가 직접 매긴 값이라 Console의 금액과 다를 수 있습니다. 금액을 다 알리기 전에 멈춘 Stage가 있으면 `$12.34+`처럼 `+`로 끝나며, 적어도 그만큼 썼다는 뜻입니다. subscription Run은 금액을 보여 주지 않고, Stage가 요금제의 extra usage를 썼으면 `extra usage`를 붙입니다. 아무것도 가져가지 않은 Run은 줄 대신 `  nothing to do`를 출력합니다.
 
 | 줄 | 뜻 |
 |---|---|

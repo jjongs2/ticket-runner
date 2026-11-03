@@ -787,6 +787,25 @@ describe("runSummary", () => {
     expect(summary).toContain("  billed   #3 verify · apiKeySource apiKeyHelper · $0.50");
   });
 
+  it("ends a stray Stage's figure `+` where it is only part of the Stage's", () => {
+    const summary = runSummary({
+      credential: "subscription",
+      version: VERSION,
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [merged],
+      billing: {
+        ...emptyBilling(),
+        strays: [
+          { ticket: 3, stage: "verify", apiKeySource: "apiKeyHelper", costUsd: 0.5, costIncomplete: true },
+        ],
+      },
+      stop: { reason: "frontier", blocked: [] },
+    });
+
+    expect(summary).toContain("  billed   #3 verify · apiKeySource apiKeyHelper · $0.50+");
+  });
+
   it("says a subscription Run used extra usage, with no amount", () => {
     const summary = runSummary({
       credential: "subscription",

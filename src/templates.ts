@@ -9,7 +9,6 @@ import {
   CREDENTIAL_WORDS,
   type Credential,
   type StrayStage,
-  dollars,
   emptyBilling,
 } from "./credential.js";
 import type { GuardReason } from "./guards.js";
@@ -621,10 +620,21 @@ function billedTo(credential: Credential, billing: Billing): string {
   return billing.extraUsage ? `${words} · extra usage` : words;
 }
 
-/** A Stage billed somewhere the Run did not choose, with its own figure where it gave one. */
+/**
+ * A Stage billed somewhere the Run did not choose, with its own figure where it
+ * gave one, ending `+` where that is only part of its session's.
+ */
 function billedRow(stray: StrayStage): string {
-  const cost = stray.costUsd === undefined ? "" : ` · ${dollars(stray.costUsd)}`;
+  const cost =
+    stray.costUsd === undefined
+      ? ""
+      : ` · ${dollars(stray.costUsd)}${stray.costIncomplete === true ? "+" : ""}`;
   return row("billed", stray.ticket, `${stray.stage} · apiKeySource ${stray.apiKeySource}${cost}`);
+}
+
+/** An amount of dollars as the Run summary prints one: `$12.34`. */
+function dollars(usd: number): string {
+  return `$${usd.toFixed(2)}`;
 }
 
 /** The one line that says why the Run stopped. */

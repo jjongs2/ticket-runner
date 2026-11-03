@@ -191,7 +191,7 @@ export class ClaudeAgentRunner implements AgentRunner {
     const turns = countTurns(results);
     const resetsAt = failure === "rate-limited" ? limitResetsAt(events) : undefined;
     const apiKeySource = keySource(events);
-    const costUsd = sessionCost(results);
+    const cost = sessionCost(execution, events);
 
     return {
       ok: failure === undefined,
@@ -202,7 +202,7 @@ export class ClaudeAgentRunner implements AgentRunner {
       ...(turns === undefined ? {} : { turns }),
       ...(resetsAt === undefined ? {} : { limitResetsAt: resetsAt }),
       ...(apiKeySource === undefined ? {} : { apiKeySource }),
-      ...(costUsd === undefined ? {} : { costUsd }),
+      ...cost,
       ...(events.some(usedExtraUsage) ? { extraUsage: true } : {}),
       // The clock is the runner's own. A session that woke for a background
       // agent reports one `duration_ms` per waking, and the time it spent
@@ -242,12 +242,26 @@ function countTurns(results: ResultEvent[]): number | undefined {
  * What the CLI priced the session at: the latest figure a `result` event gave.
  * Every waking repeats the session's running total, so the last one is the
  * whole session and summing them would count the early turns again.
+ *
+ * The figure is only part of the session's where the session did not end on
+ * the event that gave it: anything printed after it, a later `result` event
+ * without a figure included, or a kill at the wall-clock limit, which can land
+ * while a background agent runs and prints nothing.
  */
-function sessionCost(results: ResultEvent[]): number | undefined {
-  const cost = results.findLast((result) => isAmount(result.total_cost_usd))?.total_cost_usd;
-  return isAmount(cost) ? cost : undefined;
+function sessionCost(
+  execution: Execution,
+  events: unknown[],
+): { costUsd?: number; costIncomplete?: true } {
+  const priced = events.findLastIndex(
+    (event) => isResultEvent(event) && isAmount(event.total_cost_usd),
+  );
+  if (priced === -1) return {};
+  const costUsd = (events[priced] as ResultEvent).total_cost_usd as number;
+  const incomplete = execution.timedOut || priced < events.length - 1;
+  return incomplete ? { costUsd, costIncomplete: true } : { costUsd };
 }
 
+/** A figure a `result` event can be read for: a finite number. */
 function isAmount(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }

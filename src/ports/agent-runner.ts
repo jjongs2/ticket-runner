@@ -105,6 +105,13 @@ export interface StageResult {
    */
   costUsd?: number;
   /**
+   * Present, and true, when {@link costUsd} is only part of the session's:
+   * the session went on past the last `result` event that gave a figure, and
+   * was killed or crashed before it gave another, or the wall-clock limit
+   * stopped it while it waited for a background agent.
+   */
+  costIncomplete?: true;
+  /**
    * Present, and true, when one of the session's `rate_limit_event`s said it
    * was using the subscription's extra usage (`isUsingOverage`).
    */

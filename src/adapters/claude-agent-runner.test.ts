@@ -410,6 +410,38 @@ describe("the credential a Stage runs on", () => {
     expect(result.costUsd).toBe(1.5);
   });
 
+  it("says the cost is only part of the session's when the session went on past it", async () => {
+    const first = {
+      type: "result",
+      subtype: "success",
+      is_error: false,
+      num_turns: 40,
+      total_cost_usd: 6.2,
+    };
+    // A waking that started and never ended: a crash, or a kill, after the
+    // first `result` event.
+    const crashed = transcript(first, {
+      type: "assistant",
+      message: { content: [{ type: "text", text: "the agent finished" }] },
+    });
+    // The last `result` event gave no figure, so only an earlier one is known.
+    const unpriced = transcript(first, { type: "result", subtype: "success", num_turns: 2 });
+
+    for (const stdout of [crashed, unpriced]) {
+      const result = await runner(execution({ stdout, exitCode: 1 })).run(request());
+      expect(result).toMatchObject({ costUsd: 6.2, costIncomplete: true });
+    }
+
+    // The wall-clock limit killed it while it waited for a background agent.
+    const timedOut = await runner(execution({ stdout: transcript(first), timedOut: true })).run(
+      request(),
+    );
+    expect(timedOut).toMatchObject({ costUsd: 6.2, costIncomplete: true });
+
+    const whole = await runner(execution({ stdout: transcript(first) })).run(request());
+    expect(whole).not.toHaveProperty("costIncomplete");
+  });
+
   it("says a Stage used extra usage when a rate_limit_event says so", async () => {
     const info = {
       status: "allowed_warning",
