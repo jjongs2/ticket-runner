@@ -182,7 +182,7 @@ rate limit, API 장애, API 예산으로 멈춘 fix Stage는 Fix budget을 쓰�
 
 ## Lane과 Frontier 다시 채우기 {#lanes-and-the-frontier-refill}
 
-Run은 [Lane](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 하나에 Ticket 하나를 맡고, Lane의 Ticket이 끝나는 즉시 다시 채웁니다. 어떤 순서로 채우는지는 [실행하기](./running.md#run)에, Lane을 늘리면 언제 도움이 되는지는 [`lanes`](./configuration.md#lanes)에, 두 Ticket이 서로 방해하지 않게 하는 것은 [blocker](./planning.md#blockers)에 있습니다.
+Run은 [Lane](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 하나에 Ticket 하나를 맡고, Lane의 Ticket이 끝나는 즉시 다시 채웁니다. 다른 Lane이 바쁜 동안에는 빈 Lane이 틈틈이 Frontier를 다시 보므로, Run 도중 Frontier에 들어온 Ticket이 바쁜 Lane이 끝나기를 기다리지 않습니다. 어떤 순서로 채우는지는 [실행하기](./running.md#run)에, Lane을 늘리면 언제 도움이 되는지는 [`lanes`](./configuration.md#lanes)에, 두 Ticket이 서로 방해하지 않게 하는 것은 [blocker](./planning.md#blockers)에 있습니다.
 
 ## Landing {#the-landing}
 

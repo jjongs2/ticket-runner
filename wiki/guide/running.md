@@ -48,7 +48,7 @@ flowchart TD
   D -- yes --> E["Resume it in the free Lane"] --> C
   D -- no --> F["List the Frontier again,<br>lowest number first"]
   F --> G["Claim the next Ticket<br>into the free Lane"] --> C
-  C -- "no, or nothing to take" --> H["Wait for any Lane to end"]
+  C -- "no, or nothing to take" --> H["Wait for any Lane to end,<br>or 5 minutes while one is free"]
   H --> I{"Released, or a Stop arrived?"}
   I -- yes --> J["Fill no more Lanes;<br>the busy ones finish"]
   I -- no --> K{"Any Lane still busy?"}
@@ -59,6 +59,7 @@ flowchart TD
 <!-- Sources: src/run.ts, src/start.ts, src/stranded.ts, src/frontier.ts -->
 
 - **A Ticket that fails is handed off** and its Lane takes the next one; one bad Ticket does not cost the rest of the night.
+- **A free Lane looks at the Frontier again while another Lane is busy**, five minutes after the Run last listed it. A Ticket you label `ready-for-agent`, or whose last blocker you close, mid-Run is taken without waiting for a busy Lane to end. A Run with one Lane never does this.
 - **A [Release](./stopping-and-resuming.md#release-on-a-rate-limit) stops the filling**: the busy Lanes finish, and the next Run is yours or an Operator's to start.
 - **The Run ends** when no Lane is busy and nothing is left to take: the Frontier is empty, or everything on it is blocked.
 - **Leave the main checkout to the Run.** It pulls the Base branch there before each rebase and after each merge. Uncommitted changes the pull would overwrite hand the Ticket off, and commits on a checked-out Base branch that the remote lacks are rebased into the next pull request. Work in a worktree of your own meanwhile.

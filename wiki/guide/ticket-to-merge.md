@@ -182,7 +182,7 @@ A fix Stage stopped by the rate limit, an API failure or the API budget spends n
 
 ## Lanes and the Frontier refill
 
-A Run holds one Ticket per [Lane](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) and refills a Lane the moment its Ticket ends. The order it fills them in is on [Running](./running.md#run), when more Lanes help on [`lanes`](./configuration.md#lanes), and what keeps two Tickets out of each other's way on [Blockers](./planning.md#blockers).
+A Run holds one Ticket per [Lane](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) and refills a Lane the moment its Ticket ends. While another Lane is busy, a free Lane also looks at the Frontier again at intervals, so a Ticket that joins it mid-Run need not wait for a busy Lane to end. The order it fills them in is on [Running](./running.md#run), when more Lanes help on [`lanes`](./configuration.md#lanes), and what keeps two Tickets out of each other's way on [Blockers](./planning.md#blockers).
 
 ## The Landing
 

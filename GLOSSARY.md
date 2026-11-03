@@ -67,7 +67,7 @@ One invocation of the pipeline command. Drains the Frontier through its Lanes; a
 _Avoid_: session, batch, loop
 
 **Lane**:
-One of the places a Run has for a Ticket in progress; the Target's config says how many, unless the Run is told otherwise where it starts, because how many a Host can carry is the Host's business, not the Target's. A Lane holds one Ticket from Claim to merge, Hand-off or Release, and is refilled from the Stranded Tickets first and the Frontier second.
+One of the places a Run has for a Ticket in progress; the Target's config says how many, unless the Run is told otherwise where it starts, because how many a Host can carry is the Host's business, not the Target's. A Lane holds one Ticket from Claim to merge, Hand-off or Release. A free Lane is refilled, from the Stranded Tickets first and the Frontier second, the moment a Lane's Ticket ends, its own or another's, and also looks at the Frontier again, at intervals, for as long as another Lane is still busy, so a Ticket that joins the Frontier mid-Run need not wait for a busy Lane to end.
 _Avoid_: slot, worker, thread, parallelism
 
 **Landing**:
