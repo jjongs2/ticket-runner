@@ -17,7 +17,7 @@ Run은 아무도 지켜보지 않는 사이에 돌아가니, 일이 틀어졌을
 | [Stop](#stop-and-kill) | `ticket-runner stop`(SIGTERM) | 새로 남는 것 없음 |
 | [kill](#stop-and-kill) | Ctrl+C, SIGKILL, 사라진 Host | Claim, 마지막 push 시점의 작업, State |
 
-merge나 Hand-off 뒤에는 Run이 그 Lane을 다시 채웁니다. Release나 Stop 뒤에는 더 claim하지 않고, 바쁜 Lane만 맡은 일을 마칩니다. kill이면 그 자리에서 끝납니다.
+merge나 Hand-off 뒤에는 Run이 그 Lane을 다시 채우고, 다른 Lane이 바쁜 동안에는 빈 Lane도 틈틈이 Frontier를 다시 봅니다([실행하기](./running.md#run)). Release나 Stop 뒤에는 더 claim하지 않고, 바쁜 Lane만 맡은 일을 마칩니다. kill이면 그 자리에서 끝납니다.
 
 아직 끝나지 않은 Ticket은 저마다 한 갈래 길로 돌아옵니다. 어느 길인지는 보드가 정합니다.
 

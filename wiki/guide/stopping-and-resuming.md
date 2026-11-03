@@ -17,7 +17,7 @@ Nobody watches a Run, so it has to end well when something goes wrong: a Ticket 
 | [Stop](#stop-and-kill) | `ticket-runner stop` (SIGTERM) | nothing new |
 | [Kill](#stop-and-kill) | Ctrl+C, SIGKILL, a vanished Host | the Claim; work as last pushed, and State |
 
-After a merge or a Hand-off the Run refills the Lane. After a Release or a Stop it claims nothing more, and the busy Lanes finish what they hold. A kill ends it on the spot.
+After a merge or a Hand-off the Run refills the Lane, and while another Lane is busy a free Lane also looks at the Frontier again at intervals ([Running](./running.md#run)). After a Release or a Stop it claims nothing more, and the busy Lanes finish what they hold. A kill ends it on the spot.
 
 Each Ticket that is still unfinished then comes back by one road. The board decides which:
 
