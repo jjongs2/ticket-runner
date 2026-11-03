@@ -96,6 +96,19 @@ export interface StageResult {
    * session printed no such event.
    */
   apiKeySource?: string;
+  /**
+   * What the CLI priced the session at, in dollars: the `total_cost_usd` of its
+   * last `result` event. A session that woke for background agents repeats the
+   * whole session's figure on every waking, so it is read once, never summed.
+   * Absent where no `result` event carried one: a session a Stop killed, the
+   * wall-clock limit stopped, or that crashed before it.
+   */
+  costUsd?: number;
+  /**
+   * Present, and true, when one of the session's `rate_limit_event`s said it
+   * was using the subscription's extra usage (`isUsingOverage`).
+   */
+  extraUsage?: true;
 }
 
 /**

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { UNCHECKED_BOX } from "./acceptance-criteria.js";
 import { MAX_TAIL_CHARS } from "./log-tail.js";
+import { type Billing, emptyBilling } from "./credential.js";
 import type { RunStop } from "./run.js";
 import {
   HANDOFF_MARKER,
@@ -695,8 +696,22 @@ describe("runSummary", () => {
       });
     }
 
-    it("names the API key in its header", () => {
-      expect(onTheKey().split("\n")[0]).toBe(`ticket-runner ${VERSION} run r1 · 0m · API key`);
+    it("names the API key in its header, and what the Run spent on it", () => {
+      const header = (billing: Partial<Billing>) =>
+        onTheKey({ billing: { ...emptyBilling(), ...billing } }).split("\n")[0];
+
+      expect(onTheKey().split("\n")[0]).toBe(`ticket-runner ${VERSION} run r1 · 0m · API key · $0.00`);
+      expect(header({ spendUsd: 12.3449 })).toBe(
+        `ticket-runner ${VERSION} run r1 · 0m · API key · $12.34`,
+      );
+      expect(header({ spendUsd: 12.34, spendUnreported: true })).toMatch(/ · API key · \$12\.34\+$/);
+      expect(header({ spendUnreported: true })).toMatch(/ · API key · \$0\.00\+$/);
+    });
+
+    it("never says extra usage, which only a subscription has", () => {
+      expect(onTheKey({ billing: { ...emptyBilling(), extraUsage: true } }).split("\n")[0]).toMatch(
+        / · API key · \$0\.00$/,
+      );
     });
 
     it("says a Ticket was released out of API budget, and ends on it", () => {
@@ -734,19 +749,58 @@ describe("runSummary", () => {
       runId: "r1",
       durationMs: 0,
       outcomes: [merged, handed],
-      strayStages: [
-        { ticket: 5, stage: "verify", apiKeySource: "apiKeyHelper" },
-        { ticket: 3, stage: "implement", apiKeySource: "ANTHROPIC_API_KEY" },
-      ],
+      billing: {
+        ...emptyBilling(),
+        strays: [
+          { ticket: 5, stage: "verify", apiKeySource: "apiKeyHelper" },
+          { ticket: 3, stage: "implement", apiKeySource: "ANTHROPIC_API_KEY", costUsd: 4.15 },
+        ],
+      },
       stop: { reason: "frontier", blocked: [] },
     });
 
+    expect(summary.split("\n")[0]).toBe(`ticket-runner ${VERSION} run r1 · 0m · subscription`);
     expect(summary.split("\n").slice(2, 6)).toEqual([
       "  merged   #3 Run: drain the Frontier (PR #12)",
-      "  billed   #3 implement · apiKeySource ANTHROPIC_API_KEY",
+      "  billed   #3 implement · apiKeySource ANTHROPIC_API_KEY · $4.15",
       "  handed   #5 Fix Stage with a single retry · verify · 1 unmet",
       "  billed   #5 verify · apiKeySource apiKeyHelper",
     ]);
+  });
+
+  it("gives a stray Stage's figure on its row of an `--api-key` Run, apart from the Spend", () => {
+    const summary = runSummary({
+      credential: "api-key",
+      version: VERSION,
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [merged],
+      billing: {
+        ...emptyBilling(),
+        spendUsd: 1,
+        strays: [{ ticket: 3, stage: "verify", apiKeySource: "apiKeyHelper", costUsd: 0.5 }],
+      },
+      stop: { reason: "frontier", blocked: [] },
+    });
+
+    expect(summary.split("\n")[0]).toMatch(/ · API key · \$1\.00$/);
+    expect(summary).toContain("  billed   #3 verify · apiKeySource apiKeyHelper · $0.50");
+  });
+
+  it("says a subscription Run used extra usage, with no amount", () => {
+    const summary = runSummary({
+      credential: "subscription",
+      version: VERSION,
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [],
+      billing: { ...emptyBilling(), extraUsage: true, spendUsd: 3, spendUnreported: true },
+      stop: { reason: "frontier", blocked: [] },
+    });
+
+    expect(summary.split("\n")[0]).toBe(
+      `ticket-runner ${VERSION} run r1 · 0m · subscription · extra usage`,
+    );
   });
 });
 
