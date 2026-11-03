@@ -632,6 +632,7 @@ describe("the credential a Run's Stages run on", () => {
 
   it("is the Host's key for every Stage of a Run started with `--api-key`", async () => {
     tracker.addIssue({ number: 4 });
+    runner.queue("implement", { apiKeySource: "ANTHROPIC_API_KEY", costUsd: 10.53 });
 
     const { code, lines } = await start(
       { command: "run", apiKey: true },
@@ -642,7 +643,9 @@ describe("the credential a Run's Stages run on", () => {
 
     expect(code).toBe(0);
     expect(runner.requests.map((request) => request.credential)).toEqual(["api-key", "api-key"]);
-    expect(lines.at(-1)?.split("\n")[1]).toBe(`ticket-runner ${VERSION} run run-1 · 0m · API key`);
+    expect(lines.at(-1)?.split("\n")[1]).toBe(
+      `ticket-runner ${VERSION} run run-1 · 0m · API key · $10.53`,
+    );
   });
 
   it.each([{}, { ANTHROPIC_API_KEY: "" }])(
@@ -676,12 +679,12 @@ describe("the credential a Run's Stages run on", () => {
 
   it("names a Stage that ran on another credential in the log and the summary", async () => {
     tracker.addIssue({ number: 4 });
-    runner.queue("implement", { apiKeySource: "apiKeyHelper" });
+    runner.queue("implement", { apiKeySource: "apiKeyHelper", costUsd: 4.15 });
 
     const { out } = await start();
 
     expect(out).toContain("#4 implement ran on apiKeySource apiKeyHelper, not the subscription (none)");
-    expect(out).toContain("  billed   #4 implement · apiKeySource apiKeyHelper");
+    expect(out).toContain("  billed   #4 implement · apiKeySource apiKeyHelper · $4.15");
   });
 
   it("starts a subscription Run on a cloud Host as before", async () => {

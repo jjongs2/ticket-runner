@@ -63,6 +63,11 @@ interface ResultEvent {
   subtype?: string;
   is_error?: boolean;
   num_turns?: number;
+  /**
+   * What the CLI priced the whole session at so far, in dollars. Unlike
+   * `num_turns`, it is the session's on every waking, not the waking's.
+   */
+  total_cost_usd?: unknown;
   result?: unknown;
   structured_output?: unknown;
   /**
@@ -93,8 +98,11 @@ interface InitEvent {
  */
 interface RateLimitEvent {
   type: "rate_limit_event";
-  /** `resetsAt` is when the limit resets, in seconds since the epoch. */
-  rate_limit_info?: { status?: string; resetsAt?: number };
+  /**
+   * `resetsAt` is when the limit resets, in seconds since the epoch, and
+   * `isUsingOverage` whether the request ran on the plan's extra usage.
+   */
+  rate_limit_info?: { status?: string; resetsAt?: number; isUsingOverage?: unknown };
 }
 
 /**
@@ -183,6 +191,7 @@ export class ClaudeAgentRunner implements AgentRunner {
     const turns = countTurns(results);
     const resetsAt = failure === "rate-limited" ? limitResetsAt(events) : undefined;
     const apiKeySource = keySource(events);
+    const cost = sessionCost(execution, events);
 
     return {
       ok: failure === undefined,
@@ -193,6 +202,8 @@ export class ClaudeAgentRunner implements AgentRunner {
       ...(turns === undefined ? {} : { turns }),
       ...(resetsAt === undefined ? {} : { limitResetsAt: resetsAt }),
       ...(apiKeySource === undefined ? {} : { apiKeySource }),
+      ...cost,
+      ...(events.some(usedExtraUsage) ? { extraUsage: true } : {}),
       // The clock is the runner's own. A session that woke for a background
       // agent reports one `duration_ms` per waking, and the time it spent
       // waiting for that agent belongs to none of them.
@@ -225,6 +236,39 @@ function countTurns(results: ResultEvent[]): number | undefined {
   const counted = results.filter((result) => result.num_turns !== undefined);
   if (counted.length === 0) return undefined;
   return counted.reduce((sum, result) => sum + (result.num_turns ?? 0), 0);
+}
+
+/**
+ * What the CLI priced the session at: the latest figure a `result` event gave.
+ * Every waking repeats the session's running total, so the last one is the
+ * whole session and summing them would count the early turns again.
+ *
+ * The figure is only part of the session's where the session did not end on
+ * the event that gave it: anything printed after it, a later `result` event
+ * without a figure included, or a kill at the wall-clock limit, which can land
+ * while a background agent runs and prints nothing.
+ */
+function sessionCost(
+  execution: Execution,
+  events: unknown[],
+): { costUsd?: number; costIncomplete?: true } {
+  const priced = events.findLastIndex(
+    (event) => isResultEvent(event) && isAmount(event.total_cost_usd),
+  );
+  if (priced === -1) return {};
+  const costUsd = (events[priced] as ResultEvent).total_cost_usd as number;
+  const incomplete = execution.timedOut || priced < events.length - 1;
+  return incomplete ? { costUsd, costIncomplete: true } : { costUsd };
+}
+
+/** A figure a `result` event can be read for: a finite number. */
+function isAmount(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+/** A `rate_limit_event` saying the request ran on the plan's extra usage. */
+function usedExtraUsage(event: unknown): boolean {
+  return isRateLimitEvent(event) && event.rate_limit_info?.isUsingOverage === true;
 }
 
 /** A session that could not even start still has to leave a trace behind. */

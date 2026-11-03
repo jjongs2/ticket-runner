@@ -22,17 +22,19 @@ function transcript(...events: unknown[]): string {
   return `${events.map((event) => JSON.stringify(event)).join("\n")}\n`;
 }
 
+const SUCCESS_RESULT = {
+  type: "result",
+  subtype: "success",
+  is_error: false,
+  num_turns: 12,
+  duration_ms: 4200,
+  result: "done",
+};
+
 const SUCCESS = transcript(
   { type: "system", subtype: "init", session_id: "abc" },
   { type: "assistant", message: { content: [{ type: "text", text: "working" }] } },
-  {
-    type: "result",
-    subtype: "success",
-    is_error: false,
-    num_turns: 12,
-    duration_ms: 4200,
-    result: "done",
-  },
+  SUCCESS_RESULT,
 );
 
 function runner(
@@ -368,6 +370,115 @@ describe("the credential a Stage runs on", () => {
     const result = await runner(execution({ stdout: SUCCESS })).run(request());
 
     expect(result).not.toHaveProperty("apiKeySource");
+    expect(result).not.toHaveProperty("costUsd");
+    expect(result).not.toHaveProperty("extraUsage");
+  });
+
+  it("reports the session's cost once, from its last result event, however often it woke", async () => {
+    // The implement Stage of #122 in Run 2026-09-21T23-56-11-027: four wakings,
+    // each one's own turns, and the session's cost repeated on every one.
+    const waking = (turns: number) => ({
+      type: "result",
+      subtype: "success",
+      is_error: false,
+      num_turns: turns,
+      total_cost_usd: 10.53,
+      result: "done",
+    });
+    const stdout = transcript(
+      { type: "system", subtype: "init", apiKeySource: "ANTHROPIC_API_KEY" },
+      waking(72),
+      waking(3),
+      waking(3),
+      waking(5),
+    );
+
+    const result = await runner(execution({ stdout })).run(request({ credential: "api-key" }));
+
+    expect(result.costUsd).toBe(10.53);
+    expect(result.turns).toBe(83);
+  });
+
+  it("reports the latest cost a session gave when its wakings disagree", async () => {
+    const stdout = transcript(
+      { type: "result", subtype: "success", is_error: false, num_turns: 9, total_cost_usd: 1.2 },
+      { type: "result", subtype: "success", is_error: false, num_turns: 2, total_cost_usd: 1.5 },
+    );
+
+    const result = await runner(execution({ stdout })).run(request());
+
+    expect(result.costUsd).toBe(1.5);
+  });
+
+  it("says the cost is only part of the session's when the session went on past it", async () => {
+    const first = {
+      type: "result",
+      subtype: "success",
+      is_error: false,
+      num_turns: 40,
+      total_cost_usd: 6.2,
+    };
+    // A waking that started and never ended: a crash, or a kill, after the
+    // first `result` event.
+    const crashed = transcript(first, {
+      type: "assistant",
+      message: { content: [{ type: "text", text: "the agent finished" }] },
+    });
+    // The last `result` event gave no figure, so only an earlier one is known.
+    const unpriced = transcript(first, { type: "result", subtype: "success", num_turns: 2 });
+
+    for (const stdout of [crashed, unpriced]) {
+      const result = await runner(execution({ stdout, exitCode: 1 })).run(request());
+      expect(result).toMatchObject({ costUsd: 6.2, costIncomplete: true });
+    }
+
+    // The wall-clock limit killed it while it waited for a background agent.
+    const timedOut = await runner(execution({ stdout: transcript(first), timedOut: true })).run(
+      request(),
+    );
+    expect(timedOut).toMatchObject({ costUsd: 6.2, costIncomplete: true });
+
+    const whole = await runner(execution({ stdout: transcript(first) })).run(request());
+    expect(whole).not.toHaveProperty("costIncomplete");
+  });
+
+  it("says a Stage used extra usage when a rate_limit_event says so", async () => {
+    const info = {
+      status: "allowed_warning",
+      resetsAt: 1_790_000_000,
+      overageStatus: "rejected",
+      overageDisabledReason: "out_of_credits",
+    };
+    const stdout = transcript(
+      { type: "system", subtype: "init", apiKeySource: "none" },
+      { type: "rate_limit_event", rate_limit_info: { ...info, isUsingOverage: false } },
+      { type: "rate_limit_event", rate_limit_info: { ...info, isUsingOverage: true } },
+      { type: "result", subtype: "success", is_error: false, num_turns: 1, result: "done" },
+    );
+
+    const result = await runner(execution({ stdout })).run(request());
+
+    expect(result.extraUsage).toBe(true);
+  });
+
+  it("says nothing of extra usage when every rate_limit_event says it was not used", async () => {
+    // The shape of every one of the 182 this repository's transcripts hold.
+    const stdout = transcript(
+      {
+        type: "rate_limit_event",
+        rate_limit_info: {
+          status: "allowed",
+          isUsingOverage: false,
+          overageStatus: "rejected",
+          overageDisabledReason: "out_of_credits",
+        },
+      },
+      SUCCESS_RESULT,
+    );
+
+    const result = await runner(execution({ stdout })).run(request());
+
+    expect(result).not.toHaveProperty("extraUsage");
   });
 });
 

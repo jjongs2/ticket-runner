@@ -1,6 +1,6 @@
 import { resolveBaseBranch } from "./base-branch.js";
 import type { Config } from "./config.js";
-import { type Credential, credentialRefusal } from "./credential.js";
+import { type Credential, credentialRefusal, emptyBilling } from "./credential.js";
 import { type HostKind, hostKind } from "./host.js";
 import { BaseBranchChecks } from "./failing-base.js";
 import { Landing } from "./landing.js";
@@ -236,7 +236,7 @@ async function execute(
     version,
     host,
     credential,
-    strayStages: [],
+    billing: emptyBilling(),
     baseBranch,
     // Once per Run as well, and for the same reason: the Tickets of one Run
     // take turns between their rebase and their merge, and a Landing made per
@@ -262,7 +262,7 @@ async function execute(
       durationMs: Date.now() - startedAt,
       credential,
       outcomes,
-      strayStages: pipeline.strayStages,
+      billing: pipeline.billing,
       ...(newer === undefined ? {} : { newer }),
       stop,
     });

@@ -1,10 +1,11 @@
 import { branchName, worktreePath } from "./branch.js";
 import type { Config } from "./config.js";
 import {
+  type Billing,
   CREDENTIAL_WORDS,
   type Credential,
-  type StrayStage,
   expectedKeySource,
+  recordStage,
 } from "./credential.js";
 import { tickMetCriteria } from "./criteria.js";
 import type { BaseBranchChecks, FailingBase } from "./failing-base.js";
@@ -139,11 +140,11 @@ export interface Pipeline {
    */
   credential: Credential;
   /**
-   * Every Stage of this Run that said it ran on something other than
-   * {@link credential}, in the order they came back, shared by every Ticket so
-   * the Run summary can name them all.
+   * What every Stage of this Run said it was billed, shared by every Ticket so
+   * the Run summary can name each Stage that ran on something other than
+   * {@link credential}, and say what the Run spent.
    */
-  strayStages: StrayStage[];
+  billing: Billing;
   /**
    * The branch every Ticket of this Run branches from, rebases onto, merges
    * into and pulls, resolved once before the Run started
@@ -938,29 +939,29 @@ async function runStage(
       ? {}
       : { resultRequired: request.resultRequired }),
   });
-  noteStrayCredential(pipeline, request.ticket, stage, result);
+  noteBilling(pipeline, request.ticket, stage, result);
   return result;
 }
 
 /**
- * Name a Stage whose `system/init` event reported another `apiKeySource` than
- * the Run's credential expects, in the log now and in the summary at the end.
- * A Stage that reported none, one that never started, is not named: there is
- * nothing it said to set against the Run's choice.
+ * Add a Stage to what the Run was billed, and name it in the log now when its
+ * `system/init` event reported another `apiKeySource` than the Run's credential
+ * expects; the summary names it again at the end. A Stage that reported none,
+ * one that never started, is not named: there is nothing it said to set
+ * against the Run's choice. The log line carries no amount: the summary is the
+ * only place one is printed.
  */
-function noteStrayCredential(
+function noteBilling(
   pipeline: Pipeline,
   ticket: number,
   stage: StageName,
   result: StageResult,
 ): void {
-  const { apiKeySource } = result;
-  const expected = expectedKeySource(pipeline.credential);
-  if (apiKeySource === undefined || apiKeySource === expected) return;
-  pipeline.strayStages.push({ ticket, stage, apiKeySource });
+  const stray = recordStage(pipeline.billing, pipeline.credential, ticket, stage, result);
+  if (stray === undefined) return;
   pipeline.log?.(
-    `#${ticket} ${stage} ran on apiKeySource ${apiKeySource}, ` +
-      `not the ${CREDENTIAL_WORDS[pipeline.credential]} (${expected})`,
+    `#${ticket} ${stage} ran on apiKeySource ${stray.apiKeySource}, ` +
+      `not the ${CREDENTIAL_WORDS[pipeline.credential]} (${expectedKeySource(pipeline.credential)})`,
   );
 }
 

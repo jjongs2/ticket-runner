@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { UNCHECKED_BOX } from "./acceptance-criteria.js";
 import { resolveBaseBranch } from "./base-branch.js";
 import type { Config } from "./config.js";
-import type { Credential, StrayStage } from "./credential.js";
+import { type Billing, type Credential, emptyBilling } from "./credential.js";
 import type { HostKind } from "./host.js";
 import { BaseBranchChecks } from "./failing-base.js";
 import { Landing } from "./landing.js";
@@ -127,11 +127,11 @@ let worktree: string;
 /** The Run log, for the lines a Ticket is expected to print — or not to. */
 let logged: string[];
 /** The Stages the Run named for running on another credential than its own. */
-let strayStages: StrayStage[];
+let billing: Billing;
 
 beforeEach(() => {
   logged = [];
-  strayStages = [];
+  billing = emptyBilling();
   worktree = join(repoRoot, ".worktrees", `ticket-${TICKET}`);
   tracker = new FakeTracker();
   tracker.addIssue({ number: TICKET, title: "Skeleton: one Ticket end to end", url: URL });
@@ -183,7 +183,7 @@ async function run(
       version: VERSION,
       host,
       credential,
-      strayStages,
+      billing,
       baseBranch: await resolveBaseBranch(tracker, settings),
       landing: new Landing(),
       standingNotes: new StandingNotes(),
@@ -2278,7 +2278,7 @@ describe("a Stage that ran on another credential than its Run's", () => {
     runner.queue("verify", stageResult({ result: PASSING_VERDICT, apiKeySource: "apiKeyHelper" }));
 
     expect(await run()).toMatchObject({ outcome: "merged" });
-    expect(strayStages).toEqual([{ ticket: TICKET, stage: "verify", apiKeySource: "apiKeyHelper" }]);
+    expect(billing.strays).toEqual([{ ticket: TICKET, stage: "verify", apiKeySource: "apiKeyHelper" }]);
     expect(logged).toContain(
       `#${TICKET} verify ran on apiKeySource apiKeyHelper, not the subscription (none)`,
     );
@@ -2289,7 +2289,7 @@ describe("a Stage that ran on another credential than its Run's", () => {
 
     await run({}, "workstation", "api-key");
 
-    expect(strayStages).toEqual([{ ticket: TICKET, stage: "implement", apiKeySource: "none" }]);
+    expect(billing.strays).toEqual([{ ticket: TICKET, stage: "implement", apiKeySource: "none" }]);
   });
 
   it("is never a Stage that ran on the Run's own, or said nothing", async () => {
@@ -2297,8 +2297,71 @@ describe("a Stage that ran on another credential than its Run's", () => {
 
     await run({}, "workstation", "api-key");
 
-    expect(strayStages).toEqual([]);
+    expect(billing.strays).toEqual([]);
     expect(logged.join("\n")).not.toContain("apiKeySource");
+  });
+});
+
+describe("what a Run's Stages were billed", () => {
+  const ON_KEY = "ANTHROPIC_API_KEY";
+
+  it("adds up the figure of every Stage on an `--api-key` Run's own key, and prints none of it", async () => {
+    runner.queue("implement", { apiKeySource: ON_KEY, costUsd: 10.53 });
+    runner.queue("verify", stageResult({ result: PASSING_VERDICT, apiKeySource: ON_KEY, costUsd: 0.42 }));
+
+    expect(await run({}, "workstation", "api-key")).toMatchObject({ outcome: "merged" });
+
+    expect(billing.spendUsd).toBeCloseTo(10.95);
+    expect(billing.spendUnreported).toBe(false);
+    expect(logged.join("\n")).not.toMatch(/\$\d/);
+    expect(progressTable()).not.toMatch(/\$\d/);
+  });
+
+  it("is at least the Spend when a Stage on the key reported no figure", async () => {
+    runner.queue("implement", { apiKeySource: ON_KEY });
+    runner.queue("verify", stageResult({ result: PASSING_VERDICT, apiKeySource: ON_KEY, costUsd: 0.42 }));
+
+    await run({}, "workstation", "api-key");
+
+    expect(billing.spendUsd).toBeCloseTo(0.42);
+    expect(billing.spendUnreported).toBe(true);
+  });
+
+  it("adds a figure that is only part of a Stage's, and says the Spend is at least that", async () => {
+    runner.queue("implement", { apiKeySource: ON_KEY, costUsd: 6.2, costIncomplete: true });
+    runner.queue("verify", stageResult({ result: PASSING_VERDICT, apiKeySource: ON_KEY, costUsd: 0.42 }));
+
+    await run({}, "workstation", "api-key");
+
+    expect(billing.spendUsd).toBeCloseTo(6.62);
+    expect(billing.spendUnreported).toBe(true);
+  });
+
+  it("leaves out a Stage that printed no init event, figure or none", async () => {
+    runner.queue("implement", { costUsd: 3 });
+
+    await run({}, "workstation", "api-key");
+
+    expect(billing).toMatchObject({ spendUsd: 0, spendUnreported: false });
+  });
+
+  it("keeps a stray Stage's figure on the stray, out of the Spend", async () => {
+    runner.queue("implement", { apiKeySource: "apiKeyHelper", costUsd: 4.15 });
+
+    await run({}, "workstation", "api-key");
+
+    expect(billing.strays).toEqual([
+      { ticket: TICKET, stage: "implement", apiKeySource: "apiKeyHelper", costUsd: 4.15 },
+    ]);
+    expect(billing.spendUsd).toBe(0);
+  });
+
+  it("counts nothing on a subscription Run, but says when a Stage used extra usage", async () => {
+    runner.queue("implement", { apiKeySource: "none", costUsd: 7.5, extraUsage: true });
+
+    await run();
+
+    expect(billing).toMatchObject({ spendUsd: 0, spendUnreported: false, extraUsage: true });
   });
 });
 
@@ -2469,7 +2532,7 @@ describe("a Check the Base branch fails too", () => {
         version: VERSION,
         host: "workstation",
         credential: "subscription",
-        strayStages: [],
+        billing: emptyBilling(),
         baseBranch: "main",
         landing,
         standingNotes: new StandingNotes(),
@@ -2510,7 +2573,7 @@ describe("Tickets in several Lanes failing against one merge-base", () => {
       version: VERSION,
       host: "workstation",
       credential: "subscription",
-      strayStages: [],
+      billing: emptyBilling(),
       baseBranch: "main",
       landing: new Landing(),
       standingNotes: new StandingNotes(),
@@ -4409,7 +4472,7 @@ describe("the Landing", () => {
       version: VERSION,
       host: "workstation",
       credential: "subscription",
-      strayStages: [],
+      billing: emptyBilling(),
       baseBranch: await resolveBaseBranch(tracker, settings),
       landing: new Landing(),
       standingNotes: new StandingNotes(),

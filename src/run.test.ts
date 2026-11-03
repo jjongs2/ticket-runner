@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Config } from "./config.js";
-import type { Credential } from "./credential.js";
+import { type Credential, emptyBilling } from "./credential.js";
 import { BaseBranchChecks } from "./failing-base.js";
 import { Landing } from "./landing.js";
 import { StandingNotes } from "./notes.js";
@@ -99,7 +99,7 @@ function pipeline(lanes = 1, credential: Credential = "subscription"): Pipeline 
     version: VERSION,
     host: "workstation",
     credential,
-    strayStages: [],
+    billing: emptyBilling(),
     baseBranch: "main",
     landing: new Landing(),
     standingNotes: new StandingNotes(),

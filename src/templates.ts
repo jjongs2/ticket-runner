@@ -4,7 +4,13 @@
  */
 
 import { UNCHECKED_BOX } from "./acceptance-criteria.js";
-import { CREDENTIAL_WORDS, type Credential, type StrayStage } from "./credential.js";
+import {
+  type Billing,
+  CREDENTIAL_WORDS,
+  type Credential,
+  type StrayStage,
+  emptyBilling,
+} from "./credential.js";
 import type { GuardReason } from "./guards.js";
 import type { HostKind } from "./host.js";
 import type { FailurePoint } from "./lifecycle.js";
@@ -518,10 +524,11 @@ export interface RunSummary {
   credential: Credential;
   outcomes: TicketOutcome[];
   /**
-   * Every Stage that said it ran on something else, each named in a row after
-   * its own Ticket's.
+   * What the Run's Stages said they were billed: the Spend or extra usage its
+   * header gives, and every Stage that said it ran on something else, each
+   * named in a row after its own Ticket's.
    */
-  strayStages?: readonly StrayStage[];
+  billing?: Billing;
   /**
    * The line saying a newer Version is out, where one is. Above the header
    * rather than below it: the Run already said this hours ago, at the top of a
@@ -571,16 +578,14 @@ export function runSummary({
   durationMs,
   credential,
   outcomes,
-  strayStages = [],
+  billing = emptyBilling(),
   newer,
   stop,
 }: RunSummary): string {
   const rows = [
     ...outcomes.flatMap((outcome) => [
       ...ticketRows(outcome, credential),
-      ...strayStages
-        .filter((stray) => stray.ticket === outcome.ticket)
-        .map((stray) => row("billed", stray.ticket, `${stray.stage} · apiKeySource ${stray.apiKeySource}`)),
+      ...billing.strays.filter((stray) => stray.ticket === outcome.ticket).map(billedRow),
     ]),
     // Only a Run that reached the end of the Frontier can name what was held
     // back all Run, so only that stop carries candidates to skip.
@@ -591,13 +596,45 @@ export function runSummary({
 
   return [
     ...(newer === undefined ? [] : [newer]),
-    `ticket-runner ${version} run ${runId} · ${Math.round(durationMs / 60_000)}m · ${CREDENTIAL_WORDS[credential]}`,
+    `ticket-runner ${version} run ${runId} · ${Math.round(durationMs / 60_000)}m · ${billedTo(credential, billing)}`,
     "",
     ...(rows.length === 0 ? ["  nothing to do"] : rows),
     "",
     lastLine(stop, credential),
     "",
   ].join("\n");
+}
+
+/**
+ * What the header says the Run's Stages were billed to. An `--api-key` Run
+ * adds its Spend, ending `+` where a Stage on the key reported no figure, so it
+ * is at least that much. A subscription Run adds no amount, since its figure
+ * is an estimate at API prices and not money spent, only whether a Stage ran
+ * on the plan's extra usage.
+ */
+function billedTo(credential: Credential, billing: Billing): string {
+  const words = CREDENTIAL_WORDS[credential];
+  if (credential === "api-key") {
+    return `${words} · ${dollars(billing.spendUsd)}${billing.spendUnreported ? "+" : ""}`;
+  }
+  return billing.extraUsage ? `${words} · extra usage` : words;
+}
+
+/**
+ * A Stage billed somewhere the Run did not choose, with its own figure where it
+ * gave one, ending `+` where that is only part of its session's.
+ */
+function billedRow(stray: StrayStage): string {
+  const cost =
+    stray.costUsd === undefined
+      ? ""
+      : ` · ${dollars(stray.costUsd)}${stray.costIncomplete === true ? "+" : ""}`;
+  return row("billed", stray.ticket, `${stray.stage} · apiKeySource ${stray.apiKeySource}${cost}`);
+}
+
+/** An amount of dollars as the Run summary prints one: `$12.34`. */
+function dollars(usd: number): string {
+  return `$${usd.toFixed(2)}`;
 }
 
 /** The one line that says why the Run stopped. */

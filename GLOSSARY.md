@@ -58,6 +58,10 @@ _Avoid_: default branch, trunk, main, integration branch
 What a Run's Stages are billed to, chosen once when the Run starts and held for the whole Run: the subscription the Host's `claude` is logged in with, with the `ANTHROPIC_API_KEY` the Host exports kept out of every Stage, or, for a Run started with `--api-key`, that key. Whose money a Run spends is the Host's business, so it is a flag and never a config field. Each Stage says what it actually ran on, as its `apiKeySource`, and a Stage that ran on anything else is named in the Run's log and summary.
 _Avoid_: auth, account, billing mode, login (the subscription is one Credential)
 
+**Spend**:
+What the Stages of a Run on an API key were billed to that key, as the CLI reported it.
+_Avoid_: credit (the organization's balance, which a Run never sees), cost (the CLI's estimate, which a subscription Run reports too)
+
 **Run**:
 One invocation of the pipeline command. Drains the Frontier through its Lanes; a Run given Ticket numbers takes only those, from the Stranded Tickets and the Frontier alike, and leaves every other Ticket as it found it. Ends when no Lane is busy and the Frontier is empty or every Ticket left on it is blocked, or, once a Ticket has been released, when the last busy Lane comes back.
 _Avoid_: session, batch, loop
