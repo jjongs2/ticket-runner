@@ -50,7 +50,7 @@ describe("the conventions document", () => {
     expect(commits).toContain("Subject: `<type>(<scope>): <summary>`");
     expect(commits).toMatch(/reads the shape, never the words/);
     expect(doc).not.toContain("(#<n>)");
-    expect(commits).not.toMatch(/Ticket number/);
+    expect(doc).not.toMatch(/Ticket number/);
   });
 
   /**
