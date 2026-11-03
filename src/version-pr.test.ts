@@ -9,7 +9,7 @@ const NOTES = `### Lanes
 
 ### After upgrading
 
-- nothing
+1. Run \`ticket-runner init\` in each Target, then commit and push what it writes
 
 [#82]: https://github.com/jjongs2/ticket-runner/pull/82
 [#83]: https://github.com/jjongs2/ticket-runner/pull/83`;
@@ -39,10 +39,10 @@ function templateSection(number: string): string {
   );
   const shape: string[] = [];
   for (const line of template.split("\n")) {
-    // The shape is the headings, the opening sentence, the list items, the link
-    // definitions and the blank lines between them; the prose starts at the
-    // first line that is none.
-    if (!/^(#{2,3} |<|- |\[# |\[#<|$)/.test(line)) break;
+    // The shape is the headings, the opening sentence, the list items, the
+    // numbered steps, the link definitions and the blank lines between them;
+    // the prose starts at the first line that is none.
+    if (!/^(#{2,3} |<|- |\d+\. |\[# |\[#<|$)/.test(line)) break;
     shape.push(line);
   }
   return shape.join("\n").trim().replace("<number>", number).replace("<yyyy-mm-dd>", "2026-09-20");
@@ -191,7 +191,7 @@ describe("judging a pull request that changes the number", () => {
   });
 
   it("refuses a section that does not say what to do after upgrading", () => {
-    const withoutHeading = changelog("0.4.0").replace("### After upgrading\n\n- nothing\n", "");
+    const withoutHeading = changelog("0.4.0").replace("### After upgrading", "### Upgrading");
     expect(versionPrRefusals(versionPr({ changelog: withoutHeading }))).toEqual([
       "The `0.4.0` section of `CHANGELOG.md` has no `### After upgrading` heading.",
     ]);
