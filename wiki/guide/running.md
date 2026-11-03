@@ -159,7 +159,7 @@ ticket-runner 0.5.2 run 2026-09-17T09-00-00-000 · 84m · subscription
 Frontier blocked.
 ```
 
-The header ends with what the Stages were billed to: `subscription`, or `API key` on an `--api-key` Run. A Run that took nothing prints `  nothing to do` in place of the rows.
+The header ends with what the Stages were billed to: `subscription`, or `API key` on an `--api-key` Run. An `--api-key` Run follows it with its [Spend](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), `API key · $12.34`: what the Stages on that key cost, as the CLI prices them, which can differ from the Console's. It ends `+`, `$12.34+`, when a Stage stopped before reporting its figure, so the Run spent at least that much. A subscription Run shows no amount, and adds `extra usage` when a Stage ran on the plan's extra usage. A Run that took nothing prints `  nothing to do` in place of the rows.
 
 | Row | Meaning |
 |---|---|
@@ -167,7 +167,7 @@ The header ends with what the Stages were billed to: `subscription`, or `API key
 | `handed` | Handed off to a human: the Stage it stopped at, and why |
 | `released` | Released at the named Stage by the `rate limit` (`API rate limit` on an `--api-key` Run), an `API failure`, or `out of API budget`, or at `checks` or `ci` by a `failing Base branch`. Nobody has to do anything about the Ticket |
 | `skipped` | Passed over, with the reason ([Guards](./planning.md#guards), or the table above) |
-| `billed` | A Stage of the Ticket above that said, in its `apiKeySource`, it ran on another Credential than the header's: an `apiKeyHelper` in the Host's settings, say, which no environment variable removes |
+| `billed` | A Stage of the Ticket above that said, in its `apiKeySource`, it ran on another Credential than the header's: an `apiKeyHelper` in the Host's settings, say, which no environment variable removes. It ends with that Stage's own amount, `· $4.15`, where it gave one, which the header's leaves out |
 | `noted` | A [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) the row above made, `from #<n> pipeline` when it is the pipeline's own about a failing Base branch, and where it went: `comment` on an issue already there, the Notes issue included, or `new` for the one Note that opened the Notes issue |
 
 | Last line | Why the Run ended |

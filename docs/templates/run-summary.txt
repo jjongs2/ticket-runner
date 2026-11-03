@@ -17,6 +17,28 @@ Claude login, or `API key`, the `ANTHROPIC_API_KEY` the Host exports, for a Run
 started with `--api-key`. A subscription Run starts its Stages without that
 key, whatever the Host exports.
 
+An `--api-key` Run follows `API key` with its Spend, in dollars to two
+decimals: for each Stage that ran on the Run's own key, the `total_cost_usd` of
+its last `result` event, added up. A Stage that woke for background agents
+repeats the session's figure on every waking, so it counts once. A Run that ran
+no Stage on its key prints `$0.00`. A Stage on the key that reported no figure
+— one a Stop killed, the wall-clock limit stopped, or that crashed before its
+`result` event — makes the amount end `+`, at least that much:
+
+ticket-runner <version> run <runId> · <duration> · API key · $12.34+
+
+The amount is the CLI's own pricing of the tokens, which can differ from the
+Console's, for a model the CLI's price list does not know, say.
+
+A subscription Run gives no amount: its figure is an estimate at API prices,
+not money spent. When a Stage's `rate_limit_event` said it ran on the plan's
+extra usage, the header says so, still with no amount:
+
+ticket-runner <version> run <runId> · <duration> · subscription · extra usage
+
+No amount is printed anywhere else: not per Ticket, not in the Run's log, and
+not in the Progress comment.
+
 `<version>` is the Version the Run ran (ADR-0007): the number alone from an
 installed copy, and the number, the commit and a `dirty` mark from a development
 checkout — `0.4.0`, `0.4.0+331d79c`, `0.4.0+331d79c.dirty`. Every stamp of one
@@ -160,10 +182,12 @@ failure, and the rate limit outranks an API failure.
 the Run's credential: anything but `none` on a subscription Run, anything but
 `ANTHROPIC_API_KEY` on an `--api-key` Run. It follows its Ticket's rows, and the
 Run's log named it when the Stage came back. A key an `apiKeyHelper` in the
-Host's settings supplies is one, which no environment variable removes:
+Host's settings supplies is one, which no environment variable removes. The
+row ends with that Stage's own amount where it reported one, on a subscription
+Run as on an `--api-key` Run, and that amount is not in the header's:
 
   merged   #3 Run: drain the Frontier (PR #12)
-  billed   #3 implement · apiKeySource apiKeyHelper
+  billed   #3 implement · apiKeySource apiKeyHelper · $4.15
 
 A Run a Release stopped prints no `skipped  #<n> blocked` rows and no rows for
 the Frontier Tickets it never reached: it stopped before it could say a
