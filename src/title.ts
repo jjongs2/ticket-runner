@@ -22,7 +22,7 @@ export const BRANCH_TITLE =
 /** Any `<type>(<scope>): <summary>`; the repo's own types and scopes are CONTRIBUTING.md's business. */
 const CONVENTIONAL_SUBJECT = /^[a-z]+(\([a-z0-9._-]+\))?: \S/;
 
-/** The `(#<n>)` a branch commit carries, which the squash commit's `Closes #<n>` replaces. */
+/** The `(#<n>)` a commit may carry, which the squash commit's `Closes #<n>` replaces. */
 const TICKET_REFERENCE = /\s*\(#\d+\)$/;
 
 /**

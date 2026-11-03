@@ -86,8 +86,13 @@ const titleGuidance = (base: string) =>
 /**
  * Guidance appended to every implement Stage, working around known defects of
  * the `implement` skill in an unattended session.
+ *
+ * The Ticket's URL is handed to the review explicitly: the review looks for its
+ * spec in the commit messages first, the skill does not always pass it on, and
+ * commit subjects need not carry the Ticket number.
  */
 const implementGuidance = (
+  issueUrl: string,
   base: string,
   checks: readonly string[],
 ) => `This session is unattended. Follow this guidance as well as the skill's own:
@@ -95,6 +100,7 @@ const implementGuidance = (
 - Make an initial commit before running \`/mattpocock-skills:code-review\`, so the reviewed diff is not empty.
 ${titleGuidance(base)}
 - The review the skill asks for is \`/mattpocock-skills:code-review\`. Invoke it by that full name: the short name also matches the CLI's own built-in review skill, which runs neither the Standards review nor the Spec review.
+- Pass the review this Ticket's URL, \`${issueUrl}\`, as the spec. It otherwise looks for the spec in the commit messages, which need not name the Ticket, and reviews with no spec without saying so.
 - Spawn its review sub-agents with \`run_in_background: false\` set explicitly, several in one message so they still run in parallel. Omitting \`run_in_background\` still runs them in the background, and you would then reach your answer before the review has come back.
 - Do not answer the schema until the review has returned and the fixes you take from it are committed. An answer you have already given does not stop you committing: the pipeline waits for this session to exit before it reads the branch.
 - A later answer replaces an earlier one, so if you answer again, repeat every Note you still stand by.${codeChecksLine(checks, true)}
@@ -284,7 +290,7 @@ export function implementPrompt(
 ): string {
   return sections([
     `/mattpocock-skills:implement ${issueUrl}`,
-    implementGuidance(base, checks),
+    implementGuidance(issueUrl, base, checks),
     stageBoundary(selfHosted),
     notesGuidance(standingNotes),
     extraPrompt,

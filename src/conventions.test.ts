@@ -40,6 +40,20 @@ describe("the conventions document", () => {
   });
 
   /**
+   * The pipeline reads a subject's shape and no number: a Ticket is one branch
+   * and one pull request, and the squash commit's `Closes #<n>` names it.
+   */
+  it("asks a commit subject for its shape and not the Ticket number", () => {
+    const doc = conventionsDoc("0.4.0");
+    const commits = section(doc, "Commits");
+
+    expect(commits).toContain("Subject: `<type>(<scope>): <summary>`");
+    expect(commits).toMatch(/reads the shape, never the words/);
+    expect(doc).not.toContain("(#<n>)");
+    expect(commits).not.toMatch(/Ticket number/);
+  });
+
+  /**
    * The mark is the one thing `init` and a Run read the document for, and the
    * one thing its readers must never meet: it sits on the first line, inside an
    * HTML comment, so the heading renders as it always did.

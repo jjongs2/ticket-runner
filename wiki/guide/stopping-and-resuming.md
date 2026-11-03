@@ -232,7 +232,7 @@ The file is JSON a human can read without the pipeline:
   "state": "implemented",
   "fixUsed": false,
   "pullRequest": 31,
-  "title": "feat: release a rate-limited Ticket (#8)",
+  "title": "feat: release a rate-limited Ticket",
   "rebaseFirst": true,
   "runId": "2026-09-17T09-00-00-000",
   "version": "0.5.2",
