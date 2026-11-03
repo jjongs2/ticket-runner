@@ -8,7 +8,9 @@
 
 ### After upgrading
 
-- <what a Target or its human has to do> — or the single word: nothing
+1. <a step a Target or its human takes before `init`>
+2. Run `ticket-runner init` in each Target, then commit and push what it writes<: what it now writes differently>
+3. <a step a Target or its human takes after `init`>
 
 [#<pr>]: https://github.com/jjongs2/ticket-runner/pull/<pr>
 
@@ -27,14 +29,23 @@ sentence was asked for have none.
 
 `After upgrading` is a fixed heading: always last, always present, and the one
 thing a reader of this tool cannot get from the pull request list, because the
-pipeline rewrites files in every Target it is set up in. When nothing is asked
-of a Target, it says so in one word rather than being left out.
+pipeline rewrites files in every Target it is set up in. It always includes
+running `init` in each Target and committing and pushing what it writes, even
+when nothing else changed: each Version stamps a new number, and a Target's
+conventions document keeps the old one until `init` rewrites it. Until then a
+Run there warns to run `init`, and an Operator installs the Version the
+document is stamped with on a cloud Host, which so stays on the old one. Whatever else a Target or its
+human must do takes its place before or after that step, in the order the
+steps must run; a step nothing asks for is left out. Sections cut before this
+was asked for may say `nothing`.
 
 Everything between the sentence and it is grouped by what changed, in the
 writer's own words.
-Lines are terse: about a dozen words, ending in the pull request numbers the
-change landed in. One line per change, not per pull request — three pull
-requests that built one thing are one line carrying three numbers.
+Lines are terse, because the reader is deciding whether to upgrade and the pull
+request is one click away: about a dozen words, ending in the pull request
+numbers the change landed in. A line says what changed; the why and the how
+stay in the pull request. One line per change, not per pull request — three
+pull requests that built one thing are one line carrying three numbers.
 
 The numbers are links the notes carry themselves, defined at the end of the
 section below `After upgrading`, where the extraction keeps them and nothing
