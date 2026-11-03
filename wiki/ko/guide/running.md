@@ -48,7 +48,7 @@ flowchart TD
   D -- 예 --> E["빈 Lane에서 재개"] --> C
   D -- 아니오 --> F["Frontier를 다시 조회,<br>낮은 번호부터"]
   F --> G["다음 Ticket을<br>빈 Lane에 Claim"] --> C
-  C -- "없음, 또는 가져갈 게 없음" --> H["Lane 하나가 끝날 때까지 대기"]
+  C -- "없음, 또는 가져갈 게 없음" --> H["Lane 하나가 끝날 때까지 대기,<br>빈 Lane이 있으면 5분까지만"]
   H --> I{"Release됐거나 Stop이 왔나?"}
   I -- 예 --> J["더는 Lane을 채우지 않음,<br>바쁜 Lane은 마저 끝냄"]
   I -- 아니오 --> K{"아직 바쁜 Lane이 있나?"}
@@ -59,6 +59,7 @@ flowchart TD
 <!-- Sources: src/run.ts, src/start.ts, src/stranded.ts, src/frontier.ts -->
 
 - **실패한 Ticket은 Hand-off되고** 그 Lane은 다음 Ticket을 가져갑니다. 나쁜 Ticket 하나 때문에 밤 전체를 잃지는 않습니다.
+- **다른 Lane이 바쁜 동안 빈 Lane은 Frontier를 다시 봅니다.** Run이 마지막으로 조회한 지 5분이 지나면 봅니다. Run 도중 `ready-for-agent`를 붙이거나 마지막 blocker를 닫은 Ticket은 바쁜 Lane이 끝나기를 기다리지 않고 들어갑니다. Lane이 하나인 Run은 이렇게 하지 않습니다.
 - **[Release](./stopping-and-resuming.md#release-on-a-rate-limit)가 일어나면 채우기를 멈춥니다.** 바쁜 Lane은 마저 끝내고, 다음 Run은 사람이나 Operator가 시작합니다.
 - **Run이 끝나는 때**는 바쁜 Lane이 없고 가져갈 것도 남지 않았을 때입니다. Frontier가 비었거나, 남은 것이 모두 막혀 있을 때죠.
 - **main checkout은 Run에게 맡겨 두세요.** Run은 rebase하기 전과 merge한 뒤마다 거기로 Base branch를 pull합니다. commit하지 않은 변경을 pull이 덮어쓰게 되면 Ticket이 Hand-off되고, checkout된 Base branch에 remote에 없는 commit이 있으면 다음 pull request에 rebase되어 들어갑니다. 그동안 작업은 따로 만든 worktree에서 하세요.

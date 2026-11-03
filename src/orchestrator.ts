@@ -58,6 +58,7 @@ import {
   pullRequestBody,
   squashCommit,
 } from "./templates.js";
+import type { StartTimer } from "./timer.js";
 import { CODE_STAGE_JSON_SCHEMA, parseTitle, pullRequestTitle } from "./title.js";
 import {
   type Verdict,
@@ -176,6 +177,12 @@ export interface Pipeline {
    * there is a Stage told to exercise it through its tests and fakes.
    */
   selfHosted: boolean;
+  /**
+   * How the Run waits between its looks at the Frontier while a Lane is free
+   * and another busy: the real clock, unless a test hands it one it moves
+   * itself. Never the interval, which is fixed.
+   */
+  startTimer?: StartTimer;
   log?: (line: string) => void;
 }
 

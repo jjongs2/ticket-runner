@@ -6,6 +6,14 @@ import { type Pipeline, type TicketOutcome, processTicket } from "./orchestrator
 import { StopSignal, stopLine } from "./stop.js";
 import { holdsClaim, strandedTickets } from "./stranded.js";
 import { releaseWords } from "./templates.js";
+import { startTimer } from "./timer.js";
+
+/**
+ * How long a free Lane waits, after the Run last listed the Frontier, before it
+ * looks at the Frontier again while another Lane is busy. Fixed: nothing in the
+ * Target's config or on the command line sets it, and nothing turns it off.
+ */
+export const POLL_MS = 5 * 60_000;
 
 /**
  * What a Run has to show for itself: every Ticket it took, in the order they
@@ -73,6 +81,15 @@ export type RunStop =
  * working is still an open blocker. Those edges are the whole of what keeps two
  * Tickets apart: no heuristic here decides which are safe together.
  *
+ * A Ticket can also join the Frontier with no Lane ending — a human labels it
+ * `ready-for-agent`, or closes its last blocker outside the Run — so while one
+ * Lane is free and another busy, the Run looks at the Frontier again
+ * {@link POLL_MS} after it last listed it, whatever listed it, and takes what
+ * a refill would. A Run with nothing busy has nothing to wait for and ends, as
+ * before: it never waits for new Tickets. A look that cannot list is logged
+ * and tried again next time, since nothing about the Run depended on it; a
+ * refill that cannot list still ends the Run's claiming.
+ *
  * A Ticket that fails is handed off and the Lane moves on: one bad Ticket must
  * not cost the rest of the night.
  *
@@ -122,7 +139,7 @@ export async function processRun(
   // that several Lanes came back during sees every one of them free.
   const busy = new Map<number, Promise<void>>();
   // What the last Frontier this Run computed held back, which is what a Run
-  // that drained the Frontier reports. Replaced at every refill: a candidate a
+  // that drained the Frontier reports. Replaced at every listing: a candidate a
   // Lane unblocked on the way is not one the Run was still held up by.
   let blocked: number[] = [];
   // Why this Run stopped, which is also what it reports. Set by whichever of
@@ -137,6 +154,12 @@ export async function processRun(
   // went down, so the error waits for them and is thrown where a Run with one
   // Lane threw it: out of the Run, with nothing else left running.
   let listing: unknown;
+  // How many Lanes have ended, and how many had when the last pass listed the
+  // Frontier, which tells a refill a Lane's ending brought from a look the
+  // clock brought: a listing that fails is the Run's to throw only in the
+  // first. -1 until the first pass, which is a refill too.
+  let ended = 0;
+  let endedAtLastPass = -1;
 
   // Registered before the sweep, because a Stop that arrives during it is a Run
   // that claims nothing at all: the Lanes are empty, so there is nothing to
@@ -181,6 +204,7 @@ export async function processRun(
       ticket.number,
       take(pipeline, ticket).then((outcome) => {
         busy.delete(ticket.number);
+        ended += 1;
         outcomes.push(outcome);
         if (outcome.outcome !== "released") return;
         if (runStop === undefined) {
@@ -228,18 +252,50 @@ export async function processRun(
     }
   }
 
+  /**
+   * Whether a free Lane should look at the Frontier again before a busy one
+   * ends. Only after a pass that listed it, which every pass that leaves a Lane
+   * free while the Run is still taking Tickets did: so the wait counts from
+   * that listing.
+   */
+  function polling(): boolean {
+    return runStop === undefined && listing === undefined && busy.size > 0 && laneFree();
+  }
+
+  /** Wait for a Lane to end, or for the time to look at the Frontier again. */
+  async function nextPass(): Promise<void> {
+    const ending = Promise.race(busy.values());
+    if (!polling()) return await ending;
+    const poll = (pipeline.startTimer ?? startTimer)(POLL_MS);
+    try {
+      await Promise.race([ending, poll.elapsed]);
+    } finally {
+      poll.cancel();
+    }
+  }
+
   for (;;) {
     if (runStop === undefined && listing === undefined) {
+      const endedBefore = ended;
+      const looking = endedBefore === endedAtLastPass;
       try {
         await fillLanes();
+        endedAtLastPass = ended;
       } catch (error) {
-        listing = error;
+        if (!looking) {
+          listing = error;
+        } else {
+          pipeline.log?.(pollFailure(error));
+          // A Lane that ended while the look was listing is still owed its
+          // refill, which runs now, and only that one's failure is the Run's.
+          if (ended !== endedBefore) continue;
+        }
       }
     }
     // Never while a Lane is busy, whatever the Frontier had to offer: that Lane
     // may be about to close the blocker the rest of the Frontier is waiting on.
     if (busy.size === 0) break;
-    await Promise.race(busy.values());
+    await nextPass();
   }
 
   if (listing !== undefined) throw listing;
@@ -253,6 +309,12 @@ export async function processRun(
     }
   }
   return { outcomes, stop };
+}
+
+/** The one line a look at the Frontier that could not list it earns. */
+function pollFailure(error: unknown): string {
+  const minutes = POLL_MS / 60_000;
+  return `listing the Frontier failed, trying again in ${minutes} minutes · ${(error as Error).message}`;
 }
 
 /**

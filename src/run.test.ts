@@ -9,6 +9,7 @@ import type { Pipeline } from "./orchestrator.js";
 import type { TicketState } from "./ports/workspace.js";
 import { type RunResult, processRun } from "./run.js";
 import { StopSignal } from "./stop.js";
+import { FakeClock } from "./testing/clock.js";
 import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./testing/fakes.js";
 import { settle } from "./testing/settle.js";
 
@@ -1272,6 +1273,337 @@ describe("Lanes", () => {
     // abandoned mid-Ticket to report that `gh` had gone down.
     expect(tracker.pullRequest(100).merged).toBe(true);
     expect(tracker.pullRequest(101).merged).toBe(true);
+  });
+});
+
+/**
+ * A free Lane while another is busy. A Ticket can join the Frontier with no
+ * Lane ending — a human labels it, or closes its last blocker outside the Run —
+ * so the free Lane looks at the Frontier again on its own, five minutes after
+ * the Run last listed it, rather than waiting for the busy Lane to end.
+ */
+describe("a free Lane while another is busy", () => {
+  const MINUTE = 60_000;
+  let clock: FakeClock;
+
+  beforeEach(() => {
+    clock = new FakeClock();
+  });
+
+  /** A Run with `lanes` Lanes, whose waits elapse only as the test moves the clock. */
+  function onFakeClock(lanes = 2): Pipeline {
+    return { ...pipeline(lanes), startTimer: clock.start };
+  }
+
+  /**
+   * Make the listings of the Frontier `fails` picks throw, counting from one,
+   * and say how many have been asked for.
+   */
+  function failListings(fails: (attempt: number) => Promise<boolean> | boolean): () => number {
+    const listed = tracker.listCandidates.bind(tracker);
+    let attempts = 0;
+    tracker.listCandidates = async (label) => {
+      // The standing Notes issue is looked up off the same call, by another label.
+      if (label !== "ready-for-agent") return await listed(label);
+      attempts += 1;
+      if (await fails(attempts)) throw new Error("gh: connection reset");
+      return await listed(label);
+    };
+    return () => attempts;
+  }
+
+  /** How many times the Run listed the Frontier. */
+  function listings(): number {
+    return tracker.calls.filter((call) => call === "listCandidates:ready-for-agent").length;
+  }
+
+  it("takes a Ticket that joined the Frontier five minutes after the last listing, while the busy Lane is still busy", async () => {
+    tracker.addIssue({ number: 4 });
+    const verifying = runner.holds("verify");
+
+    const run = processRun(onFakeClock());
+    await verifying.started();
+    await settle();
+    tracker.addIssue({ number: 5 });
+
+    await clock.advance(5 * MINUTE - 1);
+    expect(processed()).toEqual([4]);
+
+    await clock.advance(1);
+    expect(processed()).toEqual([4, 5]);
+    // #4 is still parked in its verify Stage: nothing ended to make room for #5.
+    expect(runner.stages()).toEqual(["implement", "verify", "implement", "verify"]);
+
+    verifying.release();
+    const result = await run;
+
+    expect(result.outcomes.map((outcome) => outcome.outcome)).toEqual(["merged", "merged"]);
+    expect(result.stop).toEqual({ reason: "frontier", blocked: [] });
+    // Nothing is left counting down to hold the process open.
+    expect(clock.pending).toBe(0);
+  });
+
+  it("counts the five minutes again from a refill when a Lane's Ticket ends", async () => {
+    tracker.addIssue({ number: 4 });
+    // #4 parks in its wait for CI, and #5, which a poll takes, in its verify
+    // Stage, so #4's Lane can end while #5's is still busy.
+    const ci = tracker.holdsCi();
+
+    const run = processRun(onFakeClock(3));
+    await ci.started();
+    await settle();
+    const verifying = runner.holds("verify");
+    tracker.addIssue({ number: 5 });
+
+    await clock.advance(5 * MINUTE);
+    expect(processed()).toEqual([4, 5]);
+    expect(listings()).toBe(2);
+
+    await clock.advance(4 * MINUTE);
+    ci.release();
+    await settle();
+    expect(tracker.pullRequest(100).merged).toBe(true);
+    expect(listings()).toBe(3);
+
+    // Ten minutes in, which is five after the poll: no listing, because the
+    // refill a minute ago was one.
+    await clock.advance(2 * MINUTE);
+    expect(listings()).toBe(3);
+
+    await clock.advance(3 * MINUTE);
+    expect(listings()).toBe(4);
+
+    verifying.release();
+    await run;
+    expect(clock.pending).toBe(0);
+  });
+
+  it("lists nothing while every Lane is busy", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    const verifying = runner.holds("verify");
+
+    const run = processRun(onFakeClock());
+    await verifying.started();
+    await settle();
+    tracker.addIssue({ number: 6 });
+    await clock.advance(10 * MINUTE);
+
+    expect(listings()).toBe(1);
+    expect(processed()).toEqual([4, 5]);
+    expect(clock.started).toBe(0);
+
+    verifying.release();
+    await run;
+  });
+
+  it("never looks at the Frontier on its own in a Run with one Lane", async () => {
+    tracker.addIssue({ number: 4 });
+    const verifying = runner.holds("verify");
+
+    const run = processRun(onFakeClock(1));
+    await verifying.started();
+    await settle();
+    tracker.addIssue({ number: 5 });
+    await clock.advance(10 * MINUTE);
+
+    expect(listings()).toBe(1);
+    expect(processed()).toEqual([4]);
+    expect(clock.started).toBe(0);
+
+    verifying.release();
+    await run;
+    // #5 is taken the usual way, by the refill once #4 has ended.
+    expect(processed()).toEqual([4, 5]);
+  });
+
+  it("lists nothing once a Stop has reached the Run", async () => {
+    tracker.addIssue({ number: 4 });
+    const verifying = runner.holds("verify");
+    const stopping = new StopSignal();
+
+    const run = processRun(onFakeClock(), stopping);
+    await verifying.started();
+    await settle();
+    stopping.request(new Date("2026-09-20T22:07:13.000Z"));
+    tracker.addIssue({ number: 5 });
+    await clock.advance(10 * MINUTE);
+
+    expect(listings()).toBe(1);
+    expect(processed()).toEqual([4]);
+
+    verifying.release();
+    const result = await run;
+
+    expect(result.stop.reason).toBe("stopped");
+    expect(clock.pending).toBe(0);
+  });
+
+  it("lists nothing once a Release has reached the Run", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    runner.queue("implement", { ok: false, failure: "rate-limited" });
+    const verifying = runner.holds("verify");
+
+    const run = processRun(onFakeClock(3));
+    await verifying.started();
+    await settle();
+    tracker.addIssue({ number: 6 });
+    await clock.advance(10 * MINUTE);
+
+    expect(listings()).toBe(1);
+    expect(processed()).toEqual([4, 5]);
+
+    verifying.release();
+    const result = await run;
+
+    expect(result.stop).toEqual({ reason: "rate-limited" });
+    expect(clock.pending).toBe(0);
+  });
+
+  it("takes only the Tickets a narrowed Run was given", async () => {
+    tracker.addIssue({ number: 4 });
+    const verifying = runner.holds("verify");
+
+    const run = processRun(onFakeClock(), undefined, [4, 6]);
+    await verifying.started();
+    await settle();
+    for (const number of [5, 6]) tracker.addIssue({ number });
+    await clock.advance(5 * MINUTE);
+
+    expect(processed()).toEqual([4, 6]);
+
+    verifying.release();
+    await run;
+    expect(processed()).toEqual([4, 6]);
+  });
+
+  it("does not sweep for Stranded Tickets again", async () => {
+    tracker.addIssue({ number: 4 });
+    const readAll = workspace.readAllStates.bind(workspace);
+    let sweeps = 0;
+    workspace.readAllStates = async () => {
+      sweeps += 1;
+      return await readAll();
+    };
+    const verifying = runner.holds("verify");
+
+    const run = processRun(onFakeClock());
+    await verifying.started();
+    await settle();
+    // Left the way a Run that never came back would have left it.
+    stranded(9);
+    await clock.advance(5 * MINUTE);
+
+    expect(listings()).toBe(2);
+    expect(sweeps).toBe(1);
+
+    verifying.release();
+    const result = await run;
+    expect(result.outcomes.map((outcome) => outcome.ticket)).toEqual([4]);
+  });
+
+  it("logs one line for a listing that failed, carries on, and looks again five minutes later", async () => {
+    tracker.addIssue({ number: 4 });
+    const attempts = failListings((attempt) => attempt === 2);
+    const verifying = runner.holds("verify");
+
+    const run = processRun(onFakeClock());
+    await verifying.started();
+    await settle();
+    const before = logged.length;
+    await clock.advance(5 * MINUTE);
+
+    expect(attempts()).toBe(2);
+    expect(logged.slice(before)).toEqual([
+      "listing the Frontier failed, trying again in 5 minutes · gh: connection reset",
+    ]);
+
+    tracker.addIssue({ number: 5 });
+    await clock.advance(5 * MINUTE - 1);
+    expect(processed()).toEqual([4]);
+    await clock.advance(1);
+    expect(processed()).toEqual([4, 5]);
+
+    verifying.release();
+    const result = await run;
+
+    expect(result.outcomes.map((outcome) => outcome.outcome)).toEqual(["merged", "merged"]);
+    expect(result.stop).toEqual({ reason: "frontier", blocked: [] });
+  });
+
+  it("still refills a Lane that ended while a failing look was listing, and carries on", async () => {
+    tracker.addIssue({ number: 4 });
+    const ci = tracker.holdsCi();
+    // The look five minutes in fails, and #4's Lane ends while it is listing.
+    const attempts = failListings(async (attempt) => {
+      if (attempt !== 2) return false;
+      tracker.addIssue({ number: 5 });
+      ci.release();
+      await settle();
+      return true;
+    });
+
+    const run = processRun(onFakeClock());
+    await ci.started();
+    await settle();
+    await clock.advance(5 * MINUTE);
+    const result = await run;
+
+    expect(attempts()).toBeGreaterThanOrEqual(3);
+    expect(logged.filter((line) => line.includes("gh: connection reset"))).toEqual([
+      "listing the Frontier failed, trying again in 5 minutes · gh: connection reset",
+    ]);
+    expect(result.outcomes.map((outcome) => [outcome.ticket, outcome.outcome])).toEqual([
+      [4, "merged"],
+      [5, "merged"],
+    ]);
+    expect(result.stop).toEqual({ reason: "frontier", blocked: [] });
+  });
+
+  it("looks no further after a refill whose listing failed, and throws it once the Lanes are back", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    // #4 is handed off at its implement Stage, so its Lane ends while #5 is
+    // parked in verify, and the refill that follows cannot list.
+    runner.queue("implement", { ok: false, failure: "nonzero-exit" });
+    const attempts = failListings((attempt) => attempt > 1);
+    const verifying = runner.holds("verify");
+
+    const run = processRun(onFakeClock(3));
+    // Caught now, so the rejection is not unhandled while the test moves the clock.
+    const thrown = run.catch((error: unknown) => error);
+    await verifying.started();
+    await settle();
+    expect(attempts()).toBe(2);
+
+    await clock.advance(10 * MINUTE);
+    expect(attempts()).toBe(2);
+    expect(logged.some((line) => line.includes("gh: connection reset"))).toBe(false);
+
+    verifying.release();
+    expect(await thrown).toEqual(new Error("gh: connection reset"));
+    expect(clock.pending).toBe(0);
+  });
+
+  it("logs nothing for a look that takes no Ticket, and only what a refill logs for one that does", async () => {
+    tracker.addIssue({ number: 4 });
+    const verifying = runner.holds("verify");
+
+    const run = processRun(onFakeClock());
+    await verifying.started();
+    await settle();
+    const before = logged.length;
+    await clock.advance(5 * MINUTE);
+
+    expect(listings()).toBe(2);
+    expect(logged.length).toBe(before);
+
+    tracker.addIssue({ number: 5 });
+    await clock.advance(5 * MINUTE);
+
+    expect(processed()).toEqual([4, 5]);
+    for (const line of logged.slice(before)) expect(line).toMatch(/^#5 /);
+
+    verifying.release();
+    await run;
   });
 });
 
