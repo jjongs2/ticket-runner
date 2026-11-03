@@ -1291,8 +1291,25 @@ describe("a free Lane while another is busy", () => {
   });
 
   /** A Run with `lanes` Lanes, whose waits elapse only as the test moves the clock. */
-  function polling(lanes = 2): Pipeline {
+  function onFakeClock(lanes = 2): Pipeline {
     return { ...pipeline(lanes), startTimer: clock.start };
+  }
+
+  /**
+   * Make the listings of the Frontier `fails` picks throw, counting from one,
+   * and say how many have been asked for.
+   */
+  function failListings(fails: (attempt: number) => Promise<boolean> | boolean): () => number {
+    const listed = tracker.listCandidates.bind(tracker);
+    let attempts = 0;
+    tracker.listCandidates = async (label) => {
+      // The standing Notes issue is looked up off the same call, by another label.
+      if (label !== "ready-for-agent") return await listed(label);
+      attempts += 1;
+      if (await fails(attempts)) throw new Error("gh: connection reset");
+      return await listed(label);
+    };
+    return () => attempts;
   }
 
   /** How many times the Run listed the Frontier. */
@@ -1304,7 +1321,7 @@ describe("a free Lane while another is busy", () => {
     tracker.addIssue({ number: 4 });
     const verifying = runner.holds("verify");
 
-    const run = processRun(polling());
+    const run = processRun(onFakeClock());
     await verifying.started();
     await settle();
     tracker.addIssue({ number: 5 });
@@ -1332,7 +1349,7 @@ describe("a free Lane while another is busy", () => {
     // Stage, so #4's Lane can end while #5's is still busy.
     const ci = tracker.holdsCi();
 
-    const run = processRun(polling(3));
+    const run = processRun(onFakeClock(3));
     await ci.started();
     await settle();
     const verifying = runner.holds("verify");
@@ -1365,7 +1382,7 @@ describe("a free Lane while another is busy", () => {
     for (const number of [4, 5]) tracker.addIssue({ number });
     const verifying = runner.holds("verify");
 
-    const run = processRun(polling());
+    const run = processRun(onFakeClock());
     await verifying.started();
     await settle();
     tracker.addIssue({ number: 6 });
@@ -1383,7 +1400,7 @@ describe("a free Lane while another is busy", () => {
     tracker.addIssue({ number: 4 });
     const verifying = runner.holds("verify");
 
-    const run = processRun(polling(1));
+    const run = processRun(onFakeClock(1));
     await verifying.started();
     await settle();
     tracker.addIssue({ number: 5 });
@@ -1404,7 +1421,7 @@ describe("a free Lane while another is busy", () => {
     const verifying = runner.holds("verify");
     const stopping = new StopSignal();
 
-    const run = processRun(polling(), stopping);
+    const run = processRun(onFakeClock(), stopping);
     await verifying.started();
     await settle();
     stopping.request(new Date("2026-09-20T22:07:13.000Z"));
@@ -1426,7 +1443,7 @@ describe("a free Lane while another is busy", () => {
     runner.queue("implement", { ok: false, failure: "rate-limited" });
     const verifying = runner.holds("verify");
 
-    const run = processRun(polling(3));
+    const run = processRun(onFakeClock(3));
     await verifying.started();
     await settle();
     tracker.addIssue({ number: 6 });
@@ -1446,7 +1463,7 @@ describe("a free Lane while another is busy", () => {
     tracker.addIssue({ number: 4 });
     const verifying = runner.holds("verify");
 
-    const run = processRun(polling(), undefined, [4, 6]);
+    const run = processRun(onFakeClock(), undefined, [4, 6]);
     await verifying.started();
     await settle();
     for (const number of [5, 6]) tracker.addIssue({ number });
@@ -1469,7 +1486,7 @@ describe("a free Lane while another is busy", () => {
     };
     const verifying = runner.holds("verify");
 
-    const run = processRun(polling());
+    const run = processRun(onFakeClock());
     await verifying.started();
     await settle();
     // Left the way a Run that never came back would have left it.
@@ -1486,24 +1503,16 @@ describe("a free Lane while another is busy", () => {
 
   it("logs one line for a listing that failed, carries on, and looks again five minutes later", async () => {
     tracker.addIssue({ number: 4 });
-    const listed = tracker.listCandidates.bind(tracker);
-    let attempts = 0;
-    tracker.listCandidates = async (label) => {
-      // The standing Notes issue is looked up off the same call, by another label.
-      if (label !== "ready-for-agent") return await listed(label);
-      attempts += 1;
-      if (attempts === 2) throw new Error("gh: connection reset");
-      return await listed(label);
-    };
+    const attempts = failListings((attempt) => attempt === 2);
     const verifying = runner.holds("verify");
 
-    const run = processRun(polling());
+    const run = processRun(onFakeClock());
     await verifying.started();
     await settle();
     const before = logged.length;
     await clock.advance(5 * MINUTE);
 
-    expect(attempts).toBe(2);
+    expect(attempts()).toBe(2);
     expect(logged.slice(before)).toEqual([
       "listing the Frontier failed, trying again in 5 minutes · gh: connection reset",
     ]);
@@ -1521,31 +1530,52 @@ describe("a free Lane while another is busy", () => {
     expect(result.stop).toEqual({ reason: "frontier", blocked: [] });
   });
 
+  it("still refills a Lane that ended while a failing look was listing, and carries on", async () => {
+    tracker.addIssue({ number: 4 });
+    const ci = tracker.holdsCi();
+    // The look five minutes in fails, and #4's Lane ends while it is listing.
+    const attempts = failListings(async (attempt) => {
+      if (attempt !== 2) return false;
+      tracker.addIssue({ number: 5 });
+      ci.release();
+      await settle();
+      return true;
+    });
+
+    const run = processRun(onFakeClock());
+    await ci.started();
+    await settle();
+    await clock.advance(5 * MINUTE);
+    const result = await run;
+
+    expect(attempts()).toBeGreaterThanOrEqual(3);
+    expect(logged.filter((line) => line.includes("gh: connection reset"))).toEqual([
+      "listing the Frontier failed, trying again in 5 minutes · gh: connection reset",
+    ]);
+    expect(result.outcomes.map((outcome) => [outcome.ticket, outcome.outcome])).toEqual([
+      [4, "merged"],
+      [5, "merged"],
+    ]);
+    expect(result.stop).toEqual({ reason: "frontier", blocked: [] });
+  });
+
   it("looks no further after a refill whose listing failed, and throws it once the Lanes are back", async () => {
     for (const number of [4, 5]) tracker.addIssue({ number });
     // #4 is handed off at its implement Stage, so its Lane ends while #5 is
     // parked in verify, and the refill that follows cannot list.
     runner.queue("implement", { ok: false, failure: "nonzero-exit" });
-    const listed = tracker.listCandidates.bind(tracker);
-    let attempts = 0;
-    tracker.listCandidates = async (label) => {
-      // The standing Notes issue is looked up off the same call, by another label.
-      if (label !== "ready-for-agent") return await listed(label);
-      attempts += 1;
-      if (attempts > 1) throw new Error("gh: connection reset");
-      return await listed(label);
-    };
+    const attempts = failListings((attempt) => attempt > 1);
     const verifying = runner.holds("verify");
 
-    const run = processRun(polling(3));
+    const run = processRun(onFakeClock(3));
     // Caught now, so the rejection is not unhandled while the test moves the clock.
     const thrown = run.catch((error: unknown) => error);
     await verifying.started();
     await settle();
-    expect(attempts).toBe(2);
+    expect(attempts()).toBe(2);
 
     await clock.advance(10 * MINUTE);
-    expect(attempts).toBe(2);
+    expect(attempts()).toBe(2);
     expect(logged.some((line) => line.includes("gh: connection reset"))).toBe(false);
 
     verifying.release();
@@ -1557,7 +1587,7 @@ describe("a free Lane while another is busy", () => {
     tracker.addIssue({ number: 4 });
     const verifying = runner.holds("verify");
 
-    const run = processRun(polling());
+    const run = processRun(onFakeClock());
     await verifying.started();
     await settle();
     const before = logged.length;

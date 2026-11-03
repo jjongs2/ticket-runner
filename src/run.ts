@@ -154,11 +154,12 @@ export async function processRun(
   // went down, so the error waits for them and is thrown where a Run with one
   // Lane threw it: out of the Run, with nothing else left running.
   let listing: unknown;
-  // How many Lanes have ended, which tells a pass that a Lane's ending brought
-  // it from one the clock brought: a listing that fails is the Run's to throw
-  // only in the first. -1 until the first pass, which is a refill too.
+  // How many Lanes have ended, and how many had when the last pass listed the
+  // Frontier, which tells a refill a Lane's ending brought from a look the
+  // clock brought: a listing that fails is the Run's to throw only in the
+  // first. -1 until the first pass, which is a refill too.
   let ended = 0;
-  let answered = -1;
+  let endedAtLastPass = -1;
 
   // Registered before the sweep, because a Stop that arrives during it is a Run
   // that claims nothing at all: the Lanes are empty, so there is nothing to
@@ -275,16 +276,21 @@ export async function processRun(
 
   for (;;) {
     if (runStop === undefined && listing === undefined) {
-      const before = answered;
+      const endedBefore = ended;
+      const looking = endedBefore === endedAtLastPass;
       try {
         await fillLanes();
+        endedAtLastPass = ended;
       } catch (error) {
-        // A Lane that ended while the look was listing made it that Lane's
-        // refill, so it fails the way a refill does.
-        if (ended !== before) listing = error;
-        else pipeline.log?.(pollFailure(error));
+        if (!looking) {
+          listing = error;
+        } else {
+          pipeline.log?.(pollFailure(error));
+          // A Lane that ended while the look was listing is still owed its
+          // refill, which runs now, and only that one's failure is the Run's.
+          if (ended !== endedBefore) continue;
+        }
       }
-      answered = ended;
     }
     // Never while a Lane is busy, whatever the Frontier had to offer: that Lane
     // may be about to close the blocker the rest of the Frontier is waiting on.
