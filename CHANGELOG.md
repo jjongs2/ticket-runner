@@ -4,6 +4,37 @@ One section per Version, newest first, written in the Version PR that cut it and
 published as the body of that Version's GitHub Release (ADR-0007). The shape is
 `docs/templates/version-notes.md`.
 
+## 0.6.4 (2026-11-03)
+
+A free Lane now takes a Ticket that joins the Frontier mid-Run, and the Run summary says what an API-key Run spent.
+
+### Runs
+
+- A free Lane looks at the Frontier every five minutes while another Lane is busy ([#282])
+- The Run summary shows an API-key Run's spend, and a subscription Run's use of extra usage ([#276])
+- A checks row no Check command ran reads `⚠️ no checks`, not `✅ passed` ([#273])
+- `ciGraceMinutes` accepts `0`, for a Target with no CI ([#273])
+
+### Conventions
+
+- A commit subject is asked for its shape, `<type>(<scope>): <summary>`, not the Ticket number ([#280])
+- The implement Stage passes the Ticket's URL to code-review as the spec ([#280])
+
+### Docs
+
+- `/cut-a-version` takes its notes from the span's issues, and shows the Specs behind the number ([#278])
+
+### After upgrading
+
+1. Run `ticket-runner init` in each Target, then commit and push what it writes: the conventions document no longer asks a commit subject to end with the Ticket number
+2. A Target whose humans want each commit traced to its Ticket adds that rule to its own contributing guide
+
+[#273]: https://github.com/jjongs2/ticket-runner/pull/273
+[#276]: https://github.com/jjongs2/ticket-runner/pull/276
+[#278]: https://github.com/jjongs2/ticket-runner/pull/278
+[#280]: https://github.com/jjongs2/ticket-runner/pull/280
+[#282]: https://github.com/jjongs2/ticket-runner/pull/282
+
 ## 0.6.3 (2026-10-24)
 
 Stages run on the subscription unless a Run starts with `--api-key`.
