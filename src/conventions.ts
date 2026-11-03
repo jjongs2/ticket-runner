@@ -79,9 +79,9 @@ What \`ticket-runner\` requires of this repository, and nothing else. \`ticket-r
 
 ## Commits
 
-- Subject: \`<type>(<scope>): <summary> (#<n>)\`, where \`<n>\` is the Ticket number. Every commit carries the number, so no commit has to be traced back to the work it was part of.
-- The type and scope vocabulary is this repository's own. The pipeline reads the shape and the number, never the words.
-- A commit subject describes its own commit. The whole branch is summarised by the \`title\` the implement and fix Stages each answer beside their Notes: one line in the same shape without the \`(#<n>)\`. The latest one becomes the pull request title, and the pull request title becomes the subject of the squash commit that lands.
+- Subject: \`<type>(<scope>): <summary>\`.
+- The type and scope vocabulary is this repository's own. The pipeline reads the shape, never the words.
+- A commit subject describes its own commit. The whole branch is summarised by the \`title\` the implement and fix Stages each answer beside their Notes: one line in the same shape. The latest one becomes the pull request title, and the pull request title becomes the subject of the squash commit that lands.
 
 ## Branches
 

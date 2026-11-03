@@ -86,6 +86,16 @@ describe("implementPrompt", () => {
     }
   });
 
+  // The review otherwise looks for its spec in the commit messages, which need
+  // not name the Ticket, and reviews with none without saying so.
+  it("tells the review the Ticket's URL is its spec", () => {
+    const prompt = implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS);
+    const line = prompt.split("\n").find((l) => l.includes(`\`${url}\``) && /as the spec/.test(l));
+
+    expect(line).toBeDefined();
+    expect(line).toMatch(/pass the review/i);
+  });
+
   it("asks for review sub-agents in the foreground, since omitting the flag backgrounds them", () => {
     const prompt = implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS);
 
