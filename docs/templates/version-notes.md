@@ -33,11 +33,13 @@ pipeline rewrites files in every Target it is set up in. It always includes
 running `init` in each Target and committing and pushing what it writes, even
 when nothing else changed: each Version stamps a new number, and a Target's
 conventions document keeps the old one until `init` rewrites it. Until then a
-Run there warns to run `init`, and an Operator installs the Version the
-document is stamped with on a cloud Host, which so stays on the old one. Whatever else a Target or its
-human must do takes its place before or after that step, in the order the
-steps must run; a step nothing asks for is left out. Sections cut before this
-was asked for may say `nothing`.
+Run there warns to run `init`, and an Operator installs the stamped Version on
+a cloud Host whose own setup installed none, so that Host stays on the old one.
+Whatever else a Target or its human must do takes its place before or after
+that step, in the order the steps must run; a step nothing asks for is left
+out, and the `init` step's reason, colon and all, is left out when this Version
+changed nothing `init` writes but the number. Sections cut before this was
+asked for may say `nothing`.
 
 Everything between the sentence and it is grouped by what changed, in the
 writer's own words.

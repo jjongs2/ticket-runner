@@ -106,9 +106,8 @@ closing decided it is named, or the table is empty.
 every line of it; the sections already in `CHANGELOG.md` are the measure. The
 new section goes at the top, under the file's heading and prose.
 
-`After upgrading` is the part only this repository can write, because the
-pipeline rewrites files in every Target it is set up in. Gather what goes in it
-beside the `init` step the template always asks for, from two places:
+Gather what goes into `After upgrading` beside the `init` step the template
+always asks for, from two places:
 
 - What the span's own issues and pull requests ask. Read the body of each
   issue closed as completed in the span and of each pull request that landed

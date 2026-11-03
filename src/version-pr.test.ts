@@ -9,7 +9,7 @@ const NOTES = `### Lanes
 
 ### After upgrading
 
-Run \`ticket-runner init\` in each Target, then commit and push what it writes.
+1. Run \`ticket-runner init\` in each Target, then commit and push what it writes
 
 [#82]: https://github.com/jjongs2/ticket-runner/pull/82
 [#83]: https://github.com/jjongs2/ticket-runner/pull/83`;
