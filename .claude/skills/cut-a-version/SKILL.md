@@ -18,8 +18,8 @@ checkout, not this one.
 
 ## 1. Check the checkout
 
-The release PR carries only the files `CONTRIBUTING.md`'s versions section
-lists, and step 7 commits those and nothing else. List every other tracked
+The release PR carries only the files `CONTRIBUTING.md` lists under `## Versions`,
+and step 7 commits those and nothing else. List every other tracked
 file the checkout has changed:
 
 ```bash
