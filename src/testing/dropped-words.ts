@@ -1,6 +1,6 @@
 /**
  * The words the glossary once listed and no longer does, found where a text
- * still capitalises one mid-sentence, and every PR that prose should have
+ * still capitalises one mid-sentence, and every bare `PR` that prose should have
  * called a pull request.
  *
  * A dropped word is an ordinary word, so it is lowercase wherever English
@@ -13,7 +13,7 @@
 const DROPPED =
   /(?<=[a-z0-9,;)] )(?:Executions?|Candidates?|Claims?|Base branch(?:es)?|Credentials?|Spend|Run Lock|Stage Mark|Session [Mm]arks?|Target Readiness|Progress|Guards?|Verify|Conflict|Verdicts?|Fix [Bb]udgets?|States?|Versions?)\b/g;
 
-/** A PR that is neither a `PR #<n>` reference nor the set phrase release PR. */
+/** A bare `PR` that is neither a `PR #<n>` reference nor the set phrase release PR. */
 const PR = /(?<!release )\bPRs?\b(?! #)/g;
 
 /** Each mid-sentence capitalised dropped word in `text`, with the line it is on. */
@@ -23,7 +23,7 @@ export function capitalisedDroppedWords(text: string): string[] {
     .flatMap((line) => [...line.matchAll(DROPPED)].map((match) => `${match[0]}: ${line.trim()}`));
 }
 
-/** Each PR in `text` that prose should call a pull request, with the line it is on. */
+/** Each bare `PR` in `text` that prose should call a pull request, with the line it is on. */
 export function bareAcronymPRs(text: string): string[] {
   return text
     .split("\n")

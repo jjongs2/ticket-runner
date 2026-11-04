@@ -38,10 +38,10 @@ async function main(argv: string[]): Promise<number> {
   }
 
   // Resolved once, here, and handed to everything that stamps it the way the
-  // run id is: a Run whose summary, comments, State files and transcripts all
+  // run id is: a Run whose summary, comments, state files and transcripts all
   // read it separately could report four different things (ADR-0007).
   const version = await pipelineVersion();
-  // The repository a newer Version would be published on, read from the same
+  // The repository a newer version would be published on, read from the same
   // package the number came from, so a fork asks about itself (ADR-0007).
   const repository = pipelineRepository();
   if (commandLine.kind === "version") {

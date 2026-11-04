@@ -30,5 +30,5 @@ Run `<runId>`
 
 The transcripts clause is dropped on a cloud Host, and the Run is named alone.
 A merged Ticket keeps no transcripts on the remote, since they go with its
-State, and a cloud Host's VM does not outlive its session, so nothing is left
+state, and a cloud Host's VM does not outlive its session, so nothing is left
 for the clause to point at.

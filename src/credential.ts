@@ -16,15 +16,15 @@ export type Credential = "subscription" | "api-key";
  */
 export const API_KEY_ENV_VAR = "ANTHROPIC_API_KEY";
 
-/** The credential, as the Run summary's header and the log name it. */
+/** What the Stages are billed to, as the Run summary's header and the log name it. */
 export const CREDENTIAL_WORDS: Record<Credential, string> = {
   subscription: "subscription",
   "api-key": "API key",
 };
 
 /**
- * The `apiKeySource` a Stage's `system/init` event reports when it ran on the
- * Run's credential. Any other is a Stage billed somewhere the Run did not
+ * The `apiKeySource` a Stage's `system/init` event reports when it was billed
+ * to what the Run chose. Any other is a Stage billed somewhere the Run did not
  * choose: a key an `apiKeyHelper` in the Host's settings supplied, say, which
  * no environment variable removes.
  */
@@ -33,8 +33,9 @@ export function expectedKeySource(credential: Credential): string {
 }
 
 /**
- * A Stage that reported another `apiKeySource` than its Run's credential
- * expects, which the Run's log and its summary each name.
+ * A Stage that reported another `apiKeySource` than the one
+ * {@link expectedKeySource} gives its Run, which the Run's log and its
+ * summary each name.
  */
 export interface StrayStage {
   ticket: number;
@@ -49,14 +50,14 @@ export interface StrayStage {
 
 /**
  * What a Run's Stages were billed, gathered as each comes back and shared by
- * every Ticket, for the Run summary and nothing else: the log and the Progress
+ * every Ticket, for the Run summary and nothing else: the log and the progress
  * comment carry no amount.
  */
 export interface Billing {
-  /** Every Stage that ran on something other than the Run's credential, in order. */
+  /** Every Stage billed to something other than what the Run chose, in order. */
   strays: StrayStage[];
   /**
-   * The Spend, in dollars: the CLI's figures for the Stages of an `--api-key`
+   * The spend, in dollars: the CLI's figures for the Stages of an `--api-key`
    * Run that ran on the Run's own key, added up, which is the amount that key's
    * Console can be checked against. Always zero on a subscription Run, whose
    * figure is an estimate at API prices and not money spent.
@@ -65,7 +66,7 @@ export interface Billing {
   /**
    * Whether a Stage that ran on the Run's own key reported no figure, or only
    * part of its session's — one the wall-clock limit stopped or that crashed —
-   * so the Spend is at least {@link spendUsd}.
+   * so the spend is at least {@link spendUsd}.
    */
   spendUnreported: boolean;
   /** Whether any Stage said it ran on the subscription's extra usage. */
@@ -94,8 +95,8 @@ export interface StageBilling {
  * a stray where it ran on something else.
  *
  * A Stage that reported no `apiKeySource` printed no `system/init` event and so
- * made no request: it is no stray, adds no Spend and leaves the Spend exact. A
- * stray's figure stays on its own row and out of the Spend, which is the Run's
+ * made no request: it is no stray, adds no spend and leaves the spend exact. A
+ * stray's figure stays on its own row and out of the spend, which is the Run's
  * own key's alone.
  */
 export function recordStage(

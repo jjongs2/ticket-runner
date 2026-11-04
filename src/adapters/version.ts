@@ -4,11 +4,11 @@ import { fileURLToPath } from "node:url";
 import { exec } from "./exec.js";
 
 /**
- * Which Version this copy of the pipeline is (ADR-0007).
+ * Which version this copy of the pipeline is (ADR-0007).
  *
  * Computed once, in the CLI, and handed to the Run and to `init` the way the
  * run id is. Nothing downstream asks again: every line one Run stamps — its
- * summary, each Progress comment, each State file, the file beside its
+ * summary, each progress comment, each state file, the file beside its
  * transcripts — has to say the same thing, and the only way to promise that is
  * to read it once.
  *
@@ -26,7 +26,7 @@ export const PACKAGE_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const UNKNOWN = "unknown";
 
 /**
- * The Version, as everything this Run writes will report it.
+ * The version, as everything this Run writes will report it.
  *
  * An installed copy is its number and nothing else, because a machine installs
  * a tag: two machines that say `0.4.0` run the same code. A development
@@ -45,7 +45,7 @@ export async function pipelineVersion(packageRoot: string = PACKAGE_ROOT): Promi
  * its package, and undefined where the package names none or names one this
  * cannot read.
  *
- * The one thing a Run has to know to ask whether a newer Version is out. It is
+ * The one thing a Run has to know to ask whether a newer version is out. It is
  * read from the package rather than written down here for the same reason the
  * number is: an installed copy and a checkout answer the same way, and a fork
  * asks about itself (ADR-0007).
@@ -66,7 +66,7 @@ export function pipelineRepository(packageRoot: string = PACKAGE_ROOT): string |
   return match?.[1];
 }
 
-/** The number in `package.json`, which is the whole of an installed Version. */
+/** The number in `package.json`, which is the whole of an installed version. */
 function packageNumber(packageRoot: string): string {
   const version = packageField(packageRoot, "version");
   return typeof version === "string" && version !== "" ? version : UNKNOWN;

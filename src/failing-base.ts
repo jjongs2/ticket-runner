@@ -2,20 +2,20 @@
  * Whether a Check a Ticket's branch failed is one it inherited.
  *
  * The Checks run on the Ticket's branch, and CI on its pull request, so a
- * failure alone cannot say whether the branch brought it or the Base branch
- * did. A test that starts failing on the Base branch fails on every branch at
+ * failure alone cannot say whether the branch brought it or the base branch
+ * did. A test that starts failing on the base branch fails on every branch at
  * once, and a fix Stage per Ticket then mends it differently in each pull
- * request, at the cost of every Ticket's Fix budget. So a failure is graded
- * once more, at what the branch inherited: its merge-base with the Base branch,
+ * request, at the cost of every Ticket's fix budget. So a failure is graded
+ * once more, at what the branch inherited: its merge-base with the base branch,
  * checked out clean in a worktree of its own. One that fails there too is the
- * Base branch's, and the Ticket is released rather than charged for it.
+ * base branch's, and the Ticket is released rather than charged for it.
  */
 
 import { baseWorktreePath } from "./branch.js";
 import type { RoutedNote } from "./notes.js";
 import type { CheckOutcome, Workspace } from "./ports/workspace.js";
 
-/** A Check command the Base branch fails, and how. */
+/** A Check command the base branch fails, and how. */
 export interface FailingBase {
   /** The merge-base it fails at, in full. */
   commit: string;
@@ -38,7 +38,7 @@ export interface BaseCheckRun {
  * posted about the ones that failed there.
  *
  * A Run has one and every Lane shares it, so the Tickets that fail together
- * over one broken Base branch cost one run of the Check between them, and one
+ * over one broken base branch cost one run of the Check between them, and one
  * Note. Runs at the same commit take turns, because they share its worktree.
  * A run that could not be made — no worktree, no git — is forgotten rather
  * than kept, as a standing Notes lookup that failed is: the Ticket that asked

@@ -65,7 +65,7 @@ function checkList(checks: readonly string[]): string {
  * whole suite while it works, and again after each change, pays for runs the
  * pipeline is about to make anyway: in the logged Runs that was half of an
  * implement Stage's wall clock. One run after its last commit still catches a
- * failure before it spends the Fix budget. implement's comes after the review,
+ * failure before it spends the fix budget. implement's comes after the review,
  * because the review changes code in nearly every Stage.
  */
 function codeChecksLine(checks: readonly string[], afterReview: boolean): string {
@@ -130,14 +130,14 @@ ${noteEntryGuidance(standingNotes)}`;
  *
  * The guidance above is written for a Stage that could have fixed what it found
  * and is told not to. verify could not: it is told to fix nothing in the first
- * place, and what it has instead of a commit is a Verdict with a slot per
- * Acceptance Criterion. So this says which findings that Verdict already
+ * place, and what it has instead of a commit is a verdict with a slot per
+ * Acceptance Criterion. So this says which findings that verdict already
  * carries — every judgement of a criterion — and gives the rest the Notes list,
  * because a defect outside the criteria has no slot anywhere else.
  */
-const verifyNotesGuidance = (standingNotes?: number) => `Notes for other Tickets: your Verdict grades this Ticket's Acceptance Criteria and nothing else, so anything you find beside them is lost unless you record it as a Note.
+const verifyNotesGuidance = (standingNotes?: number) => `Notes for other Tickets: your verdict grades this Ticket's Acceptance Criteria and nothing else, so anything you find beside them is lost unless you record it as a Note.
 
-- What you make of a criterion belongs in the Verdict. A criterion you judge \`unmet\` or \`unverifiable\` is reported in its own slot with the evidence you gathered, and never in a Note as well.
+- What you make of a criterion belongs in the verdict. A criterion you judge \`unmet\` or \`unverifiable\` is reported in its own slot with the evidence you gathered, and never in a Note as well.
 - A defect the criteria do not cover is a Note. Your structured output carries a \`notes\` list beside the criteria, and the pipeline posts each entry where a human will meet it.
 - A Note of yours carries the evidence that the defect is real in its \`evidence\` field, held to the standard you hold a criterion you judge \`unmet\` to. You have the branch and you can run it, so something you suspect but did not demonstrate is not a Note.
 - Writing the Note is all you do about it: fix nothing, commit nothing, stage nothing, exactly as the rest of your brief says.
@@ -204,7 +204,7 @@ const verifyInstructions = (checks: readonly string[]) => `You are the verify St
 - Judge the code as it is. Do not fix anything, and never commit, stage or push. Scratch files are fine; the pipeline discards them.
 - Mark a criterion \`unverifiable\` only when no evidence can be gathered, never as a substitute for looking.
 - When a criterion ${NEEDS_A_HUMAN}, mark it \`unmet\` and say in its evidence that a human decision is needed, naming what it collides with. A workaround that sidesteps the collision does not meet it.
-- End by emitting the Verdict: one entry per criterion with its status and the evidence you actually gathered.`;
+- End by emitting the verdict: one entry per criterion with its status and the evidence you actually gathered.`;
 
 /** The Checks as the verify Stage is told about them: passed, and not its to run. */
 function verifyChecksLine(checks: readonly string[]): string {
@@ -238,8 +238,8 @@ const HUMAN_DECISION_LINE = `
 
 /**
  * The conflict Stage's brief. It may reach past the conflicted files only to
- * repair what the merge broke there, such as a name the Base branch renamed:
- * a Stage that left those red would spend the Fix budget on them. Nothing it
+ * repair what the merge broke there, such as a name the base branch renamed:
+ * a Stage that left those red would spend the fix budget on them. Nothing it
  * does may change behaviour the criteria cover, because verify does not run
  * again after it.
  */
@@ -298,9 +298,9 @@ export function implementPrompt(
 }
 
 /**
- * A fresh session with no plugin skill, graded against the Verdict schema.
+ * A fresh session with no plugin skill, graded against the verdict schema.
  *
- * `unmetBefore` is the evidence of the Verdict a fix Stage was sent in for, in
+ * `unmetBefore` is the evidence of the verdict a fix Stage was sent in for, in
  * the same Run; a first verify has none. Without it the verify behind a fix
  * graded the fix on its own terms, and passed a caveat the first one had
  * counted as unmet.

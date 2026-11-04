@@ -29,7 +29,7 @@ export interface ClaudeAgentRunnerOptions {
 const STAGE_SHELL = "/bin/bash";
 
 /**
- * The Session mark: a variable every Stage carries at a value no other Stage
+ * The session mark: a variable every Stage carries at a value no other Stage
  * session shares, and every process it starts inherits. A Stage killed at its
  * time limit is killed with every process still carrying its value, whoever
  * their parent is by then.
@@ -363,7 +363,7 @@ function startStageLog(
       appendFileSync(path(suffix), text.slice(0, text.length - held));
       appended[suffix] += chunk.length;
     } catch {
-      // Nothing is lost: the chunk is still part of the Execution.
+      // Nothing is lost: the chunk is still part of the execution.
     }
   };
 

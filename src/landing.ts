@@ -17,7 +17,7 @@ export interface LandingTurn {
  * The Landing: the stretch of a Ticket from its rebase to the pull of the Base
  * branch after its merge, which one Ticket is in at a time (ADR-0005).
  *
- * A Run has one and every Ticket it drives shares it, so the Base branch cannot
+ * A Run has one and every Ticket it drives shares it, so the base branch cannot
  * move between a Ticket's rebase and its merge: what CI graded is what lands.
  * Turns are taken in arrival order — the Ticket that reaches the rebase first
  * lands first, whatever its number — and a Ticket that leaves the stretch for a

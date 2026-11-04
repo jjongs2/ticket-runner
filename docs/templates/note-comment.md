@@ -66,9 +66,9 @@ From #12 verify
 ## The pipeline's own Note
 
 One Note no Stage writes: the pipeline's, when a Ticket is released over a
-failing Base branch. A Check failed on the Ticket's branch, or CI failed on its
+failing base branch. A Check failed on the Ticket's branch, or CI failed on its
 pull request, and the pipeline ran the Check commands in a clean worktree at
-the branch's merge-base with the Base branch, where one failed too. It always
+the branch's merge-base with the base branch, where one failed too. It always
 goes to the standing Notes issue, once per Run per merge-base commit, however
 many Tickets that commit releases:
 
@@ -76,7 +76,7 @@ many Tickets that commit releases:
 <!-- ticket-runner:note -->
 From the pipeline, releasing #<origin> at <checks|ci>
 
-**The Base branch `<base>` fails `<command>`.**
+**The base branch `<base>` fails `<command>`.**
 
 **Evidence**: `<command>` <failed|timed out> in a clean worktree at <commit>, the merge-base of `<branch>` with `<base>`. The tail of its output:
 
@@ -90,9 +90,9 @@ The branch's own failure, which need not be the same: `<command>` <failed|timed 
 <the last lines it printed on the branch>
 ```
 
-**Impact**: every Ticket whose branch inherits <commit> fails the same Check. #<origin> was released with its Fix budget as it was, and the Run claimed no more Tickets.
+**Impact**: every Ticket whose branch inherits <commit> fails the same Check. #<origin> was released with its fix budget as it was, and the Run claimed no more Tickets.
 
-**Next**: mend `<command>` on `<base>`. The next Run takes the released Tickets up again from their State files, rebased onto `<base>` before their Checks.
+**Next**: mend `<command>` on `<base>`. The next Run takes the released Tickets up again from their state files, rebased onto `<base>` before their Checks.
 ````
 
 `<checks|ci>` is `checks` when the Check failed on the branch and `ci` when CI
@@ -133,5 +133,5 @@ fence of its own.
 
 Every part of a Stage's Note is the Stage's own words, with one edit: a `- [ ]`
 at the start of a list item is escaped to `- \[ \]`. An unescaped one would read as an Acceptance
-Criterion, and the guards, the Verdict and the tick-on-merge all take a Ticket's
+Criterion, and the guards, the verdict and the tick-on-merge all take a Ticket's
 checkboxes at face value.

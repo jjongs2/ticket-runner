@@ -22,7 +22,7 @@ export type Verdict = z.infer<typeof verdictSchema>;
 export type CriterionStatus = Criterion["status"];
 
 /**
- * The `--json-schema` the verify Stage is invoked with: the Verdict, and the
+ * The `--json-schema` the verify Stage is invoked with: the verdict, and the
  * Notes channel beside it.
  *
  * The `notes` list has to be declared here even though {@link parseVerdict}
@@ -31,11 +31,11 @@ export type CriterionStatus = Criterion["status"];
  * parsing, is what would otherwise leave the most adversarial reader in the
  * pipeline with nowhere to put a finding outside the criteria.
  *
- * It is not required, where the criteria and the flag are. The Verdict is the
+ * It is not required, where the criteria and the flag are. The verdict is the
  * Stage's product and a session that graded nothing has done none of its job,
- * so every required key here is a way for a Ticket to lose its Verdict — and a
- * side channel may never cost one. A Verdict that leaves the list out is a
- * Verdict from a session that found nothing beside the criteria.
+ * so every required key here is a way for a Ticket to lose its verdict — and a
+ * side channel may never cost one. A verdict that leaves the list out is a
+ * verdict from a session that found nothing beside the criteria.
  */
 export const VERDICT_JSON_SCHEMA = {
   type: "object",
@@ -70,7 +70,7 @@ export function parseVerdict(result: unknown): Verdict {
 
 /**
  * The pipeline's own pass decision: no criterion is unmet and at least one is
- * met. A Verdict of nothing but `unverifiable` is zero evidence, so it fails.
+ * met. A verdict of nothing but `unverifiable` is zero evidence, so it fails.
  */
 export function passes(verdict: Verdict): boolean {
   const counts = countStatuses(verdict);

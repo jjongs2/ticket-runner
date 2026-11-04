@@ -1,5 +1,5 @@
 /**
- * Ticking the Acceptance Criteria a Verdict proved.
+ * Ticking the Acceptance Criteria a verdict proved.
  *
  * A merged Ticket whose checkboxes are all still empty reads as unfinished
  * work, so the criteria verify marked `met` are ticked where they live — the
@@ -136,7 +136,7 @@ function lineKey(place: number, index: number): string {
 }
 
 /**
- * Tick every criterion the Verdict proved, wherever the Ticket writes it.
+ * Tick every criterion the verdict proved, wherever the Ticket writes it.
  *
  * The issue is read again rather than reusing the copy it was claimed with: a
  * whole Run has happened since, and both the body and any comment are written

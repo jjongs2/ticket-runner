@@ -17,7 +17,7 @@ import type { TicketState } from "./ports/workspace.js";
 import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./testing/fakes.js";
 import { settle } from "./testing/settle.js";
 
-/** The Version this Run is, as the CLI resolves it once and hands it down. */
+/** The version this Run is, as the CLI resolves it once and hands it down. */
 const VERSION = "0.4.0+331d79c";
 
 const TICKET = 2;
@@ -112,7 +112,7 @@ const notices = () => tracker.comments.filter(({ body }) => !body.startsWith(PRO
 
 /**
  * The Checks run on the Ticket's branch, in order, leaving out those run at its
- * merge-base to ask whether the Base branch fails them too.
+ * merge-base to ask whether the base branch fails them too.
  */
 const checksOnBranch = () =>
   workspace.ranChecks.filter((check) => check.cwd === worktree).map((check) => check.command);
@@ -145,9 +145,9 @@ beforeEach(() => {
 });
 
 /**
- * The State file as it stood when each Stage started.
+ * The state file as it stood when each Stage started.
  *
- * The file is written as part of the Claim and rewritten as the Ticket advances,
+ * The file is written as part of the claim and rewritten as the Ticket advances,
  * and by the time a Run comes back it has been cleared — so the only place those
  * writes can be read is from inside the Run.
  */
@@ -252,7 +252,7 @@ describe("the happy path", () => {
     ]);
   });
 
-  it("opens a PR that closes the Ticket and summarises the Verdict", async () => {
+  it("opens a pull request that closes the Ticket and summarises the verdict", async () => {
     await run();
     const pr = tracker.pullRequest(100);
 
@@ -367,7 +367,7 @@ describe("the pull request title and the squash commit", () => {
     expect(tracker.pullRequest(100).title).toBe("Skeleton: one Ticket end to end");
   });
 
-  it("merges with the PR title plus the PR number as the subject", async () => {
+  it("merges with the pull request title plus the pull request number as the subject", async () => {
     workspace.commits = ["fix(cli): stop double-counting (#2)"];
 
     await run();
@@ -468,7 +468,7 @@ describe("the pull request title and the squash commit", () => {
     );
   });
 
-  it("composes a body of Closes, the Verdict counts and every branch commit in order", async () => {
+  it("composes a body of Closes, the verdict counts and every branch commit in order", async () => {
     workspace.commits = [
       "feat(cli): do the thing (#2)",
       "test(cli): cover the thing (#2)",
@@ -511,7 +511,7 @@ describe("the pull request title and the squash commit", () => {
     );
   });
 
-  it("titles a draft PR the hand-off opens with the title the State file holds", async () => {
+  it("titles a draft pull request the hand-off opens with the title the state file holds", async () => {
     runner.queue("implement", titled("feat(cli): do the whole thing"));
     workspace.failCheck("npm test", "FAIL src/a.test.ts");
 
@@ -523,7 +523,7 @@ describe("the pull request title and the squash commit", () => {
     expect(tracker.pullRequest(100).title).toBe("feat(cli): do the whole thing");
   });
 
-  it("titles a draft PR the hand-off opens with the Ticket title when the State file holds none", async () => {
+  it("titles a draft pull request the hand-off opens with the Ticket title when the state file holds none", async () => {
     workspace.commits = [];
 
     const outcome = await run();
@@ -533,7 +533,7 @@ describe("the pull request title and the squash commit", () => {
     expect(tracker.pullRequest(100).title).toBe("Skeleton: one Ticket end to end");
   });
 
-  it("leaves the title of a PR that was already open when the hand-off came", async () => {
+  it("leaves the title of a pull request that was already open when the hand-off came", async () => {
     tracker.ci = { state: "none" };
 
     await run();
@@ -740,7 +740,7 @@ describe("the verify Stage", () => {
       ],
       true,
     );
-    // Both passes, so the fix budget runs out on the same Verdict the agent
+    // Both passes, so the fix budget runs out on the same verdict the agent
     // called a pass; the decision under test is the pipeline's, not the agent's.
     runner.queue("verify", { result: claimsToPass });
     runner.queue("verify", { result: claimsToPass });
@@ -770,7 +770,7 @@ describe("the verify Stage", () => {
     expect(await run()).toMatchObject({ outcome: "merged" });
   });
 
-  it("hands off a Verdict that is nothing but unverifiable criteria", async () => {
+  it("hands off a verdict that is nothing but unverifiable criteria", async () => {
     runner.queue("verify", {
       result: verdictResult([{ text: "it reads well", status: "unverifiable", evidence: "taste" }]),
     });
@@ -781,7 +781,7 @@ describe("the verify Stage", () => {
     expect(handoffBody()).toMatch(/unverifiable/i);
   });
 
-  it("hands off when the Stage returned no usable Verdict", async () => {
+  it("hands off when the Stage returned no usable verdict", async () => {
     runner.queue("verify", { result: { nonsense: true } });
 
     expect(await run()).toMatchObject({ outcome: "handed-off", stage: "verify" });
@@ -789,7 +789,7 @@ describe("the verify Stage", () => {
 });
 
 describe("rebase", () => {
-  it("rebases on main before opening the PR", async () => {
+  it("rebases on main before opening the pull request", async () => {
     await run();
 
     // The push the pull request is opened from, which is the last one.
@@ -846,7 +846,7 @@ describe("rebase", () => {
     expect(request?.prompt).toContain(CONFLICT);
   });
 
-  it("runs the Checks again on the resolution before the PR", async () => {
+  it("runs the Checks again on the resolution before the pull request", async () => {
     workspace.conflictOnce(CONFLICT);
 
     await run();
@@ -946,7 +946,7 @@ describe("rebase", () => {
 });
 
 describe("CI", () => {
-  it("waits for the PR checks up to the configured timeout", async () => {
+  it("waits for the pull request checks up to the configured timeout", async () => {
     await run({ ciTimeoutMinutes: 5 });
 
     expect(tracker.ciWaits).toEqual([{ pullRequest: 100, timeoutMs: 5 * 60_000 }]);
@@ -983,7 +983,7 @@ describe("CI", () => {
     expect(handoffBody()).not.toContain("<details><summary>Evidence</summary>");
   });
 
-  it("hands off when the PR has no checks at all", async () => {
+  it("hands off when the pull request has no checks at all", async () => {
     tracker.ci = { state: "none" };
 
     const outcome = await run();
@@ -992,7 +992,7 @@ describe("CI", () => {
     expect(handoffBody()).toMatch(/no checks/i);
   });
 
-  it("hands off a PR that conflicts with the Base branch as a conflict, not as no checks", async () => {
+  it("hands off a pull request that conflicts with the base branch as a conflict, not as no checks", async () => {
     tracker.ci = { state: "conflicting" };
 
     const outcome = await run();
@@ -1003,7 +1003,7 @@ describe("CI", () => {
     expect(progressTable()).toMatch(/\| ci \| ❌ conflicting \|/);
   });
 
-  it("hands off a conflicting PR when the CI gate is off, without trying the merge", async () => {
+  it("hands off a conflicting pull request when the CI gate is off, without trying the merge", async () => {
     tracker.ci = { state: "conflicting" };
 
     const outcome = await run({ gates: { checks: true, ci: false } });
@@ -1019,7 +1019,7 @@ describe("CI", () => {
     expect(await run()).toMatchObject({ outcome: "handed-off", stage: "ci" });
   });
 
-  it("merges a PR with no checks when the CI gate is off", async () => {
+  it("merges a pull request with no checks when the CI gate is off", async () => {
     tracker.ci = { state: "none" };
 
     expect(await run({ gates: { checks: true, ci: false } })).toMatchObject({
@@ -1027,7 +1027,7 @@ describe("CI", () => {
     });
   });
 
-  it("still refuses a red PR when the CI gate is off", async () => {
+  it("still refuses a red pull request when the CI gate is off", async () => {
     tracker.ci = { state: "failed", summary: "checks/build failed", excerpt: "" };
 
     expect(await run({ gates: { checks: true, ci: false } })).toMatchObject({
@@ -1036,7 +1036,7 @@ describe("CI", () => {
     });
   });
 
-  it("still refuses a PR whose checks never finished when the CI gate is off", async () => {
+  it("still refuses a pull request whose checks never finished when the CI gate is off", async () => {
     tracker.ci = { state: "timed-out" };
 
     expect(await run({ gates: { checks: true, ci: false } })).toMatchObject({
@@ -1061,7 +1061,7 @@ describe("failures the pipeline did not expect", () => {
     expect(workspace.calls).not.toContain(`push:${BRANCH}`);
   });
 
-  it("blames the PR step when the push fails", async () => {
+  it("blames the pull request step when the push fails", async () => {
     workspace.push = async () => {
       throw new Error("remote rejected");
     };
@@ -1088,7 +1088,7 @@ describe("hand-off", () => {
     workspace.commits = [];
   });
 
-  it("opens a draft PR, comments, relabels and unassigns", async () => {
+  it("opens a draft pull request, comments, relabels and unassigns", async () => {
     await run();
 
     expect(tracker.pullRequest(100).draft).toBe(true);
@@ -1106,7 +1106,7 @@ describe("hand-off", () => {
     expect(workspace.calls).not.toContain(`removeWorktree:${BRANCH}`);
   });
 
-  it("converts the existing PR to a draft rather than opening a second one", async () => {
+  it("converts the existing pull request to a draft rather than opening a second one", async () => {
     workspace.commits = ["feat(cli): do the thing (#2)"];
     tracker.ci = { state: "failed", summary: "checks/build failed", excerpt: "" };
 
@@ -1117,7 +1117,7 @@ describe("hand-off", () => {
     expect(tracker.calls).toContain("convertPullRequestToDraft:100");
   });
 
-  it("still relabels when the draft PR cannot be opened", async () => {
+  it("still relabels when the draft pull request cannot be opened", async () => {
     workspace.push = async () => {
       throw new Error("remote rejected");
     };
@@ -1161,7 +1161,7 @@ describe("hand-off", () => {
 describe("the transcripts a hand-off keeps on the remote", () => {
   const KEPT = "- Transcripts: `ticket-2/run-1/` on the `ticket-runner/state` branch";
 
-  it("keeps this Run's beside the State, and the comment says where they and the branch are", async () => {
+  it("keeps this Run's beside the state, and the comment says where they and the branch are", async () => {
     workspace.failCheck("npm test", "FAIL src/a.test.ts");
 
     expect(await run()).toMatchObject({ outcome: "handed-off" });
@@ -1171,7 +1171,7 @@ describe("the transcripts a hand-off keeps on the remote", () => {
     expect(handoffBody()).toContain(KEPT);
   });
 
-  it("keeps them after the rest of the hand-off is written, so the kept State is current", async () => {
+  it("keeps them after the rest of the hand-off is written, so the kept state is current", async () => {
     workspace.failCheck("npm test", "FAIL src/a.test.ts");
     let stateWhenKept: TicketState | undefined;
     const keep = workspace.keepTranscripts.bind(workspace);
@@ -1182,12 +1182,12 @@ describe("the transcripts a hand-off keeps on the remote", () => {
 
     await run();
 
-    // The draft PR is part of the State; transcripts kept before it would sit
-    // beside a State a resuming Run opens a second pull request over.
+    // The draft pull request is part of the state; transcripts kept before it would sit
+    // beside a state a resuming Run opens a second pull request over.
     expect(stateWhenKept).toMatchObject({ pullRequest: 100 });
   });
 
-  it("names them in the draft PR's body too, and not the directory on this Host", async () => {
+  it("names them in the draft pull request's body too, and not the directory on this Host", async () => {
     workspace.failCheck("npm test", "FAIL src/a.test.ts");
 
     await run({}, "cloud");
@@ -1200,7 +1200,7 @@ describe("the transcripts a hand-off keeps on the remote", () => {
     expect(body).not.toContain(".ticket-runner/runs/");
   });
 
-  it("names none in the draft PR's body when the remote will not take them", async () => {
+  it("names none in the draft pull request's body when the remote will not take them", async () => {
     workspace.failCheck("npm test", "FAIL src/a.test.ts");
     workspace.keepTranscripts = async () => {
       throw new Error("remote rejected");
@@ -1213,7 +1213,7 @@ describe("the transcripts a hand-off keeps on the remote", () => {
     expect(body).not.toContain("transcripts");
   });
 
-  it("names them in a PR that was open before the hand-off made it a draft", async () => {
+  it("names them in a pull request that was open before the hand-off made it a draft", async () => {
     tracker.ci = { state: "failed", summary: "checks/build failed", excerpt: "" };
 
     await run();
@@ -1227,7 +1227,7 @@ describe("the transcripts a hand-off keeps on the remote", () => {
     expect(body).not.toContain(".ticket-runner/runs/");
   });
 
-  it("names none in a PR made a draft when the remote will not take them", async () => {
+  it("names none in a pull request made a draft when the remote will not take them", async () => {
     tracker.ci = { state: "failed", summary: "checks/build failed", excerpt: "" };
     workspace.keepTranscripts = async () => {
       throw new Error("remote rejected");
@@ -1240,7 +1240,7 @@ describe("the transcripts a hand-off keeps on the remote", () => {
     expect(body).not.toContain("transcripts");
   });
 
-  it("still hands the Ticket off when the draft PR's body cannot be rewritten", async () => {
+  it("still hands the Ticket off when the draft pull request's body cannot be rewritten", async () => {
     workspace.failCheck("npm test", "FAIL src/a.test.ts");
     tracker.updatePullRequestBody = async () => {
       throw new Error("gh: 502");
@@ -1277,7 +1277,7 @@ describe("the transcripts a hand-off keeps on the remote", () => {
     expect(workspace.transcripts.has(TICKET)).toBe(false);
   });
 
-  it("keeps none where the hand-off leaves no State, and says the branch is only here", async () => {
+  it("keeps none where the hand-off leaves no state, and says the branch is only here", async () => {
     // A branch in the way at setup: no Stage of this Run ran, and the branch
     // is a human's, which never went to the remote.
     workspace.branches.add(BRANCH);
@@ -1457,7 +1457,7 @@ describe("the fix Stage", () => {
     expect(runner.prompts("fix")[0]).toContain("FAIL src/a.test.ts");
   });
 
-  it("retries an unmet criterion and merges on the second Verdict", async () => {
+  it("retries an unmet criterion and merges on the second verdict", async () => {
     runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
 
     const outcome = await run();
@@ -1476,7 +1476,7 @@ describe("the fix Stage", () => {
     expect(runner.prompts("fix")[0]).toMatch(/regression test/i);
   });
 
-  it("gives the verify behind it the first Verdict's unmet criteria and what meeting them takes", async () => {
+  it("gives the verify behind it the first verdict's unmet criteria and what meeting them takes", async () => {
     runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
 
     await run();
@@ -1489,7 +1489,7 @@ describe("the fix Stage", () => {
     expect(second).toMatch(/counterexample is gone and the whole criterion holds/i);
   });
 
-  it("gives the verify behind a fix for anything else no earlier Verdict", async () => {
+  it("gives the verify behind a fix for anything else no earlier verdict", async () => {
     workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
 
     await run();
@@ -1533,7 +1533,7 @@ describe("the fix Stage", () => {
     expect(tracker.ciWaits.map((wait) => wait.pullRequest)).toEqual([100, 100]);
   });
 
-  it("merges the Verdict of the pass that succeeded, not the one that failed", async () => {
+  it("merges the verdict of the pass that succeeded, not the one that failed", async () => {
     runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
     runner.queue("verify", stageResult({ result: MIXED_VERDICT }));
 
@@ -1586,7 +1586,7 @@ describe("the fix Stage", () => {
 
     await run();
 
-    // The Stage's files are named after the Stage, so the failing Verdict's
+    // The Stage's files are named after the Stage, so the failing verdict's
     // transcript would otherwise be overwritten by the one that passed.
     expect(runner.requests.map((request) => [request.stage, request.logDir])).toEqual([
       ["implement", ticketLogs],
@@ -1596,14 +1596,14 @@ describe("the fix Stage", () => {
     ]);
   });
 
-  it("rewrites the pull request body with the Verdict the second pass reached", async () => {
+  it("rewrites the pull request body with the verdict the second pass reached", async () => {
     tracker.queueCi({ state: "failed", summary: "checks/build failed", excerpt: "" });
     runner.queue("verify", stageResult({ result: MIXED_VERDICT }));
     runner.queue("verify", stageResult({ result: PASSING_VERDICT }));
 
     await run();
 
-    // The merge carries the second Verdict, so the PR a human reads must too.
+    // The merge carries the second verdict, so the pull request a human reads must too.
     expect(tracker.calls).toContain("updatePullRequestBody:100");
     expect(tracker.pullRequest(100).body).toContain(
       "**Verdict:** 1 met · 0 unmet · 0 unverifiable",
@@ -1640,7 +1640,7 @@ describe("a fix Stage that committed nothing", () => {
     await run();
 
     // The Check that bought the fix Stage ran once, not twice, and neither the
-    // Verdict nor CI was asked about a branch the fix Stage left alone.
+    // verdict nor CI was asked about a branch the fix Stage left alone.
     expect(checksOnBranch()).toEqual(["npm test"]);
     expect(runner.stages()).toEqual(["implement", "fix"]);
     expect(tracker.ciWaits).toEqual([]);
@@ -1896,7 +1896,7 @@ describe("failures no fix Stage is offered", () => {
     await expectNoFix("implement");
   });
 
-  it("refuses to retry a verify Stage that returned no usable Verdict", async () => {
+  it("refuses to retry a verify Stage that returned no usable verdict", async () => {
     runner.queue("verify", { result: { nonsense: true } });
 
     await expectNoFix("verify");
@@ -1908,7 +1908,7 @@ describe("failures no fix Stage is offered", () => {
     await expectNoFix("verify");
   });
 
-  it("refuses to retry a Verdict of nothing but unverifiable criteria", async () => {
+  it("refuses to retry a verdict of nothing but unverifiable criteria", async () => {
     runner.queue("verify", {
       result: verdictResult([{ text: "it reads well", status: "unverifiable", evidence: "taste" }]),
     });
@@ -1936,7 +1936,7 @@ describe("failures no fix Stage is offered", () => {
     await expectNoFix("ci");
   });
 
-  it("refuses to retry a pull request that conflicts with the Base branch", async () => {
+  it("refuses to retry a pull request that conflicts with the base branch", async () => {
     tracker.ci = { state: "conflicting" };
 
     await expectNoFix("ci");
@@ -1944,7 +1944,7 @@ describe("failures no fix Stage is offered", () => {
 });
 
 describe("releasing a rate-limited Ticket", () => {
-  /** The State file the release left, as a later Run would read it. */
+  /** The state file the release left, as a later Run would read it. */
   const state = () => workspace.state(TICKET);
 
   it("releases the Ticket rather than handing it to a human", async () => {
@@ -1977,7 +1977,7 @@ describe("releasing a rate-limited Ticket", () => {
     });
   });
 
-  it("undoes the Claim, so the next Run may pick the Ticket up", async () => {
+  it("undoes the claim, so the next Run may pick the Ticket up", async () => {
     runner.queue("implement", { ok: false, failure: "rate-limited" });
 
     await run();
@@ -2109,7 +2109,7 @@ describe("releasing a rate-limited Ticket", () => {
     expect(progressTable()).toContain("| conflict | ✅ rebased |");
   });
 
-  it("leaves a State file behind when the Ticket is handed off instead", async () => {
+  it("leaves a state file behind when the Ticket is handed off instead", async () => {
     runner.queue("implement", { ok: false, failure: "turn-capped" });
 
     // A hand-off keeps the file too; the label is what tells the two apart, and
@@ -2118,7 +2118,7 @@ describe("releasing a rate-limited Ticket", () => {
     expect(state()).toMatchObject({ state: "claimed", branch: BRANCH });
   });
 
-  it("leaves no State file behind when the Ticket merges", async () => {
+  it("leaves no state file behind when the Ticket merges", async () => {
     expect(await run()).toMatchObject({ outcome: "merged" });
     expect(state()).toBeUndefined();
   });
@@ -2317,7 +2317,7 @@ describe("what a Run's Stages were billed", () => {
     expect(progressTable()).not.toMatch(/\$\d/);
   });
 
-  it("is at least the Spend when a Stage on the key reported no figure", async () => {
+  it("is at least the spend when a Stage on the key reported no figure", async () => {
     runner.queue("implement", { apiKeySource: ON_KEY });
     runner.queue("verify", stageResult({ result: PASSING_VERDICT, apiKeySource: ON_KEY, costUsd: 0.42 }));
 
@@ -2327,7 +2327,7 @@ describe("what a Run's Stages were billed", () => {
     expect(billing.spendUnreported).toBe(true);
   });
 
-  it("adds a figure that is only part of a Stage's, and says the Spend is at least that", async () => {
+  it("adds a figure that is only part of a Stage's, and says the spend is at least that", async () => {
     runner.queue("implement", { apiKeySource: ON_KEY, costUsd: 6.2, costIncomplete: true });
     runner.queue("verify", stageResult({ result: PASSING_VERDICT, apiKeySource: ON_KEY, costUsd: 0.42 }));
 
@@ -2345,7 +2345,7 @@ describe("what a Run's Stages were billed", () => {
     expect(billing).toMatchObject({ spendUsd: 0, spendUnreported: false });
   });
 
-  it("keeps a stray Stage's figure on the stray, out of the Spend", async () => {
+  it("keeps a stray Stage's figure on the stray, out of the spend", async () => {
     runner.queue("implement", { apiKeySource: "apiKeyHelper", costUsd: 4.15 });
 
     await run({}, "workstation", "api-key");
@@ -2365,7 +2365,7 @@ describe("what a Run's Stages were billed", () => {
   });
 });
 
-describe("a Check the Base branch fails too", () => {
+describe("a Check the base branch fails too", () => {
   const state = () => workspace.state(TICKET);
   const MERGE_BASE = "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d";
   const baseWorktree = join(repoRoot, ".worktrees", "base-1a2b3c4d5e6f");
@@ -2376,7 +2376,7 @@ describe("a Check the Base branch fails too", () => {
   const pipelineNotes = () =>
     tracker.comments.filter(({ body }) => body.includes("\nFrom the pipeline, releasing #"));
 
-  it("releases the Ticket with its Fix budget unspent when the merge-base fails the same Check", async () => {
+  it("releases the Ticket with its fix budget unspent when the merge-base fails the same Check", async () => {
     workspace.failCheck("npm test", "FAIL src/date.test.ts");
     workspace.failBaseCheck("npm test", "FAIL src/date.test.ts");
 
@@ -2396,7 +2396,7 @@ describe("a Check the Base branch fails too", () => {
           stage: "pipeline",
           issue: 200,
           opened: true,
-          summary: "The Base branch `main` fails `npm test`.",
+          summary: "The base branch `main` fails `npm test`.",
         },
       ],
     });
@@ -2408,7 +2408,7 @@ describe("a Check the Base branch fails too", () => {
     expect(tracker.issue(TICKET).labels).toEqual(["ready-for-agent"]);
     expect(tracker.issue(TICKET).assignees).toEqual([]);
     expect(state()).toMatchObject({ state: "implemented", fixUsed: false, rebaseFirst: true });
-    expect(progressTable()).toContain("| checks | ⏸ `npm test` fails on the Base branch |");
+    expect(progressTable()).toContain("| checks | ⏸ `npm test` fails on the base branch |");
     expect(tracker.pullRequests).toEqual([]);
   });
 
@@ -2421,7 +2421,7 @@ describe("a Check the Base branch fails too", () => {
     const [note, ...more] = pipelineNotes();
     expect(more).toEqual([]);
     expect(note?.issue).toBe(200);
-    expect(note?.body).toContain("**The Base branch `main` fails `npm test`.**");
+    expect(note?.body).toContain("**The base branch `main` fails `npm test`.**");
     expect(note?.body).toContain(`at ${MERGE_BASE}, the merge-base of \`${BRANCH}\` with \`main\``);
     expect(note?.body).toContain("```\nFAIL src/date.test.ts\n  expected 2026 to be 2025\n```");
     expect(note?.body).toContain(
@@ -2431,7 +2431,7 @@ describe("a Check the Base branch fails too", () => {
     expect(notices().filter(({ issue }) => issue === TICKET)).toEqual([]);
   });
 
-  it("keeps a Fix budget an earlier failure spent, as it was", async () => {
+  it("keeps a fix budget an earlier failure spent, as it was", async () => {
     workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
     workspace.failCheck("npm run typecheck", "error TS2345");
     workspace.failBaseCheck("npm run typecheck", "error TS2345");
@@ -2461,7 +2461,7 @@ describe("a Check the Base branch fails too", () => {
     expect(state()).toMatchObject({ fixUsed: true });
   });
 
-  it("spends the Fix budget as it always did when the merge-base passes the Check", async () => {
+  it("spends the fix budget as it always did when the merge-base passes the Check", async () => {
     workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
 
     const outcome = await run();
@@ -2473,7 +2473,7 @@ describe("a Check the Base branch fails too", () => {
     expect(pipelineNotes()).toEqual([]);
   });
 
-  it("spends the Fix budget when the merge-base could not be checked out", async () => {
+  it("spends the fix budget when the merge-base could not be checked out", async () => {
     workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
     workspace.failing.set(`createDetachedWorktree:${MERGE_BASE}`, new Error("disk full"));
 
@@ -2497,7 +2497,7 @@ describe("a Check the Base branch fails too", () => {
     // Every Check command until the first the merge-base fails.
     expect(atBase()).toEqual(["npm test", "npm run typecheck"]);
     expect(runner.stages()).toEqual(["implement", "verify"]);
-    expect(progressTable()).toContain("| ci | ⏸ `npm run typecheck` fails on the Base branch |");
+    expect(progressTable()).toContain("| ci | ⏸ `npm run typecheck` fails on the base branch |");
     expect(pipelineNotes()[0]?.body).toContain("From the pipeline, releasing #2 at ci");
     // The branch's part is the failing jobs' logs a fix Stage would have been handed.
     expect(pipelineNotes()[0]?.body).toContain(
@@ -2553,7 +2553,7 @@ describe("a Check the Base branch fails too", () => {
     expect(entered).toEqual([true]);
   });
 
-  it("spends the Fix budget on a red CI the merge-base passes every Check of", async () => {
+  it("spends the fix budget on a red CI the merge-base passes every Check of", async () => {
     tracker.queueCi({ state: "failed", summary: "checks/build failed", excerpt: "" });
 
     expect(await run()).toMatchObject({ outcome: "merged" });
@@ -2603,7 +2603,7 @@ describe("Tickets in several Lanes failing against one merge-base", () => {
   });
 });
 
-describe("resuming a Ticket released over a failing Base branch", () => {
+describe("resuming a Ticket released over a failing base branch", () => {
   function releasedOverBase(): void {
     workspace.recordState({
       ticket: TICKET,
@@ -2618,7 +2618,7 @@ describe("resuming a Ticket released over a failing Base branch", () => {
     workspace.branches.add(BRANCH);
   }
 
-  it("rebases onto the Base branch, as the remote holds it, before its Checks", async () => {
+  it("rebases onto the base branch, as the remote holds it, before its Checks", async () => {
     releasedOverBase();
     const seen = stateAtEachStage();
 
@@ -2633,7 +2633,7 @@ describe("resuming a Ticket released over a failing Base branch", () => {
     expect(seen[0]?.state).not.toHaveProperty("rebaseFirst");
   });
 
-  it("sends a conflicting rebase to the Conflict Stage before its Checks, so it is not released over the same commit again", async () => {
+  it("sends a conflicting rebase to the conflict Stage before its Checks, so it is not released over the same commit again", async () => {
     releasedOverBase();
     workspace.conflictOnce(CONFLICT);
     const seen = stateAtEachStage();
@@ -2648,7 +2648,7 @@ describe("resuming a Ticket released over a failing Base branch", () => {
     expect(seen[1]?.state).not.toHaveProperty("rebaseFirst");
   });
 
-  it("spends the Fix budget on a conflict the Conflict Stage could not resolve, as at the Landing", async () => {
+  it("spends the fix budget on a conflict the conflict Stage could not resolve, as at the Landing", async () => {
     releasedOverBase();
     workspace.conflictOnce(CONFLICT);
     workspace.rebaseStateAfterStage = UNRESOLVED;
@@ -2670,8 +2670,8 @@ describe("resuming a Ticket released over a failing Base branch", () => {
   });
 });
 
-describe("the State file a claimed Ticket keeps", () => {
-  it("is written as part of the Claim, before any Stage runs", async () => {
+describe("the state file a claimed Ticket keeps", () => {
+  it("is written as part of the claim, before any Stage runs", async () => {
     const seen = stateAtEachStage();
 
     await run();
@@ -2690,7 +2690,7 @@ describe("the State file a claimed Ticket keeps", () => {
     });
   });
 
-  it("names the Version that wrote it, on every write", async () => {
+  it("names the version that wrote it, on every write", async () => {
     const seen = stateAtEachStage();
 
     await run();
@@ -2700,7 +2700,7 @@ describe("the State file a claimed Ticket keeps", () => {
     expect([...new Set(seen.map(({ state }) => state?.version))]).toEqual([VERSION]);
   });
 
-  it("is on disk before the Claim reaches the board", async () => {
+  it("is on disk before the claim reaches the board", async () => {
     let atClaim: TicketState | undefined;
     const assign = tracker.assign.bind(tracker);
     tracker.assign = async (number, assignee) => {
@@ -2710,7 +2710,7 @@ describe("the State file a claimed Ticket keeps", () => {
 
     await run();
 
-    // A Claim no State file names is what the order rules out: a crash between
+    // A claim no state file names is what the order rules out: a crash between
     // the two writes leaves a Ticket nobody claimed, which resumes itself.
     expect(atClaim).toMatchObject({ state: "claimed", branch: BRANCH });
   });
@@ -2774,12 +2774,12 @@ describe("the State file a claimed Ticket keeps", () => {
   });
 
   it("fails the Ticket at setup rather than claiming what it cannot record", async () => {
-    // Storage that will not take the State, so the very first write fails.
+    // Storage that will not take the state, so the very first write fails.
     workspace.stateWriteFailure = new Error("ENOTDIR: not a directory");
 
     await expect(run()).rejects.toThrow();
 
-    // Nothing was claimed, so there is no Claim for a later Run to be stuck on.
+    // Nothing was claimed, so there is no claim for a later Run to be stuck on.
     expect(tracker.issue(TICKET).assignees).toEqual([]);
     expect(tracker.issue(TICKET).labels).toEqual(["ready-for-agent"]);
     expect(runner.requests).toEqual([]);
@@ -2818,7 +2818,7 @@ describe("the State file a claimed Ticket keeps", () => {
     expect(workspace.states.has(TICKET)).toBe(false);
   });
 
-  it("is kept once the Ticket is handed off, with the Fix budget given back", async () => {
+  it("is kept once the Ticket is handed off, with the fix budget given back", async () => {
     workspace.failCheck("npm test", "FAIL src/a.test.ts");
 
     // The fix Stage ran and failed the Checks a second time, so the budget was
@@ -2842,11 +2842,11 @@ describe("the State file a claimed Ticket keeps", () => {
 
 /**
  * A **Stranded Ticket**: one a Run claimed and never released, because the Run
- * was killed. The Claim is still on the board and the State file is still beside
+ * was killed. The claim is still on the board and the state file is still beside
  * the worktree, which together is what says so (GLOSSARY.md).
  */
 describe("resuming a stranded Ticket", () => {
-  /** Exactly what a killed Run leaves: the Claim, the worktree, the State file. */
+  /** Exactly what a killed Run leaves: the claim, the worktree, the state file. */
   function strandedTicket(overrides: Partial<TicketState> = {}): void {
     const state: TicketState = {
       ticket: TICKET,
@@ -2875,7 +2875,7 @@ describe("resuming a stranded Ticket", () => {
     expect(workspace.calls).not.toContain(`createWorktree:${BRANCH}`);
   });
 
-  it("keeps the Claim it already has, re-assigning and relabelling nothing", async () => {
+  it("keeps the claim it already has, re-assigning and relabelling nothing", async () => {
     strandedTicket();
 
     await run();
@@ -2908,7 +2908,7 @@ describe("resuming a stranded Ticket", () => {
     expect(workspace.state(TICKET)).toMatchObject({ fixUsed: false });
   });
 
-  it("still pushes and opens a draft PR when it is handed off in its own worktree", async () => {
+  it("still pushes and opens a draft pull request when it is handed off in its own worktree", async () => {
     strandedTicket({ fixUsed: true });
     workspace.failCheck("npm test", "FAIL src/a.test.ts");
 
@@ -2942,7 +2942,7 @@ describe("resuming a stranded Ticket", () => {
     expect(outcome).toMatchObject({ outcome: "merged" });
     expect(workspace.calls).toContain(`createWorktree:${BRANCH}`);
     expect(runner.stages()).toEqual(["implement", "verify"]);
-    // Nothing was re-assigned or relabelled: the Claim was already this Run's.
+    // Nothing was re-assigned or relabelled: the claim was already this Run's.
     expect(tracker.calls).not.toContain(`assign:${TICKET}:pipeline-user`);
   });
 
@@ -2957,7 +2957,7 @@ describe("resuming a stranded Ticket", () => {
     expect(workspace.calls).not.toContain(`createWorktree:${BRANCH}`);
   });
 
-  it("is refused as claimed when there is no State file beside it", async () => {
+  it("is refused as claimed when there is no state file beside it", async () => {
     const issue = tracker.issue(TICKET);
     issue.assignees = ["pipeline-user"];
     issue.labels = ["in-progress"];
@@ -2969,7 +2969,7 @@ describe("resuming a stranded Ticket", () => {
     expect(tracker.comments).toEqual([]);
   });
 
-  it("is refused when the Claim on it is somebody else's, State file or not", async () => {
+  it("is refused when the claim on it is somebody else's, state file or not", async () => {
     strandedTicket();
     tracker.issue(TICKET).assignees = ["octocat"];
 
@@ -2996,7 +2996,7 @@ describe("resuming a stranded Ticket", () => {
 });
 
 describe("resuming a released Ticket", () => {
-  /** Leave behind exactly what a release leaves: a worktree, a branch, a State file. */
+  /** Leave behind exactly what a release leaves: a worktree, a branch, a state file. */
   function released(overrides: Partial<TicketState> = {}): void {
     const state: TicketState = {
       ticket: TICKET,
@@ -3036,7 +3036,7 @@ describe("resuming a released Ticket", () => {
     expect(runner.requests[0]?.cwd).toBe(worktree);
   });
 
-  it("works on the branch the State file names, whatever the Ticket is called now", async () => {
+  it("works on the branch the state file names, whatever the Ticket is called now", async () => {
     released({ branch: "agent/2-what-the-Ticket-was-called-then" });
 
     await run();
@@ -3099,7 +3099,7 @@ describe("resuming a released Ticket", () => {
     expect(tracker.calls).toContain("updatePullRequestBody:100");
   });
 
-  it("titles the pull request with the title the State file recorded", async () => {
+  it("titles the pull request with the title the state file recorded", async () => {
     released({ title: "feat: name the pipeline ticket-runner" });
 
     await run();
@@ -3110,7 +3110,7 @@ describe("resuming a released Ticket", () => {
     expect(pr.squashCommit?.subject).toBe("feat: name the pipeline ticket-runner (#100)");
   });
 
-  it("titles a draft PR the hand-off opens with the title an earlier Run recorded", async () => {
+  it("titles a draft pull request the hand-off opens with the title an earlier Run recorded", async () => {
     released({ title: "feat: name the pipeline ticket-runner" });
     runner.queue("verify", { ok: false, failure: "timed-out" });
 
@@ -3138,7 +3138,7 @@ describe("resuming a released Ticket", () => {
     expect(tracker.pullRequest(100).title).toBe("feat: name the pipeline ticket-runner");
   });
 
-  it("clears the State file once the resumed Ticket merges", async () => {
+  it("clears the state file once the resumed Ticket merges", async () => {
     released();
 
     await run();
@@ -3146,7 +3146,7 @@ describe("resuming a released Ticket", () => {
     expect(workspace.states.has(TICKET)).toBe(false);
   });
 
-  it("keeps the State file when the resumed Ticket is handed off", async () => {
+  it("keeps the state file when the resumed Ticket is handed off", async () => {
     released({ fixUsed: true });
     workspace.failCheck("npm test", "FAIL src/a.test.ts");
 
@@ -3176,7 +3176,7 @@ describe("resuming a released Ticket", () => {
     expect(outcome).toMatchObject({ outcome: "merged" });
     expect(workspace.calls).toContain(`createWorktree:${BRANCH}`);
     expect(runner.stages()).toEqual(["implement", "verify"]);
-    // And the State file nothing can resume from is gone, so the next Run is
+    // And the state file nothing can resume from is gone, so the next Run is
     // not asked the same question again.
     expect(workspace.states.has(TICKET)).toBe(false);
   });
@@ -3188,7 +3188,7 @@ describe("resuming a released Ticket", () => {
  * (ADR-0004).
  */
 describe("resuming from the remote branch", () => {
-  /** The State a Run on some Host recorded, and the branch it pushed. */
+  /** The state a Run on some Host recorded, and the branch it pushed. */
   function recorded(overrides: Partial<TicketState> = {}): void {
     workspace.recordState({
       ticket: TICKET,
@@ -3231,7 +3231,7 @@ describe("resuming from the remote branch", () => {
       expect(workspace.calls).not.toContain(`createWorktree:${BRANCH}`);
     });
 
-    it("resumes a Stranded Ticket another Host left, keeping its Claim", async () => {
+    it("resumes a Stranded Ticket another Host left, keeping its claim", async () => {
       recorded();
       const issue = tracker.issue(TICKET);
       issue.assignees = ["pipeline-user"];
@@ -3333,7 +3333,7 @@ describe("resuming from the remote branch", () => {
         expect(workspace.state(TICKET)).toMatchObject({ state: "implemented" });
       });
 
-      it("pushes nothing over the remote branch and opens no draft PR", async () => {
+      it("pushes nothing over the remote branch and opens no draft pull request", async () => {
         const outcome = await run();
 
         expect(outcome).not.toHaveProperty("pullRequest");
@@ -3341,7 +3341,7 @@ describe("resuming from the remote branch", () => {
         expect(tracker.pullRequests).toEqual([]);
       });
 
-      it("keeps the State, so the Ticket resumes once a human has chosen a side", async () => {
+      it("keeps the state, so the Ticket resumes once a human has chosen a side", async () => {
         await run();
 
         expect(workspace.state(TICKET)).toMatchObject({ state: "implemented" });
@@ -3399,7 +3399,7 @@ describe("a branch that outlived its worktree", () => {
     expect(handoffBody()).not.toContain("worktree `");
   });
 
-  it("opens no draft PR, because there is no worktree to push out of", async () => {
+  it("opens no draft pull request, because there is no worktree to push out of", async () => {
     const outcome = await run();
 
     expect(outcome).not.toHaveProperty("pullRequest");
@@ -3437,7 +3437,7 @@ describe("a branch that outlived its worktree", () => {
   it("names the worktree instead when the branch is still checked out in one", async () => {
     // A branch of the Ticket's name checked out in its worktree with nothing
     // recorded beside it: a human's work, since a Ticket the pipeline handed
-    // off keeps its State file and resumes without ever reaching here.
+    // off keeps its state file and resumes without ever reaching here.
     workspace.worktrees.set(worktree, BRANCH);
 
     const outcome = await run();
@@ -3454,19 +3454,19 @@ git branch -D ${BRANCH}\`, then relabel the Ticket ready-for-agent`,
     expect(workspace.calls).not.toContain(`createWorktree:${BRANCH}`);
     // The worktree is on disk here, so the hand-off still sends the human to it.
     expect(handoffBody()).toContain(`worktree \`${worktree}\``);
-    // And the State file the Claim wrote goes, alone among hand-offs: no Stage
+    // And the state file the claim wrote goes, alone among hand-offs: no Stage
     // of this Run ran in there, so a later resume would implement over a human.
     expect(workspace.states.has(TICKET)).toBe(false);
   });
 
-  it("pushes nothing and opens no draft PR over the worktree it names", async () => {
+  it("pushes nothing and opens no draft pull request over the worktree it names", async () => {
     workspace.worktrees.set(worktree, BRANCH);
 
     const outcome = await run();
 
     // No Stage of this Run ran in there: what the branch carries is a human's
     // work, which the pipeline neither writes to the remote nor presents as
-    // this Run's in a PR that says `Closes #<n>`.
+    // this Run's in a pull request that says `Closes #<n>`.
     expect(outcome).not.toHaveProperty("pullRequest");
     expect(workspace.calls).not.toContain(`push:${BRANCH}`);
     expect(tracker.pullRequests).toEqual([]);
@@ -3474,13 +3474,13 @@ git branch -D ${BRANCH}\`, then relabel the Ticket ready-for-agent`,
     expect(handoffBody()).not.toContain("PR #");
   });
 
-  it("says nothing about a draft PR it never set out to open", async () => {
+  it("says nothing about a draft pull request it never set out to open", async () => {
     workspace.worktrees.set(worktree, BRANCH);
 
     const outcome = await run();
 
     // The line a failed attempt logs reads as if something had gone wrong.
-    expect(logged.some((line) => line.includes("could not open a draft PR"))).toBe(false);
+    expect(logged.some((line) => line.includes("could not open a draft pull request"))).toBe(false);
     // What the Run log says instead is the refusal, exactly as it always did.
     if (outcome.outcome !== "handed-off") throw new Error("the Ticket was not handed off");
     expect(logged).toContain(`#${TICKET} handed off at setup · ${outcome.failure}`);
@@ -3565,7 +3565,7 @@ describe("a Ticket released and then resumed", () => {
  * A hand-off and the relabel that answers it, in one test: the second `run()` is
  * the next Run meeting a Ticket a human has handed back by moving the label to
  * `ready-for-agent`. What the hand-off left — the branch, the worktree, the
- * draft pull request and the State file — is what that Run picks up.
+ * draft pull request and the state file — is what that Run picks up.
  */
 describe("a Ticket handed off and then handed back", () => {
   /** Every Stage both Runs asked for, so the second Run's shortcuts are visible. */
@@ -3578,7 +3578,7 @@ describe("a Ticket handed off and then handed back", () => {
       .comments.filter(({ body }) => body.startsWith(PROGRESS_MARKER))
       .map(({ body }) => body);
 
-  /** A first Run that spends the Fix budget and is handed off at the Checks. */
+  /** A first Run that spends the fix budget and is handed off at the Checks. */
   async function handedOff(): Promise<void> {
     workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
     workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
@@ -3591,7 +3591,7 @@ describe("a Ticket handed off and then handed back", () => {
     tracker.issue(TICKET).labels = ["ready-for-agent"];
   }
 
-  it("keeps the branch, the worktree, the draft PR and the State file", async () => {
+  it("keeps the branch, the worktree, the draft pull request and the state file", async () => {
     await handedOff();
 
     expect(workspace.worktrees.get(worktree)).toBe(BRANCH);
@@ -3608,7 +3608,7 @@ describe("a Ticket handed off and then handed back", () => {
     await handedOff();
 
     // `ready-for-human` is not `ready-for-agent`, and the sweep cannot see it
-    // either, the Claim having come off. Nothing moves until the human does.
+    // either, the claim having come off. Nothing moves until the human does.
     expect(await run()).toMatchObject({ outcome: "skipped", reason: "not-ready" });
     expect(workspace.states.has(TICKET)).toBe(true);
   });
@@ -3697,7 +3697,7 @@ describe("a Ticket handed off and then handed back", () => {
     expect(tables()).toEqual([handed, expect.stringContaining("| merge | ✅ #100 |")]);
   });
 
-  it("clears the State file once the Ticket it took back merges", async () => {
+  it("clears the state file once the Ticket it took back merges", async () => {
     await handedOff();
     handedBack();
 
@@ -4027,7 +4027,7 @@ describe("a hand-off the Ticket was already carrying", () => {
     return tracker.issue(TICKET).comments.map(({ body }) => body);
   }
 
-  it("marks it as history at the Claim, keeping the failure and the evidence", async () => {
+  it("marks it as history at the claim, keeping the failure and the evidence", async () => {
     carrying("c9");
 
     await run();
@@ -4126,7 +4126,7 @@ describe("ticking the Acceptance Criteria a merge proved", () => {
     });
   });
 
-  it("leaves the body alone when the Verdict proved nothing that is in it", async () => {
+  it("leaves the body alone when the verdict proved nothing that is in it", async () => {
     tracker.issue(TICKET).body = "- [ ] something nobody graded\n";
 
     await run();
@@ -4165,7 +4165,7 @@ function progressTable(): string {
 describe("Notes a Stage makes", () => {
   const OTHER = 7;
   const noteResult = (notes: unknown[]) => stageResult({ result: { notes } });
-  /** A passing Verdict with Notes beside it, as a verify session emits one. */
+  /** A passing verdict with Notes beside it, as a verify session emits one. */
   const verdictWithNotes = (notes: unknown[]) =>
     stageResult({ result: { ...PASSING_VERDICT, notes } });
 
@@ -4332,7 +4332,7 @@ describe("Notes a Stage makes", () => {
     });
   });
 
-  it("routes the Notes of a verify Stage whose Verdict was unusable", async () => {
+  it("routes the Notes of a verify Stage whose verdict was unusable", async () => {
     runner.queue(
       "verify",
       stageResult({ result: { notes: [{ ticket: OTHER, summary: "graded nothing, saw this" }] } }),

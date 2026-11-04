@@ -3,7 +3,7 @@
  *
  * Readers recognise a criterion by its shape and would disagree about it if each
  * carried its own pattern: the `no-criteria` guard counts one to decide a Ticket
- * is usable, the merge ticks one a Verdict proved and then counts the boxes it
+ * is usable, the merge ticks one a verdict proved and then counts the boxes it
  * ticked, and a Note has one escaped before it is posted. Drift between them is
  * not a cosmetic bug — a criterion the guard sees but the escaper misses lets a
  * Note read as work somebody promised, and one the merge ticks but the guard
@@ -32,7 +32,7 @@ const ITEM_HEAD = String.raw`^([ \t]*[-*+] )`;
 export const UNCHECKED_BOX = String.raw`${ITEM_HEAD}\[ \]`;
 
 /**
- * The ticked twin, for the merge alone: having ticked what a Verdict proved, it
+ * The ticked twin, for the merge alone: having ticked what a verdict proved, it
  * counts the boxes now ticked to tell whether a met criterion matched nothing.
  *
  * It shares {@link UNCHECKED_BOX}'s head so that count cannot drift from the

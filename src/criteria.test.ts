@@ -18,7 +18,7 @@ function tick(text: string, met: string[]): string {
   return ticked ?? text;
 }
 
-/** #284 as it stood before its merge, and the criteria its final Verdict met. */
+/** #284 as it stood before its merge, and the criteria its final verdict met. */
 const TICKET_284 = {
   body: readFileSync(new URL("./testing/ticket-284/body.md", import.meta.url), "utf8"),
   met: JSON.parse(
@@ -27,7 +27,7 @@ const TICKET_284 = {
 };
 
 describe("ticking a criterion", () => {
-  it("ticks the box whose text a Verdict met", () => {
+  it("ticks the box whose text a verdict met", () => {
     const body = ["## Acceptance criteria", "", "- [ ] it works", "- [ ] it is documented"].join("\n");
 
     expect(tick(body, ["it works"])).toBe(
@@ -35,7 +35,7 @@ describe("ticking a criterion", () => {
     );
   });
 
-  it("leaves every box the Verdict did not name unticked", () => {
+  it("leaves every box the verdict did not name unticked", () => {
     const body = "- [ ] it works\n- [ ] the docs say so";
 
     expect(tick(body, ["it works"])).toBe("- [x] it works\n- [ ] the docs say so");
@@ -183,7 +183,7 @@ describe("a second chance for a criterion that matches no line exactly", () => {
     ]);
   });
 
-  it("ticks all 9 of #284's boxes from its final Verdict", () => {
+  it("ticks all 9 of #284's boxes from its final verdict", () => {
     const ticked = tick(TICKET_284.body, TICKET_284.met);
 
     expect(ticked.match(/^- \[x\] /gm)).toHaveLength(9);
@@ -235,7 +235,7 @@ describe("ticking what a merge proved", () => {
     expect(tracker.calls).not.toContain(`updateIssueBody:${TICKET}`);
   });
 
-  it("writes nothing when the Verdict proved nothing the Ticket wrote down", async () => {
+  it("writes nothing when the verdict proved nothing the Ticket wrote down", async () => {
     const tracker = new FakeTracker();
     tracker.addIssue({ number: TICKET, body: "- [ ] something nobody graded\n" });
 

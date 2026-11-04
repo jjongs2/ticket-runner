@@ -4,15 +4,15 @@ import { z } from "zod";
 import { REACHED_STATES, type StateFile, type TicketState } from "./ports/workspace.js";
 
 /**
- * The State file a Ticket keeps while its branch carries work worth resuming,
+ * The state file a Ticket keeps while its branch carries work worth resuming,
  * and what a later Run makes of it (ADR-0004).
  *
  * A Ticket keeps the file for as long as there is work on its branch worth
- * resuming, so it is written as part of the Claim and rewritten whenever the
+ * resuming, so it is written as part of the claim and rewritten whenever the
  * Ticket reaches something a later Run should not pay for again. Three Runs read
  * it, and what the board says decides which. One finds a Ticket the subscription
  * rate limit or a transient API failure released: nothing was wrong with it, so
- * the Claim came off and this file says where to carry on from. One finds a
+ * the claim came off and this file says where to carry on from. One finds a
  * Ticket still claimed — the Run that claimed it was killed and never released
  * anything — and resumes it in place. One finds a Ticket a human was handed and has relabelled
  * `ready-for-agent`, which is the human handing it back. A Ticket still sitting
@@ -25,7 +25,7 @@ import { REACHED_STATES, type StateFile, type TicketState } from "./ports/worksp
  * This is only what the file says and what its name is, which that Workspace
  * reads and writes through here. Whether the branch a file names is still there
  * is the Workspace's other question, and whether the Ticket is released or
- * stranded is the Claim's, read off GitHub.
+ * stranded is the claim's, read off GitHub.
  */
 
 const stateSchema = z.object({
@@ -66,7 +66,7 @@ export function stateFileContents(state: TicketState): string {
  * A file that is not JSON, one missing what resuming needs, and one a newer
  * pipeline shaped differently are all unreadable: starting the Ticket over is
  * always safe, and resuming on a guess is not. So is one that names another
- * Ticket than its own name does, which no Version would resume either.
+ * Ticket than its own name does, which no version would resume either.
  */
 export function readStateFile(contents: string, ticket: number): StateFile {
   const raw = parseJson(contents);
@@ -76,7 +76,7 @@ export function readStateFile(contents: string, ticket: number): StateFile {
     return { readable: false, ticket, ...(version === undefined ? {} : { version }) };
   }
 
-  // A pull request nobody opened, a title no Stage answered, and a Version an
+  // A pull request nobody opened, a title no Stage answered, and a version an
   // older pipeline never wrote, are keys that are not there rather than keys
   // holding nothing: the rest of the pipeline reads these with the same
   // distinction.
@@ -94,11 +94,11 @@ export function readStateFile(contents: string, ticket: number): StateFile {
 }
 
 /**
- * The Version a file that will not parse still names, where it names one.
+ * The version a file that will not parse still names, where it names one.
  *
  * Read off the raw JSON rather than the schema, because the schema is exactly
- * what refused the file: a State file a newer pipeline wrote is named by the
- * Version that wrote it, whatever else about it this one cannot read.
+ * what refused the file: a state file a newer pipeline wrote is named by the
+ * version that wrote it, whatever else about it this one cannot read.
  */
 function namedVersion(raw: unknown): string | undefined {
   if (raw === null || typeof raw !== "object" || !("version" in raw)) return undefined;
@@ -116,7 +116,7 @@ function parseJson(contents: string): unknown {
 }
 
 /**
- * The branch of the Target's remote that holds every Ticket's State, one file
+ * The branch of the Target's remote that holds every Ticket's state, one file
  * per Ticket, and the transcripts of a handed-off Ticket's Stages beside it,
  * under the prefix the pipeline owns (ADR-0004). Named here rather than only in
  * the Workspace that writes it, because `ticket-runner remove` deletes it by
@@ -124,11 +124,11 @@ function parseJson(contents: string): unknown {
  */
 export const STATE_BRANCH = "ticket-runner/state";
 
-/** Where a pipeline before the state branch kept the State files, in the checkout. */
+/** Where a pipeline before the state branch kept the state files, in the checkout. */
 export const LOCAL_STATE_DIR = join(".ticket-runner", "state");
 
 /**
- * The Tickets whose State files a pipeline before the state branch left in this
+ * The Tickets whose state files a pipeline before the state branch left in this
  * checkout, in ascending number.
  *
  * Nothing reads them any more, and nothing migrates them (ADR-0004): a Run that

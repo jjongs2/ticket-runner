@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { CONFIG_FILENAME, ConfigError, loadConfig } from "./config.js";
 
-/** The Version doing the refusing, which an unknown key is reported with. */
+/** The version doing the refusing, which an unknown key is reported with. */
 const VERSION = "0.4.0+331d79c";
 
 function repoWith(files: Record<string, string>): string {
@@ -277,7 +277,7 @@ describe("a key this install does not know", () => {
     throw new Error("the config was not refused");
   }
 
-  it("is refused by name, and with the Version that refused it", () => {
+  it("is refused by name, and with the version that refused it", () => {
     const message = refusal({ retries: 3 });
 
     expect(message).toContain("retries");

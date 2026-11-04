@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { versionNotes, versionPrRefusals } from "./version-pr.js";
 
-/** One Version's notes, in the shape `docs/templates/version-notes.md` asks for. */
+/** One version's notes, in the shape `docs/templates/version-notes.md` asks for. */
 const NOTES = `### Lanes
 
 - A Run takes \`lanes\` Tickets at once, default one ([#82], [#83])
@@ -19,7 +19,7 @@ function changelog(...numbers: string[]): string {
   return ["# Changelog", "", ...numbers.map(section)].join("\n");
 }
 
-/** One section, as the Version PR writes it into the changelog. */
+/** One section, as the release PR writes it into the changelog. */
 function section(number: string): string {
   return `## ${number} (2026-09-20)\n\n${NOTES}\n`;
 }
@@ -48,8 +48,8 @@ function templateSection(number: string): string {
   return shape.join("\n").trim().replace("<number>", number).replace("<yyyy-mm-dd>", "2026-09-20");
 }
 
-describe("the notes a Version published", () => {
-  it("returns a Version's section without its number heading", () => {
+describe("the notes a version published", () => {
+  it("returns a version's section without its number heading", () => {
     expect(versionNotes(changelog("0.4.0", "0.3.1"), "0.4.0")).toBe(NOTES);
   });
 
@@ -94,11 +94,11 @@ describe("the notes a Version published", () => {
     );
   });
 
-  it("returns the notes of every Version this repository has cut", () => {
+  it("returns the notes of every version this repository has cut", () => {
     for (const number of ["0.1.0", "0.1.1", "0.2.0", "0.3.0", "0.3.1"]) {
       expect(versionNotes(CHANGELOG, number)).toContain("### After upgrading");
     }
-    // The body GitHub published for that Version, to the character. It was cut
+    // The body GitHub published for that version, to the character. It was cut
     // before the rename to ticket-runner, so its words name the pipeline by its
     // former name, read here from the command its After upgrading line gives,
     // while its links point at the repository under the name it has now.
@@ -121,7 +121,7 @@ describe("the notes a Version published", () => {
   });
 });
 
-/** A Version PR that cuts `0.4.0`, with everything about it right. */
+/** A release PR that cuts `0.4.0`, with everything about it right. */
 function versionPr(over: Partial<Parameters<typeof versionPrRefusals>[0]> = {}) {
   return {
     number: "0.4.0",
@@ -146,7 +146,7 @@ describe("judging a pull request that changes the number", () => {
     ).toEqual([]);
   });
 
-  it("lets a Version PR that raises the number, the lock and the changelog through", () => {
+  it("lets a release PR that raises the number, the lock and the changelog through", () => {
     expect(versionPrRefusals(versionPr())).toEqual([]);
   });
 
@@ -154,14 +154,14 @@ describe("judging a pull request that changes the number", () => {
     expect(versionPrRefusals(
         versionPr({ number: "0.3.0", lockNumber: "0.3.0", changelog: changelog("0.3.0") }),
       )).toEqual([
-      "`0.3.0` is not higher than every Version tag; `v0.3.1` exists.",
+      "`0.3.0` is not higher than every version tag; `v0.3.1` exists.",
     ]);
   });
 
   it("refuses a number the highest tag already carries", () => {
     expect(
       versionPrRefusals(versionPr({ number: "0.3.1", lockNumber: "0.3.1", baseNumber: "0.3.0" })),
-    ).toEqual(["`0.3.1` is not higher than every Version tag; `v0.3.1` exists."]);
+    ).toEqual(["`0.3.1` is not higher than every version tag; `v0.3.1` exists."]);
   });
 
   it("compares numbers by their parts, not as text", () => {
@@ -173,7 +173,7 @@ describe("judging a pull request that changes the number", () => {
     expect(versionPrRefusals(tenth)).toEqual([]);
   });
 
-  it("weighs only tags that name a Version", () => {
+  it("weighs only tags that name a version", () => {
     const tagged = versionPr({ tags: ["v0.3.1", "a-tag-of-somebody-else's", "v9-rc"] });
     expect(versionPrRefusals(tagged)).toEqual([]);
   });
@@ -201,7 +201,7 @@ describe("judging a pull request that changes the number", () => {
     expect(
       versionPrRefusals(versionPr({ number: "0.2.0", lockNumber: "0.1.0", changelog: "" })),
     ).toEqual([
-      "`0.2.0` is not higher than every Version tag; `v0.3.1` exists.",
+      "`0.2.0` is not higher than every version tag; `v0.3.1` exists.",
       "`package-lock.json` says `0.1.0`, not `0.2.0`.",
       "`CHANGELOG.md` has no `## 0.2.0` section.",
     ]);

@@ -63,12 +63,12 @@ const FAIL = "✗";
 export interface InitOptions {
   repoRoot: string;
   /**
-   * The Version doing the setting up, which the report's first line names. A
+   * The version doing the setting up, which the report's first line names. A
    * string the CLI resolved, never something read from here (ADR-0007).
    */
   version: string;
   /**
-   * The pipeline's own repository, as `owner/name`, which the newer-Version
+   * The pipeline's own repository, as `owner/name`, which the newer-version
    * notice is looked up against; see {@link import("./staleness.js")}.
    */
   repository?: string | undefined;
@@ -170,7 +170,7 @@ function writeTargetFiles(repoRoot: string, version: string): string[] {
 }
 
 /**
- * The Version that set this Target up, where it is newer than the one setting
+ * The version that set this Target up, where it is newer than the one setting
  * it up now, and nothing otherwise.
  *
  * Read off the conventions document's mark, which is the only thing in a
@@ -184,7 +184,7 @@ export function newerSetUp(repoRoot: string, version: string): NewerSetUp | unde
     : undefined;
 }
 
-/** Which newer Version set a Target up, and which one found it. */
+/** Which newer version set a Target up, and which one found it. */
 export interface NewerSetUp {
   mark: string;
   own: string;
@@ -229,7 +229,7 @@ function ensureConfigFile(repoRoot: string): string | undefined {
  *
  * The mark is read before the text, because it is the only thing that says
  * which way round the two copies are. Nothing is refused either way: a Target
- * is not worse for carrying a document from another Version.
+ * is not worse for carrying a document from another version.
  */
 function ensureConventionsDoc(
   repoRoot: string,
@@ -254,9 +254,9 @@ function ensureConventionsDoc(
 /**
  * Which of the four ways a copy came to be rewritten this one was.
  *
- * A copy marked with this very Version is the odd one: nothing about the
+ * A copy marked with this very version is the odd one: nothing about the
  * pipeline moved, so the difference is something the Target did to the file,
- * and saying it was left by the Version now writing it would read as nonsense.
+ * and saying it was left by the version now writing it would read as nonsense.
  */
 function rewritten(
   existing: string | undefined,
@@ -264,7 +264,7 @@ function rewritten(
   own: string | undefined,
 ): string {
   if (existing === undefined) return "written";
-  if (mark === undefined) return "overwritten, because the copy here carried no Version";
+  if (mark === undefined) return "overwritten, because the copy here carried no version";
   if (mark === own) return "overwritten, because the copy here said something else";
   return `overwritten, because the copy here was left by ${mark}`;
 }

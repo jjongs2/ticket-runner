@@ -172,7 +172,7 @@ const LABEL_DEFAULTS: Labels = {
  * from package.json when the config does not name them.
  *
  * Throws {@link ConfigError} naming the offending field when the file is
- * unusable; a missing file is not an error. `version` is the Version doing the
+ * unusable; a missing file is not an error. `version` is the version doing the
  * refusing, which the message for an unknown key carries.
  */
 export function loadConfig(repoRoot: string, version: string): Config {
@@ -208,12 +208,12 @@ export function loadConfig(repoRoot: string, version: string): Config {
 }
 
 /**
- * Why the file was refused, and — for an unknown key — which Version refused it.
+ * Why the file was refused, and — for an unknown key — which version refused it.
  *
  * The schema is strict, so a key this install has never heard of is refused by
  * name. That is the right answer to a typo and a confusing one to a key a newer
- * Version added, and on a machine running a stale install the two look exactly
- * the same. So the Version is said out loud, and the config file itself is left
+ * version added, and on a machine running a stale install the two look exactly
+ * the same. So the version is said out loud, and the config file itself is left
  * without one to carry (ADR-0007).
  */
 function refusal(error: z.ZodError, version: string): string {

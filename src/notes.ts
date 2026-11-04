@@ -3,7 +3,7 @@
  *
  * A Stage that meets a defect in code it was not sent to touch has three bad
  * options and one good one. Fixing it widens the Ticket past the Acceptance
- * Criteria the Verdict grades. Ignoring it loses it. Writing it into the
+ * Criteria the verdict grades. Ignoring it loses it. Writing it into the
  * Ticket's own comments buries it under a Ticket that is about to close. So it
  * records a **Note** instead, and the pipeline puts the Note where somebody
  * will meet it: the comments of the Ticket it belongs to, or the standing
@@ -11,7 +11,7 @@
  *
  * Notes ride along with the structured output of the implement, verify and fix
  * Stages: the two that write code, which meet what they were not sent to touch,
- * and the one that grades, whose Verdict has a slot per Acceptance Criterion and
+ * and the one that grades, whose verdict has a slot per Acceptance Criterion and
  * none for anything else it found. A Stage with nothing to report emits an empty
  * list and is not treated differently for it.
  */
@@ -61,7 +61,7 @@ export interface RoutedNote {
   origin: number;
   /**
    * The Stage that made it, or the pipeline itself: the one Note no Stage
-   * writes is the pipeline's, about a Base branch failing a Check.
+   * writes is the pipeline's, about a base branch failing a Check.
    */
   stage: NotingStage | "pipeline";
   /** The issue the Note reached: the Ticket it named, or the standing Notes issue. */
@@ -400,7 +400,7 @@ async function route(routing: NoteRouting, note: Note): Promise<RoutedNote> {
  * finishes with, after `which`.
  *
  * Claimed is the label alone, not the assignee with it: the pipeline's own
- * Claim writes both, but a human who took a Ticket may have written only the
+ * claim writes both, but a human who took a Ticket may have written only the
  * label, and either way there is somebody on it.
  */
 async function buriedOn(routing: NoteRouting, ticket: number): Promise<string | undefined> {

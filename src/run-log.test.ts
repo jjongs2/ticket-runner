@@ -34,8 +34,8 @@ describe("where a Run writes", () => {
   });
 });
 
-describe("the Version beside the transcripts", () => {
-  it("names the Version at the top of the Run's own directory", () => {
+describe("the version beside the transcripts", () => {
+  it("names the version at the top of the Run's own directory", () => {
     writeRunVersion(repoRoot, RUN_ID, "0.4.0+331d79c");
 
     expect(readFileSync(join(runLogDir(repoRoot, RUN_ID), VERSION_FILE), "utf8")).toBe(
@@ -60,7 +60,7 @@ describe("the files a hand-off keeps", () => {
     }
   }
 
-  it("are each Stage's command line and transcript, the retries' and the Version with them", () => {
+  it("are each Stage's command line and transcript, the retries' and the version with them", () => {
     writeRunVersion(repoRoot, RUN_ID, "0.4.0");
     write(8, [
       "verify.command",

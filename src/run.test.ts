@@ -63,7 +63,7 @@ function config(): Config {
   };
 }
 
-/** The Version this Run is, as the CLI resolves it once and hands it down. */
+/** The version this Run is, as the CLI resolves it once and hands it down. */
 const VERSION = "0.4.0+331d79c";
 
 const PASSING_VERDICT = {
@@ -122,7 +122,7 @@ function worktreeOf(ticket: number): string {
   return join(repoRoot, ".worktrees", `ticket-${ticket}`);
 }
 
-/** Exactly what a killed Run leaves: the Claim, the worktree, the State file. */
+/** Exactly what a killed Run leaves: the claim, the worktree, the state file. */
 function stranded(ticket: number, overrides: Partial<TicketState> = {}): void {
   const state: TicketState = {
     ticket,
@@ -320,7 +320,7 @@ describe("a Ticket that fails", () => {
 });
 
 /**
- * A Ticket a Run on one Host left, taken up by a Run on another: the State and
+ * A Ticket a Run on one Host left, taken up by a Run on another: the state and
  * the branch are on the remote, and this Host has no worktree of it at all.
  */
 describe("a Ticket another Host left", () => {
@@ -354,7 +354,7 @@ describe("a Ticket another Host left", () => {
 
     expect(result.outcomes).toEqual([expect.objectContaining({ outcome: "merged", ticket: 4 })]);
     // One implement Stage across both Hosts, which is the whole of what the
-    // State on the remote saves.
+    // state on the remote saves.
     expect(runner.stages()).toEqual(["implement", "verify", "verify"]);
     expect(workspace.calls).not.toContain("createWorktree:agent/4-ticket-4");
     expect(workspace.states.has(4)).toBe(false);
@@ -473,7 +473,7 @@ describe("which Release a Run ends on when its Releases differ", () => {
     expect(result.stop).toEqual({ reason: "rate-limited", resetsAt: RESETS_AT });
   });
 
-  it("stays on a failing Base branch when the rate limit came second", async () => {
+  it("stays on a failing base branch when the rate limit came second", async () => {
     for (const number of [4, 5]) tracker.addIssue({ number });
     // #4's Check fails on its branch and at the merge-base alike; #5's passes
     // and waits at verify until #4 has stopped the Run.
@@ -574,7 +574,7 @@ describe("a Ticket whose API key ran out of budget", () => {
     expect(result.stop).toEqual({ reason: "out-of-budget" });
   });
 
-  it("leaves a failing Base branch that came first where it is", async () => {
+  it("leaves a failing base branch that came first where it is", async () => {
     for (const number of [4, 5]) tracker.addIssue({ number });
     workspace.failCheckOnce("npm test", "FAIL src/date.test.ts");
     workspace.failBaseCheck("npm test", "FAIL src/date.test.ts");
@@ -606,7 +606,7 @@ describe("a Ticket the rate limit released on a Run on the API key", () => {
   });
 });
 
-describe("a Ticket released over a failing Base branch", () => {
+describe("a Ticket released over a failing base branch", () => {
   beforeEach(() => {
     for (const number of [4, 5]) tracker.addIssue({ number });
     workspace.failCheck("npm test", "FAIL src/date.test.ts");
@@ -623,7 +623,7 @@ describe("a Ticket released over a failing Base branch", () => {
     expect(workspace.calls).not.toContain("createWorktree:agent/5-ticket-5");
   });
 
-  it("says the Base branch, the Check and the merge-base ended the Run", async () => {
+  it("says the base branch, the Check and the merge-base ended the Run", async () => {
     const result = await processRun(pipeline());
 
     expect(result.stop).toEqual({
@@ -632,7 +632,7 @@ describe("a Ticket released over a failing Base branch", () => {
       commit: workspace.mergeBaseCommit,
       command: "npm test",
     });
-    expect(logged).toContain("#4 stopped the Run · failing Base branch");
+    expect(logged).toContain("#4 stopped the Run · failing base branch");
   });
 });
 
@@ -816,7 +816,7 @@ describe("stranded Tickets", () => {
     );
   });
 
-  it("works on the branch each State file names, not one derived from the title", async () => {
+  it("works on the branch each state file names, not one derived from the title", async () => {
     stranded(4, { branch: "agent/4-what-it-was-called-then" });
 
     await processRun(pipeline());
@@ -826,7 +826,7 @@ describe("stranded Tickets", () => {
     ]);
   });
 
-  it("keeps the Claim each one already has", async () => {
+  it("keeps the claim each one already has", async () => {
     stranded(4);
 
     await processRun(pipeline());
@@ -846,11 +846,11 @@ describe("stranded Tickets", () => {
     expect(result.outcomes.map((outcome) => outcome.outcome)).toEqual(["released"]);
     expect(result.stop).toEqual({ reason: "rate-limited" });
     expect(tracker.issue(4).labels).toEqual(["ready-for-agent"]);
-    // #9 keeps the Claim that makes it stranded, and its state keeps the work,
+    // #9 keeps the claim that makes it stranded, and its state keeps the work,
     // so the next Run sweeps it up exactly as this one found it.
     expect(tracker.issue(9).assignees).toEqual(["pipeline-user"]);
     expect(workspace.states.has(9)).toBe(true);
-    // No Candidate is listed, let alone taken.
+    // No candidate is listed, let alone taken.
     expect(tracker.calls).not.toContain("listCandidates:ready-for-agent");
     expect(processed()).toEqual([]);
   });
@@ -939,7 +939,7 @@ describe("stranded Tickets", () => {
   });
 
   it("ends the Run when one resumed off the Frontier is released", async () => {
-    // No Claim, so the Frontier offers #4 and the Run resumes it from its state.
+    // No claim, so the Frontier offers #4 and the Run resumes it from its state.
     tracker.addIssue({ number: 4 });
     workspace.recordState({
       ticket: 4,
@@ -1691,7 +1691,7 @@ describe("a Run a human stopped", () => {
     expect(result.stop).toEqual({ reason: "stopped", at: "2026-09-20T22:07:13.000Z", busy: [] });
     expect(stopLines()).toEqual(["nothing left to finish · stopped"]);
     expect(runner.requests).toEqual([]);
-    // No Candidate listed, and nothing written on GitHub either: a Stop is not
+    // No candidate listed, and nothing written on GitHub either: a Stop is not
     // news any Ticket has to be told.
     expect(tracker.calls).toEqual([]);
     expect(tracker.comments).toEqual([]);
@@ -1840,7 +1840,7 @@ describe("a Run narrowed to the Tickets it was given", () => {
     expect(writesTo(6)).toEqual([]);
   });
 
-  it("asks nothing about a closed Ticket's State it was not given, and leaves the State there", async () => {
+  it("asks nothing about a closed Ticket's state it was not given, and leaves the state there", async () => {
     tracker.addIssue({ number: 3, closed: true, assignees: ["pipeline-user"] });
     workspace.recordState({
       ticket: 3,

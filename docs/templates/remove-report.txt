@@ -27,13 +27,13 @@ Left for you:
   branch `agent/12-some-title` on GitHub: pull request #40 is open on it
   branch `agent/9-another-title` on GitHub: no pull request is open on it
   issue #88: the standing Notes issue, left open with the Notes on it
-  #12, #15: no Run can resume them any more, because their State files, and any hand-off transcripts kept beside them, went with `ticket-runner/state`
+  #12, #15: no Run can resume them any more, because their state files, and any hand-off transcripts kept beside them, went with `ticket-runner/state`
   comments on issues: the progress, hand-off and Note comments Runs wrote are left as they are, since they are addressed to humans
   nothing was committed: review the changes with `git status` and commit them yourself
 
 Done: the pipeline has gone from this Target.
 
-On stdout, and exit code 0. The first line names the Version doing the removing
+On stdout, and exit code 0. The first line names the version doing the removing
 (ADR-0007), in the shape `init-report.txt` gives its own.
 
 Three groups, always in this order and always all three, however little each has
@@ -86,7 +86,7 @@ purpose, each line with what to do about it:
 - each `agent/` branch on GitHub, and the pull request open on it, if any: they
   are a Ticket's work
 - the standing Notes issue, by number, which is addressed to a human
-- the Tickets whose State files went with the state branch, which no Run can
+- the Tickets whose state files went with the state branch, which no Run can
   resume any more, and the hand-off transcripts that went with them. They are
   read before the branch is deleted, and a branch whose Tickets cannot be read
   is kept and marked `✗`, so none of them goes unnamed
@@ -150,16 +150,16 @@ order, and each says what to do next:
 1. A shell carrying the Stage mark, before anything is read, as `init` refuses it.
 2. A cloud Host, which can delete no branch (ADR-0008):
 
-Refusing to remove on a cloud Host: it can delete no branch on the remote, so the Run lock and State branches would stay. Run `ticket-runner remove` on a workstation instead.
+Refusing to remove on a cloud Host: it can delete no branch on the remote, so the Run lock and state branches would stay. Run `ticket-runner remove` on a workstation instead.
 
 3. A `gh` that cannot speak to GitHub, in the words `init` uses:
 
 Refusing to remove: `gh` is not authenticated — run `gh auth login`, then `ticket-runner remove` again.
 Refusing to remove: `gh` is not installed — install the GitHub CLI from https://cli.github.com, then `ticket-runner remove` again.
 
-4. A conventions document a newer Version stamped:
+4. A conventions document a newer version stamped:
 
-Refusing to remove: 0.6.0 set this Target up and this is 0.5.2, so it may have left things this Version does not know to remove. Upgrade with `npm install -g ticket-runner`, then run `ticket-runner remove` again.
+Refusing to remove: 0.6.0 set this Target up and this is 0.5.2, so it may have left things this version does not know to remove. Upgrade with `npm install -g ticket-runner`, then run `ticket-runner remove` again.
 
 5. Neither a terminal nor `--yes`:
 

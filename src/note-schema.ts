@@ -6,9 +6,9 @@
  * a Stage actually reads: two copies would drift, and the Stage reading the
  * stale one would be the only place it showed.
  *
- * A module of its own rather than a corner of `notes.ts`, because the Verdict's
+ * A module of its own rather than a corner of `notes.ts`, because the verdict's
  * schema carries this list too and `notes.ts` reaches the templates a Note is
- * posted with, which read a Verdict. Only the shape a Stage is asked for lives
+ * posted with, which read a verdict. Only the shape a Stage is asked for lives
  * here, so both schemas can share it without that cycle.
  *
  * `ticket` is optional on purpose: a Stage that guesses a number puts the Note
@@ -65,7 +65,7 @@ export const NOTES_LIST_SCHEMA = {
  * Stages' schema and their prompts use: one declaration, so the two cannot drift.
  */
 export const OWN_DEFECT =
-  "A defect this branch introduced, one that behaves correctly on the Base branch and wrongly here, or one in code this branch added, belongs to this Ticket";
+  "A defect this branch introduced, one that behaves correctly on the base branch and wrongly here, or one in code this branch added, belongs to this Ticket";
 
 /**
  * The list as the implement and fix Stages read it: a defect their own branch

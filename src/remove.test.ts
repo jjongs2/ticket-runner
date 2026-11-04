@@ -79,7 +79,7 @@ function worktree(ticket: number): string {
 
 /**
  * What a Run leaves behind: its logs, a handed-off Ticket's worktree and
- * State, a local branch without a worktree, a pushed branch with its pull
+ * state, a local branch without a worktree, a pushed branch with its pull
  * request, the standing Notes issue, and a lock it took and gave back.
  */
 async function aRunWorkedHere(): Promise<void> {
@@ -185,7 +185,7 @@ describe("taking the pipeline out of a Target it set up", () => {
     expect(out.split("\n").at(-1)).toBe("Done: the pipeline has gone from this Target.");
   });
 
-  it("removes the worktrees, branches, label, State and lock a Run left", async () => {
+  it("removes the worktrees, branches, label, state and lock a Run left", async () => {
     await init();
     await aRunWorkedHere();
 
@@ -232,7 +232,7 @@ describe("taking the pipeline out of a Target it set up", () => {
     ]);
   });
 
-  it("reports in the shape of the template: the Version, three groups, and the exit code in words", async () => {
+  it("reports in the shape of the template: the version, three groups, and the exit code in words", async () => {
     await init();
     await aRunWorkedHere();
 
@@ -274,7 +274,7 @@ describe("what remove leaves for the human", () => {
       "branch `agent/12-some-title` on GitHub: pull request #40 is open on it",
       "branch `agent/9-another-title` on GitHub: no pull request is open on it",
       "issue #88: the standing Notes issue, left open with the Notes on it",
-      `#12: no Run can resume it any more, because its State file, and any hand-off transcripts kept beside it, went with \`${STATE_BRANCH}\``,
+      `#12: no Run can resume it any more, because its state file, and any hand-off transcripts kept beside it, went with \`${STATE_BRANCH}\``,
       "comments on issues: the progress, hand-off and Note comments Runs wrote are left as they are, since they are addressed to humans",
       "nothing was committed: review the changes with `git status` and commit them yourself",
     ]);
@@ -697,14 +697,14 @@ describe("refusing before anything changes", () => {
     );
   });
 
-  it("refuses a Target a newer Version set up, and names the upgrade", async () => {
+  it("refuses a Target a newer version set up, and names the upgrade", async () => {
     const err = await unchanged(
       () => write(CONVENTIONS_PATH, conventionsDoc("0.6.0")),
       () => remove(),
     );
 
     expect(err).toBe(
-      "Refusing to remove: 0.6.0 set this Target up and this is 0.5.2, so it may have left things this Version does not know to remove. Upgrade with `npm install -g ticket-runner`, then run `ticket-runner remove` again.",
+      "Refusing to remove: 0.6.0 set this Target up and this is 0.5.2, so it may have left things this version does not know to remove. Upgrade with `npm install -g ticket-runner`, then run `ticket-runner remove` again.",
     );
   });
 

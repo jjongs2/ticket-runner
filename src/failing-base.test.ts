@@ -9,7 +9,7 @@ const note: RoutedNote = {
   stage: "pipeline",
   issue: 200,
   opened: true,
-  summary: "The Base branch `main` fails `npm test`.",
+  summary: "The base branch `main` fails `npm test`.",
 };
 
 describe("the Note about a commit", () => {

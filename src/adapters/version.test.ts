@@ -26,7 +26,7 @@ function checkout(): void {
   git("config", "user.email", "pipeline@example.com");
   git("config", "user.name", "Pipeline");
   git("add", "-A");
-  git("commit", "-m", "chore: the commit a Version is read against");
+  git("commit", "-m", "chore: the commit a version is read against");
 }
 
 beforeEach(() => {
@@ -85,7 +85,7 @@ describe("a development checkout", () => {
   });
 });
 
-describe("the repository a newer Version would be published on", () => {
+describe("the repository a newer version would be published on", () => {
   /** A package root naming its repository however npm lets it be named. */
   function repository(field: unknown): void {
     writeFileSync(join(root, "package.json"), `${JSON.stringify({ repository: field })}\n`);
@@ -137,7 +137,7 @@ describe("the package root", () => {
     expect(await pipelineVersion(PACKAGE_ROOT)).toMatch(/^\d+\.\d+\.\d+(\+[0-9a-f]+(\.dirty)?)?$/);
   });
 
-  it("is where the repository a newer Version is looked up on is read from", () => {
+  it("is where the repository a newer version is looked up on is read from", () => {
     // The other assertion that reads the real checkout: the name the Run asks
     // GitHub about has to be this repository's own.
     expect(pipelineRepository(PACKAGE_ROOT)).toMatch(/^[\w.-]+\/[\w.-]+$/);

@@ -34,7 +34,7 @@ export interface RunResult {
  * A Run that drained the Frontier carries what was left held back; one a
  * Release stopped carries no candidates, because it ended before it could say
  * one was held back all Run, and the rate limit carries when it resets, where a
- * Stage was told, and a failing Base branch the Check it fails and where; one
+ * Stage was told, and a failing base branch the Check it fails and where; one
  * a human stopped carries the moment it was asked and what it still had in
  * hand. That is why this is a choice rather than a flag beside
  * the list: the stops do not report the same things.
@@ -96,7 +96,7 @@ export type RunStop =
  * A Release stops the Run filling Lanes and nothing more. Nothing was wrong with
  * the Ticket — the subscription or the API key ran out of room, or the API
  * failed on its own side after the CLI had given up retrying it — so the next
- * one would be stopped the same way, and claiming it would spend a Claim, a
+ * one would be stopped the same way, and claiming it would spend a claim, a
  * worktree and a doomed Stage to learn what the first one already said. The Lanes still busy finish
  * what they hold, and the Run reports what stopped it once the last of them
  * comes back. It does not wait for the limit to reset: a human or an Operator
@@ -109,7 +109,7 @@ export type RunStop =
  * own behind where a killed one leaves all of them (ADR-0006).
  *
  * Before any of that, the Tickets a Run that never came back left claimed are
- * resumed. They are not on the Frontier and never will be — the Claim they still
+ * resumed. They are not on the Frontier and never will be — the claim they still
  * wear is what keeps them off it — so this sweep is the only thing that ever
  * picks them up again, and a free Lane takes one before it takes anything the
  * Frontier is offering.
@@ -132,7 +132,7 @@ export async function processRun(
   // Every Ticket this Run has taken. A Ticket normally leaves the candidate
   // list by being closed or relabelled; this is what stops a Run offering one
   // to a second Lane, whether because that write did not land or because the
-  // Claim of the Lane holding it has not reached GitHub yet.
+  // claim of the Lane holding it has not reached GitHub yet.
   const taken = new Set<number>();
   // The Lanes with a Ticket in them, by Ticket number. A Lane takes itself out
   // of here as its Ticket ends rather than where the Run waits, so a fill pass
@@ -319,7 +319,7 @@ function pollFailure(error: unknown): string {
 
 /**
  * The stop a Release puts on the Run: what released it, when a limit resets,
- * and which Check the Base branch fails.
+ * and which Check the base branch fails.
  */
 function releaseStop(
   outcome: Extract<TicketOutcome, { outcome: "released" }>,
@@ -343,7 +343,7 @@ function releaseStop(
  * it alone needs the human to act: no wait mends it, only the Console. The
  * rate limit outranks an API failure, which says nothing of when the next Run
  * can start, and a limit nobody was told the end of is outranked by one a
- * Stage was told. A failing Base branch and a Stop stay whatever comes after
+ * Stage was told. A failing base branch and a Stop stay whatever comes after
  * them, and so does an API budget, and a limit already told when it resets.
  */
 function outranks(
@@ -454,7 +454,7 @@ async function take(pipeline: Pipeline, ticket: Taken): Promise<TicketOutcome> {
  *
  * The branch is carried rather than derived, because the two ways a Run reaches
  * a Ticket know it differently: a candidate off the Frontier has whatever its
- * title derives to, and a stranded Ticket has the branch its State file names —
+ * title derives to, and a stranded Ticket has the branch its state file names —
  * which is where the work actually is, whatever the title says now.
  */
 interface Taken {

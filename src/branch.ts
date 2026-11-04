@@ -33,7 +33,7 @@ export function worktreePath(repoRoot: string, ticket: number): string {
 }
 
 /**
- * The gitignored worktree a Check runs in at a merge-base with the Base branch,
+ * The gitignored worktree a Check runs in at a merge-base with the base branch,
  * beside the Tickets' own: named for the commit, shortened as git shortens one.
  */
 export function baseWorktreePath(repoRoot: string, commit: string): string {

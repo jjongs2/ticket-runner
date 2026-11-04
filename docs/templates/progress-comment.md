@@ -22,8 +22,8 @@
 | merge | ✅ #<pr> | – | – |
 
 One section per Run that worked the Ticket, oldest first: the header naming
-that Run's Version, runId and branch, a blank line, and that Run's table. A
-Ticket one Run took from the Claim to the merge has one section.
+that Run's version, runId and branch, a blank line, and that Run's table. A
+Ticket one Run took from the claim to the merge has one section.
 
 One row per Stage or gate, appended as it finishes, in the order it happened.
 Rows are not unique: a fix buys a second pass of the Checks and verify, and each
@@ -31,7 +31,7 @@ rebase conflict adds a `conflict` row and the `checks` row that re-grades what i
 resolved. A Stage that is never reached has no row, which is how the table shows
 where a Ticket stopped.
 
-`<version>` is the Version that wrote the table (ADR-0007), in the shape
+`<version>` is the version that wrote the table (ADR-0007), in the shape
 `run-summary.txt` describes.
 
 A later Run finds this comment by its marker and carries on in it: it leaves
@@ -39,9 +39,9 @@ every section's header and table exactly as they were and writes its own
 section below them, whether the Ticket was released, stranded, or resumed on the
 same Host or another. A Run's transcripts go with a cloud Host's VM, so the
 sections an earlier Run wrote are the only record of which Stages it ran, on
-which Version, and what they cost. A Run whose own section is already the last
+which version, and what they cost. A Run whose own section is already the last
 one — the same runId — rewrites that section rather than starting a second. A
-comment an earlier Version wrote, with one header and one table, is one earlier
+comment an earlier version wrote, with one header and one table, is one earlier
 section.
 
 A section carries forward its header and its table and nothing else. A cloud
@@ -78,10 +78,10 @@ Ticket for a later Run to resume.
 |---|---|
 | implement | `✅ committed`, `❌ no commits`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
 | fix | `✅ committed`, `❌ no commits`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
-| checks | `✅ passed`, `⚠️ no checks`, `❌ uncommitted work`, ``❌ `<command>` failed``, ``❌ `<command>` timed out``, ``⏸ `<command>` fails on the Base branch`` |
-| verify | `✅ <k> met · <u> unverifiable`, `❌ <k> unmet`, `❌ no evidence`, `❌ no Verdict`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
+| checks | `✅ passed`, `⚠️ no checks`, `❌ uncommitted work`, ``❌ `<command>` failed``, ``❌ `<command>` timed out``, ``⏸ `<command>` fails on the base branch`` |
+| verify | `✅ <k> met · <u> unverifiable`, `❌ <k> unmet`, `❌ no evidence`, `❌ no verdict`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
 | conflict | `✅ rebased`, `❌ unresolved`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ unknown` |
-| ci | `✅ passed`, `❌ failed`, `❌ conflicting`, `❌ no checks`, `⚠️ no checks`, `❌ timed out`, ``⏸ `<command>` fails on the Base branch`` |
+| ci | `✅ passed`, `❌ failed`, `❌ conflicting`, `❌ no checks`, `⚠️ no checks`, `❌ timed out`, ``⏸ `<command>` fails on the base branch`` |
 | merge | `✅ #<pr>` |
 
 A `checks` row tells a command that exited non-zero from one the wall-clock
@@ -95,20 +95,20 @@ and again after the `conflict` Stage, and it is the outcome the `ci` row writes 
 pull request with no checks; the Stage column tells the two apart.
 
 `❌ conflicting` is the `ci` row for a pull request GitHub reports as
-conflicting with the Base branch, which has moved since the rebase — a human
+conflicting with the base branch, which has moved since the rebase — a human
 merging on GitHub meanwhile, say. GitHub runs no workflow for such a pull
 request, so it is not `❌ no checks`, and it is not the `conflict` Stage: that
 row is the rebase before the pull request, and this one comes after it.
 
-``⏸ `<command>` fails on the Base branch`` is a failing Check, or a red CI, that
+``⏸ `<command>` fails on the base branch`` is a failing Check, or a red CI, that
 the branch inherited rather than brought. The pipeline ran the Check commands
-once in a clean worktree at the branch's merge-base with the Base branch, and
+once in a clean worktree at the branch's merge-base with the base branch, and
 `<command>` failed there too: on a `checks` row the command that failed on the
 branch, on a `ci` row the first Check command the merge-base failed. Nothing
-about the Ticket is wrong, so the Ticket is released with its Fix budget as it
+about the Ticket is wrong, so the Ticket is released with its fix budget as it
 was, and this is the last row of its Run's table, like the rate limit's. It
 names the command rather than the limit, because what a human does about it is
-mend the Base branch, which the Note on the standing Notes issue says.
+mend the base branch, which the Note on the standing Notes issue says.
 
 `❌ uncommitted work` is the `checks` row no command wrote: the worktree held
 changes no commit carries, so no Check ran. What lands is the branch, and a

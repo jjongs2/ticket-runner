@@ -4,7 +4,7 @@ Notes from the pipeline
 **Notes from the pipeline.** Every defect a Stage met outside its own Ticket and
 could not post on another one arrives here as a comment: one that named no
 Ticket, one whose Ticket would have buried it, and one whose Ticket refused the
-comment. So does the pipeline's own Note about a Base branch that fails a
+comment. So does the pipeline's own Note about a base branch that fails a
 Check. Each comment says which Ticket and Stage, or the pipeline, found it. What
 is not a defect — a preference, a refactor, a test that would be nice to have —
 is not a Note and never reaches this issue.
@@ -15,7 +15,7 @@ comment. The next Note after that opens a fresh one, so only ever one of these i
 open.
 
 The standing issue every Note that cannot reach a Ticket becomes a comment on,
-the pipeline's own Note about a failing Base branch included, labelled
+the pipeline's own Note about a failing base branch included, labelled
 `needs-triage` so it sits on the board with everything else awaiting a human.
 The first line is the title; the rest is the body.
 

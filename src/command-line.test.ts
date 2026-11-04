@@ -79,7 +79,7 @@ describe("the Lane count a Run is started with", () => {
   });
 });
 
-describe("the credential a Run is started with", () => {
+describe("what a Run is started billing its Stages to", () => {
   it("reads `run --api-key` as a Run on the API key, and `run` alone as one without it", () => {
     expect(readCommandLine(["run", "--api-key"])).toEqual({
       kind: "work",

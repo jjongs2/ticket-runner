@@ -65,7 +65,7 @@ export interface StageRequest {
    * Whether a Stage that emitted no structured output has failed. Defaults to
    * true.
    *
-   * It is the verify Stage's Verdict that makes it true there: a session that
+   * It is the verify Stage's verdict that makes it true there: a session that
    * graded nothing has done none of its job. A schema that only carries Notes
    * is a side channel the Stage may have had nothing to put in, and failing a
    * Ticket over an empty one would be failing it for finding nothing.
