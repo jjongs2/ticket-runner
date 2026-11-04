@@ -116,7 +116,7 @@ Stop은 Run에게 Lane이 맡고 있는 Ticket만 merge나 Hand-off까지 마치
 Ctrl+C in that Run's own terminal stops it at once instead, at the cost of killing the Stages it is running and leaving their Tickets stranded for the next Run.
 ```
 
-Target에서는 lock 말고 아무것도 필요 없습니다. 설정도, `gh` 로그인도, readiness도요.
+Target에서는 lock 말고 아무것도 필요 없습니다. 설정도, `gh` 로그인도, 준비 상태 확인도요.
 
 | 찾은 것 | 출력 | 종료 코드 |
 |---|---|---|
