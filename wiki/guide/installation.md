@@ -146,7 +146,7 @@ So `ticket-runner init && ticket-runner run` stops before a Run that could not w
 
 ## Target readiness: what `run` refuses
 
-`run` repairs nothing. It asks for each item `init` would have put there, in this order, and refuses on the first one missing, with exit code `2`.
+`run` repairs nothing. It asks for each item `init` would have put there, in this order, and refuses on the first one missing, with exit code `2`. It asks the same of every Host, so a Target a workstation's Run accepts is one an Operator can run from the Claude app too.
 
 | Order | Refused when |
 |---|---|

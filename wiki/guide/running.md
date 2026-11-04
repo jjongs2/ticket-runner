@@ -68,13 +68,13 @@ What happens to each Ticket inside a Lane is on [From Ticket to merge](./ticket-
 
 ### `--lanes`
 
-`--lanes <n>` gives this one Run `n` Lanes, over whatever [`lanes`](./configuration.md#lanes) in `ticket-runner.json` says, which is also where to read what more Lanes speed up and when to keep one. It may go before or after Ticket numbers.
+`--lanes <n>` gives this one Run `n` Lanes, over whatever [`lanes`](./configuration.md#lanes) in `ticket-runner.json` says, because how many Lanes a Host can carry is the Host's business, not the Target's. That page is also where to read what more Lanes speed up and when to keep one. It may go before or after Ticket numbers.
 
 ### `--api-key`
 
 Every Stage is a `claude -p` session. Under `-p` an `ANTHROPIC_API_KEY` outranks your Claude login without asking, so a Run starts each Stage without that key, whatever your shell exports, and the Stages run on your plan. `ANTHROPIC_AUTH_TOKEN` is passed on as it is, for a gateway or proxy.
 
-`--api-key` bills every Stage of this one Run to the `ANTHROPIC_API_KEY` your shell exports instead. It is how the monthly API credits of a Max or Team plan are spent: they cover `claude -p` only on a key. It is refused before the lock where no key is exported and on a cloud Host ([Refused before it starts](#refused-before-it-starts)). A Run the plan's limit stops does not switch to the key by itself.
+`--api-key` bills every Stage of this one Run to the `ANTHROPIC_API_KEY` your shell exports instead. Whose money a Run spends is the Host's business, so it is a flag and never a field of `ticket-runner.json`. It is how the monthly API credits of a Max or Team plan are spent: they cover `claude -p` only on a key. It is refused before the lock where no key is exported and on a cloud Host ([Refused before it starts](#refused-before-it-starts)). A Run the plan's limit stops does not switch to the key by itself.
 
 | On an `--api-key` Run | What happens |
 |---|---|
@@ -245,7 +245,7 @@ Readying the Host installs only what the cloud environment's setup script did no
 3. **`gh`**, from apt.
 4. **The Target's own dependencies**, in the main checkout, where every worktree's Checks find them.
 
-It reports each Ticket as the Run ends it, then the summary and what the exit code means.
+It reports each Ticket as the Run ends it, then the summary and what the exit code means. Everything else you want of a Ticket still goes through the board, and while its Run holds the Target the Operator leaves the main checkout and the worktrees alone.
 
 A cloud Host differs from a workstation in a few ways the pipeline accounts for:
 
@@ -254,6 +254,8 @@ A cloud Host differs from a workstation in a few ways the pipeline accounts for:
 - **A reclaimed VM is a kill.** It leaves Stranded Tickets, which the next Run on any Host resumes, and a lock no other Host will presume dead: a human releases it, through an Operator or on GitHub.
 - **Transcripts go with the VM**, except a handed-off Ticket's, which are kept on the State branch.
 - **Stages always run on your plan.** A cloud session ignores `ANTHROPIC_API_KEY`, so `--api-key` is refused there rather than accepted and not honoured.
+
+In everything else a cloud Host runs the same Run against the same Target as a workstation. A claim assigns the same `gh` user whichever Host made it, so nothing on the board says where a Run ran.
 
 ## Related pages
 
@@ -266,7 +268,7 @@ A cloud Host differs from a workstation in a few ways the pipeline accounts for:
 ## References
 
 - [`src/cli.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/cli.ts), [`src/command-line.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/command-line.ts), [`src/start.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts), [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts)
-- [`src/credential.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/credential.ts), [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts)
+- [`src/credential.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/credential.ts), [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts), [`src/adapters/gh-tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts)
 - [`src/stop.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stop.ts), [`src/lock.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lock.ts), [`src/stage-guard.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stage-guard.ts), [`src/host.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/host.ts)
 - [`src/templates.ts` · `runSummary`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts), [`src/run-log.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run-log.ts), [`src/adapters/version.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts)
 - [`docs/templates/run-summary.txt`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/run-summary.txt), [`docs/templates/stop-report.txt`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/stop-report.txt), [`docs/templates/operator-skill.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/operator-skill.md)

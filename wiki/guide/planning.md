@@ -5,7 +5,7 @@ description: "What makes a GitHub issue a Ticket the pipeline will take: Specs a
 
 # Planning the work
 
-The pipeline does not plan. Planning stays with humans, and the pipeline only takes what Planning hands it ([ADR-0001](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0001-humans-plan-the-pipeline-executes.md)). Because it trusts what it is handed, it reads only a few things off an issue, reads them strictly, and refuses an issue that gets one of them wrong rather than guess.
+The pipeline does not plan. Planning stays with humans, and the pipeline only takes what Planning hands it and carries it, unattended, from picking a Ticket to merging it ([ADR-0001](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0001-humans-plan-the-pipeline-executes.md)). Because it trusts what it is handed, it reads only a few things off an issue, reads them strictly, and refuses an issue that gets one of them wrong rather than guess.
 
 | A Ticket needs | Why |
 |---|---|
@@ -95,7 +95,7 @@ To keep the pipeline off a Ticket, take `ready-for-agent` off it, or assign some
 
 ## Guards
 
-Planning goes wrong in a few known ways. A [Guard](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) passes such a Candidate over before it is claimed and says once why, so you fix the Planning output and run again.
+Planning goes wrong in a few known ways. A [Guard](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) passes such a Candidate over before it is claimed and says once why, but never repairs the issue itself, so you fix the Planning output and run again. Every open `ready-for-agent` issue a Run looks at is a candidate, and the Frontier is the candidates left once the claimed and the blocked ones are dropped:
 
 ```mermaid
 flowchart TD

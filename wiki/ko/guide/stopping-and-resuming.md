@@ -154,22 +154,22 @@ Release가 하는 일:
 - Progress comment에 `⏸ rate limited`나 `⏸ API failure` 줄을 하나 남깁니다. 보고는 이게 전부입니다.
 - State file을 최신으로 맞춥니다. implement Stage가 멈췄으면 `claimed`, 그 뒤의 Stage가 멈췄으면 `implemented`입니다. Fix budget은 그대로 가져가되, 이렇게 멈춘 게 fix Stage 자신이면 쓴 것으로 치지 않습니다.
 - Claim을 되돌립니다. `ready-for-agent`를 붙이고, `in-progress`를 떼고, 담당자를 해제합니다.
-- 코멘트를 달지 않고, draft pull request도 열지 않습니다.
+- 코멘트를 달지 않으니 아무에게도 알림이 가지 않고, draft pull request도 열지 않습니다.
 
 그 뒤로 Run은 더 claim하지 않습니다. 한 Stage를 멈춘 원인은 다음 Stage도 멈출 테니까요. 바쁜 Lane은 자기 Ticket을 끝까지 마치고, Run은 한도가 풀리기를 기다리지 않고 끝납니다. 마지막 줄이 그 이유를 말하고, CLI가 알려 준 경우에는 한도가 풀리는 시각도 담습니다([요약](./running.md#the-summary)). Release된 Ticket도 가져간 것으로 치니, Hand-off가 없으면 종료 코드는 `0`입니다.
 
-한도가 풀리거나 API가 회복된 뒤 Run을 시작하면 그 Ticket이 Frontier에 돌아와 있고, State file에서 이어 갑니다.
+한도가 풀리거나 API가 회복된 뒤 직접, 또는 Operator를 통해 Run을 시작하면 그 Ticket이 Frontier에 돌아와 있고, State file에서 이어 갑니다.
 
 ## API 예산 소진으로 인한 Release {#release-out-of-api-budget}
 
-[`--api-key`](./running.md#api-key)로 시작한 Run의 Stage는 키의 조직에 크레딧이 없거나, 워크스페이스가 Console에서 건 지출 한도에 닿으면 거절당할 수 있습니다. 어느 쪽도 Ticket 탓이 아니니 rate limit 때처럼 Release하되, 다음이 다릅니다.
+[`--api-key`](./running.md#api-key)로 시작한 Run의 Stage는 키의 조직에 크레딧이 없거나, 워크스페이스가 Console에서 건 지출 한도에 닿으면 거절당할 수 있습니다. 둘 다 크레딧 잔액이나 워크스페이스의 사용 한도를 언급하는 400으로 돌아오고, 다음에 할 일이 같으니 원인 하나로 봅니다. 어느 쪽도 Ticket 탓이 아니니 rate limit 때처럼 Release하되, 다음이 다릅니다.
 
 - Progress 줄은 `⏸ out of API budget`, Run의 마지막 줄은 `Out of API budget.`입니다.
 - 지출 한도 메시지에는 접근이 돌아오는 시각이 있지만 요약은 말하지 않습니다. Console을 확인한 뒤 다음 Run을 시작하세요.
 
 ## Base branch가 실패할 때의 Release {#release-over-a-failing-base-branch}
 
-Check나 CI가 실패했는데 branch의 merge-base에서도 실패하면, branch가 들여온 것이 아니라 물려받은 실패입니다([Base branch도 함께 실패할 때](./ticket-to-merge.md#a-failure-the-base-branch-shares)). 이때는 rate limit 때처럼 Ticket을 Release하되, 다른 점은 이렇습니다.
+Check나 CI가 실패해 파이프라인이 branch와 base branch의 merge-base에서 깨끗한 worktree로 Check 명령을 다시 돌렸는데 그중 하나가 거기서도 실패하면, branch가 들여온 것이 아니라 물려받은 실패입니다([Base branch도 함께 실패할 때](./ticket-to-merge.md#a-failure-the-base-branch-shares)). 이때는 rate limit 때처럼 Ticket을 Release하되, 다른 점은 이렇습니다.
 
 - Progress 줄에 ``⏸ `<command>` fails on the Base branch``라고 적고, Run의 마지막 줄은 그 명령과 merge-base를 밝힙니다.
 - 상설 Notes 이슈에 명령 출력의 끝부분을 담은 Note 하나를 올립니다. Ticket 자체에는 코멘트를 달지 않습니다.
@@ -215,7 +215,7 @@ kill된 Run은 아무것도 놓아주지 않습니다. 그 Ticket들은 Claim을
 
 읽을 수 없는 State file은 아마 더 새 파이프라인이 쓴 파일입니다.
 
-Stranded Ticket은 Frontier가 내놓는 것보다 먼저 빈 Lane을 채웁니다([실행하기](./running.md#run)).
+Stranded Ticket은 Frontier가 내놓는 것보다 먼저 빈 Lane을 채웁니다([실행하기](./running.md#run)). 어느 Host든 sweep한 Run이 remote의 branch에서 이어받습니다. 범위를 좁힌 Run은 받은 Ticket 가운데 stranded인 것만 이어받습니다.
 
 그래도 kill은 Stop보다 비쌉니다. Stage가 아직 commit하고 push하지 못한 것은 사라집니다. rebase 도중에 멈춘 worktree는 Check가 판정하기 전에 rebase를 abort해 branch tip으로 되돌립니다.
 
@@ -253,19 +253,19 @@ Ticket이 어디까지 갔는지 기록이 없으면, Release되거나 stranded�
 
 상태는 둘뿐입니다. implement Stage 다음의 모든 것(Check, Verify, rebase, pull request, CI, merge)은 `implemented`에서 이어받은 Run이 Check부터 다시 돌립니다.
 
-파일은 Ticket이 merge되거나, 이슈가 닫히거나, branch가 여기 worktree에도 remote에도 없을 때 사라집니다.
+파일은 claim과 함께 쓰이고, Ticket이 나아갈 때마다 갱신됩니다. Ticket이 merge되거나, 이슈가 닫히거나, branch가 여기 worktree에도 remote에도 없을 때, 그리고 파이프라인의 작업이 남지 않는 [setup에서의 Hand-off](#when-a-hand-off-does-less)에서 사라집니다.
 
 ### `ticket-runner/state` branch {#the-ticket-runner-state-branch}
 
-State는 Target의 remote에 두니, 어느 Host의 Run이든 다른 Host가 남긴 Ticket을 이어받을 수 있습니다([ADR-0004](./internals.md#adr-0004)). 바뀔 때마다 branch를 snapshot commit 하나로 다시 씁니다([`GitWorkspace`](./internals.md#gitworkspace)). Run이 도는 동안에는 이 branch에 손으로 commit하지 마세요.
+State는 보드 밖, Target의 remote에 두니, 어느 Host의 Run이든 다른 Host가 남긴 Ticket을 이어받을 수 있습니다([ADR-0004](./internals.md#adr-0004)). 바뀔 때마다 branch를 snapshot commit 하나로 다시 씁니다([`GitWorkspace`](./internals.md#gitworkspace)). Run이 도는 동안에는 이 branch에 손으로 commit하지 마세요.
 
 ## Run lock {#the-run-lock}
 
-어느 Host에서 돌든 Target 하나는 한 번에 Run 하나만 잡습니다. 모든 Host와 모든 사람이 볼 수 있는 Target의 GitHub 저장소에 lock을 두고 그렇게 합니다([ADR-0008](./internals.md#adr-0008)).
+어느 Host에서 돌든 Target 하나는 한 번에 Run 하나만 잡습니다. 보드 밖이지만 모든 Host와 모든 사람이 볼 수 있는 Target의 GitHub 저장소에 lock을 두고 그렇게 합니다([ADR-0008](./internals.md#adr-0008)). Run은 시작부터 끝까지 lock을 잡고 있고, claim이 Ticket 하나의 것이라면 lock은 Target 전체의 것입니다.
 
 lock은 `ticket-runner/lock` branch tip의 `lock.json`입니다. 이 branch는 Run이 한 번 시작된 뒤로 늘 존재합니다. 파일에는 잡은 쪽이 적힙니다. `host`(kind, id, name), `pid`, `command`, `runId`, `startedAt`, 그리고 OS가 알려 주는 프로세스 시작 시각입니다. 아무도 잡지 않았다면 `{ "held": false }`입니다. commit 메시지도 같은 내용을 말로 적습니다. 예를 들면 ``Held by run 2026-09-17T09-00-00-000 on the workstation `desk`: ticket-runner run``이나 `Free`입니다.
 
-state branch와 달리 lock은 이력을 남기니, GitHub에서 누가 언제 Target을 잡았는지 볼 수 있습니다. 두 Run이 동시에 잡으려 할 때 어떻게 가려내는지는 [`GitWorkspace`](./internals.md#gitworkspace)에 있습니다.
+state branch와 달리 lock은 이력을 남기니, GitHub에서 누가 언제 Target을 잡았는지 볼 수 있습니다. 잡을 때도 놓을 때도 Run이 마지막으로 읽은 tip 위에 새 commit을 얹고 그 tip에 lease를 걸어 push하므로, 지워지는 것은 없고 잡는 쪽이 마지막으로 본 상태에서만 잡을 수 있습니다. 두 Run이 동시에 잡으려 할 때 어떻게 가려내는지는 [`GitWorkspace`](./internals.md#gitworkspace)에 있습니다.
 
 누군가 잡고 있는 lock을 Run이 어떻게 보느냐는 잡은 쪽이 어디 있느냐에 달려 있습니다.
 

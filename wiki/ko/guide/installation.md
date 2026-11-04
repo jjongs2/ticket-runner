@@ -146,7 +146,7 @@ Not ready: 1 item is yours to put right.
 
 ## Target readiness: `run`이 거절하는 경우 {#target-readiness-what-run-refuses}
 
-`run`은 아무것도 고치지 않습니다. `init`이 뒀어야 할 항목이 있는지 이 순서로 확인하고, 처음 빠진 항목에서 종료 코드 `2`로 거절합니다.
+`run`은 아무것도 고치지 않습니다. `init`이 뒀어야 할 항목이 있는지 이 순서로 확인하고, 처음 빠진 항목에서 종료 코드 `2`로 거절합니다. 어느 Host에서나 똑같이 확인하므로, 워크스테이션의 Run이 받아들인 Target은 Operator가 Claude 앱에서 돌려도 받아들여집니다.
 
 | 순서 | 거절하는 경우 |
 |---|---|

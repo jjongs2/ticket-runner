@@ -75,6 +75,7 @@ claude --print <prompt> --output-format stream-json --verbose \
   | `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | `1` | Host 사용자의 memory는 Target이 아닌 그 사람의 프로젝트에 관한 것 |
   | `CLAUDE_CODE_SHELL` | `/bin/bash`, 있을 때만 | zsh는 아무것도 맞지 않는 glob 하나에 명령 전체를 멈춤 |
   `ANTHROPIC_AUTH_TOKEN`을 비롯한 다른 변수는 그대로 물려받습니다.
+- Stage가 띄우는 프로세스는 모두 두 표시를 물려받습니다. Stage 표시는 실수를 막는 장치일 뿐 sandbox가 아닙니다. 변수를 지운 세션은 그대로 통과하고, 한 Target에 Run 둘이 붙지 못하게 하는 것은 Run lock의 몫입니다. session 표시를 따로 두는 것은 같은 Stage에 있는 두 Lane이 Stage 표시를 같이 쓰기 때문입니다.
 - Stage가 시작되는 순간부터 [Stage의 파일](./running.md#logs-and-transcripts)을 쓰고, 거기에 키 값은 절대 적지 않습니다. 명령 파일은 Hand-off 때 Target의 remote로 가기 때문입니다.
 - 세션의 `system/init` 이벤트에서 `apiKeySource`를 읽고, orchestrator가 이를 Run의 Credential과 맞춰 봅니다.
 - `maxMinutes`가 지나면 자식과 자식이 띄운 프로세스를 모두 죽이고, 실패를 `rate-limited`, `api-error`, `out-of-budget`, `timed-out`, `turn-capped`, `nonzero-exit`, `invalid-result`로 분류합니다. 성공한 세션은 앞의 셋 중 어느 것도 아니고, 셋은 실패한 세션에서 이렇게 읽습니다.
@@ -195,7 +196,9 @@ sequenceDiagram
 
 [Version](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 `main`이 `v<x.y.z>` tag로 달고, npm에 올리고, GitHub Release로 공개하는 번호입니다. 설치된 사본이 이 번호를 알려 줍니다. 머신에는 `main`이 아니라 Version을 설치하니, `0.5.2`라고 말하는 두 머신은 같은 코드를 돌립니다([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
 
-Version은 사람이 Version PR을 merge해서 끊고, 그 PR의 초안은 [`/cut-a-version`](https://github.com/jjongs2/ticket-runner/blob/main/.claude/skills/cut-a-version/SKILL.md)이 만듭니다. 단계와 거기 붙는 검사는 [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md#versions)에 있습니다.
+Version은 사람이 Version PR을 merge해서 끊고, 그 PR의 초안은 [`/cut-a-version`](https://github.com/jjongs2/ticket-runner/blob/main/.claude/skills/cut-a-version/SKILL.md)이 만듭니다. 단계와 거기 붙는 검사는 [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md#versions)에 있습니다. 이 pull request가 번호를 올리고 릴리스 노트를 싣습니다. 스킬을 돌리는 agent가 `CONTRIBUTING.md`의 규칙대로 번호를 제안하고 노트 초안을 쓰지만, 결정은 사람의 리뷰와 merge입니다. 언제 버전을 끊을지는 Planning의 결정이고, 무엇이 merge됐는지를 보고 짐작할 일이 아니기 때문입니다.
+
+릴리스 노트에는 지난 버전 이후 무엇이 바뀌었는지를 pull request별로 늘어놓지 않고 읽는 사람에게 맞게 묶어 적고, 업그레이드한 뒤 Target이나 그 사람이 해야 할 일을 적습니다. 노트는 `CHANGELOG.md`에 버전마다 섹션 하나로 남고, 그 버전의 GitHub Release 본문으로 공개됩니다.
 
 ### 찍히는 번호 {#the-stamp}
 
@@ -208,6 +211,8 @@ Version은 CLI에서 한 번 정해서 아래로 넘깁니다. 그래서 한 Run
 | `0.5.2+331d79c.dirty` | commit하지 않은 변경이 있는 개발 checkout |
 | `unknown` | 읽을 수 있는 `package.json`이 없음 |
 
+개발 checkout이 commit을 덧붙이는 것은 두 버전 사이에서는 번호만으로 아무것도 알 수 없기 때문입니다.
+
 같은 문자열이 찍히는 곳:
 
 | 어디 | 왜 |
@@ -218,6 +223,8 @@ Version은 CLI에서 한 번 정해서 아래로 넘깁니다. 그래서 한 Run
 | Run 디렉터리의 `version.txt` | transcript가 그걸 쓴 파이프라인 곁에 있도록 |
 | conventions 문서의 첫 줄(번호만) | `init`과 Run이 어느 쪽이 뒤처졌는지 알 수 있도록 |
 | 설치본이 모르는 설정 키를 거절하는 문구 | 낡은 설치본과 잘못된 설정을 구별할 수 있도록 |
+
+conventions 문서에 찍힌 번호는 Host의 자체 설정이 아무 버전도 설치하지 않은 cloud Host에 Operator가 설치하는 버전이기도 합니다. 자체 설정이 버전을 설치한 Host는 찍힌 번호와 상관없이 그 버전을 돌립니다.
 
 ### 새 Version 확인 {#the-newer-version-check}
 
@@ -306,6 +313,7 @@ checkout은 번호 옆에 commit도 함께 알려 줍니다([찍히는 번호](#
 - [`src/ports/`](https://github.com/jjongs2/ticket-runner/tree/main/src/ports), [`src/adapters/`](https://github.com/jjongs2/ticket-runner/tree/main/src/adapters), [`src/testing/`](https://github.com/jjongs2/ticket-runner/tree/main/src/testing)
 - [`src/cli.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/cli.ts), [`src/start.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts), [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts), [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts)
 - [`src/adapters/version.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts), [`src/version-number.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/version-number.ts), [`src/version-pr.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/version-pr.ts), [`src/staleness.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/staleness.ts)
-- [`scripts/version.ts`](https://github.com/jjongs2/ticket-runner/blob/main/scripts/version.ts), [`.github/workflows/`](https://github.com/jjongs2/ticket-runner/tree/main/.github/workflows)
+- [`scripts/version.ts`](https://github.com/jjongs2/ticket-runner/blob/main/scripts/version.ts), [`.github/workflows/`](https://github.com/jjongs2/ticket-runner/tree/main/.github/workflows), [`.claude/skills/cut-a-version/`](https://github.com/jjongs2/ticket-runner/blob/main/.claude/skills/cut-a-version/SKILL.md), [`docs/templates/version-notes.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/version-notes.md)
+- [`src/stage-guard.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stage-guard.ts), [`docs/templates/operator-skill.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/operator-skill.md)
 - [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md), [`CHANGELOG.md`](https://github.com/jjongs2/ticket-runner/blob/main/CHANGELOG.md)
 - [ADR-0001](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0001-humans-plan-the-pipeline-executes.md)부터 [ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)까지

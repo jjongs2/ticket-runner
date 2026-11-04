@@ -47,9 +47,11 @@ flowchart TD
 
 fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종류와 상관없이 두 번째 실패, 또는 fix Stage가 손쓸 수 없는 실패는 Hand-off입니다. rate limit, API 장애, API 예산으로 멈춘 Stage와 Base branch도 똑같이 겪는 실패([아래](#a-failure-the-base-branch-shares))는 이 그림을 아예 벗어나 Ticket을 [Release](./stopping-and-resuming.md#release-on-a-rate-limit)합니다.
 
+[Hand-off](./stopping-and-resuming.md#hand-off)는 claim을 풀고, `ready-for-human`을 달고, 실패와 작업이 있는 곳을 코멘트로 남기고, 열린 pull request를 draft로 되돌립니다. branch와 state file은 Target의 remote에 남고, 넘겨진 Stage들의 transcript도 그 옆에 남습니다. 사람이 볼 즈음에는 작업한 Host가 없어졌을 수도 있기 때문입니다. 사람이 Ticket의 라벨을 `ready-for-agent`로 바꾸면 Ticket이 파이프라인으로 돌아가고, implement Stage를 다시 돌리지 않고 도달한 지점부터 이어 갑니다. state file을 지우는 것은 Run이 덮어쓰지 않으려 한, 이미 있던 branch 때문에 setup에서 일어난 Hand-off뿐입니다. 거기서는 이 Run의 Stage가 하나도 돌지 않았으니 파이프라인이 이어 갈 것이 없습니다.
+
 ## Claim {#the-claim}
 
-아무것도 쓰기 전에 [Guard](./planning.md)부터 실행됩니다. 파이프라인이 맡지 않을 이슈에 '가져감' 표시가 남는 일은 없습니다.
+claim은 Ticket에 '가져감' 표시를 해서 다른 Run이 가져가지 않게 합니다. Frontier는 담당자가 있는 Ticket을 모두 뺍니다. 아무것도 쓰기 전에 [Guard](./planning.md)부터 실행됩니다. 파이프라인이 맡지 않을 이슈에 '가져감' 표시가 남는 일은 없습니다.
 
 그다음 이 순서로 진행합니다.
 
@@ -134,11 +136,11 @@ remote에 있는 그대로의 merge-base를 깨끗하게 checkout하고, 같은 
 | 함께 실패 | ``⏸ `<command>` fails on the Base branch`` | Release. budget은 썼든 안 썼든 그대로 |
 | checkout하거나 돌리지 못함 | 통과한 것으로 봄 | Fix budget을 쓰고, 이유는 Run 로그에 남김 |
 
-Release는 상설 Notes 이슈에 파이프라인 자신의 Note를 올리고, 거기에 명령 이름과 출력의 끝부분을 담습니다. 다음에 할 일은 [Base branch가 실패할 때의 Release](./stopping-and-resuming.md#release-over-a-failing-base-branch)에 있습니다.
+Release는 상설 Notes 이슈에 파이프라인 자신의 Note를 올리고, 거기에 명령 이름과 출력의 끝부분을 담습니다. Release되는 Ticket이 몇 개든 Run 하나에서 merge-base commit 하나당 한 번만 올립니다. 다음에 할 일은 [Base branch가 실패할 때의 Release](./stopping-and-resuming.md#release-over-a-failing-base-branch)에 있습니다.
 
 ## verify Stage와 Verdict {#the-verify-stage-and-its-verdict}
 
-merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 그 코드가 제대로 도는지 물어보기에 가장 믿기 어려운 상대입니다. 그래서 플러그인 스킬 없이 새로 띄운 세션이 각 Acceptance Criterion이 충족되지 **않았음**을 증명하려고 합니다. 이 세션은 본문과 코멘트에서 기준을 읽고, 코드를 돌려 보고, 버릴 테스트를 써도 되지만 commit은 하면 안 됩니다. 문서로 남은 결정이나 다른 기준을 뒤집지 않고는 충족할 수 없는 기준은 `unmet`으로 두고, 근거에 사람의 결정이 필요하다고 적습니다. 임시 파일은 끝난 뒤 버리므로 pull request에 섞이지 않습니다.
+merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 그 코드가 제대로 도는지 물어보기에 가장 믿기 어려운 상대입니다. 그래서 플러그인 스킬 없이 새로 띄운 세션이 각 Acceptance Criterion이 충족되지 **않았음**을 증명하려고 합니다. 이 세션은 본문과 코멘트에서 기준을 읽고, 코드를 돌려 보고, 버릴 테스트를 써도 되지만 commit은 하면 안 됩니다. 문서로 남은 결정이나 다른 기준을 뒤집지 않고는 충족할 수 없는 기준은 `unmet`으로 두고, 근거에 사람의 결정이 필요하다고 적습니다. 임시 파일은 끝난 뒤 버리므로 pull request에 섞이지 않습니다. 판정에는 기준마다 칸이 하나씩 있을 뿐 다른 것을 적을 칸이 없으므로, 기준 밖에서 찾은 것은 [Note](#notes)로 세션을 나갑니다.
 
 **Verdict**는 기준마다 `met`, `unmet`, `unverifiable` 중 하나를 근거와 함께 매깁니다. 에이전트 자신의 통과 여부 판단은 참고일 뿐이고, 파이프라인이 직접 판단합니다. 통과 조건은 **`unmet`이 하나도 없고 `met`이 하나 이상**인 것입니다.
 
@@ -178,7 +180,7 @@ merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 �
 
 fix Stage가 끝나면 Ticket은 Check부터 다시 시작합니다. verify Stage를 포함해 모든 게이트가 수정본을 다시 판정하므로, 수정본도 처음 구현과 같은 기준을 통과해야 합니다. fix Stage 후 branch가 자라지 않았다면 곧바로 Hand-off입니다. 아무도 건드리지 않은 branch를 다시 판정해 봐야 똑같이 실패할 뿐이기 때문입니다. squash하거나 amend한 branch도 자라지 않은 것으로 봅니다. 이때 hand-off 코멘트에는 fix Stage가 받았던 근거가 실리므로, 사람에게 넘어간 `unmet` 기준은 그 근거가 묻는 질문과 함께 도착합니다.
 
-rate limit, API 장애, API 예산으로 멈춘 fix Stage는 Fix budget을 쓰지 않습니다. 다음 Run이 어떤 budget으로 시작하는지는 [Ticket 돌려주기](./stopping-and-resuming.md#handing-a-ticket-back)에 있습니다.
+rate limit, API 장애, API 예산으로 멈춘 fix Stage는 Fix budget을 쓰지 않습니다. fix 기회는 파이프라인이 Ticket을 맡을 때마다 fix Stage 한 번입니다. Release는 Ticket에 대해 아무것도 바꾸지 않았으니 이미 쓴 fix 기회를 다음 Run에 그대로 넘깁니다. Hand-off는 fix 기회를 되돌려 줍니다. Ticket은 사람의 손을 거쳐야만 돌아오고, 새 fix 기회는 그 사람이 손본 것을 위한 것이기 때문입니다. 자세한 것은 [Ticket 돌려주기](./stopping-and-resuming.md#handing-a-ticket-back)에 있습니다.
 
 ## Lane과 Frontier 다시 채우기 {#lanes-and-the-frontier-refill}
 
@@ -208,7 +210,7 @@ sequenceDiagram
 ```
 <!-- Sources: src/landing.ts, src/orchestrator.ts -->
 
-Ticket은 fix Stage, Hand-off, Release 때도 Landing을 나가므로, 누구도 세션 하나를 기다리며 서 있지 않습니다.
+Ticket은 fix Stage, Hand-off, Release 때도 Landing을 나가므로, 누구도 세션 하나를 기다리며 서 있지 않습니다. fix Stage에서 돌아온 Ticket은 맨 뒤에 다시 줄을 섭니다. [base branch가 함께 실패해서 Release된](#a-failure-the-base-branch-shares) Ticket은 다음 Run이 맡을 때 Check 전에 pull과 rebase만 하러 Landing을 한 번 지나고, 그 뒤로 merge할 것이 없으니 곧바로 나옵니다.
 
 ### rebase {#rebase}
 
@@ -290,7 +292,7 @@ Ticket은 이미 merge됐으니 여기서부터는 Hand-off될 수 없습니다.
 
 ## 보드에 남기는 기록 {#what-the-board-is-told}
 
-**Progress comment.** Ticket마다 [Progress comment](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)가 하나 있습니다. 단계가 끝날 때마다 제자리에서 고쳐 쓰므로, 알림은 첫 작성 때만 갑니다. 첫 행이 기록될 때 처음 올라갑니다. Ticket을 다룬 Run마다 섹션이 하나씩 생겨 이전 Run의 섹션 아래에 붙고, 섹션 머리글에는 Version, Run id, branch가 적힙니다.
+**Progress comment.** Ticket마다 [Progress comment](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)가 하나 있습니다. 숨은 표식으로 다시 찾아 단계가 끝날 때마다 제자리에서 고쳐 쓰므로, 알림은 첫 작성 때만 갑니다. 첫 행이 기록될 때 처음 올라갑니다. Ticket을 다룬 Run마다 섹션이 하나씩 생겨 이전 Run의 섹션 아래에 붙고, 섹션 머리글에는 Version, Run id, branch가 적힙니다.
 
 ```text
 **ticket-runner** `0.4.0` · run `2026-09-17T09-00-00-000` · `agent/4-planning-guards`
@@ -312,7 +314,7 @@ Ticket은 이미 merge됐으니 여기서부터는 Hand-off될 수 없습니다.
 
 ## Note {#notes}
 
-Stage는 자기 Ticket과 상관없는 결함을 자주 만납니다. 고치면 verify가 판정하는 범위를 넘어 Ticket이 넓어지고, 무시하면 transcript 속에 묻혀 버립니다. 그래서 implement, verify, fix Stage는 [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 목록을 남기며 끝나고, 파이프라인은 각 Note를 사람이 볼 만한 곳에 올립니다. Note는 Ticket 밖의 결함이고, 그 Ticket 안에서는 손대지 않습니다. branch 스스로 만든 결함은 Note로 남기지 않고 고칩니다. Note는 Stage 자체의 결과를 판정하기 전에 보내므로, 턴이 바닥난 Stage도 알아챈 것은 전합니다.
+Stage는 자기 Ticket과 상관없는 결함을 자주 만납니다. 고치면 verify가 판정하는 범위를 넘어 Ticket이 넓어지고, 무시하면 transcript 속에 묻혀 버립니다. 그래서 implement, verify, fix Stage는 [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 목록을 남기며 끝나고, 파이프라인은 각 Note를 사람이 볼 만한 곳에 올립니다. Note는 잘못 동작하거나 망가지는 Ticket 밖의 결함입니다. 취향이나 리팩터링, 있으면 좋을 테스트는 Note가 아니고, 그 Ticket 안에서는 손대지 않습니다. branch 스스로 만든 결함, 즉 base branch에서는 제대로 돌고 branch에서는 잘못 도는 결함이나 branch가 더한 코드 안의 결함은 그 Ticket의 몫입니다. implement와 fix Stage는 Note로 남기지 않고 고치고, 아무것도 고치지 않는 verify만 기준 밖에서 증명한 것을 Note로 남깁니다. Note는 Stage 자체의 결과를 판정하기 전에 보내므로, 턴이 바닥난 Stage도 알아챈 것은 전합니다.
 
 | Note가 가리키는 곳 | 가는 곳 |
 |---|---|

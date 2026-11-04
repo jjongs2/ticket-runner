@@ -54,7 +54,7 @@ The second sentence is added only for an unknown key: on a stale install, a key 
 
 - `baseBranch`: string
 
-The [Base branch](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is the one every Ticket starts from and merges into. Without this field it is whatever GitHub calls the repository's default branch, so a Target on `master` needs no setting. It is resolved once at the start of a Run.
+The [Base branch](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is the one every Ticket starts from and merges into: a Run rebases each Ticket onto it, opens the Ticket's pull request against it and pulls the main checkout to it once the Ticket merges. Without this field it is whatever GitHub calls the repository's default branch, so a Target on `master` needs no setting. It is resolved once at the start of a Run.
 
 ## `lanes`
 

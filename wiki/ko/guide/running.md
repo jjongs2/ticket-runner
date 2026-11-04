@@ -68,13 +68,13 @@ Lane 안에서 Ticket 하나에 일어나는 일은 [Ticket 하나가 merge되�
 
 ### `--lanes` {#lanes}
 
-`--lanes <n>`은 이번 Run에만 Lane `n`개를 주고, `ticket-runner.json`의 [`lanes`](./configuration.md#lanes)보다 우선합니다. Lane을 늘리면 무엇이 빨라지는지, 언제 하나로 둘지도 거기에 있습니다. Ticket 번호 앞에 둬도 뒤에 둬도 됩니다.
+`--lanes <n>`은 이번 Run에만 Lane `n`개를 주고, `ticket-runner.json`의 [`lanes`](./configuration.md#lanes)보다 우선합니다. Host가 Lane을 몇 개나 감당할 수 있는지는 Target이 아니라 Host가 정할 일이기 때문입니다. Lane을 늘리면 무엇이 빨라지는지, 언제 하나로 둘지도 거기에 있습니다. Ticket 번호 앞에 둬도 뒤에 둬도 됩니다.
 
 ### `--api-key` {#api-key}
 
 Stage는 모두 `claude -p` 세션입니다. `-p`에서는 `ANTHROPIC_API_KEY`가 묻지도 않고 Claude 로그인보다 앞서기 때문에, Run은 셸이 무엇을 export하든 그 키를 빼고 Stage를 시작합니다. 그래서 Stage는 요금제로 돌아갑니다. `ANTHROPIC_AUTH_TOKEN`은 게이트웨이나 프록시를 위해 그대로 넘깁니다.
 
-`--api-key`를 주면 이 Run의 모든 Stage를 대신 셸이 export한 `ANTHROPIC_API_KEY`로 과금합니다. Max나 Team 요금제에 딸린 월간 API 크레딧은 키로 돌린 `claude -p`에만 쓰이니, 그 크레딧을 쓰는 방법이 이것입니다. 키를 export하지 않았거나 클라우드 Host라면 lock을 잡기 전에 거절합니다([시작 전에 거절되는 경우](#refused-before-it-starts)). 요금제 한도로 멈춘 Run이 알아서 키로 넘어가지는 않습니다.
+`--api-key`를 주면 이 Run의 모든 Stage를 대신 셸이 export한 `ANTHROPIC_API_KEY`로 과금합니다. 누구의 돈을 쓸지는 Host가 정할 일이라, `ticket-runner.json`의 필드가 아니라 플래그로만 받습니다. Max나 Team 요금제에 딸린 월간 API 크레딧은 키로 돌린 `claude -p`에만 쓰이니, 그 크레딧을 쓰는 방법이 이것입니다. 키를 export하지 않았거나 클라우드 Host라면 lock을 잡기 전에 거절합니다([시작 전에 거절되는 경우](#refused-before-it-starts)). 요금제 한도로 멈춘 Run이 알아서 키로 넘어가지는 않습니다.
 
 | `--api-key` Run에서 | 일어나는 일 |
 |---|---|
@@ -245,7 +245,7 @@ Host 준비는 클라우드 환경의 setup 스크립트가 설치하지 않은 
 3. **`gh`**, apt에서
 4. **Target 자체의 의존성**, main checkout에. 모든 worktree의 Check가 거기서 찾아 씁니다.
 
-Run이 Ticket을 끝낼 때마다 보고하고, 끝나면 요약과 종료 코드의 뜻을 전합니다.
+Run이 Ticket을 끝낼 때마다 보고하고, 끝나면 요약과 종료 코드의 뜻을 전합니다. 그 밖에 Ticket에 바라는 일은 여전히 보드에서 합니다. 자기 Run이 Target을 잡고 있는 동안 Operator는 main checkout과 worktree에 손대지 않습니다.
 
 클라우드 Host는 몇 가지가 워크스테이션과 다르고, 파이프라인은 그것을 감안합니다.
 
@@ -254,6 +254,8 @@ Run이 Ticket을 끝낼 때마다 보고하고, 끝나면 요약과 종료 코�
 - **회수된 VM은 kill입니다.** Stranded Ticket을 남기고, 다음 Run이 어느 Host에서든 재개합니다. 남은 lock은 다른 Host가 죽었다고 단정하지 않으니 사람이 풀어야 합니다. Operator를 통해서든 GitHub에서든요.
 - **transcript는 VM과 함께 사라집니다.** Hand-off된 Ticket의 것만 State branch에 남습니다.
 - **Stage는 늘 요금제로 돌아갑니다.** 클라우드 세션은 `ANTHROPIC_API_KEY`를 무시하니, `--api-key`를 받아 놓고 지키지 못하는 대신 거절합니다.
+
+그 밖에는 클라우드 Host도 워크스테이션과 같은 Target에 같은 Run을 돌립니다. claim은 어느 Host에서 하든 같은 `gh` 사용자를 담당자로 지정하니, Run이 어디서 돌았는지는 보드에 드러나지 않습니다.
 
 ## 관련 페이지 {#related-pages}
 
@@ -266,7 +268,7 @@ Run이 Ticket을 끝낼 때마다 보고하고, 끝나면 요약과 종료 코�
 ## 참고 자료 {#references}
 
 - [`src/cli.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/cli.ts), [`src/command-line.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/command-line.ts), [`src/start.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts), [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts)
-- [`src/credential.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/credential.ts), [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts)
+- [`src/credential.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/credential.ts), [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts), [`src/adapters/gh-tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts)
 - [`src/stop.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stop.ts), [`src/lock.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lock.ts), [`src/stage-guard.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stage-guard.ts), [`src/host.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/host.ts)
 - [`src/templates.ts` · `runSummary`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts), [`src/run-log.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run-log.ts), [`src/adapters/version.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts)
 - [`docs/templates/run-summary.txt`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/run-summary.txt), [`docs/templates/stop-report.txt`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/stop-report.txt), [`docs/templates/operator-skill.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/operator-skill.md)

@@ -154,22 +154,22 @@ What the Release does:
 - writes a `⏸ rate limited` or `⏸ API failure` row in the Progress comment, which is the whole report
 - brings the State file up to date, to `claimed` if the implement Stage was stopped and `implemented` if a later Stage was, and keeps the Fix budget as it was, except that a fix Stage stopped this way spends nothing
 - undoes the Claim: adds `ready-for-agent`, removes `in-progress`, and unassigns
-- posts no comment and opens no draft pull request
+- posts no comment, so nobody is notified, and opens no draft pull request
 
 The Run then claims nothing more, because what stopped one Stage would stop the next. The busy Lanes finish their own Tickets, and the Run ends without waiting for the limit to reset. Its last line says why, and when the limit resets where the CLI said ([The summary](./running.md#the-summary)). A released Ticket counts as taken, so the exit code is `0` unless something was handed off.
 
-Start a Run once the limit has reset, or the API has recovered, and the Ticket is back on the Frontier, resumed from its State file.
+Start a Run yourself, or through an Operator, once the limit has reset or the API has recovered, and the Ticket is back on the Frontier, resumed from its State file.
 
 ## Release out of API budget {#release-out-of-api-budget}
 
-A Stage of a Run started with [`--api-key`](./running.md#api-key) can be refused because the key's organization is out of credit, or because its workspace reached the spend limit set in the Console. Neither is the Ticket's doing, so the Ticket is released as on a rate limit, with these differences:
+A Stage of a Run started with [`--api-key`](./running.md#api-key) can be refused because the key's organization is out of credit, or because its workspace reached the spend limit set in the Console. Either comes back as a 400 whose message names the credit balance or the workspace's usage limits, and the two are one cause, since what you do next is the same. Neither is the Ticket's doing, so the Ticket is released as on a rate limit, with these differences:
 
 - The Progress row is `⏸ out of API budget`, and the Run's last line `Out of API budget.`.
 - The summary does not say when access returns, though the spend limit's message does: look at the Console, then start the next Run.
 
 ## Release over a failing Base branch {#release-over-a-failing-base-branch}
 
-A failing Check or red CI that fails at the branch's merge-base too was inherited, not brought ([A failure the Base branch shares](./ticket-to-merge.md#a-failure-the-base-branch-shares)). The Ticket is released as on a rate limit, with these differences:
+A failing Check or red CI is inherited, not brought, when the pipeline runs the Check commands again in a clean worktree at the branch's merge-base with the base branch and one fails there too ([A failure the Base branch shares](./ticket-to-merge.md#a-failure-the-base-branch-shares)). The Ticket is released as on a rate limit, with these differences:
 
 - the Progress row reads ``⏸ `<command>` fails on the Base branch``, and the Run's last line names the command and the merge-base
 - the pipeline posts one Note on the standing Notes issue with the tail of the command's output; the Ticket itself gets no comment
@@ -215,7 +215,7 @@ A [Stranded Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.
 
 An unreadable State file was probably written by a newer pipeline.
 
-Stranded Tickets fill free Lanes before anything the Frontier offers ([Running](./running.md#run)).
+Stranded Tickets fill free Lanes before anything the Frontier offers ([Running](./running.md#run)), each resumed from its branch on the remote by whichever Host's Run swept it. A narrowed Run resumes only the stranded Tickets among those it was given.
 
 A kill still costs more than a Stop. Whatever the Stage had not yet committed and pushed is lost. A worktree left in the middle of a rebase is aborted back to the branch tip before the Checks grade it.
 
@@ -253,19 +253,19 @@ The file is JSON a human can read without the pipeline:
 
 There are only two states. Everything after the implement Stage (Checks, Verify, rebase, pull request, CI, merge) is run again from the Checks by a Run that resumes at `implemented`.
 
-The file goes when the Ticket merges, its issue closes, or its branch is in neither the worktree here nor on the remote.
+The file is written as part of the claim and updated as the Ticket advances. It goes when the Ticket merges, its issue closes, or its branch is in neither the worktree here nor on the remote, and at a [Hand-off at setup](#when-a-hand-off-does-less) that leaves no work of the pipeline's.
 
 ### The `ticket-runner/state` branch
 
-The State lives on the Target's remote, so a Run on any Host can resume a Ticket another Host left ([ADR-0004](./internals.md#adr-0004)). Each change rewrites the branch as one snapshot commit ([`GitWorkspace`](./internals.md#gitworkspace)). Never commit to it by hand while a Run is running.
+The State lives on the Target's remote, off the board, so a Run on any Host can resume a Ticket another Host left ([ADR-0004](./internals.md#adr-0004)). Each change rewrites the branch as one snapshot commit ([`GitWorkspace`](./internals.md#gitworkspace)). Never commit to it by hand while a Run is running.
 
 ## The Run lock
 
-One Run at a time holds a Target, whichever Host it is on, through a lock on the Target's GitHub repository, where every Host and every human can see it ([ADR-0008](./internals.md#adr-0008)).
+One Run at a time holds a Target, whichever Host it is on, through a lock on the Target's GitHub repository: off the board, but where every Host and every human can see it ([ADR-0008](./internals.md#adr-0008)). A Run holds it from start to end, and it covers the whole Target, where a claim covers one Ticket.
 
 It is `lock.json` at the tip of the `ticket-runner/lock` branch. That branch always exists once a Run has started. The file names the holder: `host` (kind, id, name), `pid`, `command`, `runId`, `startedAt`, and the process's start time as the OS reports it. Otherwise it reads `{ "held": false }`. The commit message says the same thing in words, for example ``Held by run 2026-09-17T09-00-00-000 on the workstation `desk`: ticket-runner run`` or `Free`.
 
-Unlike the state branch, the lock keeps its history, so GitHub shows who held the Target and when. How two Runs racing for it are told apart is under [`GitWorkspace`](./internals.md#gitworkspace).
+Unlike the state branch, the lock keeps its history, so GitHub shows who held the Target and when. Each take and each release is a new commit on the tip the Run last read, pushed with a lease on that tip, so nothing is ever deleted and a take succeeds only from the state its taker last saw. How two Runs racing for it are told apart is under [`GitWorkspace`](./internals.md#gitworkspace).
 
 What a Run makes of a held lock depends on where the holder is:
 

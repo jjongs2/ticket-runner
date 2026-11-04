@@ -47,9 +47,11 @@ flowchart TD
 
 Every edge to the fix Stage is taken at most once per Ticket. A second failure of any kind, or any failure the fix Stage cannot act on, is a Hand-off. A Stage stopped by the rate limit, an API failure or the API budget, and a failure the Base branch shares ([below](#a-failure-the-base-branch-shares)), leave this diagram entirely: they [release](./stopping-and-resuming.md#release-on-a-rate-limit) the Ticket.
 
+A [Hand-off](./stopping-and-resuming.md#hand-off) undoes the claim, puts `ready-for-human` on, comments the failure and where the work is, and puts an open pull request back into draft. The branch and the state file stay on the Target's remote, with the handed-off Stages' transcripts beside them, since the Host the work was done on may be gone by the time a human looks. A human who relabels the Ticket `ready-for-agent` hands it back, and it carries on from what it reached rather than paying for the implement Stage again. Only a Hand-off at setup, over a branch the Run would not branch over, removes the state file: no Stage of it ran there, so nothing is the pipeline's to resume.
+
 ## The Claim
 
-The [Guards](./planning.md) run before anything is written. An issue the pipeline will not take is never marked as taken.
+The claim marks a Ticket as taken, so no other Run picks it: the Frontier leaves out every assigned Ticket. The [Guards](./planning.md) run before anything is written. An issue the pipeline will not take is never marked as taken.
 
 Then, in this order:
 
@@ -134,11 +136,11 @@ The merge-base, as the remote holds it, is checked out clean, and the command ru
 | fails too | ``⏸ `<command>` fails on the Base branch`` | A Release; the budget stays as it was, spent or not |
 | could not be checked out or run | as if it passed | Spends the Fix budget, and the Run log says why |
 
-The Release posts the pipeline's own Note on the standing Notes issue, naming the command and quoting the tail of its output. What to do next is on [Release over a failing Base branch](./stopping-and-resuming.md#release-over-a-failing-base-branch).
+The Release posts the pipeline's own Note on the standing Notes issue, naming the command and quoting the tail of its output, once per Run and merge-base commit however many Tickets it releases. What to do next is on [Release over a failing Base branch](./stopping-and-resuming.md#release-over-a-failing-base-branch).
 
 ## The verify Stage and its Verdict
 
-No human reviews the code before it merges, and the session that wrote it is the last one to trust on whether it works. So a fresh session, with no plugin skill, tries to prove each Acceptance Criterion is **not** met. It reads the criteria from the body and the comments, runs the code, may write throwaway tests, and must not commit. A criterion that cannot be met without overturning a documented decision or another criterion is `unmet`, with evidence saying a human decision is needed. Its scratch files are discarded afterwards, so they never reach the pull request.
+No human reviews the code before it merges, and the session that wrote it is the last one to trust on whether it works. So a fresh session, with no plugin skill, tries to prove each Acceptance Criterion is **not** met. It reads the criteria from the body and the comments, runs the code, may write throwaway tests, and must not commit. A criterion that cannot be met without overturning a documented decision or another criterion is `unmet`, with evidence saying a human decision is needed. Its scratch files are discarded afterwards, so they never reach the pull request. What it finds beside the criteria leaves the session as a [Note](#notes), because the verdict has a slot per criterion and none for anything else.
 
 The **Verdict** grades each criterion `met`, `unmet` or `unverifiable`, with evidence. The agent's own pass or fail is advisory; the pipeline decides for itself: **no criterion unmet and at least one met.**
 
@@ -178,7 +180,7 @@ Only a defect a fresh session could mend spends the budget:
 
 After a fix Stage, the Ticket starts again at the Checks. Every gate grades the fix, the verify Stage included, so a fix is held to the same bar as the first attempt. A fix Stage whose branch did not grow is a Hand-off straight away: re-grading an untouched branch could only fail the same way. A squashed or amended branch counts as not grown. Its hand-off comment carries the evidence the fix Stage was sent in with, so an unmet criterion left for a human arrives with the question its evidence asks.
 
-A fix Stage stopped by the rate limit, an API failure or the API budget spends nothing. What budget a later Run starts with is on [Handing a Ticket back](./stopping-and-resuming.md#handing-a-ticket-back).
+A fix Stage stopped by the rate limit, an API failure or the API budget spends nothing. The fix budget is one fix Stage each time the pipeline takes the Ticket up: a Release carries a spent budget over to the next Run, having changed nothing about the Ticket, and a Hand-off restores it, because the Ticket only comes back through a human's hands and whatever they did to it is what the fresh budget is for. More on [Handing a Ticket back](./stopping-and-resuming.md#handing-a-ticket-back).
 
 ## Lanes and the Frontier refill
 
@@ -208,7 +210,7 @@ sequenceDiagram
 ```
 <!-- Sources: src/landing.ts, src/orchestrator.ts -->
 
-A Ticket also leaves the Landing for a fix Stage, a Hand-off or a Release, so nobody waits behind a session.
+A Ticket also leaves the Landing for a fix Stage, a Hand-off or a Release, so nobody waits behind a session; one back from a fix Stage rejoins at the back. A Ticket [released over a failing base branch](#a-failure-the-base-branch-shares) passes through the Landing once when a later Run takes it up, for the pull and the rebase alone, before its Checks, and leaves it again at once, since nothing is merged behind them.
 
 ### Rebase
 
@@ -290,7 +292,7 @@ The Ticket is merged, so nothing below can hand it off. Each step's failure is l
 
 ## What the board is told
 
-**The Progress comment.** A Ticket gets one [Progress comment](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), rewritten in place as each step ends, so only the first write notifies anyone. It is posted when the first row is recorded. Each Run that works the Ticket has its own section below earlier Runs' sections, headed by the Version, the Run id and the branch:
+**The Progress comment.** A Ticket gets one [Progress comment](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), found again by a hidden marker and rewritten in place as each step ends, so only the first write notifies anyone. It is posted when the first row is recorded. Each Run that works the Ticket has its own section below earlier Runs' sections, headed by the Version, the Run id and the branch:
 
 ```text
 **ticket-runner** `0.4.0` · run `2026-09-17T09-00-00-000` · `agent/4-planning-guards`
@@ -312,7 +314,7 @@ Rows carry a few words only. Anything a human has to act on is its own comment, 
 
 ## Notes
 
-A Stage keeps meeting defects that are not its Ticket's. Fixing them widens the Ticket past what verify grades; ignoring them loses them in a transcript. So the implement, verify and fix Stages end with a list of [Notes](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), and the pipeline posts each one where a human will meet it. A Note is a defect outside the Ticket, never acted on in it; a defect the branch itself introduced is fixed, not noted. Notes are routed before the Stage's own outcome is judged, so a Stage that ran out of turns still reports what it noticed.
+A Stage keeps meeting defects that are not its Ticket's. Fixing them widens the Ticket past what verify grades; ignoring them loses them in a transcript. So the implement, verify and fix Stages end with a list of [Notes](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), and the pipeline posts each one where a human will meet it. A Note is a defect outside the Ticket, something that behaves wrongly or breaks, never a preference, a refactor or a test that would be nice to have, and never acted on in it. A defect the branch itself introduced, one that behaves correctly on the base branch and wrongly on the branch or sits in code the branch added, belongs to the Ticket: the implement and fix Stages fix it rather than note it, and only verify, which fixes nothing, still notes one it demonstrates beside the criteria. Notes are routed before the Stage's own outcome is judged, so a Stage that ran out of turns still reports what it noticed.
 
 | The Note names | Where it goes |
 |---|---|
