@@ -817,6 +817,29 @@ describe("rebase", () => {
     expect(handoffBody()).toContain("Not possible to fast-forward");
   });
 
+  it("gives a pull that failed unexpectedly one line, and its whole output as evidence", async () => {
+    // The message `throwOnFailure` built for #288's pull, as it reached the Run.
+    const ssh = [
+      "git@github.com: Permission denied (publickey).",
+      "fatal: Could not read from remote repository.",
+      "",
+      "Please make sure you have the correct access rights",
+      "and the repository exists.",
+    ].join("\n");
+    const pull = "`git pull --ff-only origin main` exited 1";
+    workspace.pullBaseFailure = new Error(`${pull}\n${ssh}`);
+    const evidence = ["<details><summary>Evidence</summary>", "", "```", ssh, "```"].join("\n");
+
+    await run();
+
+    expect(handoffBody()).toContain(`- Failure: ${pull}\n- Branch`);
+    expect(handoffBody()).toContain(evidence);
+    const draft = tracker.pullRequest(100);
+    expect(draft.draft).toBe(true);
+    expect(draft.body).toContain(`**Handed off at rebase.** ${pull}\n\n`);
+    expect(draft.body).toContain(evidence);
+  });
+
   it("sends no conflict Stage in when the branch rebases cleanly", async () => {
     await run();
 

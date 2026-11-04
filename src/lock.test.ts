@@ -8,6 +8,7 @@ import {
   lockFileContents,
   lockHeldMessage,
   readLockFile,
+  unreleasedLockMessage,
 } from "./lock.js";
 import type { LockHolder } from "./ports/workspace.js";
 
@@ -161,5 +162,29 @@ describe("lockHeldMessage", () => {
     const message = lockHeldMessage({ holder: holder({ host: desk }), onAnotherHost: true });
 
     expect(message).toContain("the workstation `laptop`");
+  });
+});
+
+describe("unreleasedLockMessage", () => {
+  it("follows an output that ends with its own full stop without a second one", () => {
+    const reason = [
+      "`git push origin ticket-runner/lock` exited 128",
+      "git@github.com: Permission denied (publickey).",
+      "fatal: Could not read from remote repository.",
+      "",
+      "Please make sure you have the correct access rights",
+      "and the repository exists.",
+    ].join("\n");
+
+    const message = unreleasedLockMessage(reason);
+
+    expect(message).toContain("and the repository exists. It still names this Run");
+    expect(message).not.toContain("..");
+  });
+
+  it("ends a reason that has no full stop with one", () => {
+    expect(unreleasedLockMessage("gh: connection reset")).toContain(
+      "gh: connection reset. It still names this Run",
+    );
   });
 });

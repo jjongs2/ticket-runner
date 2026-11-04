@@ -13,6 +13,7 @@ import {
 } from "./credential.js";
 import type { GuardReason } from "./guards.js";
 import type { HostKind } from "./host.js";
+import { splitMessage } from "./failure-message.js";
 import type { FailurePoint } from "./lifecycle.js";
 import { logTail } from "./log-tail.js";
 import type { NoteText, NotingStage, RoutedNote } from "./notes.js";
@@ -166,6 +167,10 @@ export function pullRequestBody({ ticket, verdict, runId, host }: PullRequestBod
 export interface DraftPullRequestBody {
   ticket: number;
   stage: FailurePoint;
+  /**
+   * As the hand-off comment's: one line, or an unexpected error's whole
+   * message, whose output the body shows as evidence the way the comment does.
+   */
   failure: string;
   runId: string;
   /** Where the hand-off kept the Stages' transcripts on the remote, when it kept any. */
@@ -184,16 +189,43 @@ export function draftPullRequestBody({
   runId,
   transcripts,
 }: DraftPullRequestBody): string {
+  const shown = failureShown(failure, "");
   return [
     `Closes #${ticket}`,
     "",
-    `**Handed off at ${stage}.** ${failure}`,
+    `**Handed off at ${stage}.** ${shown.line}`,
     "",
+    ...evidenceBlock(shown.evidence),
     `See the hand-off comment on #${ticket} for the branch, worktree and evidence.`,
     "",
     runLine(runId, transcripts === undefined ? undefined : keptPlace(transcripts)),
     "",
   ].join("\n");
+}
+
+/**
+ * A hand-off's failure as one line, and the evidence that goes with it.
+ *
+ * The failures the pipeline expects already come as one line and their output
+ * as evidence. An unexpected error comes as its message whole — the command,
+ * how it exited, and everything it printed — so its first line is the failure
+ * and the rest is evidence, ahead of any the hand-off carried already.
+ */
+function failureShown(failure: string, evidence: string): { line: string; evidence: string } {
+  const { line, output } = splitMessage(failure);
+  return {
+    line,
+    evidence: [output, evidence.trim()].filter((part) => part !== "").join("\n\n"),
+  };
+}
+
+/**
+ * Evidence folded away and fenced, because it is raw output that would
+ * otherwise be read as Markdown; nothing at all when there is none.
+ */
+function evidenceBlock(evidence: string): string[] {
+  if (evidence === "") return [];
+  return ["<details><summary>Evidence</summary>", "", "```", evidence, "```", "", "</details>", ""];
 }
 
 /**
@@ -256,7 +288,10 @@ export function squashCommit({
 
 export interface HandoffComment {
   stage: FailurePoint;
-  /** One line a human can read in a notification. */
+  /**
+   * One line a human can read in a notification, or an unexpected error's
+   * whole message, whose first line is shown here and the rest as evidence.
+   */
   failure: string;
   branch: string;
   /**
@@ -290,33 +325,19 @@ export function handoffComment(handoff: HandoffComment): string {
   // pipeline already had a second go at, which is what a human needs to know.
   const budget = handoff.fixUsed ? ", after the fix budget was used" : "";
 
-  const lines = [
+  const shown = failureShown(handoff.failure, handoff.evidence);
+  return [
     HANDOFF_MARKER,
     `**Handed off.** Failed at **${handoff.stage}**${budget}.`,
     "",
-    `- Failure: ${handoff.failure}`,
+    `- Failure: ${shown.line}`,
     `- ${location}`,
     ...(handoff.transcripts === undefined
       ? []
       : [`- Transcripts: ${keptPlace(handoff.transcripts)}`]),
     "",
-  ];
-
-  const evidence = handoff.evidence.trim();
-  if (evidence !== "") {
-    lines.push(
-      "<details><summary>Evidence</summary>",
-      "",
-      "```",
-      evidence,
-      "```",
-      "",
-      "</details>",
-      "",
-    );
-  }
-
-  return lines.join("\n");
+    ...evidenceBlock(shown.evidence),
+  ].join("\n");
 }
 
 /**
@@ -737,10 +758,6 @@ function ticketRows(outcome: TicketOutcome, credential: Credential): string[] {
   ];
 }
 
-/** A Note summary's opening line, which is as much of it as a Run summary has room for. */
-function firstLine(text: string): string {
-  return (text.split("\n").find((line) => line.trim() !== "") ?? "").trim();
-}
 
 /** `text`, or as much of it as fits with an ellipsis standing in for the rest. */
 function truncate(text: string, limit: number): string {
@@ -760,7 +777,7 @@ function noteRow({ origin, stage, issue, opened, summary }: RoutedNote): string 
   return row(
     "noted",
     issue,
-    `${destination} · from #${origin} ${stage} · ${truncate(firstLine(summary), NOTE_WIDTH)}`,
+    `${destination} · from #${origin} ${stage} · ${truncate(splitMessage(summary).line, NOTE_WIDTH)}`,
   );
 }
 
@@ -773,7 +790,8 @@ function ticketRow(outcome: TicketOutcome, credential: Credential): string {
       return row(
         "handed",
         outcome.ticket,
-        `${outcome.title} · ${outcome.stage} · ${outcome.failure}`,
+        // The one line of an unexpected error; its output is the hand-off's.
+        `${outcome.title} · ${outcome.stage} · ${splitMessage(outcome.failure).line}`,
       );
     case "released":
       // Nothing for a human to do, so the row says only what stopped the Stage

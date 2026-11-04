@@ -41,6 +41,23 @@ const VERSION = "0.4.0+331d79c";
 /** Why most summaries here end: nothing left on the Frontier. */
 const FRONTIER_EMPTY: RunStop = { reason: "frontier", blocked: [] };
 
+/**
+ * The message the `git pull` of #288's Hand-off failed with, whole: the
+ * command and how it exited, then what SSH printed.
+ */
+const PULL_FAILED = "`git pull --ff-only origin main` exited 1";
+const SSH_OUTPUT = [
+  "git@github.com: Permission denied (publickey).",
+  "fatal: Could not read from remote repository.",
+  "",
+  "Please make sure you have the correct access rights",
+  "and the repository exists.",
+].join("\n");
+const UNEXPECTED = `${PULL_FAILED}\n${SSH_OUTPUT}`;
+
+/** The fenced Evidence block a hand-off and its draft pull request both carry. */
+const SSH_EVIDENCE = ["<details><summary>Evidence</summary>", "", "```", SSH_OUTPUT, "```"].join("\n");
+
 describe("pullRequestBody", () => {
   it("starts with Closes #<n> on its own line so the merge closes the Ticket", () => {
     const body = pullRequestBody({ ticket: 2, verdict, runId: "r1", host: "workstation" });
@@ -116,6 +133,17 @@ describe("draftPullRequestBody", () => {
 
     expect(body.endsWith("evidence.\n\nRun `r1`\n")).toBe(true);
     expect(body).not.toContain("transcripts");
+  });
+
+  it("opens an unexpected failure with the command and how it exited, its output in Evidence", () => {
+    const body = draftPullRequestBody({ ...base, stage: "rebase", failure: UNEXPECTED });
+
+    expect(body).toContain(`**Handed off at rebase.** ${PULL_FAILED}\n\n`);
+    expect(body).toContain(SSH_EVIDENCE);
+  });
+
+  it("shows no evidence for a failure the pipeline gave one line", () => {
+    expect(draftPullRequestBody(base)).not.toContain("<details>");
   });
 });
 
@@ -245,6 +273,13 @@ describe("handoffComment", () => {
 
   it("omits the details block when there is no evidence", () => {
     expect(handoffComment({ ...base, evidence: "" })).not.toContain("<details>");
+  });
+
+  it("gives an unexpected failure one line, and its whole output in the Evidence block", () => {
+    const comment = handoffComment({ ...base, stage: "rebase", failure: UNEXPECTED, evidence: "" });
+
+    expect(comment).toContain(`- Failure: ${PULL_FAILED}\n- Branch`);
+    expect(comment).toContain(SSH_EVIDENCE);
   });
 
   it("says so when the Ticket had already spent its fix budget", () => {
@@ -451,6 +486,20 @@ describe("runSummary", () => {
     expect(summary).toContain("  merged   #3 Run: drain the Frontier (PR #12)");
     expect(summary).toContain("  handed   #5 Fix Stage with a single retry · verify · 1 unmet");
     expect(summary).toContain("  skipped  #9 blocked");
+  });
+
+  it("gives an unexpected failure the command and how it exited, on one line", () => {
+    const summary = runSummary({
+      credential: "subscription",
+      version: VERSION,
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [{ ...handed, stage: "rebase", failure: UNEXPECTED }],
+      stop: { reason: "frontier", blocked: [] },
+    });
+
+    expect(summary).toContain(`  handed   #5 Fix Stage with a single retry · rebase · ${PULL_FAILED}\n`);
+    expect(summary).not.toContain("Permission denied");
   });
 
   it("says where the rate limit landed on a released Ticket", () => {

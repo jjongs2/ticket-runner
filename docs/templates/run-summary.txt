@@ -131,6 +131,18 @@ A Ticket a Run resumed has no row of its own, released or stranded: it merges,
 is handed off, or is released again like any other, and the header already names
 the Run that took it.
 
+A `handed` row gives its failure on one line. One the pipeline did not expect,
+a git or GitHub command that failed, is the command and how it exited:
+
+  handed   #5 Fix Stage with a single retry · rebase · `git pull --ff-only origin main` exited 1
+
+What the command printed is in the hand-off comment's Evidence block, and in
+the Run's log above the summary. The log prints an output in full the first
+time it appears in the Run; a later event whose output is the same text gives
+its one line and says so, since one cause tends to fail several steps in turn:
+
+#5 could not push agent/5-fix-stage: `git push -u origin agent/5-fix-stage` exited 128 · the same output as above
+
 `skipped` names why a candidate was passed over: `blocked` for one an open
 blocker held back all Run, and otherwise the guard reason that kept it from
 being claimed — `spec`, `no-criteria` or `body-only-blockers` for Planning a

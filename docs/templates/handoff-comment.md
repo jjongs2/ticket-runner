@@ -46,6 +46,14 @@ nothing: the remote may hold another Host's newer work, and pushing this Host's
 over it is the choice the human is handed. The failure says the two have
 parted, names both, and says how to keep either side.
 
+A failure the pipeline did not expect — a git or GitHub command that failed —
+reaches the hand-off as an error message whose first line is the command and
+how it exited, such as `` `git pull --ff-only origin main` exited 1 ``, and the
+rest everything the command printed. The `Failure:` line gives the first line
+only, and the output goes in the Evidence block, whole: no line of it is picked
+as the reason, since a rule that picks one would name the wrong cause on an
+output nobody has seen yet.
+
 The pull request clause is dropped when no pull request could be opened. The whole
 `<details>` block is dropped when there is no evidence to show. Evidence is
 fenced because it is raw command output, which would otherwise be read as
