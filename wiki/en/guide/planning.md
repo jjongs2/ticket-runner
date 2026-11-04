@@ -1,6 +1,6 @@
 ---
 title: Planning the work
-description: "What makes a GitHub issue a Ticket the pipeline will take: Specs and Tickets, Acceptance Criteria, native blockers, the labels, and the Guards that refuse what Planning left unusable."
+description: "What makes a GitHub issue a Ticket the pipeline will take: Specs and Tickets, Acceptance Criteria, native blockers, the labels, and the guards that refuse what Planning left unusable."
 ---
 
 # Planning the work
@@ -30,11 +30,11 @@ Planning is a chain of skills from the `mattpocock-skills` plugin, run in your o
 
 A [Spec](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is only ever implemented through its Tickets. A [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) should be small enough for one implement Stage, which by default has 300 turns and 60 minutes ([Configuration](./configuration.md#stages)).
 
-After `to-tickets`, check what a Guard would otherwise refuse:
+After `to-tickets`, check what a guard would otherwise refuse:
 
 - each Ticket has `- [ ]` criteria and the `ready-for-agent` label
 - every issue a body names under `Blocked by` is a native link too ([Blockers](#blockers))
-- the Spec carries no `ready-for-agent`: `to-spec` puts it on, and the Spec is skipped as `no-criteria` until its Tickets exist, when the `spec` Guard takes it off
+- the Spec carries no `ready-for-agent`: `to-spec` puts it on, and the Spec is skipped as `no-criteria` until its Tickets exist, when the `spec` guard takes it off
 
 To file one by hand with its parent and blockers in place:
 
@@ -67,9 +67,9 @@ gh issue edit 23 --add-blocked-by 14,15      # add links to an existing issue
 gh issue edit 23 --remove-blocked-by 15      # take one off
 ```
 
-A Ticket waits while any of its blockers is open. A blocker that another Lane of the same Run is still working on is open too, and that is the whole of what keeps two Tickets out of each other's way: nothing else decides which Tickets are safe to run side by side. The moment a blocker merges, the Ticket it held back can be taken in the same Run. So link a blocker between Tickets that change the same code: the second is then built on the first, where without one they run side by side and the later one's rebase goes to the [Conflict Stage](./ticket-to-merge.md#the-conflict-stage).
+A Ticket waits while any of its blockers is open. A blocker that another Lane of the same Run is still working on is open too, and that is the whole of what keeps two Tickets out of each other's way: nothing else decides which Tickets are safe to run side by side. The moment a blocker merges, the Ticket it held back can be taken in the same Run. So link a blocker between Tickets that change the same code: the second is then built on the first, where without one they run side by side and the later one's rebase goes to the [conflict Stage](./ticket-to-merge.md#the-conflict-stage).
 
-A `Blocked by` section in the body is fine as a human-readable copy, as long as every issue it names has a native link as well. When it names one without, the `body-only-blockers` Guard refuses the Ticket. The Guard reads only the section itself, so issue references elsewhere in the body are prose:
+A `Blocked by` section in the body is fine as a human-readable copy, as long as every issue it names has a native link as well. When it names one without, the `body-only-blockers` guard refuses the Ticket. The guard reads only the section itself, so issue references elsewhere in the body are prose:
 
 | Written as | Where the section ends |
 |---|---|
@@ -86,16 +86,16 @@ The labels are the triage state machine: one state label per issue at a time. `i
 |---|---|---|
 | `needs-triage` | Humans; the pipeline on its standing Notes issue | Nothing, except opening the Notes issue with it |
 | `needs-info` | Humans | Nothing |
-| `ready-for-agent` | Planning; a Release; a human handing a Ticket back | Takes the issue as a Candidate. Removed at the Claim |
-| `in-progress` | Only a Run, at the Claim | Marks a Ticket a Run holds. Removed at merge, Hand-off and Release |
+| `ready-for-agent` | Planning; a Release; a human handing a Ticket back | Takes the issue as a candidate. Removed at the claim |
+| `in-progress` | Only a Run, at the claim | Marks a Ticket a Run holds. Removed at merge, Hand-off and Release |
 | `ready-for-human` | A Hand-off | Leaves the Ticket alone until a human relabels it |
 | `wontfix` | Humans | Nothing |
 
-To keep the pipeline off a Ticket, take `ready-for-agent` off it, or assign someone: a Candidate with any assignee is treated as claimed and passed over in silence. Do this before running the plugin's `/implement-spec` on a Spec in your own session: it leaves no mark on the Tickets it works, so a Run would take them too and do the same work again on other branches.
+To keep the pipeline off a Ticket, take `ready-for-agent` off it, or assign someone: a candidate with any assignee is treated as claimed and passed over in silence. Do this before running the plugin's `/implement-spec` on a Spec in your own session: it leaves no mark on the Tickets it works, so a Run would take them too and do the same work again on other branches.
 
 ## Guards
 
-Planning goes wrong in a few known ways. A [Guard](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) passes such a Candidate over before it is claimed and says once why, but never repairs the issue itself, so you fix the Planning output and run again. Every open `ready-for-agent` issue a Run looks at is a candidate, and the Frontier is the candidates left once the claimed and the blocked ones are dropped:
+Planning goes wrong in a few known ways. A guard passes such a candidate over before it is claimed and says once why, but never repairs the issue itself, so you fix the Planning output and run again. Every open `ready-for-agent` issue a Run looks at is a candidate, and the Frontier is the candidates left once the claimed and the blocked ones are dropped:
 
 ```mermaid
 flowchart TD
@@ -114,7 +114,7 @@ flowchart TD
 ```
 <!-- Sources: src/frontier.ts, src/guards.ts, src/orchestrator.ts -->
 
-| Reason | What the Candidate did | What the pipeline does |
+| Reason | What the candidate did | What the pipeline does |
 |---|---|---|
 | `spec` | It has native sub-issues, so it is a Spec | Skips it and removes `ready-for-agent`: its Tickets are picked up one by one |
 | `no-criteria` | No `- [ ]` line in its body or comments, so verify has nothing to grade | Skips it and keeps the label, since a comment can still add criteria |

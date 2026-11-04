@@ -25,7 +25,7 @@ Planning이 끝나도 Ticket마다 사람이 붙어 있는 세션이 하나씩 �
 이럴 때는 맞지 않습니다.
 
 - **중간에 사람의 판단이 필요한 일.** Run은 누구에게도 묻지 않습니다. 끝내지 못한 Ticket은 Hand-off가 되어서야 사람에게 갑니다.
-- **체크박스로 판정할 수 없는 기준.** verify Stage는 `- [ ]` 줄만 판정하고, 기준이 모두 `unverifiable`인 Verdict는 실패로 칩니다. merge할 근거가 없다는 뜻이니까요.
+- **체크박스로 판정할 수 없는 기준.** verify Stage는 `- [ ]` 줄만 판정하고, 기준이 모두 `unverifiable`인 판정은 실패로 칩니다. merge할 근거가 없다는 뜻이니까요.
 - **사람의 리뷰 없이는 아무것도 merge되면 안 되는 저장소.** pull request는 CI를 통과하는 즉시 squash-merge되고, 그 전에 승인하는 사람은 없습니다.
 - **CI도 테스트도 없는 저장소.** Check가 없으면 Run이 시작을 거절하고, CI check가 없는 pull request는 Hand-off합니다. [`gates`](./guide/configuration.md#gates)를 끄면 그렇게 하지 않는 대신, 검사받지 않은 코드를 merge합니다.
 
@@ -43,7 +43,7 @@ git commit -m "chore: set up ticket-runner" && git push
 ticket-runner run     # 준비된 Ticket을 모두 merge까지
 ```
 
-Stage는 `init`이 쓴 것이 Base branch에 들어간 뒤에야 읽습니다. 그러니 첫 Run 전에 push하세요. 저장소가 pull request를 요구하면 pull request로 넣으면 됩니다.
+Stage는 `init`이 쓴 것이 base branch에 들어간 뒤에야 읽습니다. 그러니 첫 Run 전에 push하세요. 저장소가 pull request를 요구하면 pull request로 넣으면 됩니다.
 
 설치 없이 먼저 써 보려면, 이 위키에서 `ticket-runner`라고 쓴 자리에 `npx ticket-runner`를 입력하세요. [설치 없이 써 보기](./guide/installation.md#try-it-without-installing)에 자세히 있습니다.
 
@@ -59,9 +59,9 @@ flowchart LR
     S --> T["to-tickets, triage"]
     T --> R["ready-for-agent 라벨이 붙은 Ticket"]
   end
-  subgraph Execution["Execution · 파이프라인이 무인으로"]
+  subgraph Execution["실행 · 파이프라인이 무인으로"]
     direction TB
-    F[Frontier] --> C[Claim]
+    F[Frontier] --> C[claim]
     C --> I[implement Stage]
     I --> K[Checks]
     K --> V[verify Stage]
@@ -73,7 +73,7 @@ flowchart LR
     X --> K
     X -. 또 실패 .-> H["Hand-off: ready-for-human"]
     I -. "어느 Stage든: rate limit, API 장애, API 예산" .-> RL["Release: ready-for-agent"]
-    K -. Base branch도 실패 .-> RL
+    K -. base branch도 실패 .-> RL
   end
   R --> F
   M -. 막힘을 풂 .-> F
@@ -82,18 +82,18 @@ flowchart LR
 ```
 <!-- Sources: src/run.ts, src/orchestrator.ts, src/frontier.ts, src/guards.ts -->
 
-Execution 쪽 절반은 [Ticket 하나가 merge되기까지](./guide/ticket-to-merge.md)에서 한 단계씩 따라가 봅니다. Hand-off와 Release가 각각 무엇을 남기는지, 그때 무엇을 하면 되는지는 [Hand-off, 멈추고 이어 하기](./guide/stopping-and-resuming.md)에 있습니다.
+실행 쪽 절반은 [Ticket 하나가 merge되기까지](./guide/ticket-to-merge.md)에서 한 단계씩 따라가 봅니다. Hand-off와 Release가 각각 무엇을 남기는지, 그때 무엇을 하면 되는지는 [Hand-off, 멈추고 이어 하기](./guide/stopping-and-resuming.md)에 있습니다.
 
 ## 가이드 {#the-guide}
 
 | 페이지 | 이런 걸 볼 때 |
 |---|---|
 | [설치와 제거](./guide/installation.md) | 요구 사항, npm 설치, `init`, Run이 Target에 요구하는 것, `remove`, 삭제 |
-| [일 계획하기](./guide/planning.md) | 이슈를 Ticket으로 만드는 것: Spec, Acceptance Criteria, 네이티브 blocker, 라벨, Guard |
+| [일 계획하기](./guide/planning.md) | 이슈를 Ticket으로 만드는 것: Spec, Acceptance Criteria, 네이티브 blocker, 라벨, guard |
 | [실행하기](./guide/running.md) | `run`, `--lanes`, `--api-key`, 좁힌 Run, `stop`, `-v`, 요약과 종료 코드, 로그, Claude 앱에서 실행하기 |
 | [설정](./guide/configuration.md) | `ticket-runner.json`의 모든 필드 |
-| [Ticket 하나가 merge되기까지](./guide/ticket-to-merge.md) | Stage, Fix budget, Lane과 Landing, rebase 충돌, 보드에 남기는 것, Note |
-| [Hand-off, 멈추고 이어 하기](./guide/stopping-and-resuming.md) | Hand-off, Release, Stop과 kill, Stranded Ticket, Ticket 돌려주기, Run lock과 State branch |
-| [내부 구조](./guide/internals.md) | port와 adapter, 모듈 구성, Version, ADR 요약, 파이프라인 자체를 고치는 법 |
+| [Ticket 하나가 merge되기까지](./guide/ticket-to-merge.md) | Stage, fix 기회, Lane과 Landing, rebase 충돌, 보드에 남기는 것, Note |
+| [Hand-off, 멈추고 이어 하기](./guide/stopping-and-resuming.md) | Hand-off, Release, Stop과 kill, Stranded Ticket, Ticket 돌려주기, Run lock과 state branch |
+| [내부 구조](./guide/internals.md) | port와 adapter, 모듈 구성, 버전, ADR 요약, 파이프라인 자체를 고치는 법 |
 
 파이프라인이 쓰는 용어(Ticket, Run, Stage, Lane 등)는 [용어집](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 한곳에 정의되어 있습니다.

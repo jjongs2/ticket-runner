@@ -1,6 +1,6 @@
 ---
 title: 일 계획하기
-description: GitHub 이슈가 파이프라인이 가져가는 Ticket이 되는 조건. Spec과 Ticket, Acceptance Criteria, 네이티브 blocker, 라벨, 그리고 Planning이 쓸 수 없게 남긴 것을 거르는 Guard
+description: GitHub 이슈가 파이프라인이 가져가는 Ticket이 되는 조건. Spec과 Ticket, Acceptance Criteria, 네이티브 blocker, 라벨, 그리고 Planning이 쓸 수 없게 남긴 것을 거르는 guard
 ---
 
 # 일 계획하기
@@ -30,11 +30,11 @@ Planning은 `mattpocock-skills` 플러그인의 스킬을 차례로 쓰는 일�
 
 [Spec](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 언제나 하위 Ticket을 통해서만 구현됩니다. [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 implement Stage 한 번에 끝날 만큼 작아야 합니다. implement Stage는 기본으로 300턴, 60분입니다([설정](./configuration.md#stages)).
 
-`to-tickets`를 돌린 뒤에는, 그대로 두면 Guard가 거절할 것들을 확인하세요.
+`to-tickets`를 돌린 뒤에는, 그대로 두면 guard가 거절할 것들을 확인하세요.
 
 - Ticket마다 `- [ ]` 기준과 `ready-for-agent` 라벨이 있는지
 - 본문이 `Blocked by` 아래 적은 이슈마다 네이티브 연결도 있는지([blocker](#blockers))
-- Spec에 `ready-for-agent`가 없는지. `to-spec`이 이 라벨을 붙이는데, Ticket이 생기기 전까지 Run은 Spec을 `no-criteria`로 건너뛰고, Ticket이 생기면 `spec` Guard가 라벨을 뗍니다.
+- Spec에 `ready-for-agent`가 없는지. `to-spec`이 이 라벨을 붙이는데, Ticket이 생기기 전까지 Run은 Spec을 `no-criteria`로 건너뛰고, Ticket이 생기면 `spec` guard가 라벨을 뗍니다.
 
 부모와 blocker까지 달아서 직접 만들려면:
 
@@ -67,9 +67,9 @@ gh issue edit 23 --add-blocked-by 14,15      # 기존 이슈에 연결 추가
 gh issue edit 23 --remove-blocked-by 15      # 하나 떼기
 ```
 
-blocker 중 하나라도 열려 있으면 Ticket은 기다립니다. 같은 Run의 다른 Lane이 아직 작업 중인 blocker도 열려 있는 것이고, 두 Ticket이 서로 방해하지 않게 하는 장치는 이것뿐입니다. 어떤 Ticket끼리 나란히 돌려도 되는지를 따로 판단하는 것은 없습니다. blocker가 merge되는 순간, 그 blocker에 막혀 있던 Ticket을 같은 Run 안에서 가져갈 수 있게 됩니다. 그러니 같은 코드를 바꾸는 Ticket 사이에는 blocker를 연결하세요. 그러면 두 번째 Ticket이 첫 번째 위에서 만들어집니다. 연결이 없으면 둘이 나란히 돌고, 나중 것의 rebase는 [Conflict Stage](./ticket-to-merge.md#the-conflict-stage)로 갑니다.
+blocker 중 하나라도 열려 있으면 Ticket은 기다립니다. 같은 Run의 다른 Lane이 아직 작업 중인 blocker도 열려 있는 것이고, 두 Ticket이 서로 방해하지 않게 하는 장치는 이것뿐입니다. 어떤 Ticket끼리 나란히 돌려도 되는지를 따로 판단하는 것은 없습니다. blocker가 merge되는 순간, 그 blocker에 막혀 있던 Ticket을 같은 Run 안에서 가져갈 수 있게 됩니다. 그러니 같은 코드를 바꾸는 Ticket 사이에는 blocker를 연결하세요. 그러면 두 번째 Ticket이 첫 번째 위에서 만들어집니다. 연결이 없으면 둘이 나란히 돌고, 나중 것의 rebase는 [conflict Stage](./ticket-to-merge.md#the-conflict-stage)로 갑니다.
 
-본문의 `Blocked by` 섹션은 사람이 읽을 사본으로 두어도 괜찮습니다. 다만 거기 적힌 이슈마다 네이티브 연결도 있어야 합니다. 연결이 없는 이슈를 적어 두면 `body-only-blockers` Guard가 Ticket을 거절합니다. Guard는 그 섹션만 읽으니, 본문의 다른 곳에 있는 이슈 참조는 그냥 산문입니다.
+본문의 `Blocked by` 섹션은 사람이 읽을 사본으로 두어도 괜찮습니다. 다만 거기 적힌 이슈마다 네이티브 연결도 있어야 합니다. 연결이 없는 이슈를 적어 두면 `body-only-blockers` guard가 Ticket을 거절합니다. guard는 그 섹션만 읽으니, 본문의 다른 곳에 있는 이슈 참조는 그냥 산문입니다.
 
 | 쓰는 방식 | 섹션이 끝나는 곳 |
 |---|---|
@@ -86,16 +86,16 @@ blocker 중 하나라도 열려 있으면 Ticket은 기다립니다. 같은 Run�
 |---|---|---|
 | `needs-triage` | 사람. 파이프라인은 상설 Notes 이슈에 | 그 라벨로 Notes 이슈를 여는 것 말고는 없음 |
 | `needs-info` | 사람 | 없음 |
-| `ready-for-agent` | Planning, Release, Ticket을 돌려주는 사람 | Candidate로 가져감. Claim할 때 뗌 |
-| `in-progress` | Run만, Claim할 때 | Run이 맡고 있는 Ticket 표시. merge, Hand-off, Release 때 뗌 |
+| `ready-for-agent` | Planning, Release, Ticket을 돌려주는 사람 | 후보로 가져감. claim할 때 뗌 |
+| `in-progress` | Run만, claim할 때 | Run이 맡고 있는 Ticket 표시. merge, Hand-off, Release 때 뗌 |
 | `ready-for-human` | Hand-off | 사람이 라벨을 바꿀 때까지 건드리지 않음 |
 | `wontfix` | 사람 | 없음 |
 
-파이프라인이 어떤 Ticket을 건드리지 않게 하려면 `ready-for-agent`를 떼거나 누군가를 담당자로 지정하세요. 담당자가 있는 Candidate는 이미 claim된 것으로 보고 조용히 넘어갑니다. 내 세션에서 Spec에 플러그인의 `/implement-spec`을 돌리기 전에도 이렇게 해 두세요. `/implement-spec`은 작업하는 Ticket에 아무 표시도 남기지 않으니, Run도 그 Ticket을 가져가 다른 branch에서 같은 일을 또 하게 됩니다.
+파이프라인이 어떤 Ticket을 건드리지 않게 하려면 `ready-for-agent`를 떼거나 누군가를 담당자로 지정하세요. 담당자가 있는 후보는 이미 claim된 것으로 보고 조용히 넘어갑니다. 내 세션에서 Spec에 플러그인의 `/implement-spec`을 돌리기 전에도 이렇게 해 두세요. `/implement-spec`은 작업하는 Ticket에 아무 표시도 남기지 않으니, Run도 그 Ticket을 가져가 다른 branch에서 같은 일을 또 하게 됩니다.
 
-## Guard {#guards}
+## guard {#guards}
 
-Planning은 몇 가지 알려진 방식으로 어긋납니다. [Guard](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 이런 Candidate를 claim하기 전에 건너뛰고, 그 이유를 한 번 알려 줍니다. 이슈를 대신 고치지는 않으니, Planning 결과를 고친 뒤 다시 돌리면 됩니다. Run이 살펴보는 열린 `ready-for-agent` 이슈는 모두 후보이고, Frontier는 후보 중 claim된 것과 막힌 것을 뺀 나머지입니다.
+Planning은 몇 가지 알려진 방식으로 어긋납니다. guard는 이런 후보를 claim하기 전에 건너뛰고, 그 이유를 한 번 알려 줍니다. 이슈를 대신 고치지는 않으니, Planning 결과를 고친 뒤 다시 돌리면 됩니다. Run이 살펴보는 열린 `ready-for-agent` 이슈는 모두 후보이고, Frontier는 후보 중 claim된 것과 막힌 것을 뺀 나머지입니다.
 
 ```mermaid
 flowchart TD
@@ -110,11 +110,11 @@ flowchart TD
   G2 -- 아니오 --> N["no-criteria: 경고, 라벨 유지"]
   G2 -- 예 --> G3{"네이티브 연결이 없는<br>blocker를 본문이 적었나?"}
   G3 -- 예 --> O["body-only-blockers: 경고, 라벨 유지"]
-  G3 -- 아니오 --> CL["Claim"]
+  G3 -- 아니오 --> CL["claim"]
 ```
 <!-- Sources: src/frontier.ts, src/guards.ts, src/orchestrator.ts -->
 
-| 이유 | Candidate의 상태 | 파이프라인이 하는 일 |
+| 이유 | 후보의 상태 | 파이프라인이 하는 일 |
 |---|---|---|
 | `spec` | 네이티브 sub-issue가 있으니 Spec | 건너뛰고 `ready-for-agent`를 뗌. 하위 Ticket은 하나씩 가져감 |
 | `no-criteria` | 본문과 코멘트에 `- [ ]` 줄이 없어 verify가 판정할 게 없음 | 건너뛰고 라벨은 둠. 코멘트로 기준을 더할 수 있으니까 |

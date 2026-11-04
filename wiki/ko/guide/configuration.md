@@ -48,13 +48,13 @@ Target은 설정 없이도 돌아가야 하므로 모든 필드는 선택이고,
 Invalid ticket-runner.json: stages: Unrecognized key: "implment". Refused by ticket-runner 0.5.2, so the key may be newer than this install.
 ```
 
-두 번째 문장은 모르는 키일 때만 붙습니다. 설치가 오래된 머신에서는 새 Version이 추가한 키와 오타가 똑같아 보이니, 철자를 확인하고 그다음 업그레이드하세요.
+두 번째 문장은 모르는 키일 때만 붙습니다. 설치가 오래된 머신에서는 새 버전이 추가한 키와 오타가 똑같아 보이니, 철자를 확인하고 그다음 업그레이드하세요.
 
 ## `baseBranch` {#basebranch}
 
 - `baseBranch`: 문자열
 
-[Base branch](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 모든 Ticket이 출발하고 merge되어 들어가는 branch입니다. Run은 Ticket을 이 branch 위로 rebase하고, Ticket의 pull request도 이 branch를 대상으로 열며, Ticket이 merge되면 main checkout을 이 branch로 pull합니다. 이 필드가 없으면 GitHub가 저장소의 기본 branch라고 부르는 것을 쓰니, `master`를 쓰는 Target도 따로 설정할 필요가 없습니다. Run이 시작할 때 한 번 정합니다.
+base branch는 모든 Ticket이 출발하고 merge되어 들어가는 branch입니다. Run은 Ticket을 이 branch 위로 rebase하고, Ticket의 pull request도 이 branch를 대상으로 열며, Ticket이 merge되면 main checkout을 이 branch로 pull합니다. 이 필드가 없으면 GitHub가 저장소의 기본 branch라고 부르는 것을 쓰니, `master`를 쓰는 Target도 따로 설정할 필요가 없습니다. Run이 시작할 때 한 번 정합니다.
 
 ## `lanes` {#lanes}
 
@@ -67,11 +67,11 @@ Run이 동시에 맡는 Ticket 수입니다. [Lane](https://github.com/jjongs2/t
 - `checks`: 문자열 배열
 - `checkTimeoutMinutes`: 0보다 큰 수
 
-[Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 파이프라인이 직접 돌리는 명령입니다. 각 명령은 Ticket의 worktree에서 셸을 통해 돌고, implement Stage 뒤, fix Stage 뒤, rebase 충돌을 해결한 뒤에 실행됩니다. 0이 아닌 코드로 끝나면 게이트를 통과하지 못하고, Ticket은 [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)을 씁니다. 단, Base branch도 같은 명령에 실패하면 예외입니다([Base branch도 함께 실패할 때](./ticket-to-merge.md#a-failure-the-base-branch-shares)). CI가 실패했을 때도 Base branch가 함께 실패하는지 이 명령들로 따지므로, CI가 돌리는 명령과 같은 것을 적어 두세요.
+[Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 파이프라인이 직접 돌리는 명령입니다. 각 명령은 Ticket의 worktree에서 셸을 통해 돌고, implement Stage 뒤, fix Stage 뒤, rebase 충돌을 해결한 뒤에 실행됩니다. 0이 아닌 코드로 끝나면 게이트를 통과하지 못하고, Ticket은 [fix 기회](./ticket-to-merge.md#the-fix-stage-and-the-fix-budget)를 씁니다. 단, base branch도 같은 명령에 실패하면 예외입니다([base branch도 함께 실패할 때](./ticket-to-merge.md#a-failure-the-base-branch-shares)). CI가 실패했을 때도 base branch가 함께 실패하는지 이 명령들로 따지므로, CI가 돌리는 명령과 같은 것을 적어 두세요.
 
 이 필드가 없으면 `package.json`에 `test`, `typecheck` 스크립트 중 정의된 것을 보고 `npm test`와 `npm run typecheck`를 추론합니다.
 
-`checkTimeoutMinutes`는 모든 명령에 하나로 적용되는 한도이고, 명령마다 이 시간을 통째로 받습니다. merge-base에서 돌릴 때도 같습니다. 한도에서 kill된 명령은 실패한 Check이고 다른 실패처럼 Fix budget을 씁니다.
+`checkTimeoutMinutes`는 모든 명령에 하나로 적용되는 한도이고, 명령마다 이 시간을 통째로 받습니다. merge-base에서 돌릴 때도 같습니다. 한도에서 kill된 명령은 실패한 Check이고 다른 실패처럼 fix 기회를 씁니다.
 
 ## `gates` {#gates}
 
@@ -83,7 +83,7 @@ Run이 동시에 맡는 Ticket 수입니다. [Lane](https://github.com/jjongs2/t
 | `gates.checks` | 설정하거나 추론한 Check 명령이 하나도 없으면 Run이 시작을 거절 | 경고와 함께 그대로 시작. 있는 Check 명령은 그대로 실행되고, 하나도 없으면 Ticket의 checks 줄이 `⚠️ no checks` |
 | `gates.ci` | CI check가 하나도 없는 pull request는 Hand-off | 시작할 때 경고하고, merge하면서 Ticket에 `⚠️ no checks` 줄을 남김 |
 
-`gates.ci`를 꺼도 봐주는 것은 check가 *하나도 없는* pull request뿐입니다. CI 실패, CI 시간 초과, Base branch와 충돌하는 pull request는 `gates` 설정과 상관없이 Ticket을 끝냅니다.
+`gates.ci`를 꺼도 봐주는 것은 check가 *하나도 없는* pull request뿐입니다. CI 실패, CI 시간 초과, base branch와 충돌하는 pull request는 `gates` 설정과 상관없이 Ticket을 끝냅니다.
 
 `gates.checks`가 켜져 있으면 Run은 이렇게 거절합니다.
 
@@ -100,8 +100,8 @@ Stage 하나는 `claude -p` 세션 하나입니다. `stages`는 Stage마다 객�
 | Stage | 하는 일 | `maxTurns` | `maxMinutes` |
 |---|---|---|---|
 | `implement` | Ticket에 `/mattpocock-skills:implement`를 돌림 | `300` | `60` |
-| `verify` | Acceptance Criteria가 충족되지 않았음을 증명하려 하고, Verdict를 돌려줌 | `130` | `30` |
-| `fix` | Fix budget을 쓰게 만든 실패 하나를 고침 | `150` | `40` |
+| `verify` | Acceptance Criteria가 충족되지 않았음을 증명하려 하고, 판정을 돌려줌 | `130` | `30` |
+| `fix` | fix 기회를 쓰게 만든 실패 하나를 고침 | `150` | `40` |
 | `conflict` | rebase가 멈춘 자리에서 충돌을 해결함 | `120` | `30` |
 
 | 키 | 타입 | 기본값 | 넘기는 방식 |
@@ -125,7 +125,7 @@ Stage 하나는 `claude -p` 세션 하나입니다. `stages`는 Stage마다 객�
 - `ciTimeoutMinutes`: 0보다 큰 수
 - `ciGraceMinutes`: 0 이상인 수
 
-Landing이 pull request를 연 뒤, Run은 최대 `ciTimeoutMinutes` 동안 check를 기다립니다. 시간 안에 끝나지 않는 CI는 Fix budget을 쓰지 않는 Hand-off입니다.
+Landing이 pull request를 연 뒤, Run은 최대 `ciTimeoutMinutes` 동안 check를 기다립니다. 시간 안에 끝나지 않는 CI는 fix 기회를 쓰지 않는 Hand-off입니다.
 
 `ciGraceMinutes`는 GitHub가 check run을 등록하기 전의 틈을 메웁니다. 이 틈이 3분을 넘긴 적도 있습니다. 이 시간이 지나기 전까지는 check가 아직 없는 pull request를 "없음"이 아니라 대기 중으로 봅니다. `ciTimeoutMinutes`보다 길어지지는 않습니다. Actions 대기열이 느린 Target이라면 늘리세요. CI가 아예 없는 Target은 `0`으로 두세요. 그러면 첫 확인에서 바로 답이 나옵니다. 기본값 그대로면 merge할 때마다 이 시간을 한 번씩 기다리고, Landing에는 한 번에 Lane 하나만 들어가니 그동안 다른 Lane의 merge도 함께 기다립니다. CI가 있는 Target은 유예 시간을 남겨 두세요. GitHub의 답으로는 CI가 없는 것과 아직 등록되지 않은 것을 구별할 수 없어서, `0`이면 늦게 뜨는 check run도 없는 것으로 읽힙니다.
 

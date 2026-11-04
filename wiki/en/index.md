@@ -25,7 +25,7 @@ It fits when:
 It does not fit when:
 
 - **The work needs a human's judgement midway.** A Run asks nobody anything; a Ticket it cannot finish reaches a human only as a Hand-off.
-- **No checkbox can grade the criteria.** The verify Stage grades only `- [ ]` lines, and a Verdict of nothing but `unverifiable` fails: it is no evidence to merge on.
+- **No checkbox can grade the criteria.** The verify Stage grades only `- [ ]` lines, and a verdict of nothing but `unverifiable` fails: it is no evidence to merge on.
 - **Nothing may merge without a person's review.** A pull request is squash-merged as soon as its CI passes; nobody approves it first.
 - **The repository has no CI or tests.** A Run refuses to start without a Check and hands off a pull request with no CI checks, unless [`gates`](./guide/configuration.md#gates) is switched off, and then it merges unchecked code.
 
@@ -43,7 +43,7 @@ git commit -m "chore: set up ticket-runner" && git push
 ticket-runner run     # take every ready Ticket to a merge
 ```
 
-A Stage reads what `init` wrote only once it is on the Base branch, so push it before the first Run, through a pull request if the repository asks for one.
+A Stage reads what `init` wrote only once it is on the base branch, so push it before the first Run, through a pull request if the repository asks for one.
 
 To try it before installing anything, type `npx ticket-runner` wherever these pages say `ticket-runner`: see [Try it without installing](./guide/installation.md#try-it-without-installing).
 
@@ -61,7 +61,7 @@ flowchart LR
   end
   subgraph Execution["Execution · the pipeline, unattended"]
     direction TB
-    F[Frontier] --> C[Claim]
+    F[Frontier] --> C[claim]
     C --> I[implement Stage]
     I --> K[Checks]
     K --> V[verify Stage]
@@ -73,7 +73,7 @@ flowchart LR
     X --> K
     X -. fails again .-> H["Hand-off: ready-for-human"]
     I -. "any Stage: rate limit, API failure, API budget" .-> RL["Release: ready-for-agent"]
-    K -. Base branch fails too .-> RL
+    K -. base branch fails too .-> RL
   end
   R --> F
   M -. unblocks .-> F
@@ -82,18 +82,18 @@ flowchart LR
 ```
 <!-- Sources: src/run.ts, src/orchestrator.ts, src/frontier.ts, src/guards.ts -->
 
-[From Ticket to merge](./guide/ticket-to-merge.md) walks the Execution half one step at a time. What a Hand-off and a Release each leave, and what you do about them, is on [Hand-offs, stopping and resuming](./guide/stopping-and-resuming.md).
+[From Ticket to merge](./guide/ticket-to-merge.md) walks the execution half one step at a time. What a Hand-off and a Release each leave, and what you do about them, is on [Hand-offs, stopping and resuming](./guide/stopping-and-resuming.md).
 
 ## The guide
 
 | Page | Read it for |
 |---|---|
 | [Install and remove](./guide/installation.md) | Requirements, the npm install, `init`, what a Run requires of a Target, `remove`, uninstalling |
-| [Planning the work](./guide/planning.md) | What makes an issue a Ticket: Specs, Acceptance Criteria, native blockers, labels, the Guards |
+| [Planning the work](./guide/planning.md) | What makes an issue a Ticket: Specs, Acceptance Criteria, native blockers, labels, the guards |
 | [Running](./guide/running.md) | `run`, `--lanes`, `--api-key`, a narrowed Run, `stop`, `-v`, the summary and exit codes, logs, running from the Claude app |
 | [Configuration](./guide/configuration.md) | Every field of `ticket-runner.json` |
-| [From Ticket to merge](./guide/ticket-to-merge.md) | The Stages, the Fix budget, Lanes and the Landing, rebase conflicts, what the board is told, Notes |
-| [Hand-offs, stopping and resuming](./guide/stopping-and-resuming.md) | Hand-off, Release, Stop against kill, Stranded Tickets, handing a Ticket back, the Run lock and the State branch |
-| [Internals](./guide/internals.md) | Ports and adapters, a map of the modules, Versions, the ADRs, working on the pipeline itself |
+| [From Ticket to merge](./guide/ticket-to-merge.md) | The Stages, the fix budget, Lanes and the Landing, rebase conflicts, what the board is told, Notes |
+| [Hand-offs, stopping and resuming](./guide/stopping-and-resuming.md) | Hand-off, Release, Stop against kill, Stranded Tickets, handing a Ticket back, the Run lock and the state branch |
+| [Internals](./guide/internals.md) | Ports and adapters, a map of the modules, versions, the ADRs, working on the pipeline itself |
 
 The words the pipeline uses (Ticket, Run, Stage, Lane and the rest) are defined once, in the [glossary](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md).

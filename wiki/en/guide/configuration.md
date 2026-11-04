@@ -48,13 +48,13 @@ The schema is strict. An unknown key, a wrong type or an out-of-range value is r
 Invalid ticket-runner.json: stages: Unrecognized key: "implment". Refused by ticket-runner 0.5.2, so the key may be newer than this install.
 ```
 
-The second sentence is added only for an unknown key: on a stale install, a key a newer Version added looks exactly like a typo, so check the spelling, then upgrade.
+The second sentence is added only for an unknown key: on a stale install, a key a newer version added looks exactly like a typo, so check the spelling, then upgrade.
 
 ## `baseBranch`
 
 - `baseBranch`: string
 
-The [Base branch](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is the one every Ticket starts from and merges into: a Run rebases each Ticket onto it, opens the Ticket's pull request against it and pulls the main checkout to it once the Ticket merges. Without this field it is whatever GitHub calls the repository's default branch, so a Target on `master` needs no setting. It is resolved once at the start of a Run.
+The base branch is the one every Ticket starts from and merges into: a Run rebases each Ticket onto it, opens the Ticket's pull request against it and pulls the main checkout to it once the Ticket merges. Without this field it is whatever GitHub calls the repository's default branch, so a Target on `master` needs no setting. It is resolved once at the start of a Run.
 
 ## `lanes`
 
@@ -67,11 +67,11 @@ How many Tickets a Run holds at once, one per [Lane](https://github.com/jjongs2/
 - `checks`: array of strings
 - `checkTimeoutMinutes`: number > 0
 
-A [Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is a command the pipeline runs itself. Each one runs through the shell in the Ticket's worktree, after the implement Stage, after a fix Stage and after a resolved rebase conflict. A non-zero exit fails the gate, and the Ticket spends its [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), unless the Base branch fails the same command ([A failure the Base branch shares](./ticket-to-merge.md#a-failure-the-base-branch-shares)). That question is asked of a red CI by running these commands too, so they should be ones CI runs.
+A [Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is a command the pipeline runs itself. Each one runs through the shell in the Ticket's worktree, after the implement Stage, after a fix Stage and after a resolved rebase conflict. A non-zero exit fails the gate, and the Ticket spends its [fix budget](./ticket-to-merge.md#the-fix-stage-and-the-fix-budget), unless the base branch fails the same command ([A failure the base branch shares](./ticket-to-merge.md#a-failure-the-base-branch-shares)). That question is asked of a red CI by running these commands too, so they should be ones CI runs.
 
 Without this field the pipeline infers `npm test` and `npm run typecheck` from whichever of the `test` and `typecheck` scripts `package.json` defines.
 
-`checkTimeoutMinutes` is one limit for every command, and each command gets the whole of it, at the merge-base too. A command killed at the limit is a failed Check and spends the Fix budget like any other.
+`checkTimeoutMinutes` is one limit for every command, and each command gets the whole of it, at the merge-base too. A command killed at the limit is a failed Check and spends the fix budget like any other.
 
 ## `gates`
 
@@ -83,7 +83,7 @@ Without this field the pipeline infers `npm test` and `npm run typecheck` from w
 | `gates.checks` | A Run with no Check command, configured or inferred, refuses to start | The Run starts anyway, with a warning. Check commands that do exist still run; with none, the Ticket's checks row reads `⚠️ no checks` |
 | `gates.ci` | A pull request with no CI checks at all is a Hand-off | It merges, with a warning at start and a `⚠️ no checks` row on the Ticket |
 
-Turning `gates.ci` off tolerates only a pull request that has *no* checks. Red CI, CI that times out, and a pull request that conflicts with the Base branch still end the Ticket whatever the gates say.
+Turning `gates.ci` off tolerates only a pull request that has *no* checks. Red CI, CI that times out, and a pull request that conflicts with the base branch still end the Ticket whatever the gates say.
 
 The refusal `gates.checks` guards against reads:
 
@@ -100,8 +100,8 @@ Each Stage is one `claude -p` session. `stages` takes an object per Stage, and e
 | Stage | What it does | `maxTurns` | `maxMinutes` |
 |---|---|---|---|
 | `implement` | Drives `/mattpocock-skills:implement` on the Ticket | `300` | `60` |
-| `verify` | Tries to prove the Acceptance Criteria are not met, and returns a Verdict | `130` | `30` |
-| `fix` | Mends the one failure that spent the Fix budget | `150` | `40` |
+| `verify` | Tries to prove the Acceptance Criteria are not met, and returns a verdict | `130` | `30` |
+| `fix` | Mends the one failure that spent the fix budget | `150` | `40` |
 | `conflict` | Resolves the conflict where a rebase stopped | `120` | `30` |
 
 | Key | Type | Default | Passed as |
@@ -125,7 +125,7 @@ Passed to every Stage as `--permission-mode`. Every Stage also runs with `--perm
 - `ciTimeoutMinutes`: number > 0
 - `ciGraceMinutes`: number ≥ 0
 
-After the Landing opens a pull request, the Run waits up to `ciTimeoutMinutes` for its checks. CI that does not finish in time is a Hand-off that spends no Fix budget.
+After the Landing opens a pull request, the Run waits up to `ciTimeoutMinutes` for its checks. CI that does not finish in time is a Hand-off that spends no fix budget.
 
 `ciGraceMinutes` covers the gap before GitHub registers a check run, which has taken over three minutes. Until it passes, a pull request with no checks yet counts as pending rather than as having none. It never outlasts `ciTimeoutMinutes`. Raise it on a Target whose Actions queue slowly. A Target with no CI at all sets it to `0`, so the wait answers at its first reading; left at the default, it waits the grace out once per merge, and since only one Lane is in the Landing at a time, that wait holds the other Lanes' merges too. A Target with CI keeps a grace: GitHub's answer cannot tell no CI from CI not registered yet, so under `0` a slow check run reads as none.
 
