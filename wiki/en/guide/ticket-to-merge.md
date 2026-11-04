@@ -1,23 +1,23 @@
 ---
 title: From Ticket to merge
-description: The path one Ticket takes through a Run, from the Claim through the Stages, the Checks, the Verdict and the Fix budget to the Landing, and what the board is told on the way.
+description: The path one Ticket takes through a Run, from the claim through the Stages, the Checks, the verdict and the fix budget to the Landing, and what the board is told on the way.
 ---
 
 # From Ticket to merge
 
-Nobody watches a Run, so nothing may merge on a single session's word. Every [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) goes through the same gates in the same order: deterministic Checks, a second session that tries to prove the work wrong, and CI. A failure a fresh session could mend buys exactly one fix Stage; anything else goes to a human. The Tickets of a Run are implemented side by side, but they land one at a time, so what CI graded is what reaches the Base branch.
+Nobody watches a Run, so nothing may merge on a single session's word. Every [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) goes through the same gates in the same order: deterministic Checks, a second session that tries to prove the work wrong, and CI. A failure a fresh session could mend buys exactly one fix Stage; anything else goes to a human. The Tickets of a Run are implemented side by side, but they land one at a time, so what CI graded is what reaches the base branch.
 
-This page follows one Ticket from its Claim to its merge. What happens when it stops short, whether by a Hand-off, a Release, a Stop or a Run that never came back, is on [Hand-offs, stopping and resuming](./stopping-and-resuming.md).
+This page follows one Ticket from its claim to its merge. What happens when it stops short, whether by a Hand-off, a Release, a Stop or a Run that never came back, is on [Hand-offs, stopping and resuming](./stopping-and-resuming.md).
 
 | Step | What happens | Who decides |
 |---|---|---|
-| Claim | Guards, State file, assign, `ready-for-agent` → `in-progress` | the pipeline |
+| Claim | Guards, state file, assign, `ready-for-agent` → `in-progress` | the pipeline |
 | Worktree | `agent/<n>-<slug>` in `.worktrees/ticket-<n>` | git |
 | implement Stage | `/mattpocock-skills:implement` in the worktree | an agent |
 | Checks | Nothing uncommitted, then each Check command | exit codes |
-| verify Stage | Adversarial grading of the Acceptance Criteria | the pipeline, from the Verdict |
-| fix Stage | One fresh session given the failure, once per Ticket | the Fix budget |
-| Landing | Rebase, Conflict Stage, pull request, CI, squash merge | one Lane at a time |
+| verify Stage | Adversarial grading of the Acceptance Criteria | the pipeline, from the verdict |
+| fix Stage | One fresh session given the failure, once per Ticket | the fix budget |
+| Landing | Rebase, conflict Stage, pull request, CI, squash merge | one Lane at a time |
 | After the merge | Tick met criteria, clean up | the pipeline |
 
 ```mermaid
@@ -29,7 +29,7 @@ flowchart TD
     I --> K["Checks"]
     K --> V["verify Stage"]
     V --> R["Rebase"]
-    R -->|conflict| X["Conflict Stage"]
+    R -->|conflict| X["conflict Stage"]
     X -->|rebased| K2["Checks again"]
     R -->|clean| P["Pull request"]
     K2 --> P
@@ -45,18 +45,18 @@ flowchart TD
 ```
 <!-- Sources: src/orchestrator.ts, src/lifecycle.ts -->
 
-Every edge to the fix Stage is taken at most once per Ticket. A second failure of any kind, or any failure the fix Stage cannot act on, is a Hand-off. A Stage stopped by the rate limit, an API failure or the API budget, and a failure the Base branch shares ([below](#a-failure-the-base-branch-shares)), leave this diagram entirely: they [release](./stopping-and-resuming.md#release-on-a-rate-limit) the Ticket.
+Every edge to the fix Stage is taken at most once per Ticket. A second failure of any kind, or any failure the fix Stage cannot act on, is a Hand-off. A Stage stopped by the rate limit, an API failure or the API budget, and a failure the base branch shares ([below](#a-failure-the-base-branch-shares)), leave this diagram entirely: they [release](./stopping-and-resuming.md#release-on-a-rate-limit) the Ticket.
 
 A [Hand-off](./stopping-and-resuming.md#hand-off) undoes the claim, puts `ready-for-human` on, comments the failure and where the work is, and puts an open pull request back into draft. The branch and the state file stay on the Target's remote, with the handed-off Stages' transcripts beside them, since the Host the work was done on may be gone by the time a human looks. A human who relabels the Ticket `ready-for-agent` hands it back, and it carries on from what it reached rather than paying for the implement Stage again. A [Hand-off at setup](./stopping-and-resuming.md#when-a-hand-off-does-less) that leaves no work of the pipeline's removes the state file: the Ticket started fresh and either failed before its worktree existed, or found a branch in the way that the Run would not branch over. No Stage of this Run worked there, so nothing is the pipeline's to resume.
 
-## The Claim
+## The claim
 
-The claim marks a Ticket as taken, so no other Run picks it: the Frontier leaves out every assigned Ticket. The [Guards](./planning.md) run before anything is written. An issue the pipeline will not take is never marked as taken.
+The claim marks a Ticket as taken, so no other Run picks it: the Frontier leaves out every assigned Ticket. The [guards](./planning.md) run before anything is written. An issue the pipeline will not take is never marked as taken.
 
 Then, in this order:
 
-1. The **State file** is written: the Ticket's branch, the state it reached (`claimed`) and whether the Fix budget is spent.
-2. The Ticket is assigned to the `gh` user, `in-progress` goes on and `ready-for-agent` comes off. A Stranded Ticket already wears this Claim, so it is not written again.
+1. The **state file** is written: the Ticket's branch, the state it reached (`claimed`) and whether the fix budget is spent.
+2. The Ticket is assigned to the `gh` user, `in-progress` goes on and `ready-for-agent` comes off. A Stranded Ticket already wears this claim, so it is not written again.
 3. Any hand-off comment still current on the Ticket is marked as history ([Handing a Ticket back](./stopping-and-resuming.md#handing-a-ticket-back)).
 
 ## The worktree and branch
@@ -65,9 +65,9 @@ Then, in this order:
 |---|---|
 | Branch | `agent/<n>-<slug>`: the title in lowercase kebab-case, cut at a word boundary to 40 characters |
 | Worktree | `.worktrees/ticket-<n>` under the Target's root, gitignored |
-| Branched from | The remote's Base branch, freshly fetched, with no upstream set |
+| Branched from | The remote's base branch, freshly fetched, with no upstream set |
 
-A branch of that name that already exists is never reused. The Ticket is handed off at `setup`, and the comment says whose branch it is and the command that clears it. A resumed Ticket carries on in the branch its State file names instead; see [Hand-offs, stopping and resuming](./stopping-and-resuming.md).
+A branch of that name that already exists is never reused. The Ticket is handed off at `setup`, and the comment says whose branch it is and the command that clears it. A resumed Ticket carries on in the branch its state file names instead; see [Hand-offs, stopping and resuming](./stopping-and-resuming.md).
 
 ## How a Stage runs
 
@@ -75,18 +75,18 @@ A [Stage](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is one
 
 Every Stage runs in the Ticket's worktree with `--permission-prompts none`, the configured `permissionMode`, and its own `model`, `effort`, `maxTurns` and `maxMinutes` (see [Configuration](./configuration.md)). The wall-clock limit is enforced by killing the process and everything it started.
 
-**What a Stage sees.** The branch's files, the Target's `CLAUDE.md` among them, so what `init` wrote reaches a Stage once it is on the Base branch. No MCP server, the claude.ai connectors included, no auto memory, and none of the tools that act beyond the session, such as scheduling. Work that needs an MCP server cannot be done by a Stage.
+**What a Stage sees.** The branch's files, the Target's `CLAUDE.md` among them, so what `init` wrote reaches a Stage once it is on the base branch. No MCP server, the claude.ai connectors included, no auto memory, and none of the tools that act beyond the session, such as scheduling. Work that needs an MCP server cannot be done by a Stage.
 
 | Stage | Prompt opens with | Structured answer |
 |---|---|---|
 | implement | `/mattpocock-skills:implement <issue URL>` | optional `title` and [`notes`](#notes) |
-| verify | `Ticket: <issue URL>`, no skill | the Verdict, optional `notes` |
+| verify | `Ticket: <issue URL>`, no skill | the verdict, optional `notes` |
 | fix | `Ticket: <issue URL>`, no skill | optional `title` and `notes` |
 | conflict | `Ticket: <issue URL>`, no skill | none |
 
 The prompt ends with the Stage's [`extraPrompt`](./configuration.md#stages).
 
-**The Credential.** A Stage runs on the Claude login, with the Host's `ANTHROPIC_API_KEY` taken out of its environment, unless the Run was started with [`--api-key`](./running.md#api-key), when it runs on that key. When the session's `apiKeySource` says otherwise, the Run's log and summary name the Stage.
+**What a Stage is billed to.** A Stage runs on the Claude login, with the Host's `ANTHROPIC_API_KEY` taken out of its environment, unless the Run was started with [`--api-key`](./running.md#api-key), when it runs on that key. When the session's `apiKeySource` says otherwise, the Run's log and summary name the Stage.
 
 What each Stage leaves on disk is on [Logs and transcripts](./running.md#logs-and-transcripts).
 
@@ -100,15 +100,15 @@ What each Stage leaves on disk is on [Logs and transcripts](./running.md#logs-an
 | `rate-limited` | `⏸ rate limited`, `⏸ API rate limited` on an `--api-key` Run | The plan's rate limit, or the API's on an `--api-key` Run. Releases the Ticket |
 | `api-error` | `⏸ API failure` | A transient API failure the CLI gave up retrying. Releases the Ticket |
 | `nonzero-exit` | `❌ exited non-zero` | Any other failed session |
-| `invalid-result` | `❌ invalid result` | The verify Stage answered no Verdict at all |
+| `invalid-result` | `❌ invalid result` | The verify Stage answered no verdict at all |
 
 ## The implement Stage
 
 The implement skill reads the Ticket, builds it and reviews it. When the session ends, the pipeline routes its [Notes](#notes), records its `title`, and pushes the branch if it has commits, so a Run on another Host can resume from it. Then:
 
 - A Stage that did not finish is a Hand-off at `implement`.
-- A branch with no commits beyond the Base branch is a Hand-off: an agent that gave up silently leaves nothing to grade.
-- Otherwise the State file moves to `implemented`, so no later Run pays for this Stage again.
+- A branch with no commits beyond the base branch is a Hand-off: an agent that gave up silently leaves nothing to grade.
+- Otherwise the state file moves to `implemented`, so no later Run pays for this Stage again.
 
 ## The Checks
 
@@ -117,11 +117,11 @@ Two gates, run by the pipeline itself rather than by an agent:
 1. **Nothing uncommitted.** A worktree holding changes no commit carries fails, naming every path. Gitignored files, such as installed dependencies, do not count.
 2. **The Check commands**, in order, each through a shell in the worktree, each under `checkTimeoutMinutes` (default 15). The first failure stops the rest. A command killed at the limit is reported as timed out, with a line appended to its output saying it hung rather than failed.
 
-The commands are [`checks`](./configuration.md#checks). Both failures spend the Fix budget. An empty `checks`, which only [`gates.checks`](./configuration.md#gates) off allows, runs nothing, so the row reads `⚠️ no checks` rather than `✅ passed`, here and after a Conflict Stage alike.
+The commands are [`checks`](./configuration.md#checks). Both failures spend the fix budget. An empty `checks`, which only [`gates.checks`](./configuration.md#gates) off allows, runs nothing, so the row reads `⚠️ no checks` rather than `✅ passed`, here and after a conflict Stage alike.
 
-### A failure the Base branch shares
+### A failure the base branch shares
 
-A test on the Base branch that starts failing, one that reads the wall clock say, fails on every branch at once. Charged to each Ticket, it costs every one its Fix budget, and each fix Stage mends it differently in its own pull request. So before a failure is charged, the pipeline asks whether the branch brought it or inherited it:
+A test on the base branch that starts failing, one that reads the wall clock say, fails on every branch at once. Charged to each Ticket, it costs every one its fix budget, and each fix Stage mends it differently in its own pull request. So before a failure is charged, the pipeline asks whether the branch brought it or inherited it:
 
 | What failed | Run at the merge-base |
 |---|---|
@@ -132,30 +132,30 @@ The merge-base, as the remote holds it, is checked out clean, and the command ru
 
 | The merge-base | Progress cell | Result |
 |---|---|---|
-| passes | ``❌ `<command>` failed``, or CI's `❌ failed` | Spends the Fix budget, as above |
-| fails too | ``⏸ `<command>` fails on the Base branch`` | A Release; the budget stays as it was, spent or not |
-| could not be checked out or run | as if it passed | Spends the Fix budget, and the Run log says why |
+| passes | ``❌ `<command>` failed``, or CI's `❌ failed` | Spends the fix budget, as above |
+| fails too | ``⏸ `<command>` fails on the base branch`` | A Release; the budget stays as it was, spent or not |
+| could not be checked out or run | as if it passed | Spends the fix budget, and the Run log says why |
 
-The Release posts the pipeline's own Note on the standing Notes issue, naming the command and quoting the tail of its output, once per Run and merge-base commit however many Tickets it releases. Only the command is compared, so a branch that fails it differently is released all the same; the Note quotes the branch's own failure beside the merge-base's, marked as the branch's: the tail of the failing Check's output, or for CI the failing jobs' logs a fix Stage would have been handed. It is the failure of the Ticket that posted the Note; a Ticket released later over the same commit adds nothing. What to do next is on [Release over a failing Base branch](./stopping-and-resuming.md#release-over-a-failing-base-branch).
+The Release posts the pipeline's own Note on the standing Notes issue, naming the command and quoting the tail of its output, once per Run and merge-base commit however many Tickets it releases. Only the command is compared, so a branch that fails it differently is released all the same; the Note quotes the branch's own failure beside the merge-base's, marked as the branch's: the tail of the failing Check's output, or for CI the failing jobs' logs a fix Stage would have been handed. It is the failure of the Ticket that posted the Note; a Ticket released later over the same commit adds nothing. What to do next is on [Release over a failing base branch](./stopping-and-resuming.md#release-over-a-failing-base-branch).
 
-## The verify Stage and its Verdict
+## The verify Stage and its verdict
 
 No human reviews the code before it merges, and the session that wrote it is the last one to trust on whether it works. So a fresh session, with no plugin skill, tries to prove each Acceptance Criterion is **not** met. It reads the criteria from the body and the comments, runs the code, may write throwaway tests, and must not commit. A criterion that cannot be met without overturning a documented decision or another criterion is `unmet`, with evidence saying a human decision is needed. Its scratch files are discarded afterwards, so they never reach the pull request. What it finds beside the criteria leaves the session as a [Note](#notes), because the verdict has a slot per criterion and none for anything else.
 
-The **Verdict** grades each criterion `met`, `unmet` or `unverifiable`, with evidence. The agent's own pass or fail is advisory; the pipeline decides for itself: **no criterion unmet and at least one met.**
+The **verdict** grades each criterion `met`, `unmet` or `unverifiable`, with evidence. The agent's own pass or fail is advisory; the pipeline decides for itself: **no criterion unmet and at least one met.**
 
 | Verdict | Progress cell | Result |
 |---|---|---|
 | Passes | `✅ <k> met · <v> unverifiable` | On to the Landing |
-| Some `unmet` | `❌ <u> unmet` | Spends the Fix budget; the fix Stage gets each unmet criterion with its evidence |
+| Some `unmet` | `❌ <u> unmet` | Spends the fix budget; the fix Stage gets each unmet criterion with its evidence |
 | All `unverifiable` | `❌ no evidence` | Hand-off: there is nothing to merge on |
-| Missing or malformed | `❌ no Verdict` | Hand-off |
+| Missing or malformed | `❌ no verdict` | Hand-off |
 
-A verify after a fix for unmet criteria gets the first Verdict's unmet criteria and their evidence, and is told such a criterion is met only when that counterexample is gone and the whole criterion holds.
+A verify after a fix for unmet criteria gets the first verdict's unmet criteria and their evidence, and is told such a criterion is met only when that counterexample is gone and the whole criterion holds.
 
-## The fix Stage and the Fix budget
+## The fix Stage and the fix budget
 
-The [Fix budget](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is one fix Stage per Ticket, and whatever still fails after it goes to a human. The fix Stage is a fresh session on the same branch, with no plugin skill, given the failure and its evidence to mend that one defect. Sent in for unmet criteria, it commits nothing and says why when one cannot be met without overturning a documented decision or another criterion, which hands the Ticket to a human.
+The fix budget is one fix Stage per Ticket, and whatever still fails after it goes to a human. The fix Stage is a fresh session on the same branch, with no plugin skill, given the failure and its evidence to mend that one defect. Sent in for unmet criteria, it commits nothing and says why when one cannot be met without overturning a documented decision or another criterion, which hands the Ticket to a human.
 
 Only a defect a fresh session could mend spends the budget:
 
@@ -165,14 +165,14 @@ Only a defect a fresh session could mend spends the budget:
 | A Check failed or timed out | checks | Yes |
 | A Check failed that the merge-base fails too | checks | No, a Release |
 | A criterion `unmet` | verify | Yes |
-| The Conflict Stage did not finish the rebase | rebase | Yes |
+| The conflict Stage did not finish the rebase | rebase | Yes |
 | A pull request check failed | ci | Yes |
 | A pull request check failed, and the merge-base fails a Check | ci | No, a Release |
 | A Stage that did not finish (timed out, turn-capped, non-zero, invalid result) | its Stage | No, Hand-off |
 | implement left no commits | implement | No, Hand-off |
-| A Verdict with no evidence, or none at all | verify | No, Hand-off |
-| The Conflict Stage could not be run, or git could not be asked | rebase | No, Hand-off |
-| The Base branch could not be pulled | rebase | No, Hand-off |
+| A verdict with no evidence, or none at all | verify | No, Hand-off |
+| The conflict Stage could not be run, or git could not be asked | rebase | No, Hand-off |
+| The base branch could not be pulled | rebase | No, Hand-off |
 | Pushing or opening the pull request failed | pr | No, Hand-off |
 | CI timed out, found conflicting, or had no checks | ci | No, Hand-off |
 | The merge failed | merge | No, Hand-off |
@@ -188,7 +188,7 @@ A Run holds one Ticket per [Lane](https://github.com/jjongs2/ticket-runner/blob/
 
 ## The Landing
 
-The [Landing](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), from the pull of the Base branch before the rebase to the pull after the merge, holds one Ticket at a time, in arrival order, so the Base branch cannot move between a Ticket's rebase and its merge, and what CI graded is what lands ([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)). implement and verify, where the time goes, stay parallel. The cost is that one Lane's Conflict Stage or slow CI holds the others' Landing.
+The [Landing](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), from the pull of the base branch before the rebase to the pull after the merge, holds one Ticket at a time, in arrival order, so the base branch cannot move between a Ticket's rebase and its merge, and what CI graded is what lands ([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)). implement and verify, where the time goes, stay parallel. The cost is that one Lane's conflict Stage or slow CI holds the others' Landing.
 
 ```mermaid
 sequenceDiagram
@@ -199,13 +199,13 @@ sequenceDiagram
     participant GH as GitHub
     A->>L: enter (free, taken)
     B->>L: enter (waits)
-    A->>GH: pull Base branch, rebase, push, open PR
+    A->>GH: pull base branch, rebase, push, open pull request
     GH-->>A: CI green
     A->>GH: squash merge
-    A->>GH: pull Base branch
+    A->>GH: pull base branch
     A->>L: leave
     L-->>B: turn handed over
-    B->>GH: pull Base branch, now carrying Ticket 4, then rebase
+    B->>GH: pull base branch, now carrying Ticket 4, then rebase
     Note over B: A red CI here leaves the Landing for the fix Stage and rejoins at the back
 ```
 <!-- Sources: src/landing.ts, src/orchestrator.ts -->
@@ -214,34 +214,34 @@ A Ticket also leaves the Landing for a fix Stage, a Hand-off or a Release, so no
 
 ### Rebase
 
-The Base branch is first brought up to the remote's, then `git rebase <base>` runs in the worktree. A clean rebase goes straight to the pull request. A conflict is left exactly where git stopped, for the Conflict Stage.
+The base branch is first brought up to the remote's, then `git rebase <base>` runs in the worktree. A clean rebase goes straight to the pull request. A conflict is left exactly where git stopped, for the conflict Stage.
 
-### The Conflict Stage
+### The conflict Stage
 
-A conflict is not a defect in the branch: the Base branch moved on underneath it. So one [Conflict Stage](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) runs in the stopped rebase with git's output and no plugin skill, and **it does not spend the Fix budget.** It is told to finish the rebase and never abort it, to keep both intents where they are compatible and the Ticket's where they are not, and to change a file the conflict did not touch only to repair what the merge broke, such as a renamed name or a moved field. It implements nothing new and changes no behaviour the criteria cover.
+A conflict is not a defect in the branch: the base branch moved on underneath it. So one conflict Stage runs in the stopped rebase with git's output and no plugin skill, and **it does not spend the fix budget.** It is told to finish the rebase and never abort it, to keep both intents where they are compatible and the Ticket's where they are not, and to change a file the conflict did not touch only to repair what the merge broke, such as a renamed name or a moved field. It implements nothing new and changes no behaviour the criteria cover.
 
-**The worktree decides, not the session's exit.** The rebase counts as resolved only when it has finished, the branch sits on top of the Base branch with no merge commit between them, and no unmerged path or conflict marker is left.
+**The worktree decides, not the session's exit.** The rebase counts as resolved only when it has finished, the branch sits on top of the base branch with no merge commit between them, and no unmerged path or conflict marker is left.
 
 | What the worktree shows | Result |
 |---|---|
 | Resolved, however the session ended (even rate-limited or stopped by an API failure) | `✅ rebased`; push, then **the Checks again** |
 | Unresolved, session rate-limited or stopped by an API failure or the API budget | Abort the rebase, Release |
-| Unresolved otherwise | `❌ unresolved`; abort the rebase, spend the Fix budget |
+| Unresolved otherwise | `❌ unresolved`; abort the rebase, spend the fix budget |
 | The Stage could not run, or git could not be asked | `❌ unknown`; abort the rebase, Hand-off |
 
 The Checks run again because the resolution is code no gate has seen. verify is not asked again: the Stage changes no behaviour the criteria cover. An unresolved rebase hands the fix Stage the conflict and what is still wrong as its evidence. The abort always happens, so a fix Stage or a human never inherits a half-finished rebase.
 
 ### Pull request
 
-The branch is pushed with `--force-with-lease`, since the rebase rewrote it. The pipeline opens a ready (non-draft) pull request against the Base branch, or updates the one it already has: a new title and body, and out of draft (a draft often runs no workflows, so a draft left from a Hand-off would read as "no checks").
+The branch is pushed with `--force-with-lease`, since the rebase rewrote it. The pipeline opens a ready (non-draft) pull request against the base branch, or updates the one it already has: a new title and body, and out of draft (a draft often runs no workflows, so a draft left from a Hand-off would read as "no checks").
 
 **The title** is the first of these in the commit convention's shape, `<type>(<scope>): <summary>` on one line (a trailing `(#<n>)` is dropped):
 
-1. The latest `title` the implement or fix Stage answered for the whole branch, in this Run or recorded in the State file by an earlier one.
+1. The latest `title` the implement or fix Stage answered for the whole branch, in this Run or recorded in the state file by an earlier one.
 2. The branch's first commit subject.
 3. The Ticket title, as it is.
 
-**The body** is `Closes #<n>`, the Verdict counts, the criteria in a folded list (evidence shown for any not `met`), and a line naming the Run. On a workstation that line also points at `.ticket-runner/runs/<runId>/<n>/`; a cloud Host's run directory does not outlive its session, so there it names the Run alone.
+**The body** is `Closes #<n>`, the verdict counts, the criteria in a folded list (evidence shown for any not `met`), and a line naming the Run. On a workstation that line also points at `.ticket-runner/runs/<runId>/<n>/`; a cloud Host's run directory does not outlive its session, so there it names the Run alone.
 
 ### CI wait and grace period
 
@@ -250,8 +250,8 @@ The pipeline polls the head commit's check runs and commit statuses until they s
 | What GitHub shows | Progress cell | Result |
 |---|---|---|
 | Every check passed or skipped | `✅ passed` | Merge |
-| A check failed, was cancelled, timed out, needs action or could not start | `❌ failed` | Spends the Fix budget |
-| The same, and the merge-base fails a Check command | ``⏸ `<command>` fails on the Base branch`` | A Release ([above](#a-failure-the-base-branch-shares)) |
+| A check failed, was cancelled, timed out, needs action or could not start | `❌ failed` | Spends the fix budget |
+| The same, and the merge-base fails a Check command | ``⏸ `<command>` fails on the base branch`` | A Release ([above](#a-failure-the-base-branch-shares)) |
 | Checks still pending at the timeout | `❌ timed out` | Hand-off |
 | No checks, and GitHub finds the pull request conflicting | `❌ conflicting` | Hand-off at once |
 | No checks after the grace period, `gates.ci` on | `❌ no checks` | Hand-off |
@@ -284,15 +284,15 @@ The subject is the pull request title. Commit subjects and `Co-authored-by` trai
 
 The Ticket is merged, so nothing below can hand it off. Each step's failure is logged and the next step still runs:
 
-1. Remove the State file, so the Ticket never looks resumable again.
+1. Remove the state file, so the Ticket never looks resumable again.
 2. Tick the met criteria (below).
 3. Remove `in-progress`. The merge closed the issue.
-4. Pull the Base branch. This ends the Landing, and the next Lane's Ticket rebases onto a Base branch that already carries this one.
+4. Pull the base branch. This ends the Landing, and the next Lane's Ticket rebases onto a base branch that already carries this one.
 5. Remove the worktree and the local branch, and delete the remote branch unless GitHub already did.
 
 ## What the board is told
 
-**The Progress comment.** A Ticket gets one [Progress comment](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), found again by a hidden marker and rewritten in place as each step ends, so only the first write notifies anyone. It is posted when the first row is recorded. Each Run that works the Ticket has its own section below earlier Runs' sections, headed by the Version, the Run id and the branch:
+**The progress comment.** A Ticket gets one progress comment, found again by a hidden marker and rewritten in place as each step ends, so only the first write notifies anyone. It is posted when the first row is recorded. Each Run that works the Ticket has its own section below earlier Runs' sections, headed by the version, the Run id and the branch:
 
 ```text
 **ticket-runner** `0.4.0` · run `2026-09-17T09-00-00-000` · `agent/4-planning-guards`
@@ -310,7 +310,7 @@ The Ticket is merged, so nothing below can hand it off. Each step's failure is l
 
 Rows carry a few words only. Anything a human has to act on is its own comment, since those are worth a notification: a hand-off, a guard warning, a Note.
 
-**Ticking met criteria.** After the merge, every criterion the Verdict marked `met` is ticked (`- [ ]` → `- [x]`) wherever it is written: the body, or any comment, such as the one triage posted its brief in. Matching forgives differences in whitespace and case. A criterion that matches no checkbox even so, ticked or not, gets a second chance: with one trailing parenthetical dropped, such as the `(table)` the verify Stage appends to a criterion whose content sits in a block below it, and with each `...` or `…` read as any run of characters. That looser match is tried against the lines the first pass left unticked, across the body and every comment together, and ticks a line only when exactly one matches; with none or more than one, the criterion stays unticked. An `unverifiable` criterion stays unticked, because nobody gathered evidence for it. A criterion the Stage reworded past matching is left unticked, and the Run log says how many were not matched.
+**Ticking met criteria.** After the merge, every criterion the verdict marked `met` is ticked (`- [ ]` → `- [x]`) wherever it is written: the body, or any comment, such as the one triage posted its brief in. Matching forgives differences in whitespace and case. A criterion that matches no checkbox even so, ticked or not, gets a second chance: with one trailing parenthetical dropped, such as the `(table)` the verify Stage appends to a criterion whose content sits in a block below it, and with each `...` or `…` read as any run of characters. That looser match is tried against the lines the first pass left unticked, across the body and every comment together, and ticks a line only when exactly one matches; with none or more than one, the criterion stays unticked. An `unverifiable` criterion stays unticked, because nobody gathered evidence for it. A criterion the Stage reworded past matching is left unticked, and the Run log says how many were not matched.
 
 ## Notes
 
@@ -329,7 +329,7 @@ A `- [ ]` at the head of a line in a Note is escaped, so a Note is never read as
 
 ## Related pages
 
-- [Planning](./planning.md): the Guards that run before the Claim, and how to write Acceptance Criteria verify can grade.
+- [Planning](./planning.md): the guards that run before the claim, and how to write Acceptance Criteria verify can grade.
 - [Running](./running.md): starting a Run, `--lanes`, `--api-key`, a narrowed Run, the summary, exit codes and transcripts.
 - [Configuration](./configuration.md): `checks`, `gates`, the Stage limits, `ciTimeoutMinutes`, `ciGraceMinutes`.
 - [Hand-offs, stopping and resuming](./stopping-and-resuming.md): Hand-off, Release, Stop, Stranded Tickets and handing a Ticket back.
@@ -346,4 +346,4 @@ A `- [ ]` at the head of a line in a Note is escaped, so a Note is never read as
 - [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts), [`src/adapters/git-workspace.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts), [`src/adapters/gh-tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts), [`src/adapters/process-tree.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/process-tree.ts)
 - [ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md): one `claude -p` child process per Stage
 - [ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md): the Landing is a serialized section
-- [`docs/templates/`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/README.md): the exact shapes of the Progress comment, pull request body, squash commit and Note comment
+- [`docs/templates/`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/README.md): the exact shapes of the progress comment, pull request body, squash commit and Note comment
