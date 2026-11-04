@@ -127,12 +127,11 @@ describe("a second chance for a criterion that matches no line exactly", () => {
     );
   });
 
-  it("keeps the parenthetical where the line ends with one too", () => {
-    const body = "- [ ] it works on Linux and Windows (both)";
+  it("takes the spaces around the dots as part of the cut", () => {
+    const body = "- [ ] it works on Linux";
 
-    expect(tick(body, ["it works on ... (both)"])).toBe(
-      "- [x] it works on Linux and Windows (both)",
-    );
+    expect(tick(body, ["it works...on Linux"])).toBe("- [x] it works on Linux");
+    expect(tick(body, ["it works ... Linux"])).toBe("- [x] it works on Linux");
   });
 
   it("ticks neither of two lines the second chance matches", () => {
@@ -193,8 +192,9 @@ describe("a second chance for a criterion that matches no line exactly", () => {
   });
 
   it("ticks #284's longest criterion to its own line with three passages cut", () => {
-    const long = TICKET_284.met.find((text) => text.length === 726);
-    if (long === undefined) throw new Error("#284's 726-character criterion is missing");
+    const long = TICKET_284.met.find((text) => text.startsWith("Text this Ticket adds"));
+    if (long === undefined) throw new Error("#284's longest criterion is missing");
+    expect(long).toHaveLength(726);
     const cut = long
       .replace(/^(Text this Ticket adds writes none of these in capitals, ).*?(: Execution)/, "$1...$2")
       .replace(/(Version notes, ).*?(\. A word)/, "$1...$2")
