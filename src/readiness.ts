@@ -15,13 +15,13 @@ import type { Workspace } from "./ports/workspace.js";
  * Target it was only asked to work in is the thing `init` exists to keep to one
  * place — so the refusal names the item and the command that fixes it.
  *
- * Presence and the Version stamp, never content. The conventions document and
+ * Presence and the version stamp, never content. The conventions document and
  * the Operator's skill are the pipeline's own text and change with it, so
  * comparing either at every start would refuse a Target for carrying last
  * week's copy, which is a thing the next `init` rewrites and nothing a Run is
- * worse for. The document's Version stamp is asked for, though never which
- * Version it names: an Operator installs the pipeline a cloud Host runs at that
- * Version, and a Target without one leaves it guessing (ADR-0008).
+ * worse for. The document's version stamp is asked for, though never which
+ * version it names: an Operator installs the pipeline a cloud Host runs at that
+ * version, and a Target without one leaves it guessing (ADR-0008).
  *
  * The checkout's files are read here rather than through a port, which every
  * external effect of a Run goes through. What a port buys is a fake to drive the
@@ -30,7 +30,7 @@ import type { Workspace } from "./ports/workspace.js";
  * from a temporary repository root, which is how the local state under
  * `.ticket-runner/` is tested too (ADR-0004).
  *
- * The same files on the remote's Base branch are the one exception, read
+ * The same files on the remote's base branch are the one exception, read
  * through `Workspace` like every other question about the remote: every
  * Ticket's worktree is made from that branch, so a file `init` wrote and nobody
  * pushed is in the checkout and in no Stage's worktree. The conventions
@@ -159,7 +159,7 @@ export interface ReadinessOptions {
  * next, so a Host without it is refused in words rather than with the spawn
  * error the first label lookup would crash on.
  *
- * What the remote's Base branch lacks is asked after all of these, by
+ * What the remote's base branch lacks is asked after all of these, by
  * {@link unpushedRefusal}, once the Run has resolved which branch that is: the
  * lookup may ask GitHub, which only a `gh` that runs can.
  */
@@ -184,17 +184,17 @@ export async function readinessRefusal({
 
 export interface UnpushedOptions {
   workspace: Pick<Workspace, "remote" | "readRemoteFile">;
-  /** The Run's Base branch, resolved once and carried on into the Run. */
+  /** The Run's base branch, resolved once and carried on into the Run. */
   baseBranch: string;
 }
 
 /**
- * The message a Run is refused with when the remote's Base branch lacks a file
+ * The message a Run is refused with when the remote's base branch lacks a file
  * the checkout has, and nothing when it has them all.
  *
  * Asked once {@link readinessRefusal} has found nothing missing, so a Target
  * that never ran `init` is told to run it and only one that did is told to
- * push. A Base branch the remote does not have lacks every file. The remedy is
+ * push. A base branch the remote does not have lacks every file. The remedy is
  * a commit and a push, which `init` leaves to the human, so this names no
  * command of the pipeline's.
  */
@@ -224,7 +224,7 @@ async function missingFileMessage(repoRoot: string): Promise<string | undefined>
 }
 
 /**
- * Names the first of the items both the checkout and the remote's Base branch
+ * Names the first of the items both the checkout and the remote's base branch
  * must carry that `read` does not find, asking each the same question in both
  * places. Where it was asked is the refusal's to say.
  */
@@ -236,7 +236,7 @@ async function missingItemMessage(
     return `\`${CONVENTIONS_PATH}\` is not there`;
   }
   if (conventionsMark(conventions) === undefined) {
-    return `\`${CONVENTIONS_PATH}\` carries no Version`;
+    return `\`${CONVENTIONS_PATH}\` carries no version`;
   }
 
   if (!hasClaudePointer(await read(CLAUDE_FILENAME))) {

@@ -1,9 +1,9 @@
 /**
- * The Version plumbing of this repository, as its two workflows call it.
+ * The version plumbing of this repository, as its two workflows call it.
  *
  * `.github/workflows/version-pr.yml` runs `check` on every pull request and
  * `.github/workflows/version-tag.yml` runs `notes` on the push that cuts a
- * Version. All this does is read — two package files, the tags, the changelog
+ * version. All this does is read — two package files, the tags, the changelog
  * — and hand what it read to the pure functions in `src/version-pr.ts`, which
  * is where the judgement is and where the tests are. Nothing here is published:
  * `scripts/` is outside the package's `files`, so an installed pipeline carries
@@ -11,8 +11,8 @@
  *
  * `mark` is the one command a human runs rather than a workflow, and the one
  * that writes: this repository is a Target of its own pipeline, so the copy of
- * the conventions document checked in here bears the Version that wrote it, and
- * raising the number leaves that copy a Version behind until it is rewritten
+ * the conventions document checked in here bears the version that wrote it, and
+ * raising the number leaves that copy a version behind until it is rewritten
  * (ADR-0007).
  */
 import { execFileSync } from "node:child_process";
@@ -70,7 +70,7 @@ function printRefusals(): void {
 }
 
 /**
- * The Version notes this checkout's number has, and nothing at all where the
+ * The release notes this checkout's number has, and nothing at all where the
  * changelog has no section for it: the tag workflow reads empty output as its
  * cue to publish GitHub's generated notes instead.
  */

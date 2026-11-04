@@ -35,7 +35,7 @@ const verdict = parseVerdict({
   pass: true,
 });
 
-/** The Version the Run ran, which its summary is headed with. */
+/** The version the Run ran, which its summary is headed with. */
 const VERSION = "0.4.0+331d79c";
 
 /** Why most summaries here end: nothing left on the Frontier. */
@@ -48,7 +48,7 @@ describe("pullRequestBody", () => {
     expect(body.split("\n")[0]).toBe("Closes #2");
   });
 
-  it("summarises the Verdict by status count", () => {
+  it("summarises the verdict by status count", () => {
     const body = pullRequestBody({ ticket: 2, verdict, runId: "r1", host: "workstation" });
 
     expect(body).toContain("**Verdict:** 1 met · 0 unmet · 1 unverifiable");
@@ -130,7 +130,7 @@ describe("squashCommit", () => {
       coAuthors: [],
     });
 
-  it("uses the pull request title as the subject and appends the PR number as GitHub would", () => {
+  it("uses the pull request title as the subject and appends the pull request number as GitHub would", () => {
     expect(commit().subject).toBe("feat(cli): add a flag (#100)");
   });
 
@@ -155,7 +155,7 @@ describe("squashCommit", () => {
     )).toBe(true);
   });
 
-  it("opens the body with Closes, then the Verdict counts, then the branch commits in order", () => {
+  it("opens the body with Closes, then the verdict counts, then the branch commits in order", () => {
     expect(commit().body).toBe(
       [
         "Closes #2",
@@ -209,7 +209,7 @@ describe("handoffComment", () => {
     expect(comment).not.toContain("worktree");
   });
 
-  it("names the draft PR when one was opened", () => {
+  it("names the draft pull request when one was opened", () => {
     expect(handoffComment({ ...base, pullRequest: 12 })).toContain("PR #12 (draft)");
   });
 
@@ -232,7 +232,7 @@ describe("handoffComment", () => {
     expect(handoffComment(base)).not.toContain("Transcripts");
   });
 
-  it("omits the PR clause when no PR exists", () => {
+  it("omits the pull request clause when no pull request exists", () => {
     expect(handoffComment(base)).not.toContain("PR #");
   });
 
@@ -390,7 +390,7 @@ describe("runSummary", () => {
     notes: [],
   };
 
-  it("heads the summary with the Version, the Run and how long it took", () => {
+  it("heads the summary with the version, the Run and how long it took", () => {
     const summary = runSummary({
       credential: "subscription",
       version: VERSION,
@@ -408,8 +408,8 @@ describe("runSummary", () => {
    * ends in a summary the human scrolls back to, and the line they most need
    * out of it is the one saying the pipeline they ran is not the current one.
    */
-  it("puts the newer-Version line at the head, above the header", () => {
-    const newer = "A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade.";
+  it("puts the newer-version line at the head, above the header", () => {
+    const newer = "A newer version is out: 0.5.0, and this is 0.4.0 — upgrade.";
     const summary = runSummary({
       credential: "subscription",
       version: VERSION,
@@ -425,7 +425,7 @@ describe("runSummary", () => {
     expect(second).toBe(`ticket-runner ${VERSION} run r1 · 0m · subscription`);
   });
 
-  it("heads the summary with the Run where no newer Version is out", () => {
+  it("heads the summary with the Run where no newer version is out", () => {
     const summary = runSummary({
       credential: "subscription",
       version: VERSION,
@@ -481,7 +481,7 @@ describe("runSummary", () => {
     expect(summary.trimEnd().split("\n").at(-1)).toBe("API failure.");
   });
 
-  it("says a failing Base branch released a Ticket, and names it, the command and the commit last", () => {
+  it("says a failing base branch released a Ticket, and names it, the command and the commit last", () => {
     const summary = runSummary({
       credential: "subscription",
       version: VERSION,
@@ -498,7 +498,7 @@ describe("runSummary", () => {
               stage: "pipeline",
               issue: 31,
               opened: false,
-              summary: "The Base branch `main` fails `npm test`.",
+              summary: "The base branch `main` fails `npm test`.",
             },
           ],
         },
@@ -512,8 +512,8 @@ describe("runSummary", () => {
     });
 
     expect(summary.split("\n").slice(2, 4)).toEqual([
-      "  released #6 Rebase conflict resolution · failing Base branch at checks",
-      "  noted    #31 comment · from #6 pipeline · The Base branch `main` fails `npm test`.",
+      "  released #6 Rebase conflict resolution · failing base branch at checks",
+      "  noted    #31 comment · from #6 pipeline · The base branch `main` fails `npm test`.",
     ]);
     expect(summary).not.toContain("rate limit");
     expect(summary.trimEnd().split("\n").at(-1)).toBe(
@@ -768,7 +768,7 @@ describe("runSummary", () => {
     ]);
   });
 
-  it("gives a stray Stage's figure on its row of an `--api-key` Run, apart from the Spend", () => {
+  it("gives a stray Stage's figure on its row of an `--api-key` Run, apart from the spend", () => {
     const summary = runSummary({
       credential: "api-key",
       version: VERSION,
@@ -959,7 +959,7 @@ describe("failingBaseNote", () => {
         NOTE_MARKER,
         "From the pipeline, releasing #6 at checks",
         "",
-        "**The Base branch `main` fails `npm test`.**",
+        "**The base branch `main` fails `npm test`.**",
         "",
         "**Evidence**: `npm test` failed in a clean worktree at 1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d, the merge-base of `agent/6-x` with `main`. The tail of its output:",
         "",
@@ -975,16 +975,16 @@ describe("failingBaseNote", () => {
         "  2246 ms is not below 2000 ms",
         "```",
         "",
-        "**Impact**: every Ticket whose branch inherits 1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d fails the same Check. #6 was released with its Fix budget as it was, and the Run claimed no more Tickets.",
+        "**Impact**: every Ticket whose branch inherits 1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d fails the same Check. #6 was released with its fix budget as it was, and the Run claimed no more Tickets.",
         "",
-        "**Next**: mend `npm test` on `main`. The next Run takes the released Tickets up again from their State files, rebased onto `main` before their Checks.",
+        "**Next**: mend `npm test` on `main`. The next Run takes the released Tickets up again from their state files, rebased onto `main` before their Checks.",
         "",
       ].join("\n"),
     );
   });
 
   it("summarises itself in the words its bold line carries", () => {
-    expect(failingBaseSummary("main", "npm test")).toBe("The Base branch `main` fails `npm test`.");
+    expect(failingBaseSummary("main", "npm test")).toBe("The base branch `main` fails `npm test`.");
   });
 
   it("quotes only the last 40 lines, in a fence no backticks in them can close", () => {

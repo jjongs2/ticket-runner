@@ -40,7 +40,7 @@ export interface Issue {
    * Whether the issue is closed.
    *
    * Only ever asked of a Ticket the pipeline kept local state for: a Run sweeps
-   * its State files before it does anything else, and a Ticket that has closed
+   * its state files before it does anything else, and a Ticket that has closed
    * since is one there is nothing left to resume.
    */
   closed: boolean;
@@ -128,13 +128,14 @@ export interface CreatePullRequest {
  * The outcome of waiting for a pull request's CI checks. Distinct from a Check,
  * which is a command the pipeline runs itself (GLOSSARY.md).
  *
- * `none` means the PR has no checks at all, which `gates.ci` treats as a
- * failure rather than a silent bypass.
+ * `none` means the pull request has no checks at all, which `gates.ci` treats
+ * as a failure rather than a silent bypass.
  *
- * `conflicting` means the PR has no checks because GitHub reports it as
- * conflicting with the Base branch: GitHub runs no `pull_request` workflow for
- * such a PR, so it would otherwise read as `none`. It cannot be merged, so no gate
- * lets it through, and it has nothing a fix Stage could act on.
+ * `conflicting` means the pull request has no checks because GitHub reports it
+ * as conflicting with the base branch: GitHub runs no `pull_request` workflow
+ * for such a pull request, so it would otherwise read as `none`. It cannot be
+ * merged, so no gate lets it through, and it has nothing a fix Stage could act
+ * on.
  */
 export type CiOutcome =
   | { state: "passed" }
@@ -203,21 +204,21 @@ export interface Tracker {
    */
   repository(): Promise<string | undefined>;
   /**
-   * The tag of the highest Version `repository` has published as a GitHub
+   * The tag of the highest version `repository` has published as a GitHub
    * Release, named `owner/name`, or nothing where GitHub could not be asked.
    *
    * Named for the tag rather than for the Release, because a Release in this
    * codebase is what a Stage the rate limit or an API failure stopped does to
    * a Ticket (GLOSSARY.md). A published GitHub Release is what makes a tag a
-   * Version anybody can install, which is why it is the question rather than
+   * version anybody can install, which is why it is the question rather than
    * the tag alone.
    *
    * The one method of this port that is not about the Target: it is asked about
    * the pipeline's own repository, so a Run and `init` can say that a newer
-   * Version is out. Nothing is ever refused over the answer, so no answer is an
+   * version is out. Nothing is ever refused over the answer, so no answer is an
    * answer — a Target with no network is a Target that works (ADR-0007).
    *
-   * Drafts and pre-releases are not published Versions and are not counted. The
+   * Drafts and pre-releases are not published versions and are not counted. The
    * tag comes back as it was cut, `v0.4.0`, because that is what a human would
    * go and look for.
    */
@@ -292,7 +293,7 @@ export interface Tracker {
   /**
    * Replace an issue's body.
    *
-   * Only ever used to tick Acceptance Criteria a Verdict proved, so whatever
+   * Only ever used to tick Acceptance Criteria a verdict proved, so whatever
    * else the body says is read first and written back unchanged.
    */
   updateIssueBody(number: number, body: string): Promise<void>;
@@ -318,7 +319,7 @@ export interface Tracker {
    * Replace the body of an open pull request.
    *
    * A Ticket that spends its fix budget is graded twice, and the body carries
-   * the Verdict a human reads; without this it would keep the Verdict that
+   * the verdict a human reads; without this it would keep the verdict that
    * failed while the squash commit carried the one that passed.
    */
   updatePullRequestBody(number: number, body: string): Promise<void>;

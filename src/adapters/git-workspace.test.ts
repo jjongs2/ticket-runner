@@ -122,7 +122,7 @@ describe("the merge-base and the worktree at it", () => {
     return other;
   }
 
-  it("names the commit the branch inherited from the remote's Base branch, whichever checkout is behind", async () => {
+  it("names the commit the branch inherited from the remote's base branch, whichever checkout is behind", async () => {
     const other = anotherClone();
     commit(other, "first.txt", "x\n", "feat: first (#1)");
     git(other, "push", "origin", "main");
@@ -675,8 +675,8 @@ describe("rebaseState", () => {
   });
 });
 
-describe("a file on the remote's Base branch", () => {
-  it("reads a file the remote's Base branch carries", async () => {
+describe("a file on the remote's base branch", () => {
+  it("reads a file the remote's base branch carries", async () => {
     expect(await workspace.readRemoteFile("main", "README.md")).toBe("hello\n");
   });
 
@@ -735,7 +735,7 @@ describe("push and pullBase", () => {
     await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
     commit(path, "a.txt", "a\n", "feat: a (#2)");
     await workspace.push(path, "agent/2-x");
-    // As GitHub does the moment a PR merges when the repo is set to.
+    // As GitHub does the moment a pull request merges when the repo is set to.
     git(remote, "branch", "-D", "agent/2-x");
 
     await expect(workspace.deleteRemoteBranch("agent/2-x")).resolves.toBeUndefined();
@@ -1157,7 +1157,7 @@ describe("a Target whose base branch is not main", () => {
   });
 });
 
-describe("the State a Ticket keeps", () => {
+describe("the state a Ticket keeps", () => {
   const state = {
     ticket: 4,
     branch: "agent/4-x",
@@ -1256,7 +1256,7 @@ describe("the State a Ticket keeps", () => {
       "ticket-6.json": "{ not json",
       // A file that parses, but names another Ticket than its own name does.
       "ticket-7.json": JSON.stringify({ ...state, ticket: 5, version: "0.4.0" }),
-      // Neither is a Ticket's State: a note, and a directory of transcripts.
+      // Neither is a Ticket's state: a note, and a directory of transcripts.
       "notes.txt": "a human's note",
       "ticket-4/implement.jsonl": "{}",
     });
@@ -1271,7 +1271,7 @@ describe("the State a Ticket keeps", () => {
     expect(await workspace.readState(7)).toBeUndefined();
   });
 
-  it("keeps what else the state branch holds when a Ticket's State is written", async () => {
+  it("keeps what else the state branch holds when a Ticket's state is written", async () => {
     await workspace.writeState(state);
     commitToStateBranch({ "ticket-4/implement.jsonl": "{}" });
 
@@ -1280,7 +1280,7 @@ describe("the State a Ticket keeps", () => {
     expect(git(remote, "show", `${STATE_BRANCH}:ticket-4/implement.jsonl`)).toBe("{}");
   });
 
-  it("has nothing to read, and creates nothing, before any State is written", async () => {
+  it("has nothing to read, and creates nothing, before any state is written", async () => {
     expect(await workspace.readState(4)).toBeUndefined();
     expect(await workspace.readAllStates()).toEqual([]);
     await workspace.removeState(4);
@@ -1349,7 +1349,7 @@ describe("the State a Ticket keeps", () => {
       const kept = await workspace.keepTranscripts(4, "run-1");
 
       expect(kept).toEqual({ branch: STATE_BRANCH, path: "ticket-4/run-1/" });
-      // The Version beside them, as it is beside them on the Host that ran them.
+      // The version beside them, as it is beside them on the Host that ran them.
       expect(keptOnRemote(4)).toEqual([
         "ticket-4/run-1/implement.command",
         "ticket-4/run-1/implement.transcript.jsonl",
@@ -1386,7 +1386,7 @@ describe("the State a Ticket keeps", () => {
       expect(git(remote, "branch", "--list", STATE_BRANCH)).toBe("");
     });
 
-    it("go when the Ticket's State does, and no other Ticket's go with them", async () => {
+    it("go when the Ticket's state does, and no other Ticket's go with them", async () => {
       stageLogs("run-1", 9, { "implement.command": "claude -p implement\n" });
       await workspace.writeState(state);
       await workspace.writeState({ ...state, ticket: 9, branch: "agent/9-x" });
@@ -1398,7 +1398,7 @@ describe("the State a Ticket keeps", () => {
       expect(onRemote()).toEqual(["ticket-9.json", "ticket-9"]);
     });
 
-    it("go on their own where the State was already gone", async () => {
+    it("go on their own where the state was already gone", async () => {
       await workspace.keepTranscripts(4, "run-1");
 
       await workspace.removeState(4);
@@ -1419,7 +1419,7 @@ describe("the State a Ticket keeps", () => {
       expect(tip()).toBe("Forget ticket 4");
     });
 
-    it("are read by nothing that reads the State", async () => {
+    it("are read by nothing that reads the state", async () => {
       await workspace.writeState(state);
       await workspace.keepTranscripts(4, "run-1");
 

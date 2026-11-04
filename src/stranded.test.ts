@@ -7,7 +7,7 @@ const IN_PROGRESS = "in-progress";
 
 let tracker: FakeTracker;
 let logged: string[];
-/** Where the State the sweep reads is kept. */
+/** Where the state the sweep reads is kept. */
 let workspace: FakeWorkspace;
 
 beforeEach(() => {
@@ -25,7 +25,7 @@ function sweep() {
   });
 }
 
-/** Record state for a Ticket, as the Claim and every Stage after it does. */
+/** Record state for a Ticket, as the claim and every Stage after it does. */
 function recorded(ticket: number, overrides: Partial<TicketState> = {}): void {
   workspace.recordState({
     ticket,
@@ -38,7 +38,7 @@ function recorded(ticket: number, overrides: Partial<TicketState> = {}): void {
   });
 }
 
-/** A Ticket wearing the Claim a Run that never came back left on it. */
+/** A Ticket wearing the claim a Run that never came back left on it. */
 function claimed(ticket: number): void {
   tracker.addIssue({ number: ticket, assignees: [tracker.user], labels: [IN_PROGRESS] });
   recorded(ticket);
@@ -81,7 +81,7 @@ describe("a Ticket a Run left claimed", () => {
 });
 
 describe("what the sweep leaves alone", () => {
-  it("passes over a Ticket whose Claim has come off, which is a released one", async () => {
+  it("passes over a Ticket whose claim has come off, which is a released one", async () => {
     tracker.addIssue({ number: 4, labels: ["ready-for-agent"] });
     recorded(4);
 
@@ -90,7 +90,7 @@ describe("what the sweep leaves alone", () => {
     expect(workspace.states.has(4)).toBe(true);
   });
 
-  it("passes over a handed-off Ticket in silence, leaving its file and Claim", async () => {
+  it("passes over a handed-off Ticket in silence, leaving its file and claim", async () => {
     tracker.addIssue({ number: 4, labels: ["ready-for-human"] });
     recorded(4);
 
@@ -153,7 +153,7 @@ describe("a Ticket that has closed", () => {
     expect(logged).toEqual(["#4 has closed, so the state it left is gone"]);
   });
 
-  it("is forgotten even when the Claim is somebody else's, since nothing is left to resume", async () => {
+  it("is forgotten even when the claim is somebody else's, since nothing is left to resume", async () => {
     tracker.addIssue({ number: 4, closed: true, assignees: ["octocat"], labels: [IN_PROGRESS] });
     recorded(4);
 
@@ -162,7 +162,7 @@ describe("a Ticket that has closed", () => {
   });
 });
 
-describe("a State file the sweep cannot read", () => {
+describe("a state file the sweep cannot read", () => {
   /** What an older or newer pipeline left behind, as far as this one can read it. */
   function unreadable(ticket: number, version?: string): void {
     workspace.states.set(ticket, {
@@ -172,27 +172,27 @@ describe("a State file the sweep cannot read", () => {
     });
   }
 
-  it("is reported by Ticket number and the Version the file names", async () => {
+  it("is reported by Ticket number and the version the file names", async () => {
     tracker.addIssue({ number: 4, assignees: [tracker.user], labels: [IN_PROGRESS] });
     unreadable(4, "9.9.0");
 
     expect(await sweep()).toEqual([]);
     expect(logged).toEqual([
-      "#4 has a State file this Version cannot use, written by 9.9.0; it and the Claim are left alone",
+      "#4 has a state file this version cannot use, written by 9.9.0; it and the claim are left alone",
     ]);
   });
 
-  it("says so when the file names no Version at all", async () => {
+  it("says so when the file names no version at all", async () => {
     unreadable(4);
 
     expect(logged).toEqual([]);
     expect(await sweep()).toEqual([]);
     expect(logged).toEqual([
-      "#4 has a State file this Version cannot use, naming no Version; it and the Claim are left alone",
+      "#4 has a state file this version cannot use, naming no version; it and the claim are left alone",
     ]);
   });
 
-  it("leaves the file where it is, and the Claim on the board with it", async () => {
+  it("leaves the file where it is, and the claim on the board with it", async () => {
     tracker.addIssue({ number: 4, assignees: [tracker.user], labels: [IN_PROGRESS] });
     unreadable(4);
 
@@ -243,7 +243,7 @@ describe("holdsClaim", () => {
   const issue = (assignees: string[], labels: string[]) =>
     tracker.addIssue({ number: 4, assignees, labels });
 
-  it("reads the Claim as both halves of it together", () => {
+  it("reads the claim as both halves of it together", () => {
     expect(holdsClaim(issue([tracker.user], [IN_PROGRESS]), tracker.user, IN_PROGRESS)).toBe(true);
   });
 

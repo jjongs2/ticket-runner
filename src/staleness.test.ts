@@ -27,8 +27,8 @@ function writeDocument(contents: string): void {
   writeFileSync(path, contents);
 }
 
-describe("a newer Version being out", () => {
-  it("names both Versions and how to upgrade", async () => {
+describe("a newer version being out", () => {
+  it("names both versions and how to upgrade", async () => {
     tracker.publishedVersionTag = "v0.5.0";
 
     const line = await newerVersionLine({ tracker, version: "0.4.0", repository: REPOSITORY });
@@ -65,11 +65,11 @@ describe("a newer Version being out", () => {
   });
 
   /**
-   * A development checkout runs a commit past the Version it reports, which is
+   * A development checkout runs a commit past the version it reports, which is
    * the ordinary state of this repository's own checkout. Comparing anything
-   * but the number would call it stale the moment its Version was published.
+   * but the number would call it stale the moment its version was published.
    */
-  it("says nothing to a development checkout of the latest Version", async () => {
+  it("says nothing to a development checkout of the latest version", async () => {
     tracker.publishedVersionTag = "v0.4.0";
 
     expect(
@@ -122,8 +122,8 @@ describe("a newer Version being out", () => {
   });
 });
 
-describe("the Version a Target's conventions document was written by", () => {
-  it("says nothing about a document this Version wrote", () => {
+describe("the version a Target's conventions document was written by", () => {
+  it("says nothing about a document this version wrote", () => {
     writeDocument(conventionsDoc("0.4.0"));
 
     expect(conventionsWarning(repoRoot, "0.4.0+331d79c")).toBeUndefined();

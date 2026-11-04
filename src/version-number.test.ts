@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { highestVersion, isHigher, tagNumber, versionNumber } from "./version-number.js";
 
-describe("the number a Version string carries", () => {
+describe("the number a version string carries", () => {
   it("reads an installed copy's number as the whole of it", () => {
     expect(versionNumber("0.4.0")).toBe("0.4.0");
   });
@@ -19,18 +19,18 @@ describe("the number a Version string carries", () => {
 });
 
 describe("the number a tag names", () => {
-  it("reads a Version tag", () => {
+  it("reads a version tag", () => {
     expect(tagNumber("v0.4.0")).toBe("0.4.0");
   });
 
-  it("reads nothing from a tag that is not a Version", () => {
+  it("reads nothing from a tag that is not a version", () => {
     expect(tagNumber("0.4.0")).toBeUndefined();
     expect(tagNumber("v1.0")).toBeUndefined();
     expect(tagNumber("nightly")).toBeUndefined();
   });
 });
 
-describe("the highest Version among tags", () => {
+describe("the highest version among tags", () => {
   it("answers with the tag as it was cut and the number to compare", () => {
     expect(highestVersion(["v0.1.0", "v0.4.0", "v0.2.0"])).toEqual({
       tag: "v0.4.0",
@@ -42,11 +42,11 @@ describe("the highest Version among tags", () => {
     expect(highestVersion(["v0.9.0", "v0.10.0"])?.tag).toBe("v0.10.0");
   });
 
-  it("ignores every tag that is not a Version", () => {
+  it("ignores every tag that is not a version", () => {
     expect(highestVersion(["nightly", "v0.2.0", "release-3"])?.tag).toBe("v0.2.0");
   });
 
-  it("has no answer for a repository with no Version tag at all", () => {
+  it("has no answer for a repository with no version tag at all", () => {
     expect(highestVersion([])).toBeUndefined();
     expect(highestVersion(["nightly"])).toBeUndefined();
   });

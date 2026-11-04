@@ -23,7 +23,7 @@ let repoRoot: string;
 let tracker: FakeTracker;
 let runner: FakeAgentRunner;
 
-/** The Version this Run is, as the CLI resolves it once and hands it down. */
+/** The version this Run is, as the CLI resolves it once and hands it down. */
 const VERSION = "0.4.0+331d79c";
 
 /** The six triage labels, in the order {@link initTarget} creates them. */
@@ -112,7 +112,7 @@ describe("what init writes into the Target", () => {
     expect(read(repoRoot, OPERATOR_SKILL_PATH)).toBe(operatorSkill());
   });
 
-  it("heads the report with the Version doing the setting up", async () => {
+  it("heads the report with the version doing the setting up", async () => {
     const { out } = await init();
 
     expect(out.split("\n")[0]).toBe(`ticket-runner ${VERSION} init · ${repoRoot}`);
@@ -259,11 +259,11 @@ describe("what init writes into the Target", () => {
   });
 });
 
-describe("what init says about another Version", () => {
+describe("what init says about another version", () => {
   /** The pipeline's own repository, as the CLI reads it off the package. */
   const REPOSITORY = "jjongs2/ticket-runner";
 
-  it("prints the newer-Version line first, right after the opening line", async () => {
+  it("prints the newer-version line first, right after the opening line", async () => {
     tracker.publishedVersionTag = "v0.5.0";
 
     const { out } = await init({ repository: REPOSITORY });
@@ -274,7 +274,7 @@ describe("what init says about another Version", () => {
     expect(notice).toContain("0.4.0");
   });
 
-  it("prints nothing where this copy is the latest Version", async () => {
+  it("prints nothing where this copy is the latest version", async () => {
     readyToReport(repoRoot);
     tracker.publishedVersionTag = "v0.4.0";
 
@@ -348,18 +348,18 @@ describe("what init says about another Version", () => {
     );
   });
 
-  it("rewrites an unmarked document, and says the copy carried no Version", async () => {
+  it("rewrites an unmarked document, and says the copy carried no version", async () => {
     write(repoRoot, CONVENTIONS_PATH, "# ticket-runner conventions\n\nOlder.\n");
 
     const { out } = await init();
 
     expect(read(repoRoot, CONVENTIONS_PATH)).toBe(conventionsDoc(VERSION));
     expect(out).toMatch(
-      new RegExp(`${CONVENTIONS_PATH}: overwritten, because the copy here carried no Version`),
+      new RegExp(`${CONVENTIONS_PATH}: overwritten, because the copy here carried no version`),
     );
   });
 
-  it("rewrites a hand-edited copy of its own Version as saying something else", async () => {
+  it("rewrites a hand-edited copy of its own version as saying something else", async () => {
     write(repoRoot, CONVENTIONS_PATH, `${conventionsDoc(VERSION)}\nA line a human added.\n`);
 
     const { out } = await init();
@@ -375,7 +375,7 @@ describe("what init says about another Version", () => {
    * is the document it compares against: without that, `init` would rewrite it
    * every time it ran.
    */
-  it("writes the document once for a copy with no Version to stamp", async () => {
+  it("writes the document once for a copy with no version to stamp", async () => {
     await init({ version: "unknown" });
     const after = read(repoRoot, CONVENTIONS_PATH);
 
@@ -385,7 +385,7 @@ describe("what init says about another Version", () => {
     expect(out).toContain("nothing to write");
   });
 
-  it("writes nothing for a document its own Version already wrote", async () => {
+  it("writes nothing for a document its own version already wrote", async () => {
     write(repoRoot, CONVENTIONS_PATH, conventionsDoc("0.4.0"));
 
     const { out } = await init();
@@ -394,10 +394,10 @@ describe("what init says about another Version", () => {
   });
 
   /**
-   * A checkout past the Version it reports writes the same document as the
-   * Version itself, so the two are one copy and neither rewrites the other.
+   * A checkout past the version it reports writes the same document as the
+   * version itself, so the two are one copy and neither rewrites the other.
    */
-  it("reads a development checkout of the marked Version as that Version", async () => {
+  it("reads a development checkout of the marked version as that version", async () => {
     write(repoRoot, CONVENTIONS_PATH, conventionsDoc("0.4.0"));
 
     const { out } = await init({ version: "0.4.0+9999999.dirty" });

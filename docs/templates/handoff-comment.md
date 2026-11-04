@@ -23,30 +23,30 @@ pushed nothing.
 The transcripts line names where the hand-off kept the command line and
 transcript of each Stage this Run ran for the Ticket, with those of the fix
 Stage and the pass it bought under `retry/`, and the Run's `version.txt`. They
-sit on the state branch beside the Ticket's State file and go when it does, so
+sit on the state branch beside the Ticket's state file and go when it does, so
 a Ticket that merges leaves none behind. The line is dropped when nothing was
-kept: a hand-off that removes the State keeps no transcripts either, a Run that
+kept: a hand-off that removes the state keeps no transcripts either, a Run that
 ran no Stage of the Ticket has none, and a remote that refused the write has
 none to point at.
 
 The worktree clause is dropped when there is no worktree to name: a Ticket that
 failed before its worktree was created never had one, and a path that is not on
-disk sends the human to a directory they will not find. No draft PR is opened
-for such a Ticket either, because there is nothing to push out of, so the PR
-clause goes with it.
+disk sends the human to a directory they will not find. No draft pull request is
+opened for such a Ticket either, because there is nothing to push out of, so
+the pull request clause goes with it.
 
 A hand-off at `setup` for a branch the pipeline refused to branch over opens no
-draft PR even when it does name a worktree: no Stage of that Run ran there, so
+draft pull request even when it does name a worktree: no Stage of that Run ran there, so
 the branch carries a human's work, which is neither pushed to the remote unasked
 nor presented as this Run's under `Closes #<n>`.
 
 A hand-off at `setup` for a resumed Ticket whose copy of the branch on this Host
-has parted from the one on the remote opens no draft PR either, and pushes
+has parted from the one on the remote opens no draft pull request either, and pushes
 nothing: the remote may hold another Host's newer work, and pushing this Host's
 over it is the choice the human is handed. The failure says the two have
 parted, names both, and says how to keep either side.
 
-The PR clause is dropped when no pull request could be opened. The whole
+The pull request clause is dropped when no pull request could be opened. The whole
 `<details>` block is dropped when there is no evidence to show. Evidence is
 fenced because it is raw command output, which would otherwise be read as
 Markdown. A Check the wall-clock limit killed is the one evidence the pipeline
@@ -64,7 +64,7 @@ _Taken again by a later Run; this hand-off is history._
 ```
 
 A hand-off holds while a human holds the Ticket, and stops being current the
-moment the pipeline claims the Ticket again. So the Claim rewrites every
+moment the pipeline claims the Ticket again. So the claim rewrites every
 hand-off comment on the Ticket in place, adding that one line under the marker
 and changing nothing else: the failure, the location and the evidence are
 history worth reading, not noise to remove. An edit notifies nobody, which is

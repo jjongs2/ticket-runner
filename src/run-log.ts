@@ -18,21 +18,21 @@ export function stageLogDir(repoRoot: string, runId: string, ticket: number): st
  * Where the fix Stage and the pass it bought write instead.
  *
  * A Stage's files are named after the Stage and emptied when it starts, so a
- * second verify would overwrite the Verdict that spent the fix budget — which
+ * second verify would overwrite the verdict that spent the fix budget — which
  * is the transcript a human most needs when the Ticket is handed off anyway.
  */
 export function retryLogDir(repoRoot: string, runId: string, ticket: number): string {
   return join(stageLogDir(repoRoot, runId, ticket), "retry");
 }
 
-/** The file naming the Version, at the top of a Run's transcripts. */
+/** The file naming the version, at the top of a Run's transcripts. */
 export const VERSION_FILE = "version.txt";
 
 /**
- * Say which Version this Run is, beside the transcripts it is about to write.
+ * Say which version this Run is, beside the transcripts it is about to write.
  *
  * Written before the first Stage, so a transcript always sits beside the
- * pipeline that wrote it: the Run summary names the Version too, but that is a
+ * pipeline that wrote it: the Run summary names the version too, but that is a
  * terminal the night is over for, and these files outlive it (ADR-0007).
  */
 export function writeRunVersion(repoRoot: string, runId: string, version: string): void {
@@ -58,7 +58,7 @@ export interface TranscriptFile {
 /**
  * The files Run `runId` wrote for `ticket` that a hand-off keeps, in name
  * order: every Stage's command line and transcript, the retries' in `retry/`,
- * and the Version the Run was, so they still name the pipeline that wrote them
+ * and the version the Run was, so they still name the pipeline that wrote them
  * once they are somewhere else. None when the Run wrote nothing for the Ticket.
  */
 export function transcriptFiles(

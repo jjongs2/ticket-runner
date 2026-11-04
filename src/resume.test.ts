@@ -31,7 +31,7 @@ function read(contents: string) {
   return readStateFile(contents, TICKET);
 }
 
-describe("the State file's name", () => {
+describe("the state file's name", () => {
   it("is one per Ticket, and names the Ticket back", () => {
     expect(stateFileName(TICKET)).toBe("ticket-8.json");
     expect(stateFileTicket(stateFileName(TICKET))).toBe(TICKET);
@@ -44,7 +44,7 @@ describe("the State file's name", () => {
   });
 });
 
-describe("what a State file says", () => {
+describe("what a state file says", () => {
   it("reads back what was written, readable without the pipeline", () => {
     const contents = stateFileContents(state({ fixUsed: true, pullRequest: 100 }));
 
@@ -55,15 +55,15 @@ describe("what a State file says", () => {
     });
   });
 
-  it("carries the Version that wrote the file", () => {
+  it("carries the version that wrote the file", () => {
     expect(read(stateFileContents(state({ version: "0.4.0+331d79c" })))).toEqual({
       readable: true,
       state: state({ version: "0.4.0+331d79c" }),
     });
   });
 
-  it("still resumes a file written before a Version was recorded in one", () => {
-    // Every field but the Version, which is what a file from before this
+  it("still resumes a file written before a version was recorded in one", () => {
+    // Every field but the version, which is what a file from before this
     // existed looks like. It has to resume, not be started over.
     const file = read(JSON.stringify(state()));
 
@@ -91,7 +91,7 @@ describe("what a State file says", () => {
     );
   });
 
-  it("cannot be used when it is not JSON at all, and names no Version", () => {
+  it("cannot be used when it is not JSON at all, and names no version", () => {
     expect(read("{ not json")).toEqual({ readable: false, ticket: TICKET });
   });
 
@@ -106,7 +106,7 @@ describe("what a State file says", () => {
     expect(read(JSON.stringify({ ...state(), state: "merged" })).readable).toBe(false);
   });
 
-  it("names the Version a file it cannot read says wrote it", () => {
+  it("names the version a file it cannot read says wrote it", () => {
     expect(read(JSON.stringify({ version: "9.9.0", somethingNewer: "later" }))).toEqual({
       readable: false,
       ticket: TICKET,
@@ -114,7 +114,7 @@ describe("what a State file says", () => {
     });
   });
 
-  it("names no Version where the file holds something that is not one", () => {
+  it("names no version where the file holds something that is not one", () => {
     expect(read(JSON.stringify({ version: 4, state: "merged" }))).toEqual({
       readable: false,
       ticket: TICKET,
@@ -130,7 +130,7 @@ describe("what a State file says", () => {
   });
 });
 
-describe("the State files an earlier pipeline left in the checkout", () => {
+describe("the state files an earlier pipeline left in the checkout", () => {
   let repoRoot: string;
 
   beforeEach(() => {

@@ -105,7 +105,7 @@ export type TicketOutcome =
        * told. Absent for an API failure, which says nothing of when it ends.
        */
       limitResetsAt?: string;
-      /** The Check the Base branch fails, and where, for a Release over it. */
+      /** The Check the base branch fails, and where, for a Release over it. */
       failingBase?: { commit: string; command: string };
       notes: RoutedNote[];
     }
@@ -126,7 +126,7 @@ export interface Pipeline {
   repoRoot: string;
   runId: string;
   /**
-   * The Version this Run is, resolved once in the CLI and stamped on everything
+   * The version this Run is, resolved once in the CLI and stamped on everything
    * the Run writes (ADR-0007). A string, never a lookup: nothing here reads
    * `package.json` or runs git, so every stamp of one Run is the same string.
    */
@@ -156,7 +156,7 @@ export interface Pipeline {
   /**
    * The Run's Landing, made once before the first Ticket and shared by every
    * Ticket it drives: only one of them is between its rebase and the pull of
-   * the Base branch after its merge at a time (ADR-0005).
+   * the base branch after its merge at a time (ADR-0005).
    */
   landing: Landing;
   /**
@@ -166,9 +166,9 @@ export interface Pipeline {
    */
   standingNotes: StandingNotes;
   /**
-   * The Checks the Run ran at merge-bases with the Base branch, made once and
+   * The Checks the Run ran at merge-bases with the base branch, made once and
    * shared by every Ticket: the Tickets that fail together over one broken
-   * Base branch run the Check there once between them, and post one Note.
+   * base branch run the Check there once between them, and post one Note.
    */
   baseChecks: BaseBranchChecks;
   /**
@@ -207,7 +207,7 @@ class TicketFailure extends Error {
  * What stops a Ticket that says nothing about it: the rate limit, a transient
  * API failure — the API overloaded, broken or silent on its own side after the
  * CLI had already retried it — the API key of an `--api-key` Run out of credit
- * or past its workspace's spend limit, and a Base branch that fails the Check
+ * or past its workspace's spend limit, and a base branch that fails the Check
  * the Ticket's branch failed.
  */
 export type ReleaseCause = StageReleaseCause | "failing-base";
@@ -227,7 +227,7 @@ function releaseCause(result: StageResult): StageReleaseCause | undefined {
  * A Stage something other than the Ticket stopped, on its way to a Release.
  *
  * The Stage failures that say nothing about the Ticket are the ones that
- * neither end it nor spend its Fix budget: the Claim is released and a State
+ * neither end it nor spend its fix budget: the claim is released and a state
  * file is left for the next Run to resume from (ADR-0004). It is not a
  * {@link TicketFailure} because every path that handles one of those would
  * either hand the Ticket off or buy it a fix Stage, and this is neither.
@@ -239,7 +239,7 @@ class Releasing extends Error {
     readonly state: ReachedState,
     readonly reason: ReleaseCause,
     readonly limitResetsAt?: string,
-    /** The Check the Base branch fails too, for a Release over it. */
+    /** The Check the base branch fails too, for a Release over it. */
     readonly failingBase?: InheritedFailure,
   ) {
     super(`the ${point} Stage was stopped · ${RELEASE_WORDS[reason]}`);
@@ -247,7 +247,7 @@ class Releasing extends Error {
 }
 
 /**
- * A Check the Base branch fails, and how the branch itself failed, which the
+ * A Check the base branch fails, and how the branch itself failed, which the
  * Note about it quotes beside the merge-base's output: only the command is
  * compared, so the two need not be the same failure.
  */
@@ -264,13 +264,12 @@ function asTicketFailure(error: unknown, point: FailurePoint): TicketFailure {
  * Take one Ticket from claimed to merged, hand it to a human, or pass it over.
  *
  * The happy path is: guards → claim → worktree and branch → implement Stage →
- * Checks → verify Stage → rebase → PR → CI → squash merge → cleanup. Work left
- * uncommitted, a failing Check, an unmet criterion, a red CI or a rebase
- * conflict the conflict Stage could not resolve spends the Ticket's fix budget
- * and starts again at the Checks; every other failure, and every second
- * failure, ends in a hand-off.
- * Nothing ends in a merge that has not been through a green pass of the whole
- * gauntlet.
+ * Checks → verify Stage → rebase → pull request → CI → squash merge → cleanup.
+ * Work left uncommitted, a failing Check, an unmet criterion, a red CI or a
+ * rebase conflict the conflict Stage could not resolve spends the Ticket's fix
+ * budget and starts again at the Checks; every other failure, and every second
+ * failure, ends in a hand-off. Nothing ends in a merge that has not been
+ * through a green pass of the whole gauntlet.
  *
  * A Stage the subscription rate limit or a transient API failure stopped ends
  * none of that: the Ticket is released, and a Run started once the limit has
@@ -285,9 +284,9 @@ function asTicketFailure(error: unknown, point: FailurePoint): TicketFailure {
  * untriaged from its Frontier, but the Ticket may have changed hands since the
  * listing, so the guards ask again.
  *
- * From the pull of the Base branch before the rebase to the pull after the
- * merge the Ticket holds the Run's Landing, so no other Ticket of the same Run moves the Base
- * branch underneath the branch CI is grading (ADR-0005).
+ * From the pull of the base branch before the rebase to the pull after the
+ * merge the Ticket holds the Run's Landing, so no other Ticket of the same Run
+ * moves the base branch underneath the branch CI is grading (ADR-0005).
  */
 export async function processTicket(
   pipeline: Pipeline,
@@ -326,7 +325,7 @@ async function takeTicket(
 
   // What an earlier Run left behind, read before the guards because it decides
   // one of them: a Ticket this pipeline still holds with state recorded for it is
-  // stranded — the Claim on it is this pipeline's own, left by a Run that never
+  // stranded — the claim on it is this pipeline's own, left by a Run that never
   // came back — and the refusals must not read it as somebody else's.
   const recorded = await workspace.readState(ticket);
   const stranded = recorded !== undefined && holdsClaim(issue, user, config.labels.inProgress);
@@ -353,12 +352,12 @@ async function takeTicket(
     log,
   });
 
-  // The State file, written as part of the Claim and kept current from here on,
+  // The state file, written as part of the claim and kept current from here on,
   // so a Run that is killed mid-Ticket — or a human handed the Ticket — still
   // leaves the next Run something to resume. A resumed Ticket carries on from
   // what it had already reached.
   //
-  // First of the two, because a Claim no State file names is the one thing this
+  // First of the two, because a claim no state file names is the one thing this
   // has to rule out: a crash between the writes then leaves a Ticket nobody has
   // claimed with state beside it, which is a released Ticket and resumes itself.
   const record = await ResumeRecord.claim(pipeline, {
@@ -373,7 +372,7 @@ async function takeTicket(
 
   // The claim is the first write on the board: it shows what the pipeline holds
   // before anything else can go wrong. A stranded Ticket is resumed in place,
-  // wearing the Claim it never gave up — re-writing what is already there would
+  // wearing the claim it never gave up — re-writing what is already there would
   // only risk the Ticket on three tracker calls that change nothing.
   if (!stranded) {
     await tracker.assign(ticket, user);
@@ -408,8 +407,8 @@ async function takeTicket(
   // The pass behind a fix Stage logs beside the first one rather than over it.
   let logDir = stageLogDir(repoRoot, runId, ticket);
   // The unmet criteria the fix Stage was sent in for, and their evidence, which
-  // the verify behind it is held to. Only this Run's: the State file keeps no
-  // Verdict, so a retry a later Run resumes is graded without them.
+  // the verify behind it is held to. Only this Run's: the state file keeps no
+  // verdict, so a retry a later Run resumes is graded without them.
   let unmetBefore: string | undefined;
 
   // Declared out here because ticking the Acceptance Criteria it proved happens
@@ -438,7 +437,7 @@ async function takeTicket(
         // Where the branch is decides what the human is asked to do about it:
         // a branch that is checked out cannot simply be deleted, so the human
         // is sent to the worktree holding it instead. Nothing the pipeline left
-        // is here — a Ticket it handed off keeps its State file and resumes
+        // is here — a Ticket it handed off keeps its state file and resumes
         // without ever reaching this — so the branch is a human's either way.
         const checkedOutAt = (await workspace.hasWorktree({ path: worktree, branch }))
           ? worktree
@@ -472,8 +471,8 @@ async function takeTicket(
     let commits: string[];
     let coAuthors: string[];
     let title: string;
-    // Owed once, by a Ticket released over a failing Base branch, and inside
-    // the passes rather than before them: a conflict it meets spends the Fix
+    // Owed once, by a Ticket released over a failing base branch, and inside
+    // the passes rather than before them: a conflict it meets spends the fix
     // budget as one at the Landing does.
     let rebaseOwed = resume?.rebaseFirst === true;
 
@@ -496,11 +495,11 @@ async function takeTicket(
         verdict = await verify(pipeline, issue, worktree, logDir, progress, notes, unmetBefore);
 
         point = "rebase";
-        // The Landing, from here until the Base branch has been pulled: the
-        // Ticket waits its turn, and the Base branch it rebases onto is then
+        // The Landing, from here until the base branch has been pulled: the
+        // Ticket waits its turn, and the base branch it rebases onto is then
         // the one its merge will land on.
         await landing.enter();
-        // Up to the remote first: a Base branch the checkout holds behind it
+        // Up to the remote first: a base branch the checkout holds behind it
         // is a rebase that changes nothing and a pull request that conflicts,
         // which GitHub then runs no CI for. One that cannot be brought up is a
         // failure here, since rebasing onto it would be the same mistake.
@@ -520,7 +519,7 @@ async function takeTicket(
             progress,
           );
           // The resolution is code nothing has graded: the Checks passed on one
-          // side of the conflict and CI on the other. The Verdict is not asked
+          // side of the conflict and CI on the other. The verdict is not asked
           // for again, because the conflict Stage is told to change no
           // behaviour the Acceptance Criteria are about.
           point = "checks";
@@ -618,13 +617,13 @@ async function takeTicket(
 
   // The Ticket is merged from here on, so nothing below may hand it off, and
   // it is still in the Landing: the pull below is the last of it.
-  // The State file goes first: a merged Ticket must not look resumable to the
+  // The state file goes first: a merged Ticket must not look resumable to the
   // next Run, whatever else below fails — which is worth the Landing staying
   // shut for three writes nobody else is waiting on.
   try {
     await workspace.removeState(ticket);
   } catch (error) {
-    log(`#${ticket} merged, but clearing its State file failed: ${(error as Error).message}`);
+    log(`#${ticket} merged, but clearing its state file failed: ${(error as Error).message}`);
   }
   try {
     await tickMetCriteria(tracker, ticket, verdict, log);
@@ -639,7 +638,7 @@ async function takeTicket(
   }
   try {
     await workspace.pullBase(baseBranch);
-    // The pull ends the Landing: the next Ticket now rebases onto a Base branch
+    // The pull ends the Landing: the next Ticket now rebases onto a base branch
     // that already carries this one, and the cleanup below holds nobody up.
     landing.leave();
     await workspace.removeWorktree({ path: worktree, branch });
@@ -689,7 +688,7 @@ interface Resumable {
   /**
    * Why it cannot, when it cannot: this Host's copy of the branch has parted
    * from the remote one, or the worktree could not be made ready at all.
-   * Either is a hand-off at setup, and the State stays.
+   * Either is a hand-off at setup, and the state stays.
    */
   refusal?: string;
   /** The worktree the branch is checked out in, for a refusal to send a human to. */
@@ -700,7 +699,7 @@ interface Resumable {
  * The state an earlier Run left for this Ticket, if a Run can still resume it,
  * with the worktree it resumes in made ready.
  *
- * The State file only names where the work is; where the work actually is, is
+ * The state file only names where the work is; where the work actually is, is
  * the Workspace's answer, and the branch on the remote is what it answers from
  * (ADR-0004). Any Host's Run pushes it each time a Stage commits, so a Host
  * with no worktree of the Ticket makes one from it, and one that still has a
@@ -721,7 +720,7 @@ async function resumable(
   if (state === undefined) return undefined;
   const ref = { path: worktree, branch: state.branch };
   // Caught here, because nothing is claimed yet: the refusal is raised once the
-  // Claim is made, as a hand-off a human can see on the board.
+  // claim is made, as a hand-off a human can see on the board.
   let found: WorktreeFromRemote;
   let checkedOut: boolean;
   try {
@@ -746,7 +745,7 @@ async function resumable(
   pipeline.log?.(
     `#${ticket} was resumable, but ${state.branch} is neither in ${worktree} nor on the remote`,
   );
-  // Logged and nothing more when it fails: the Claim writes this Ticket's State
+  // Logged and nothing more when it fails: the claim writes this Ticket's state
   // over it in a moment, from the top.
   try {
     await pipeline.workspace.removeState(ticket);
@@ -787,7 +786,7 @@ function describeParted(
  * How this Run came by the Ticket, for the one line it logs about it: resumed
  * from a recorded state, taken from the top, or claimed outright. A stranded
  * Ticket with nothing left to resume into is the middle one — it is started
- * again, but the Claim it is started under is the one it already had.
+ * again, but the claim it is started under is the one it already had.
  */
 function howItWasTaken(resume: TicketState | undefined, stranded: boolean): string {
   if (resume !== undefined) return `resumed from ${resume.state}`;
@@ -803,10 +802,10 @@ type Advance = Partial<
 >;
 
 /**
- * The State file a Ticket keeps, and the one place a Ticket writes it.
+ * The state file a Ticket keeps, and the one place a Ticket writes it.
  *
  * A Ticket is resumable for as long as its branch carries work worth resuming,
- * so the file is written as part of the Claim and rewritten whenever the Ticket
+ * so the file is written as part of the claim and rewritten whenever the Ticket
  * reaches something a later Run should not pay for again. The release is one
  * more such write rather than the only one, which is what makes a Run that was
  * killed recoverable too, and the hand-off is another.
@@ -828,12 +827,12 @@ class ResumeRecord {
   }
 
   /**
-   * Record what the Claim is about to make true, and hand back the record that
+   * Record what the claim is about to make true, and hand back the record that
    * keeps it current.
    *
-   * The one write that is allowed to fail the Ticket. It runs before the Claim,
+   * The one write that is allowed to fail the Ticket. It runs before the claim,
    * so a remote that will not take the file costs nothing at all: the Ticket ends
-   * at setup with nothing claimed, where carrying on would put a Claim on the
+   * at setup with nothing claimed, where carrying on would put a claim on the
    * board that no later Run could ever resume — which is the state this record
    * exists to rule out.
    */
@@ -868,12 +867,12 @@ class ResumeRecord {
   }
 
   /**
-   * The Run, the Version and the time belong to the write, not to what the
+   * The Run, the version and the time belong to the write, not to what the
    * Ticket reached: they say which pipeline left the file, so a Run that cannot
    * read one can still name what wrote it (ADR-0007).
    */
   private file(): TicketState {
-    // Written only while it is owed, so a State file says nothing of a rebase
+    // Written only while it is owed, so a state file says nothing of a rebase
     // nobody has to do.
     const { rebaseFirst, ...reached } = this.reached;
     return {
@@ -921,8 +920,8 @@ async function passOver(
  * config names. Everything a Stage differs in is the prompt, where it runs and
  * where it logs; the limits come from one place so no Stage can quietly skip them.
  *
- * The credential is the Run's too, and what the Stage says it actually ran on
- * is checked here for the same reason: a Stage billed somewhere the Run did not
+ * What the Stages are billed to is the Run's too, and what the Stage says it
+ * actually ran on is checked here for the same reason: a Stage billed somewhere the Run did not
  * choose is named whichever Stage it was.
  */
 async function runStage(
@@ -960,8 +959,8 @@ async function runStage(
 
 /**
  * Add a Stage to what the Run was billed, and name it in the log now when its
- * `system/init` event reported another `apiKeySource` than the Run's credential
- * expects; the summary names it again at the end. A Stage that reported none,
+ * `system/init` event reported another `apiKeySource` than the Run's
+ * subscription or API key expects; the summary names it again at the end. A Stage that reported none,
  * one that never started, is not named: there is nothing it said to set
  * against the Run's choice. The log line carries no amount: the summary is the
  * only place one is printed.
@@ -1111,7 +1110,7 @@ async function commitCount(pipeline: Pipeline, branch: string): Promise<number> 
  * Push the branch a Stage has just committed on, so the work outlives the Host
  * it was done on and a Run on any Host resumes from it (ADR-0004).
  *
- * A push that does not land is logged and nothing more, as a State write that
+ * A push that does not land is logged and nothing more, as a state write that
  * does not land is: the remote then holds an earlier tip of the same work, and
  * resuming from further back costs a Stage rather than being wrong. The push
  * the pull request needs is a different one, and fails the Ticket where it is.
@@ -1172,7 +1171,7 @@ async function implement(
   // failure, not something to verify. A resumed Ticket's branch is not clean —
   // it carries what the Stage a Release stopped had committed — so this
   // asks the same question there: is there anything at all to grade. Whether it
-  // is enough is the Verdict's business, not this guard's.
+  // is enough is the verdict's business, not this guard's.
   if (commits === 0) {
     await progress.record(stageRow("implement", result, "❌ no commits"));
     throw new TicketFailure(
@@ -1185,15 +1184,15 @@ async function implement(
 }
 
 /**
- * Bring a Ticket released over a failing Base branch up to the Base branch
+ * Bring a Ticket released over a failing base branch up to the base branch
  * before its Checks grade it, so a fix a human has landed there meanwhile
  * reaches the branch. Without it the Ticket would meet the same failure with
  * its budget unspent, and spend it.
  *
- * The pull and the rebase go through the Landing, which is where the Base
+ * The pull and the rebase go through the Landing, which is where the base
  * branch is brought up to the remote's and rebased onto (ADR-0005), and out of
  * it again at once: nothing is merged behind them. A conflict goes to the
- * Conflict Stage as one at the Landing does, outside it, since the rebase
+ * conflict Stage as one at the Landing does, outside it, since the rebase
  * there runs again before the pull request anyway. Left unresolved, the
  * branch would keep the merge-base that fails and be released again by every
  * Run that took it up.
@@ -1263,7 +1262,7 @@ async function runChecks(
     if (!result.ok) {
       const durationMs = Date.now() - startedAt;
       // Asked before the row is written, because the row is what differs: a
-      // Check the Base branch fails too is nothing the Ticket did.
+      // Check the base branch fails too is nothing the Ticket did.
       await releaseIfTheBaseFails(pipeline, {
         onBranch: { point: "checks", command, output: result.output, timedOut: result.timedOut },
         worktree,
@@ -1297,7 +1296,7 @@ async function runChecks(
 }
 
 /**
- * The first of `commands` the Base branch fails, at the commit the branch at
+ * The first of `commands` the base branch fails, at the commit the branch at
  * `worktree` inherited from it, or nothing when it passes them all.
  *
  * Nothing, too, when the merge-base could not be graded at all: the Ticket is
@@ -1331,7 +1330,7 @@ async function inheritedFailure(
 }
 
 /**
- * Release the Ticket when the Base branch fails one of `commands` too, with the
+ * Release the Ticket when the base branch fails one of `commands` too, with the
  * row that says so; return when it does not, for the caller to charge the
  * failure to the Ticket as it always did.
  *
@@ -1360,7 +1359,7 @@ async function releaseIfTheBaseFails(
   if (inherited === undefined) return;
   await progress.record({
     point: onBranch.point,
-    outcome: `⏸ \`${inherited.command}\` fails on the Base branch`,
+    outcome: `⏸ \`${inherited.command}\` fails on the base branch`,
     durationMs,
   });
   throw new Releasing(onBranch.point, "implemented", "failing-base", undefined, {
@@ -1388,7 +1387,7 @@ async function verify(
   logDir: string,
   progress: Progress,
   notes: RoutedNote[],
-  /** The unmet criteria and evidence of the Verdict a fix Stage was sent in for. */
+  /** The unmet criteria and evidence of the verdict a fix Stage was sent in for. */
   unmetBefore: string | undefined,
 ): Promise<Verdict> {
   const stage = pipeline.config.stages.verify;
@@ -1408,13 +1407,14 @@ async function verify(
   });
 
   // Before anything else is done with the Stage at all, as the code Stages do
-  // it: a session that ran out of turns, or came back with a Verdict nothing
+  // it: a session that ran out of turns, or came back with a verdict nothing
   // can be made of, still noticed whatever it noticed. The scratch work it
   // noticed it in is about to be discarded, so its Notes are all that is left —
   // and a worktree that will not discard them is no reason to lose them too.
   await collectNotes(pipeline, issue.number, "verify", result, notes);
 
-  // verify is allowed to write throwaway tests; none of them reach the PR.
+  // verify is allowed to write throwaway tests; none of them reach the pull
+  // request.
   await pipeline.workspace.discardChanges(worktree);
 
   if (!result.ok) throw await stageDidNotFinish(pipeline, progress, "verify", result);
@@ -1423,10 +1423,10 @@ async function verify(
   try {
     verdict = parseVerdict(result.result);
   } catch (error) {
-    await progress.record(stageRow("verify", result, "❌ no Verdict"));
+    await progress.record(stageRow("verify", result, "❌ no verdict"));
     throw new TicketFailure(
       "verify",
-      "the verify Stage did not return a usable Verdict",
+      "the verify Stage did not return a usable verdict",
       (error as Error).message,
     );
   }
@@ -1510,7 +1510,7 @@ async function fix(
   if (!result.ok) throw await stageDidNotFinish(pipeline, progress, "fix", result);
 
   // A session that came back clean mended nothing, whatever it says. Believing
-  // it costs the Ticket a whole second pass of the Checks, the Verdict and CI
+  // it costs the Ticket a whole second pass of the Checks, the verdict and CI
   // over a branch nobody touched, which can only fail the way it just did — and
   // a progress row claiming the Stage committed. The budget is already spent,
   // so this ends the Ticket rather than buying another try.
@@ -1666,7 +1666,7 @@ interface PullRequestSubject {
  *
  * A second pass comes back to a pull request that already exists: the push is
  * what GitHub re-runs its checks on, and the title and body are rewritten so
- * the subject and the Verdict a human reads there are the ones that will reach
+ * the subject and the verdict a human reads there are the ones that will reach
  * the base branch.
  *
  * One that already exists is also taken out of draft, because a Ticket resumed
@@ -1736,7 +1736,7 @@ async function requireGreenCi(
       // fix Stage, it leaves, and the Checks below take minutes nobody else
       // should wait behind.
       landing.leave();
-      // CI's own runs on the Base branch cannot say whether it fails there: a
+      // CI's own runs on the base branch cannot say whether it fails there: a
       // workflow that runs only on pull requests leaves a squash commit with
       // none, and a failure the clock brings starts after its last green run.
       // So the merge-base is graded with the Checks, which CI runs too.
@@ -1759,7 +1759,7 @@ async function requireGreenCi(
         `the pull request checks did not finish within ${pipeline.config.ciTimeoutMinutes} minutes`,
       );
     case "conflicting":
-      // The Landing keeps the Run's own Tickets from moving the Base branch
+      // The Landing keeps the Run's own Tickets from moving the base branch
       // under a pull request, but not a human merging on GitHub meanwhile. A
       // fix Stage has nothing to act on, so no fix kind: a human takes it.
       await record("❌ conflicting");
@@ -1784,15 +1784,15 @@ interface Release {
   user: string;
   branch: string;
   stopped: Releasing;
-  /** The Ticket's State file, which the release brings up to date and leaves. */
+  /** The Ticket's state file, which the release brings up to date and leaves. */
   record: ResumeRecord;
-  /** Whether the Fix budget was spent by a failure of the Ticket's own. */
+  /** Whether the fix budget was spent by a failure of the Ticket's own. */
   fixUsed: boolean;
   notes: RoutedNote[];
 }
 
 /**
- * Release the Ticket: undo the Claim and leave a State file behind.
+ * Release the Ticket: undo the claim and leave a state file behind.
  *
  * The opposite of a hand-off, and deliberately quiet. Nothing about the Ticket
  * failed, nobody has to look at it, and the work already on its branch is worth
@@ -1807,9 +1807,9 @@ async function release(
   const { tracker, config } = pipeline;
   const ticket = issue.number;
 
-  // Brought up to date before the Claim comes off: a Ticket back on the Frontier
+  // Brought up to date before the claim comes off: a Ticket back on the Frontier
   // whose state is out of date is one the next Run would redo Stages for. One
-  // released over a failing Base branch is rebased first when it comes back,
+  // released over a failing base branch is rebased first when it comes back,
   // or it would meet the same failure.
   await record.advance({
     state: stopped.state,
@@ -1847,9 +1847,9 @@ async function release(
 }
 
 /**
- * Tell triage the Base branch fails a Check, once this Run per merge-base
+ * Tell triage the base branch fails a Check, once this Run per merge-base
  * commit however many Tickets it releases: the pipeline's own Note, on the
- * standing Notes issue, since the defect is the Base branch's and no Ticket's.
+ * standing Notes issue, since the defect is the base branch's and no Ticket's.
  *
  * Logged and nothing more when it cannot be posted, as a Stage's Note is: the
  * Release is what the Ticket is owed, and the next Ticket released over the
@@ -1920,7 +1920,7 @@ interface HandOff {
   /** Where the work is, absent when the Ticket failed before it had a worktree. */
   worktree?: HandOffWorktree;
   /**
-   * Whether the State stays for a later Run to resume from: what the branch
+   * Whether the state stays for a later Run to resume from: what the branch
    * carries is the pipeline's, whether or not this Run may push it.
    */
   keepsState: boolean;
@@ -1928,38 +1928,40 @@ interface HandOff {
   failure: TicketFailure;
   /** Whether the Ticket's fix budget had already been spent when this failure came. */
   fixUsed: boolean;
-  /** The Ticket's State file, which the hand-off either leaves current or removes. */
+  /** The Ticket's state file, which the hand-off either leaves current or removes. */
   record: ResumeRecord;
   notes: RoutedNote[];
 }
 
 /**
- * Hand the Ticket to a human: a draft PR to review, a comment naming where the
- * work is, and the labels a human filters on. The branch, the worktree and the
- * State file stay put, so a human who relabels the Ticket `ready-for-agent`
- * hands it back and the next Run carries on from what it reached. The Stages'
- * transcripts go up beside the State, since the Host they were written on may
- * be gone by the time a human looks, and the comment says where they and the
- * branch are. The draft PR's body says where they are too, once they are
- * kept: a draft is opened first, because the State records it, and one that
- * was already open is rewritten, since its body is an earlier Run's.
+ * Hand the Ticket to a human: a draft pull request to review, a comment naming
+ * where the work is, and the labels a human filters on. The branch, the
+ * worktree and the state file stay put, so a human who relabels the Ticket
+ * `ready-for-agent` hands it back and the next Run carries on from what it
+ * reached. The Stages' transcripts go up beside the state, since the Host they
+ * were written on may be gone by the time a human looks, and the comment says
+ * where they and the branch are. The draft pull request's body says where they
+ * are too, once they are kept: a draft is opened first, because the state
+ * records it, and one that was already open is rewritten, since its body is an
+ * earlier Run's.
  *
  * A Ticket handed over before its worktree was created has none: nothing was
- * branched, so there is no directory to name and nothing to push a draft PR out
- * of. Both are left out rather than written as a path that is not there and a
- * push that fails.
+ * branched, so there is no directory to name and nothing to push a draft pull
+ * request out of. Both are left out rather than written as a path that is not
+ * there and a push that fails.
  *
  * Where a human is sent and what the pipeline pushes are two different facts. A
  * Ticket refused at setup over a branch still checked out somewhere names that
  * worktree and stops there: the work in it is a human's, and pushing it or
- * opening a PR that says `Closes #<n>` over it would claim it for this Run.
+ * opening a pull request that says `Closes #<n>` over it would claim it for
+ * this Run.
  *
- * The same fact mostly decides the State file. A worktree this Run may push out
+ * The same fact mostly decides the state file. A worktree this Run may push out
  * of is one a Stage of it worked in, and what it left is the pipeline's to
  * resume; a branch in the way at setup leaves nothing of the pipeline's behind,
  * and a file kept over it would let a later Run resume into a human's work and
  * run an implement Stage over it — which is what refusing at setup exists to
- * prevent. The one worktree this Run may not push out of whose State stays is
+ * prevent. The one worktree this Run may not push out of whose state stays is
  * one parted from the remote branch: both copies are the pipeline's, and
  * pushing either over the other is the choice the human is handed.
  */
@@ -1983,14 +1985,15 @@ async function handOff(
 
   // Nothing of this Run's is on the branch, so nothing may leave the Ticket
   // looking resumable: the next Run must not implement over what a human holds.
-  // Wrapped because the hand-off itself — the draft PR, the comment, the labels
-  // — is what a human is waiting for, and no file is worth losing it over.
+  // Wrapped because the hand-off itself — the draft pull request, the comment,
+  // the labels — is what a human is waiting for, and no file is worth losing it
+  // over.
   if (!keepsState) {
     try {
       await workspace.removeState(ticket);
     } catch (error) {
       pipeline.log?.(
-        `#${ticket} handed off, but clearing its State file failed: ${(error as Error).message}`,
+        `#${ticket} handed off, but clearing its state file failed: ${(error as Error).message}`,
       );
     }
   }
@@ -2007,7 +2010,8 @@ async function handOff(
   if (pullRequest !== undefined) {
     await tracker.convertPullRequestToDraft(pullRequest);
   } else if (worktree?.pushable === true) {
-    // A draft PR is worth trying for, but never worth losing the relabel over.
+    // A draft pull request is worth trying for, but never worth losing the
+    // relabel over.
     try {
       await workspace.push(worktree.path, branch);
       const pr = await tracker.createPullRequest({
@@ -2024,7 +2028,7 @@ async function handOff(
       pullRequest = pr.number;
       drafted = true;
     } catch (error) {
-      pipeline.log?.(`#${ticket} could not open a draft PR: ${(error as Error).message}`);
+      pipeline.log?.(`#${ticket} could not open a draft pull request: ${(error as Error).message}`);
     }
   }
 
@@ -2032,17 +2036,17 @@ async function handOff(
     // Written after the draft pull request, because that pull request is part of
     // what a resuming Run must not open a second one beside.
     //
-    // The Fix budget goes back unspent: the Ticket only comes back through a
+    // The fix budget goes back unspent: the Ticket only comes back through a
     // human's hands, and whatever they did to it is what the fresh budget is
     // for. Nothing is lost by it — the hand-off comment says the budget was
-    // spent, and the Claim only marks that comment as history.
+    // spent, and the claim only marks that comment as history.
     await record.advance({
       fixUsed: false,
       ...(pullRequest === undefined ? {} : { pullRequest }),
     });
   }
-  // Only beside a State that stays, because they go when it does, and after
-  // it, so the State they sit beside is the one a resuming Run reads.
+  // Only beside a state that stays, because they go when it does, and after
+  // it, so the state they sit beside is the one a resuming Run reads.
   const transcripts = keepsState ? await keepTranscripts(pipeline, ticket) : undefined;
   // A draft this hand-off opened went up before anything was kept, and one it
   // converted still carries an earlier body, so either learns where only now.

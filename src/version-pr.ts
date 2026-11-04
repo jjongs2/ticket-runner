@@ -1,12 +1,12 @@
 /**
- * What a Version PR has to get right, and what its merge publishes.
+ * What a release PR has to get right, and what its merge publishes.
  *
- * A Version is cut by merging a Version PR: the number in `package.json` goes
- * up, `CHANGELOG.md` gains that Version's section, and the push to `main`
+ * A version is cut by merging a release PR: the number in `package.json` goes
+ * up, `CHANGELOG.md` gains that version's section, and the push to `main`
  * creates the tag and a GitHub Release whose body is that section (ADR-0007).
  * The check on the pull request and the workflow that publishes read the same
  * changelog, so they are written together here: a check that found a section
- * the extraction then missed would tag a Version and publish nothing, which is
+ * the extraction then missed would tag a version and publish nothing, which is
  * the one failure neither half can see on its own.
  *
  * Both functions are pure. Everything they judge — the two numbers, the tags,
@@ -17,13 +17,13 @@
 import { highestVersion, isHigher } from "./version-number.js";
 
 /**
- * The one heading every Version's notes carry, whatever they group the rest by.
+ * The one heading every version's notes carry, whatever they group the rest by.
  * What a Target or its human has to do after upgrading is the thing a reader of
  * this tool cannot get anywhere else, so its absence is a refusal.
  */
 const AFTER_UPGRADING = "### After upgrading";
 
-/** A pull request, in the five things a Version PR is judged by. */
+/** A pull request, in the five things a release PR is judged by. */
 export interface VersionPr {
   /** The number in `package.json` on the head. */
   number: string;
@@ -31,7 +31,7 @@ export interface VersionPr {
   baseNumber: string;
   /** The number in the lock file on the head. */
   lockNumber: string;
-  /** Every tag the repository has, Version tags and anything else. */
+  /** Every tag the repository has, version tags and anything else. */
   tags: string[];
   /** `CHANGELOG.md` on the head, empty where the head has none. */
   changelog: string;
@@ -41,11 +41,11 @@ export interface VersionPr {
  * Every reason this pull request may not merge, in the order a reader meets
  * them, and empty where it may.
  *
- * All of them at once rather than the first: the human fixing a Version PR is
+ * All of them at once rather than the first: the human fixing a release PR is
  * running the check through a pull request, and one refusal per push would cost
  * a round trip each.
  *
- * A number equal to the base branch's is not a Version PR at all, so nothing
+ * A number equal to the base branch's is not a release PR at all, so nothing
  * else is looked at. That is every Ticket's pull request, which passes this
  * check without being written for it.
  */
@@ -56,7 +56,7 @@ export function versionPrRefusals(pr: VersionPr): string[] {
   const highest = highestVersion(pr.tags);
   if (highest !== undefined && !isHigher(pr.number, highest.number)) {
     refusals.push(
-      `\`${pr.number}\` is not higher than every Version tag; \`${highest.tag}\` exists.`,
+      `\`${pr.number}\` is not higher than every version tag; \`${highest.tag}\` exists.`,
     );
   }
   if (pr.lockNumber !== pr.number) {
@@ -75,12 +75,12 @@ export function versionPrRefusals(pr: VersionPr): string[] {
 }
 
 /**
- * The Version notes for `number`: its section of the changelog, without the
+ * The release notes for `number`: its section of the changelog, without the
  * `## ` heading the number is written in, and undefined where the changelog has
  * no section for it.
  *
  * Undefined is not a failure. The tag workflow falls back to GitHub's generated
- * notes, because a Version that reached `main` is cut either way.
+ * notes, because a version that reached `main` is cut either way.
  */
 export function versionNotes(changelog: string, number: string): string | undefined {
   return sections(changelog).get(number)?.trim();

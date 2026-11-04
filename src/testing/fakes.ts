@@ -84,14 +84,14 @@ export class FakeTracker implements Tracker {
   /** How many times the Target's repository was asked for. */
   repositoryLookups = 0;
   /**
-   * The tag of the highest Version published on the pipeline's own repository,
+   * The tag of the highest version published on the pipeline's own repository,
    * as {@link latestVersionTag} answers. Nothing by default, which is the
    * answer a Target with no network gets and the one nothing is said over.
    */
   publishedVersionTag: string | undefined;
   /** When set, the lookup throws, as a `gh` that is not installed at all does. */
   versionTagFails = false;
-  /** Every repository the Version lookup was asked about, in order. */
+  /** Every repository the version lookup was asked about, in order. */
   versionTagLookups: string[] = [];
   labels = new Set<string>();
   /**
@@ -382,7 +382,8 @@ export class FakeTracker implements Tracker {
     const pr = this.pullRequest(number);
     pr.merged = true;
     pr.squashCommit = commit;
-    // The PR body closes the Ticket, which is how a Run's Frontier shrinks.
+    // The pull request body closes the Ticket, which is how a Run's Frontier
+    // shrinks.
     const closes = /Closes #(\d+)/.exec(pr.body);
     if (closes) this.closed.add(Number.parseInt(closes[1] as string, 10));
     this.onSquashMerge?.(number);
@@ -514,7 +515,7 @@ export class FakeWorkspace implements Workspace {
   partedBranches = new Set<string>();
   /**
    * The files each branch carries on the remote, by path, as a Run reads them
-   * at the Base branch's tip. A test seeds the ones a human pushed; a branch
+   * at the base branch's tip. A test seeds the ones a human pushed; a branch
    * with no entry is one the remote does not have.
    */
   remoteFiles = new Map<string, Map<string, string>>();
@@ -541,7 +542,7 @@ export class FakeWorkspace implements Workspace {
    * test fails with {@link failCheck} is one the Ticket's branch brought.
    */
   baseCheckOutcomes = new Map<string, CheckOutcome>();
-  /** The merge-base every branch has with the Base branch, unless a test gives one per worktree. */
+  /** The merge-base every branch has with the base branch, unless a test gives one per worktree. */
   mergeBaseCommit = "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d";
   /** The merge-base of the branch checked out at a worktree path, where it differs. */
   mergeBases = new Map<string, string>();
@@ -565,20 +566,20 @@ export class FakeWorkspace implements Workspace {
   /** The branch each post-merge pull brought the main checkout to, in order. */
   pulledBase: string[] = [];
   /**
-   * Each Ticket's State on the remote's state branch, as a Run on any Host
+   * Each Ticket's state on the remote's state branch, as a Run on any Host
    * would read it. A test seeds one to stand for what an earlier Run left,
    * readable or not. Reads and writes of it stay out of `calls`: a Ticket
-   * touches its State at every step, and a test reading the order of its git
+   * touches its state at every step, and a test reading the order of its git
    * would otherwise have to step round them.
    */
   states = new Map<number, StateFile>();
   /**
-   * The Runs whose transcripts each handed-off Ticket keeps beside its State,
-   * in the order they were kept. They go when the State does.
+   * The Runs whose transcripts each handed-off Ticket keeps beside its state,
+   * in the order they were kept. They go when the state does.
    */
   transcripts = new Map<number, string[]>();
   /**
-   * What every write of the State fails with, when set: storage that will not
+   * What every write of the state fails with, when set: storage that will not
    * take it, which takes transcripts no better.
    */
   stateWriteFailure: Error | undefined;
@@ -619,7 +620,7 @@ export class FakeWorkspace implements Workspace {
 
   /**
    * The same Target seen from another Host: the remote — its branches, every
-   * Ticket's State and the Run lock — shared with this one, and none of this
+   * Ticket's state and the Run lock — shared with this one, and none of this
    * Host's worktrees or branches. What a Run on this Host pushes or records, a
    * Run on that one finds.
    */
@@ -634,13 +635,13 @@ export class FakeWorkspace implements Workspace {
     return other;
   }
 
-  /** The State `ticket` keeps, when it is one a Run can resume from. */
+  /** The state `ticket` keeps, when it is one a Run can resume from. */
   state(ticket: number): TicketState | undefined {
     const file = this.states.get(ticket);
     return file?.readable === true ? file.state : undefined;
   }
 
-  /** Seed the State an earlier Run left for its Ticket. */
+  /** Seed the state an earlier Run left for its Ticket. */
   recordState(state: TicketState): this {
     this.states.set(state.ticket, { readable: true, state: { ...state } });
     return this;
@@ -660,7 +661,7 @@ export class FakeWorkspace implements Workspace {
     return this;
   }
 
-  /** Fail `command` at every merge-base: a Check the Base branch fails too. */
+  /** Fail `command` at every merge-base: a Check the base branch fails too. */
   failBaseCheck(command: string, output: string): this {
     this.baseCheckOutcomes.set(command, { ok: false, output, timedOut: false });
     return this;
@@ -954,7 +955,7 @@ export class FakeWorkspace implements Workspace {
   }
 }
 
-/** Whether `path` is a worktree at a merge-base, where a Check grades the Base branch. */
+/** Whether `path` is a worktree at a merge-base, where a Check grades the base branch. */
 function isBaseWorktree(path: string): boolean {
   return /\/\.worktrees\/base-[0-9a-f]+$/.test(path);
 }

@@ -65,7 +65,7 @@ const FAIL = "✗";
 
 export interface RemoveOptions {
   repoRoot: string;
-  /** The Version doing the removing, which the report's first line names (ADR-0007). */
+  /** The version doing the removing, which the report's first line names (ADR-0007). */
   version: string;
   /** Read before anything is removed, because it names the in-progress label. */
   config: Config;
@@ -131,11 +131,11 @@ export async function removeTarget(options: RemoveOptions): Promise<number> {
   if (nested !== undefined) return refuse(nested);
 
   // A cloud Host can delete no ref on the remote (ADR-0008), so it would leave
-  // the lock and State branches behind whatever else it took out.
+  // the lock and state branches behind whatever else it took out.
   if (hostKind(env) === "cloud") {
     return refuse(
       "Refusing to remove on a cloud Host: it can delete no branch on the remote, so the Run" +
-        " lock and State branches would stay. Run `ticket-runner remove` on a workstation instead.",
+        " lock and state branches would stay. Run `ticket-runner remove` on a workstation instead.",
     );
   }
 
@@ -145,14 +145,14 @@ export async function removeTarget(options: RemoveOptions): Promise<number> {
     return refuse(`Refusing to remove: ${failure} — ${remedy}, then \`ticket-runner remove\` again.`);
   }
 
-  // A newer Version may have put things in the Target this one has never
+  // A newer version may have put things in the Target this one has never
   // heard of, and a removal that left them would report a Target it had not
   // emptied as done.
   const newer = newerSetUp(repoRoot, options.version);
   if (newer !== undefined) {
     return refuse(
       `Refusing to remove: ${newer.mark} set this Target up and this is ${newer.own}, so it may` +
-        ` have left things this Version does not know to remove. Upgrade with \`${UPGRADE_COMMAND}\`,` +
+        ` have left things this version does not know to remove. Upgrade with \`${UPGRADE_COMMAND}\`,` +
         " then run `ticket-runner remove` again.",
     );
   }
@@ -406,7 +406,7 @@ interface Removal {
   /** What it left, and why, where it was one of the things it set out to remove. */
   left: string[];
   failed: number;
-  /** The Tickets whose State files went with the state branch. */
+  /** The Tickets whose state files went with the state branch. */
   states: number[];
 }
 
@@ -654,7 +654,7 @@ async function leftForYou(
   if (states.length > 0) {
     lines.push(
       `${states.map((ticket) => `#${ticket}`).join(", ")}: no Run can resume ${states.length === 1 ? "it" : "them"}` +
-        ` any more, because ${states.length === 1 ? "its State file" : "their State files"}, and any` +
+        ` any more, because ${states.length === 1 ? "its state file" : "their state files"}, and any` +
         ` hand-off transcripts kept beside ${states.length === 1 ? "it" : "them"}, went with \`${STATE_BRANCH}\``,
     );
   }

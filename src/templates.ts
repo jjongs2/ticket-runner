@@ -116,7 +116,7 @@ export function guardComment(reason: GuardReason): string {
   ].join("\n");
 }
 
-/** The Verdict summary both the pull request body and the squash commit carry. */
+/** The verdict summary both the pull request body and the squash commit carry. */
 function verdictCounts(verdict: Verdict): string {
   const counts = countStatuses(verdict);
   return `${counts.met} met · ${counts.unmet} unmet · ${counts.unverifiable} unverifiable`;
@@ -173,9 +173,9 @@ export interface DraftPullRequestBody {
 }
 
 /**
- * The body of the draft PR a hand-off leaves behind, whether it opened the PR
- * or made an open one a draft: what a human needs from it is the hand-off, not
- * a Verdict.
+ * The body of the draft pull request a hand-off leaves behind, whether it
+ * opened the pull request or made an open one a draft: what a human needs from
+ * it is the hand-off, not a verdict.
  */
 export function draftPullRequestBody({
   ticket,
@@ -227,7 +227,7 @@ export interface SquashCommitMessage {
  * The commit a merged Ticket leaves on the base branch.
  *
  * `git log` renders no HTML, so this is the one template with nothing folded
- * away: the Verdict is counts only, and the per-criterion evidence stays in the
+ * away: the verdict is counts only, and the per-criterion evidence stays in the
  * pull request body where a browser can collapse it.
  */
 export function squashCommit({
@@ -440,14 +440,14 @@ export type BranchFailure =
       excerpt: string;
     };
 
-/** A Check the Base branch fails, as the pipeline's own Note reports it. */
+/** A Check the base branch fails, as the pipeline's own Note reports it. */
 export interface FailingBaseNote {
   /** The Ticket the failure released. */
   origin: number;
   /** How the Ticket's branch failed, which the Note quotes beside the merge-base's output. */
   onBranch: BranchFailure;
   baseBranch: string;
-  /** The Ticket's branch, whose merge-base with the Base branch `commit` is. */
+  /** The Ticket's branch, whose merge-base with the base branch `commit` is. */
   branch: string;
   /** The merge-base, in full, so it can be checked out as it is. */
   commit: string;
@@ -458,12 +458,12 @@ export interface FailingBaseNote {
 
 /** The pipeline's Note's summary, which is also the Run summary's `noted` row. */
 export function failingBaseSummary(baseBranch: string, command: string): string {
-  return `The Base branch \`${baseBranch}\` fails \`${command}\`.`;
+  return `The base branch \`${baseBranch}\` fails \`${command}\`.`;
 }
 
 /**
- * The one Note no Stage writes: a Ticket was released because the Base branch
- * fails the Check its branch failed, so the defect is the Base branch's and a
+ * The one Note no Stage writes: a Ticket was released because the base branch
+ * fails the Check its branch failed, so the defect is the base branch's and a
  * human has to mend it there.
  *
  * Signed and laid out as a Stage's Note is, so triage reads it the same way,
@@ -503,8 +503,8 @@ export function failingBaseNote(note: FailingBaseNote): string {
       `**${failingBaseSummary(baseBranch, command)}**`,
       `**Evidence**: ${quoted(where, "The tail of its output:", logTail(note.output), "It printed nothing.")}`,
       branchPart,
-      `**Impact**: every Ticket whose branch inherits ${commit} fails the same Check. #${note.origin} was released with its Fix budget as it was, and the Run claimed no more Tickets.`,
-      `**Next**: mend \`${command}\` on \`${baseBranch}\`. The next Run takes the released Tickets up again from their State files, rebased onto \`${baseBranch}\` before their Checks.`,
+      `**Impact**: every Ticket whose branch inherits ${commit} fails the same Check. #${note.origin} was released with its fix budget as it was, and the Run claimed no more Tickets.`,
+      `**Next**: mend \`${command}\` on \`${baseBranch}\`. The next Run takes the released Tickets up again from their state files, rebased onto \`${baseBranch}\` before their Checks.`,
     ].join("\n\n"),
     "",
   ].join("\n");
@@ -546,7 +546,7 @@ export function notesIssue(): { title: string; body: string } {
       "**Notes from the pipeline.** Every finding a Stage could not post on a " +
         "Ticket arrives here as a comment: one that named no Ticket, one whose " +
         "Ticket would have buried it, and one whose Ticket refused the comment. " +
-        "So does the pipeline's own Note about a Base branch that fails a Check. " +
+        "So does the pipeline's own Note about a base branch that fails a Check. " +
         "Each comment says which Ticket and Stage, or the pipeline, found it.",
       "",
       "Triage empties this issue by hand: promote what deserves a Ticket, record " +
@@ -559,7 +559,7 @@ export function notesIssue(): { title: string; body: string } {
 }
 
 export interface RunSummary {
-  /** The Version the Run ran, which is what its transcripts are stamped with. */
+  /** The version the Run ran, which is what its transcripts are stamped with. */
   version: string;
   runId: string;
   durationMs: number;
@@ -567,13 +567,13 @@ export interface RunSummary {
   credential: Credential;
   outcomes: TicketOutcome[];
   /**
-   * What the Run's Stages said they were billed: the Spend or extra usage its
+   * What the Run's Stages said they were billed: the spend or extra usage its
    * header gives, and every Stage that said it ran on something else, each
    * named in a row after its own Ticket's.
    */
   billing?: Billing;
   /**
-   * The line saying a newer Version is out, where one is. Above the header
+   * The line saying a newer version is out, where one is. Above the header
    * rather than below it: the Run already said this hours ago, at the top of a
    * log this summary is the bottom of (ADR-0007).
    */
@@ -585,14 +585,14 @@ export interface RunSummary {
 /**
  * What a Release is put down to, in the words the Run summary and the log
  * share: the rate limit, a transient API failure, an API key out of credit or
- * past its spend limit, or a Base branch that fails the Check the Ticket's
+ * past its spend limit, or a base branch that fails the Check the Ticket's
  * branch failed.
  */
 export const RELEASE_WORDS: Record<ReleaseCause, string> = {
   "rate-limited": "rate limit",
   "api-error": "API failure",
   "out-of-budget": "out of API budget",
-  "failing-base": "failing Base branch",
+  "failing-base": "failing base branch",
 };
 
 /**
@@ -612,7 +612,7 @@ const VERB_WIDTH = 9;
 /**
  * What a Run prints when it ends. One line per Ticket, then why the Run
  * stopped — the Frontier is empty, everything left on it is blocked, the rate
- * limit, a transient API failure, the API key's budget or a failing Base branch
+ * limit, a transient API failure, the API key's budget or a failing base branch
  * released a Ticket and the Run went no further, or a human stopped it.
  */
 export function runSummary({
@@ -650,7 +650,7 @@ export function runSummary({
 
 /**
  * What the header says the Run's Stages were billed to. An `--api-key` Run
- * adds its Spend, ending `+` where a Stage on the key reported no figure, so it
+ * adds its spend, ending `+` where a Stage on the key reported no figure, so it
  * is at least that much. A subscription Run adds no amount, since its figure
  * is an estimate at API prices and not money spent, only whether a Stage ran
  * on the plan's extra usage.

@@ -68,7 +68,7 @@ interface Blocker {
   open: boolean;
 }
 
-/** One entry of the REST release list, in the three fields a Version needs. */
+/** One entry of the REST release list, in the three fields a version needs. */
 interface RawRelease {
   tag_name: string;
   draft: boolean;
@@ -234,14 +234,14 @@ export class GhTracker implements Tracker {
   }
 
   /**
-   * The tag of the highest Version published on `repository` as a Release.
+   * The tag of the highest version published on `repository` as a Release.
    *
    * Every failure is the same answer — no answer — because nothing the caller
    * does with it may stop a Run: a rate limit, a repository nobody can see, a
    * `gh` that is not installed. The list is asked for rather than GitHub's own
    * `latest`, which is the newest by date: a patch cut on an old branch after a
-   * minor would otherwise be reported as the Version to upgrade to. A hundred
-   * of them is every Version this tool is likely to have, and they arrive
+   * minor would otherwise be reported as the version to upgrade to. A hundred
+   * of them is every version this tool is likely to have, and they arrive
    * newest first, so the highest is among them wherever the count lands: one
    * page, never every page.
    */
@@ -411,7 +411,7 @@ export class GhTracker implements Tracker {
    * Assign `user`, and refuse an assignment GitHub did not make.
    *
    * REST answers a user it cannot assign with the issue as it was and a
-   * success, where `gh issue edit --add-assignee` failed. A Claim nobody can
+   * success, where `gh issue edit --add-assignee` failed. A claim nobody can
    * see is worse than one that fails, so the answer is read back.
    */
   async assign(number: number, user: string): Promise<void> {
@@ -517,17 +517,17 @@ export class GhTracker implements Tracker {
   }
 
   /**
-   * Poll the PR's CI until it settles or the timeout runs out. A PR with no
-   * checks is reported as such, never as a pass.
+   * Poll the pull request's CI until it settles or the timeout runs out. A
+   * pull request with no checks is reported as such, never as a pass.
    *
    * The checks are the head commit's check runs and commit statuses, which is
    * everything `gh pr checks` read through GraphQL.
    *
-   * Right after a PR opens, GitHub answers "no checks" for a while before the
-   * workflow's check run exists, so "no checks" only counts once the grace
-   * period has passed. A PR GitHub finds conflicting with its base is the
-   * exception: GitHub runs no `pull_request` workflow for it, so no check is
-   * coming and the wait ends as soon as the conflict is seen.
+   * Right after a pull request opens, GitHub answers "no checks" for a while
+   * before the workflow's check run exists, so "no checks" only counts once the
+   * grace period has passed. A pull request GitHub finds conflicting with its
+   * base is the exception: GitHub runs no `pull_request` workflow for it, so no
+   * check is coming and the wait ends as soon as the conflict is seen.
    */
   async waitForCi(number: number, timeoutMs: number): Promise<CiOutcome> {
     const startedAt = this.now();
@@ -573,9 +573,9 @@ export class GhTracker implements Tracker {
    * A check that is not an Actions job has no log to fetch and yields nothing.
    *
    * The cap counts the jobs a log could be fetched for, not the red checks: a
-   * PR whose external checks went red alongside one Actions job still gets the
-   * one log there is. What it keeps out of a prompt is a whole matrix failing
-   * a leg at a time, each leg with the same log.
+   * pull request whose external checks went red alongside one Actions job
+   * still gets the one log there is. What it keeps out of a prompt is a whole
+   * matrix failing a leg at a time, each leg with the same log.
    */
   private async failedJobLogs(failed: CiCheck[]): Promise<string> {
     const jobs = failed.flatMap((check) => {
@@ -845,8 +845,8 @@ function subIssues(issue: RawIssue): number {
  * `pending` means "ask again"; everything else is an answer. Checks GitHub
  * would not report read as none, as a failing `gh pr checks` did, so the grace
  * period still covers a wait that starts before the checks exist. No checks on
- * a PR GitHub finds conflicting is the conflict, since that is why there are
- * none; checks it does have are read as they are.
+ * a pull request GitHub finds conflicting is the conflict, since that is why
+ * there are none; checks it does have are read as they are.
  */
 function readCi({ checks, conflicting }: CiSnapshot): CiReading | "pending" {
   if (checks === undefined || checks.length === 0) {

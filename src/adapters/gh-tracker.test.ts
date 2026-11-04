@@ -108,7 +108,7 @@ describe("reading", () => {
     ]);
   });
 
-  it("counts no draft and no pre-release as a published Version", async () => {
+  it("counts no draft and no pre-release as a published version", async () => {
     const gh = tracker(
       ok(
         JSON.stringify([
@@ -122,7 +122,7 @@ describe("reading", () => {
     expect(await gh.latestVersionTag("acme/repo")).toBe("v0.4.0");
   });
 
-  it("ignores a Release tagged as anything but a Version", async () => {
+  it("ignores a Release tagged as anything but a version", async () => {
     const gh = tracker(
       ok(JSON.stringify([{ tag_name: "nightly", draft: false, prerelease: false }])),
     );
@@ -753,7 +753,7 @@ describe("pull requests", () => {
       draft,
     });
 
-  it("opens a PR against the base branch it is given through REST and reads its number off the answer", async () => {
+  it("opens a pull request against the base branch it is given through REST and reads its number off the answer", async () => {
     const pr = await opened(false);
 
     expect(pr).toEqual({ number: 12, url: "https://github.com/acme/repo/pull/12" });
@@ -775,7 +775,7 @@ describe("pull requests", () => {
     ]);
   });
 
-  it("opens a draft PR when the Ticket is being handed off", async () => {
+  it("opens a draft pull request when the Ticket is being handed off", async () => {
     await opened(true);
 
     expect(calls[0]?.slice(-2)).toEqual(["-F", "draft=true"]);
@@ -793,7 +793,7 @@ describe("pull requests", () => {
     ).rejects.toThrow("could not read a pull request number");
   });
 
-  it("rewrites the body of a PR a second pass re-graded through REST", async () => {
+  it("rewrites the body of a pull request a second pass re-graded through REST", async () => {
     await tracker(ok("{}")).updatePullRequestBody(12, "Closes #2\n\n**Verdict:** 2 met");
 
     expect(calls[0]).toEqual([
@@ -806,7 +806,7 @@ describe("pull requests", () => {
     ]);
   });
 
-  it("retitles a PR a later Stage answered a new title for through REST", async () => {
+  it("retitles a pull request a later Stage answered a new title for through REST", async () => {
     await tracker(ok("{}")).updatePullRequestTitle(12, "feat(cli): title the branch");
 
     expect(calls[0]).toEqual([
@@ -843,7 +843,7 @@ describe("pull requests", () => {
     const workstation = (...queued: Execution[]) =>
       trackerWith({ host: "workstation" }, ...queued);
 
-    it("reads the PR's state through REST, then converts it to a draft through GraphQL", async () => {
+    it("reads the pull request's state through REST, then converts it to a draft through GraphQL", async () => {
       await workstation(ok(restPullRequest({ draft: false })), ok("{}")).convertPullRequestToDraft(12);
 
       expect(calls[0]).toEqual(["api", "repos/{owner}/{repo}/pulls/12"]);
@@ -852,7 +852,7 @@ describe("pull requests", () => {
       expect(calls[1]).toContain("id=PR_kw12");
     });
 
-    it("takes a drafted PR back out of draft through GraphQL", async () => {
+    it("takes a drafted pull request back out of draft through GraphQL", async () => {
       await workstation(ok(restPullRequest({ draft: true })), ok("{}")).markPullRequestReady(12);
 
       expect(calls[1]?.slice(0, 2)).toEqual(["api", "graphql"]);
@@ -864,7 +864,7 @@ describe("pull requests", () => {
   describe("on a cloud Host", () => {
     const cloud = (...queued: Execution[]) => trackerWith({ host: "cloud" }, ...queued);
 
-    it("converts a PR to a draft through the proxy's own route", async () => {
+    it("converts a pull request to a draft through the proxy's own route", async () => {
       await cloud(ok(restPullRequest({ draft: false })), ok("{}")).convertPullRequestToDraft(12);
 
       expect(calls[1]).toEqual([
@@ -875,7 +875,7 @@ describe("pull requests", () => {
       ]);
     });
 
-    it("takes a drafted PR back out of draft through the proxy's own route", async () => {
+    it("takes a drafted pull request back out of draft through the proxy's own route", async () => {
       await cloud(ok(restPullRequest({ draft: true })), ok("{}")).markPullRequestReady(12);
 
       expect(calls[1]).toEqual([
@@ -888,7 +888,7 @@ describe("pull requests", () => {
   });
 
   it.each<HostKind>(["workstation", "cloud"])(
-    "leaves a PR already in the state asked for as it is, on a %s",
+    "leaves a pull request already in the state asked for as it is, on a %s",
     async (host) => {
       const gh = trackerWith(
         { host },
@@ -1300,7 +1300,7 @@ describe("waiting for CI", () => {
     ["starts with a newline, as vitest's does", "\n RUN  v3.2.7 /repo\n\n FAIL src/date.test.ts"],
     ["starts indented", "   indented first line\nsecond"],
     ["has cleanup after an Actions error", "Run npm test\n##[error]Process completed with exit code 1.\nPost job cleanup."],
-  ])("keeps the tail a failing Base branch's Note quotes, for a log that %s", async (_, output) => {
+  ])("keeps the tail a failing base branch's Note quotes, for a log that %s", async (_, output) => {
     const outcome = await ci({}, [checks("fail")], { "100": ok(output) }).waitForCi(12, 60_000);
     const note = failingBaseNote({
       origin: 6,
@@ -1337,7 +1337,7 @@ describe("waiting for CI", () => {
     expect(readingsTaken()).toBe(2);
   });
 
-  it("reports a PR with no checks rather than treating it as green", async () => {
+  it("reports a pull request with no checks rather than treating it as green", async () => {
     expect(await ci({}, [{}]).waitForCi(12, 60_000)).toEqual({ state: "none" });
   });
 
@@ -1400,7 +1400,7 @@ describe("waiting for CI", () => {
   /** What GitHub says of a pull request whose mergeability it has not worked out yet. */
   const UNSETTLED = { mergeable: null, mergeable_state: "unknown" } as const;
 
-  it("reports a PR GitHub finds conflicting without waiting out the grace period", async () => {
+  it("reports a pull request GitHub finds conflicting without waiting out the grace period", async () => {
     const outcome = await ci({ now: ticking(1_000), checksGraceMs: 120_000 }, [
       CONFLICTING,
     ]).waitForCi(12, 60_000 * 30);
@@ -1409,7 +1409,7 @@ describe("waiting for CI", () => {
     expect(readingsTaken()).toBe(1);
   });
 
-  it("keeps waiting while GitHub has not worked out whether the PR conflicts", async () => {
+  it("keeps waiting while GitHub has not worked out whether the pull request conflicts", async () => {
     const outcome = await ci({ now: ticking(1_000), checksGraceMs: 120_000 }, [
       UNSETTLED,
       UNSETTLED,
@@ -1420,7 +1420,7 @@ describe("waiting for CI", () => {
     expect(readingsTaken()).toBe(3);
   });
 
-  it("reports no checks for a PR GitHub never settled on, once the grace period has passed", async () => {
+  it("reports no checks for a pull request GitHub never settled on, once the grace period has passed", async () => {
     const outcome = await ci({ now: ticking(50_000), checksGraceMs: 120_000 }, [
       UNSETTLED,
     ]).waitForCi(12, 60_000 * 30);
@@ -1428,7 +1428,7 @@ describe("waiting for CI", () => {
     expect(outcome).toEqual({ state: "none" });
   });
 
-  it("reports no checks for a PR that merges cleanly", async () => {
+  it("reports no checks for a pull request that merges cleanly", async () => {
     const outcome = await ci({ now: ticking(50_000), checksGraceMs: 120_000 }, [
       { mergeable: true, mergeable_state: "clean" },
     ]).waitForCi(12, 60_000 * 30);
@@ -1437,7 +1437,7 @@ describe("waiting for CI", () => {
     expect(readingsTaken()).toBeGreaterThan(1);
   });
 
-  it("reads the checks of a PR that has them, conflicting or not", async () => {
+  it("reads the checks of a pull request that has them, conflicting or not", async () => {
     expect(await ci({}, [{ ...checks("pass"), ...CONFLICTING }]).waitForCi(12, 60_000)).toEqual({
       state: "passed",
     });
@@ -1454,7 +1454,7 @@ describe("waiting for CI", () => {
     };
   };
 
-  it("grades a PR on checks GitHub registers four minutes into the wait", async () => {
+  it("grades a pull request on checks GitHub registers four minutes into the wait", async () => {
     const outcome = await ci(
       { ...waitingClock(), pollIntervalMs: 60_000, checksGraceMs: 5 * 60_000 },
       [{}, {}, {}, {}, checks("pass")],

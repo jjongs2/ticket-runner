@@ -40,7 +40,7 @@ describe("NOTES_LIST_SCHEMA", () => {
 
     expect(description).toContain(NOTES_LIST_SCHEMA.description.split(" Empty")[0]);
     expect(description).toMatch(/a defect this branch introduced\b.* belongs to this Ticket/i);
-    expect(description).toContain("behaves correctly on the Base branch and wrongly here");
+    expect(description).toContain("behaves correctly on the base branch and wrongly here");
     expect(description).toMatch(/one in code this branch added/i);
     expect(description).toMatch(/fix it, and do not list it here/i);
   });

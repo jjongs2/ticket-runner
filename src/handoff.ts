@@ -5,7 +5,7 @@
  * the Ticket is relabelled and a Run takes it again, the comment still reads as
  * the last word on it — and on a Ticket that then merges it is the last thing
  * on a closed issue, because the progress comment is edited in place above it
- * and the merge writes nothing below. So the Claim marks every hand-off comment
+ * and the merge writes nothing below. So the claim marks every hand-off comment
  * on the Ticket as history on its way past.
  *
  * Marked, not removed: the failure, the location and the evidence are worth
@@ -21,7 +21,7 @@ import { HANDOFF_MARKER, findMarkedComments, handoffTakenComment } from "./templ
  * Every hand-off comment the Ticket is still carrying as current, each with the
  * body that would mark it as history.
  *
- * One question, asked twice: it is what the Claim edits, and it is also what
+ * One question, asked twice: it is what the claim edits, and it is also what
  * says a human has been holding the Ticket since the last Run put it down.
  */
 function unmarkedHandoffs(

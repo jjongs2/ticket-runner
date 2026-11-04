@@ -14,7 +14,7 @@ const criterion = (status: string, text = "a criterion") => ({
 });
 
 describe("parseVerdict", () => {
-  it("accepts the Verdict shape the schema asks for", () => {
+  it("accepts the verdict shape the schema asks for", () => {
     const verdict = parseVerdict({
       criteria: [criterion("met"), criterion("unverifiable")],
       pass: true,
@@ -27,7 +27,7 @@ describe("parseVerdict", () => {
     expect(() => parseVerdict({ criteria: [criterion("maybe")], pass: true })).toThrow();
   });
 
-  it("rejects a Verdict with no criteria at all", () => {
+  it("rejects a verdict with no criteria at all", () => {
     expect(() => parseVerdict({ criteria: [], pass: true })).toThrow();
   });
 
@@ -35,7 +35,7 @@ describe("parseVerdict", () => {
     expect(() => parseVerdict(undefined)).toThrow();
   });
 
-  it("accepts a Verdict that carries Notes, and keeps nothing of them", () => {
+  it("accepts a verdict that carries Notes, and keeps nothing of them", () => {
     const verdict = parseVerdict({
       criteria: [criterion("met")],
       pass: true,
@@ -45,7 +45,7 @@ describe("parseVerdict", () => {
     expect(Object.keys(verdict)).toEqual(["criteria", "pass"]);
   });
 
-  it("accepts a Verdict with no Notes at all", () => {
+  it("accepts a verdict with no Notes at all", () => {
     expect(parseVerdict({ criteria: [criterion("met")], pass: true }).criteria).toHaveLength(1);
   });
 });
@@ -69,7 +69,7 @@ describe("passes", () => {
     expect(passes(verdict)).toBe(false);
   });
 
-  it("fails a Verdict where every criterion is unverifiable", () => {
+  it("fails a verdict where every criterion is unverifiable", () => {
     const verdict = parseVerdict({
       criteria: [criterion("unverifiable"), criterion("unverifiable")],
       pass: true,

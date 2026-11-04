@@ -106,9 +106,9 @@ interface TreeEntry {
  *
  * Commands that run in the main checkout go one at a time, because the Tickets
  * of a Run do not: adding and removing worktrees, deleting branches and moving
- * the Base branch all take git refs and index locks that git fails on rather
+ * the base branch all take git refs and index locks that git fails on rather
  * than waits for, and a read of a commit range taken while another Ticket is
- * moving the Base branch is a range nobody asked for. Commands inside a
+ * moving the base branch is a range nobody asked for. Commands inside a
  * worktree are left parallel — that is where a Run spends its time, and no two
  * Tickets share one.
  *
@@ -118,7 +118,7 @@ interface TreeEntry {
  * runs, which is what this gives; a pair that had to be indivisible would have
  * to say so, and none of them is.
  *
- * The State lives on the Target's remote, on {@link STATE_BRANCH}, so a Run on
+ * The state lives on the Target's remote, on {@link STATE_BRANCH}, so a Run on
  * any Host resumes a Ticket another left (ADR-0004). The branch is one snapshot
  * commit, rewritten whole and force-pushed with a lease on the tip it was built
  * from, and built from objects and a scratch index alone: the main checkout's
@@ -658,7 +658,7 @@ export class GitWorkspace implements Workspace {
   }
 
   /**
-   * Each file goes up under `ticket-<n>/<runId>/`, beside the Ticket's State
+   * Each file goes up under `ticket-<n>/<runId>/`, beside the Ticket's state
    * file, as the Run's own directory lays it out; a Ticket handed off by more
    * than one Run keeps each Run's apart, and {@link removeState} takes them
    * all.
@@ -956,7 +956,7 @@ function branchNames(refs: string[], prefix: string): string[] {
 
 /**
  * The directory of the state branch a handed-off Ticket's transcripts are kept
- * in, named like its State file without the extension, so the two sort together.
+ * in, named like its state file without the extension, so the two sort together.
  */
 function transcriptsDir(ticket: number): string {
   return `ticket-${ticket}`;

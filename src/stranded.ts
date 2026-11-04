@@ -5,26 +5,26 @@ import type { StateFile, Workspace } from "./ports/workspace.js";
  * The Tickets a Run that never came back left claimed, and how a later Run finds
  * them.
  *
- * A Run killed mid-Ticket releases nothing: the Claim stays on the board, the
- * State file on the Target's remote, and the branch on the remote as of its
+ * A Run killed mid-Ticket releases nothing: the claim stays on the board, the
+ * state file on the Target's remote, and the branch on the remote as of its
  * last committing Stage. The Frontier cannot see such a Ticket — it is claimed —
  * so without this nobody would ever pick it up again, on this Host or another.
  *
  * Nothing here needs a process id. The Run lock allows one Run at a time
- * (ADR-0004), so a Run holding the lock that finds a State file whose Ticket
- * still carries this user's Claim knows the Run that wrote it is gone.
+ * (ADR-0004), so a Run holding the lock that finds a state file whose Ticket
+ * still carries this user's claim knows the Run that wrote it is gone.
  */
 
 /** A Ticket still claimed by a Run that never came back, and where its work is. */
 export interface StrandedTicket {
   number: number;
   title: string;
-  /** The branch the State file named, which is where the work actually is. */
+  /** The branch the state file named, which is where the work actually is. */
   branch: string;
 }
 
 /**
- * Whether this issue carries this user's Claim: assigned to them and labelled
+ * Whether this issue carries this user's claim: assigned to them and labelled
  * `in-progress`, which is what {@link import("./orchestrator.js").processTicket}
  * writes when it claims a Ticket. Both halves, because a Ticket holding only one
  * of them is one nobody can say is being worked on.
@@ -35,12 +35,12 @@ export function holdsClaim(issue: Issue, user: string, inProgress: string): bool
 
 export interface StrandedSweep {
   tracker: Tracker;
-  /** Where the State is kept. */
+  /** Where the state is kept. */
   workspace: Workspace;
   /** The `in-progress` label, as this repo configured it. */
   inProgress: string;
   /**
-   * The Tickets a narrowed Run was given. The State of every other Ticket is
+   * The Tickets a narrowed Run was given. The state of every other Ticket is
    * not read, asked about or removed: it is the next unnarrowed Run's.
    */
   only?: ReadonlySet<number>;
@@ -48,13 +48,13 @@ export interface StrandedSweep {
 }
 
 /**
- * Sweep the State the Workspace keeps on the remote for the Tickets this
+ * Sweep the state the Workspace keeps on the remote for the Tickets this
  * pipeline still holds, whichever Host's Run claimed them.
  *
- * Four things can be behind a State file, and only one of them is stranded:
+ * Four things can be behind a state file, and only one of them is stranded:
  *
- * - the Ticket still carries this user's Claim — stranded, and resumed in place
- * - the Claim has come off — a released Ticket, or one handed to a human, and
+ * - the Ticket still carries this user's claim — stranded, and resumed in place
+ * - the claim has come off — a released Ticket, or one handed to a human, and
  *   neither is the sweep's: the Frontier picks up whichever of them is labelled
  *   `ready-for-agent`, and a `ready-for-human` Ticket waits, inert, until a
  *   human relabels it. Both are passed over in silence
@@ -118,19 +118,19 @@ export async function strandedTickets(sweep: StrandedSweep): Promise<StrandedTic
 }
 
 /**
- * A State file nothing here can resume from, named rather than dropped.
+ * A state file nothing here can resume from, named rather than dropped.
  *
- * The file and the Claim are left exactly where they are. A Ticket carrying a
+ * The file and the claim are left exactly where they are. A Ticket carrying a
  * file this pipeline cannot use is one a newer pipeline probably wrote, and
- * deleting either would take a Claim off the board that the machine which
+ * deleting either would take a claim off the board that the machine which
  * understands the file is still counting on (ADR-0007). So the sweep says the
- * Ticket number and whichever Version the file names, and a human decides.
+ * Ticket number and whichever version the file names, and a human decides.
  *
  * `cannot use` rather than `cannot read`, because the two files that land here
  * are not the same: one will not parse at all, and one parses but names another
- * Ticket than the file it is in, which no Version would resume either.
+ * Ticket than the file it is in, which no version would resume either.
  */
 function unreadableLine(file: Extract<StateFile, { readable: false }>): string {
-  const wrote = file.version === undefined ? "naming no Version" : `written by ${file.version}`;
-  return `#${file.ticket} has a State file this Version cannot use, ${wrote}; it and the Claim are left alone`;
+  const wrote = file.version === undefined ? "naming no version" : `written by ${file.version}`;
+  return `#${file.ticket} has a state file this version cannot use, ${wrote}; it and the claim are left alone`;
 }

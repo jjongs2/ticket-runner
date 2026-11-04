@@ -57,12 +57,12 @@ export interface StartOptions {
   workspace: Workspace;
   runId: string;
   /**
-   * The Version this Run is, resolved once in the CLI (ADR-0007). Everything
+   * The version this Run is, resolved once in the CLI (ADR-0007). Everything
    * the Run stamps takes it from here, so every stamp says the same thing.
    */
   version: string;
   /**
-   * The pipeline's own repository, as `owner/name`, which the newer-Version
+   * The pipeline's own repository, as `owner/name`, which the newer-version
    * notice is looked up against; see {@link import("./staleness.js")}.
    */
   repository?: string | undefined;
@@ -85,7 +85,7 @@ export interface StartOptions {
  *
  * Every refusal comes before the lock: an `--api-key` the Host cannot honour,
  * a Target `init` has not set up, one whose remote lacks what `init` wrote,
- * one holding State files an earlier pipeline left in the checkout, and one
+ * one holding state files an earlier pipeline left in the checkout, and one
  * with nothing to gate a merge. None is a Run that went wrong, so none should
  * leave a lock behind for the next one to reclaim.
  */
@@ -101,7 +101,7 @@ export async function startRun(given: StartOptions): Promise<number> {
   const env = options.env ?? process.env;
 
   // First, because it asks nothing of the Target: the Host either can or
-  // cannot run the Stages on the credential the Run was started with.
+  // cannot bill the Stages to what the Run was started with.
   const credential: Credential = options.work.apiKey === true ? "api-key" : "subscription";
   const host = hostKind(env);
   const refusedCredential = credentialRefusal(credential, host, env);
@@ -135,9 +135,9 @@ export async function startRun(given: StartOptions): Promise<number> {
   }
 
   const { refusal, warnings } = startupMessages(config);
-  // Which Version the document names is a warning and never a refusal, so it
+  // Which version the document names is a warning and never a refusal, so it
   // joins the config's own: readiness has already refused a copy naming none,
-  // and one naming another Version is nothing a Run is worse for (ADR-0007).
+  // and one naming another version is nothing a Run is worse for (ADR-0007).
   const stale = conventionsWarning(repoRoot, options.version);
   for (const warning of [...warnings, ...(stale === undefined ? [] : [stale])]) {
     error(`warning: ${warning}`);
@@ -211,7 +211,7 @@ async function execute(
   try {
     writeRunVersion(repoRoot, runId, version);
   } catch (error) {
-    log(`could not record the Version beside the transcripts: ${(error as Error).message}`);
+    log(`could not record the version beside the transcripts: ${(error as Error).message}`);
   }
 
   // Asked once, and said twice: at the top of the log a human watches, and
@@ -273,7 +273,7 @@ async function execute(
 }
 
 /**
- * Why a Run will not start over State files a pipeline before the state branch
+ * Why a Run will not start over state files a pipeline before the state branch
  * left in the checkout, and what the human does about it.
  *
  * Each is a Ticket that pipeline could resume and this one cannot see, since
@@ -284,9 +284,9 @@ async function execute(
 function localStateMessage(tickets: number[]): string {
   const named = tickets.map((ticket) => `#${ticket}`).join(", ");
   return (
-    `${LOCAL_STATE_DIR} holds State files for ${named}, which this Version no longer reads: ` +
+    `${LOCAL_STATE_DIR} holds state files for ${named}, which this version no longer reads: ` +
     "a Ticket's resume state lives on the Target's remote now. Finish those Tickets with " +
-    `the Version that wrote the files, or hand them to a human, then delete ${LOCAL_STATE_DIR} ` +
+    `the version that wrote the files, or hand them to a human, then delete ${LOCAL_STATE_DIR} ` +
     "and run again."
   );
 }

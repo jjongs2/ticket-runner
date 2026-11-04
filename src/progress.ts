@@ -51,7 +51,7 @@ export interface ProgressRow {
 const NO_ANSWER = "–";
 
 export interface ProgressCommentBody {
-  /** The Version reporting, as every line one Run stamps carries it. */
+  /** The version reporting, as every line one Run stamps carries it. */
   version: string;
   runId: string;
   branch: string;
@@ -99,7 +99,7 @@ export function progressComment({
  *
  * Every section under the marker, minus the last when it is this Run's own: a
  * Run that reads the Ticket again rewrites its section rather than starting a
- * second. A comment an earlier Version wrote, with one header and one table, is
+ * second. A comment an earlier version wrote, with one header and one table, is
  * one section like any other.
  */
 function earlierSections(body: string, runId: string): string {

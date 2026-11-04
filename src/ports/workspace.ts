@@ -11,7 +11,7 @@ import type { Host } from "../host.js";
  * Run, and a port that kept its own copy would be a second answer to the same
  * question.
  *
- * It also keeps the pipeline's own bookkeeping about the Target: the State each
+ * It also keeps the pipeline's own bookkeeping about the Target: the state each
  * resumable Ticket keeps, and the Run lock. Where those live is the adapter's
  * business (ADR-0004), so nothing above the port says whether they are files,
  * a branch, or a map in a test.
@@ -46,7 +46,7 @@ export type RebaseState = { resolved: true } | { resolved: false; unresolved: st
  * behind it.
  *
  * A state of the lifecycle, not a Stage — a Stage is a session (GLOSSARY.md), and
- * what the State records is what the Ticket has, not what was running. Only these
+ * what the state records is what the Ticket has, not what was running. Only these
  * two, because everything after the implement Stage — the Checks, the rebase,
  * the pull request, CI and the merge — is re-run from the top by a Run that
  * resumes at `implemented`, and none of them is worth a state a resume could
@@ -56,16 +56,16 @@ export const REACHED_STATES = ["claimed", "implemented"] as const;
 
 export type ReachedState = (typeof REACHED_STATES)[number];
 
-/** The State a Ticket keeps while its branch carries work worth resuming. */
+/** The state a Ticket keeps while its branch carries work worth resuming. */
 export interface TicketState {
-  /** Carried in the State as well as its name, so it reads on its own. */
+  /** Carried in the state as well as its name, so it reads on its own. */
   ticket: number;
   /** The branch the work is on, which the resuming Run uses rather than deriving. */
   branch: string;
   /** The state the Ticket had reached, which is where a later Run picks it up. */
   state: ReachedState;
   /**
-   * Whether the Fix budget has been spent. Resuming must not hand the Ticket a
+   * Whether the fix budget has been spent. Resuming must not hand the Ticket a
    * second fix Stage it never earned — except after a hand-off, which records it
    * unspent, the Ticket having been through a human's hands since.
    */
@@ -79,21 +79,21 @@ export interface TicketState {
    * The latest title a Stage answered for the whole branch, which names the
    * pull request and the squash commit. Without it a Run that resumes after the
    * Stage that wrote it would fall back to the first commit subject. Absent
-   * when no Stage has answered one, and in State an earlier pipeline left.
+   * when no Stage has answered one, and in state an earlier pipeline left.
    */
   title?: string;
   /**
    * Whether the Run that takes the Ticket up rebases its branch onto the Base
-   * branch before its Checks. Set by a Release over a failing Base branch, so
+   * branch before its Checks. Set by a Release over a failing base branch, so
    * a fix a human has landed there meanwhile reaches the branch; absent
-   * otherwise, and in State an earlier pipeline left.
+   * otherwise, and in state an earlier pipeline left.
    */
   rebaseFirst?: boolean;
-  /** The Run that last wrote the State, and when — both for a human reading it. */
+  /** The Run that last wrote the state, and when — both for a human reading it. */
   runId: string;
   /**
-   * The Version that wrote the State (ADR-0007). Written on every write, and
-   * optional when read: State an earlier pipeline left names none, and a
+   * The version that wrote the state (ADR-0007). Written on every write, and
+   * optional when read: state an earlier pipeline left names none, and a
    * Ticket claimed before this existed still resumes.
    */
   version?: string;
@@ -102,10 +102,10 @@ export interface TicketState {
 }
 
 /**
- * What one Ticket's recorded State turned out to be.
+ * What one Ticket's recorded state turned out to be.
  *
- * Two cases, where no State at all is a third: State a Run can resume from, and
- * State it cannot. The second is the one that most needs saying out loud: its
+ * Two cases, where no state at all is a third: state a Run can resume from, and
+ * state it cannot. The second is the one that most needs saying out loud: its
  * Ticket is claimed on the board, so the sweep for Stranded Tickets is the only
  * thing that could ever have found it (ADR-0007).
  */
@@ -113,9 +113,9 @@ export type StateFile =
   | { readable: true; state: TicketState }
   | {
       readable: false;
-      /** Read off where the State was kept, which is the only part of it that parsed. */
+      /** Read off where the state was kept, which is the only part of it that parsed. */
       ticket: number;
-      /** The Version the State names, where it names one a reader can make out. */
+      /** The version the state names, where it names one a reader can make out. */
       version?: string;
     };
 
@@ -389,7 +389,8 @@ export interface Workspace {
    */
   readRemoteFile(branch: string, path: string): Promise<string | undefined>;
   /**
-   * Delete `branch` on the remote; the PR is merged, so nothing references it.
+   * Delete `branch` on the remote; the pull request is merged, so nothing
+   * references it.
    * A branch the remote already deleted, as GitHub does on merge when told to,
    * counts as deleted without a delete being sent, which a cloud Host could not.
    */
@@ -402,15 +403,15 @@ export interface Workspace {
   pullBase(base: string): Promise<void>;
 
   /**
-   * The State `ticket` keeps, when a Run can resume from it.
+   * The state `ticket` keeps, when a Run can resume from it.
    *
-   * State nothing wrote, and State this pipeline cannot read, are both
+   * State nothing wrote, and state this pipeline cannot read, are both
    * undefined: starting the Ticket over is always safe, and resuming on a guess
    * is not.
    */
   readState(ticket: number): Promise<TicketState | undefined>;
   /**
-   * Every Ticket's State, in ascending Ticket number, the unreadable ones
+   * Every Ticket's state, in ascending Ticket number, the unreadable ones
    * included: their Tickets are claimed, and the sweep is what tells a human
    * they are there.
    */
@@ -419,12 +420,12 @@ export interface Workspace {
   writeState(state: TicketState): Promise<void>;
   /**
    * Forget `ticket` is resumable, and the transcripts {@link keepTranscripts}
-   * kept beside its State with it. A Ticket with no State is not an error.
+   * kept beside its state with it. A Ticket with no state is not an error.
    */
   removeState(ticket: number): Promise<void>;
   /**
    * Keep the command lines and transcripts of the Stages Run `runId` ran for
-   * `ticket` beside its State, where a human can still read them once this
+   * `ticket` beside its state, where a human can still read them once this
    * Host is gone. Asked of a hand-off, and nothing else: a Ticket nobody has to
    * look into leaves nothing behind.
    *

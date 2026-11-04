@@ -230,7 +230,7 @@ describe("fixPrompt", () => {
     expect(prompt).not.toMatch(/the repo's commit convention/);
   });
 
-  it("asks for the regression test a gap the Verdict found should have had", () => {
+  it("asks for the regression test a gap the verdict found should have had", () => {
     expect(fixPrompt(url, { ...FAILED_CHECK, kind: "unmet-criteria" }, BASE, "", OTHER_TARGET, NO_CHECKS)).toMatch(
       /regression test/i,
     );
@@ -444,10 +444,10 @@ describe("the Notes channel", () => {
     expect(prompt).toContain(`"notes": []`);
   });
 
-  it("sends the verify Stage's judgement of a criterion to the Verdict, never to a Note", () => {
+  it("sends the verify Stage's judgement of a criterion to the verdict, never to a Note", () => {
     const prompt = verifyPrompt(url, "", OTHER_TARGET, NO_CHECKS);
 
-    expect(prompt).toMatch(/criterion belongs in the Verdict/i);
+    expect(prompt).toMatch(/criterion belongs in the verdict/i);
     expect(prompt).toMatch(/never in a Note/i);
   });
 
@@ -611,7 +611,7 @@ describe("a defect the branch introduced", () => {
       fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS),
     ]) {
       expect(prompt).toMatch(/a defect this branch introduced\b.* belongs to this Ticket/i);
-      expect(prompt).toContain("behaves correctly on the Base branch and wrongly here");
+      expect(prompt).toContain("behaves correctly on the base branch and wrongly here");
       expect(prompt).toMatch(/one in code this branch added/i);
       expect(prompt).toMatch(/fix it, and do not record it as a Note/i);
     }
@@ -657,7 +657,7 @@ describe("a criterion that needs a human decision", () => {
 describe("a verify after a fix for unmet criteria", () => {
   const PREVIOUS = "- it works — npm test is red";
 
-  it("is given the first Verdict's unmet criteria with their evidence", () => {
+  it("is given the first verdict's unmet criteria with their evidence", () => {
     const prompt = verifyPrompt(url, "", OTHER_TARGET, NO_CHECKS, undefined, PREVIOUS);
 
     expect(prompt).toContain(`\`\`\`\n${PREVIOUS}\n\`\`\``);

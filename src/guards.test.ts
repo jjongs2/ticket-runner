@@ -53,10 +53,10 @@ describe("issues no Run may take", () => {
 });
 
 describe("a stranded Ticket", () => {
-  /** What a Claim leaves on the board: the assignee on, ready-for-agent off. */
+  /** What a claim leaves on the board: the assignee on, ready-for-agent off. */
   const CLAIMED = { assignees: ["pipeline-user"], labels: ["in-progress"] };
 
-  it("is taken rather than refused for the Claim it is still wearing", () => {
+  it("is taken rather than refused for the claim it is still wearing", () => {
     expect(strandedGuard(CLAIMED)).toBeUndefined();
   });
 

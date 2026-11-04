@@ -1,18 +1,18 @@
 /**
- * What a Run and `init` say when something around them is from another Version,
+ * What a Run and `init` say when something around them is from another version,
  * and the one thing neither ever does about it.
  *
  * Two questions, both answered in one line and neither ever a refusal
- * (ADR-0007): is a newer Version published than the one running, and is the
- * Target's conventions document from another Version than the one reading it.
- * Nothing here is a gate. A pipeline that refused to work while a newer Version
+ * (ADR-0007): is a newer version published than the one running, and is the
+ * Target's conventions document from another version than the one reading it.
+ * Nothing here is a gate. A pipeline that refused to work while a newer version
  * existed would strand a Target on the night its maintainer was asleep, and
  * Target readiness already says what a Target is refused over: the document's
- * absence or a missing Version stamp, never what it says or which Version.
+ * absence or a missing version stamp, never what it says or which version.
  *
  * A number against a number, always. A development checkout runs a commit past
- * the Version it reports, so comparing anything finer would call every checkout
- * stale the moment its Version was cut.
+ * the version it reports, so comparing anything finer would call every checkout
+ * stale the moment its version was cut.
  */
 
 import { join } from "node:path";
@@ -22,14 +22,14 @@ import { readTargetFile } from "./readiness.js";
 import { isHigher, tagNumber, versionNumber } from "./version-number.js";
 
 /**
- * How any copy is upgraded, whatever repository it asks about: every Version
+ * How any copy is upgraded, whatever repository it asks about: every version
  * is on npm before it has a GitHub Release (ADR-0007).
  */
 export const UPGRADE_COMMAND = "npm install -g ticket-runner";
 
 export interface StalenessQuestion {
   tracker: Tracker;
-  /** The Version this copy is, as the CLI resolved it once and handed it down. */
+  /** The version this copy is, as the CLI resolved it once and handed it down. */
   version: string;
   /**
    * The pipeline's own repository, as `owner/name`. Undefined where the package
@@ -40,13 +40,13 @@ export interface StalenessQuestion {
 }
 
 /**
- * One line naming the Version that is out and the Version running, and nothing
+ * One line naming the version that is out and the version running, and nothing
  * at all where this copy is the latest, is ahead of it, or could not ask.
  *
  * What has been published as a GitHub Release is the question rather than the
  * highest tag, because a tag a workflow has not finished publishing is not a
- * Version anybody can install yet. The tag workflow makes the GitHub Release
- * only once npm has the Version, so the answer names one the upgrade finds.
+ * version anybody can install yet. The tag workflow makes the GitHub Release
+ * only once npm has the version, so the answer names one the upgrade finds.
  */
 export async function newerVersionLine({
   tracker,
@@ -60,7 +60,7 @@ export async function newerVersionLine({
   const published = latest === undefined ? undefined : tagNumber(latest);
   if (published === undefined || !isHigher(published, own)) return undefined;
 
-  return `A newer Version is out: ${published}, and this is ${own} — upgrade with \`${UPGRADE_COMMAND}\`.`;
+  return `A newer version is out: ${published}, and this is ${own} — upgrade with \`${UPGRADE_COMMAND}\`.`;
 }
 
 /**
@@ -84,7 +84,7 @@ async function publishedVersionTag(
 
 /**
  * The one warning a Run prints about the conventions document in `repoRoot`,
- * and nothing where the document is this Version's own.
+ * and nothing where the document is this version's own.
  *
  * Worded for whichever side is behind, because only one of them can be put
  * right from here: a document an older pipeline left is `init`'s to rewrite,

@@ -29,7 +29,7 @@ const ALL_LABELS = [
   "in-progress",
 ];
 
-/** The Version this Run is, as the CLI resolves it once and hands it down. */
+/** The version this Run is, as the CLI resolves it once and hands it down. */
 const VERSION = "0.4.0+331d79c";
 
 const PASSING_VERDICT = {
@@ -124,7 +124,7 @@ describe("a Target init has not set up", () => {
     expect(err).toContain(".worktrees/");
     expect(err).toContain("ticket-runner init");
     expect(lockTaken()).toBe(false);
-    // No Candidate read, and nothing written on GitHub either.
+    // No candidate read, and nothing written on GitHub either.
     expect(tracker.calls).toEqual([]);
   });
 
@@ -165,14 +165,14 @@ describe("a Target init has not set up", () => {
     expect(tracker.calls).toEqual([]);
   });
 
-  it("refuses a conventions document carrying no Version stamp", async () => {
+  it("refuses a conventions document carrying no version stamp", async () => {
     write(CONVENTIONS_PATH, "# ticket-runner conventions\n\nFrom an older pipeline.\n");
 
     const { code, err } = await start();
 
     expect(code).toBe(2);
     expect(err).toContain(CONVENTIONS_PATH);
-    expect(err).toContain("no Version");
+    expect(err).toContain("no version");
     expect(err).toContain("ticket-runner init");
     expect(lockTaken()).toBe(false);
     expect(tracker.calls).toEqual([]);
@@ -269,7 +269,7 @@ describe("a Target init has not set up", () => {
     expect(tracker.calls).toContain("listCandidates:ready-for-agent");
   });
 
-  it("refuses the document's absence, and never what Version wrote it", async () => {
+  it("refuses the document's absence, and never what version wrote it", async () => {
     write(CONVENTIONS_PATH, conventionsDoc("0.9.0"));
     tracker.addIssue({ number: 4 });
 
@@ -344,14 +344,14 @@ describe("a Target whose remote lacks what init wrote", () => {
     expect(lockTaken()).toBe(false);
   });
 
-  it("refuses a remote whose conventions document carries no Version stamp", async () => {
+  it("refuses a remote whose conventions document carries no version stamp", async () => {
     workspace.pushFile("main", CONVENTIONS_PATH, "# Pipeline conventions\n");
 
     const { code, err } = await start();
 
     expect(code).toBe(2);
     expect(err).toContain(CONVENTIONS_PATH);
-    expect(err).toContain("carries no Version");
+    expect(err).toContain("carries no version");
     expect(lockTaken()).toBe(false);
   });
 
@@ -396,7 +396,7 @@ describe("a Target whose remote lacks what init wrote", () => {
     expect(lockTaken()).toBe(true);
   });
 
-  it("refuses a remote without the Base branch at all as missing the items", async () => {
+  it("refuses a remote without the base branch at all as missing the items", async () => {
     tracker.defaultBranchName = "master";
 
     const { code, err } = await start();
@@ -407,7 +407,7 @@ describe("a Target whose remote lacks what init wrote", () => {
     expect(lockTaken()).toBe(false);
   });
 
-  it("asks the Base branch the config file names, and works against it", async () => {
+  it("asks the base branch the config file names, and works against it", async () => {
     write(CONFIG_FILENAME, JSON.stringify({ baseBranch: "release" }));
     workspace.remoteFiles.clear();
     pushInitFiles("release");
@@ -419,7 +419,7 @@ describe("a Target whose remote lacks what init wrote", () => {
     expect(workspace.branchedFrom).toEqual(["release"]);
   });
 
-  it("resolves the Base branch once, and readiness and the Run use the same one", async () => {
+  it("resolves the base branch once, and readiness and the Run use the same one", async () => {
     tracker.defaultBranchName = "master";
     workspace.remoteFiles.clear();
     pushInitFiles("master");
@@ -434,10 +434,10 @@ describe("a Target whose remote lacks what init wrote", () => {
 });
 
 /**
- * A Target an earlier pipeline left State files in, under the run directory:
+ * A Target an earlier pipeline left state files in, under the run directory:
  * resume state lives on the remote now, and nothing migrates them (ADR-0004).
  */
-describe("a Target with State files left in its checkout", () => {
+describe("a Target with state files left in its checkout", () => {
   it("refuses to start, naming the Tickets they belong to, and takes nothing", async () => {
     write(".ticket-runner/state/ticket-9.json", "{}");
     write(".ticket-runner/state/ticket-4.json", "{}");
@@ -463,7 +463,7 @@ describe("a Target with State files left in its checkout", () => {
     expect(lockTaken()).toBe(false);
   });
 
-  it("starts as usual once the directory holds no Ticket's State", async () => {
+  it("starts as usual once the directory holds no Ticket's state", async () => {
     write(".ticket-runner/state/notes.txt", "a human's note");
     tracker.addIssue({ number: 6 });
 
@@ -611,7 +611,7 @@ describe("the exit code", () => {
   });
 });
 
-describe("the credential a Run's Stages run on", () => {
+describe("what a Run's Stages are billed to", () => {
   /** A Host that exports a key, as a shell with one in its profile does. */
   const KEYED = { ANTHROPIC_API_KEY: "sk-ant-host-key" };
 
@@ -677,7 +677,7 @@ describe("the credential a Run's Stages run on", () => {
     expect(tracker.calls).toEqual([]);
   });
 
-  it("names a Stage that ran on another credential in the log and the summary", async () => {
+  it("names a Stage billed to something else in the log and the summary", async () => {
     tracker.addIssue({ number: 4 });
     runner.queue("implement", { apiKeySource: "apiKeyHelper", costUsd: 4.15 });
 
@@ -814,7 +814,7 @@ describe("the Run lock", () => {
   });
 });
 
-describe("the Version a Run ran", () => {
+describe("the version a Run ran", () => {
   /** What the file beside this Run's transcripts says, if it is there at all. */
   function recorded(): string | undefined {
     const path = join(repoRoot, ".ticket-runner", "runs", "run-1", "version.txt");
@@ -851,7 +851,7 @@ describe("the Version a Run ran", () => {
     );
   });
 
-  it("is the same string the Progress comment on its Ticket carries", async () => {
+  it("is the same string the progress comment on its Ticket carries", async () => {
     tracker.addIssue({ number: 4 });
 
     await start();
@@ -910,7 +910,7 @@ describe("the Run log", () => {
     // Split on newlines as well: an entry a Stage logs in two lines is two
     // lines in the transcript, and the second one has to carry the number too.
     const ticketLines = lines.slice(1, -1).flatMap((entry) => entry.split("\n"));
-    // Claimed, verified and merged for each of #4 and #7, and the guard's line
+    // claimed, verified and merged for each of #4 and #7, and the guard's line
     // for #9. Counted rather than bounded, so a new Ticket line has to be
     // looked at here rather than slipping past an inequality.
     expect(ticketLines).toHaveLength(7);
@@ -1005,8 +1005,8 @@ describe("a Run a human stopped", () => {
   });
 });
 
-describe("what a Run says about another Version", () => {
-  it("names both Versions at the top of the log and at the head of the summary", async () => {
+describe("what a Run says about another version", () => {
+  it("names both versions at the top of the log and at the head of the summary", async () => {
     tracker.publishedVersionTag = "v0.5.0";
     tracker.addIssue({ number: 4 });
 
@@ -1030,13 +1030,13 @@ describe("what a Run says about another Version", () => {
     expect(lines[1]).toContain("0.5.0");
   });
 
-  it("says nothing where this Run is the latest Version", async () => {
+  it("says nothing where this Run is the latest version", async () => {
     tracker.publishedVersionTag = "v0.4.0";
     tracker.addIssue({ number: 4 });
 
     const { out, code } = await start({ command: "run" }, undefined, REPOSITORY);
 
-    expect(out).not.toContain("A newer Version");
+    expect(out).not.toContain("A newer version");
     expect(code).toBe(0);
   });
 
@@ -1046,7 +1046,7 @@ describe("what a Run says about another Version", () => {
 
     const { out, code } = await start({ command: "run" }, undefined, REPOSITORY);
 
-    expect(out).not.toContain("A newer Version");
+    expect(out).not.toContain("A newer version");
     expect(out).toContain("merged   #4");
     expect(code).toBe(0);
   });
@@ -1058,7 +1058,7 @@ describe("what a Run says about another Version", () => {
     const { out } = await start();
 
     expect(tracker.versionTagLookups).toEqual([]);
-    expect(out).not.toContain("A newer Version");
+    expect(out).not.toContain("A newer version");
   });
 });
 
@@ -1139,7 +1139,7 @@ describe("what a Run tells its Stages about the checkout they stand in", () => {
 });
 
 describe("what a Run says about the Target's conventions document", () => {
-  it("says nothing about a document its own Version wrote", async () => {
+  it("says nothing about a document its own version wrote", async () => {
     tracker.addIssue({ number: 4 });
 
     const { err } = await start();

@@ -17,7 +17,7 @@ Claude login, or `API key`, the `ANTHROPIC_API_KEY` the Host exports, for a Run
 started with `--api-key`. A subscription Run starts its Stages without that
 key, whatever the Host exports.
 
-An `--api-key` Run follows `API key` with its Spend, in dollars to two
+An `--api-key` Run follows `API key` with its spend, in dollars to two
 decimals: for each Stage that ran on the Run's own key, the `total_cost_usd` of
 its last `result` event, added up. A Stage that woke for background agents
 repeats the session's figure on every waking, so it counts once. A Run that ran
@@ -38,26 +38,26 @@ extra usage, the header says so, still with no amount:
 ticket-runner <version> run <runId> · <duration> · subscription · extra usage
 
 Beyond the header and the `billed` rows below, no amount is printed: not per
-Ticket, not in the Run's log, and not in the Progress comment.
+Ticket, not in the Run's log, and not in the progress comment.
 
-`<version>` is the Version the Run ran (ADR-0007): the number alone from an
+`<version>` is the version the Run ran (ADR-0007): the number alone from an
 installed copy, and the number, the commit and a `dirty` mark from a development
 checkout — `0.4.0`, `0.4.0+331d79c`, `0.4.0+331d79c.dirty`. Every stamp of one
 Run says the same thing, and `.ticket-runner/runs/<runId>/version.txt` says it
 again beside the transcripts.
 
-A Run whose Version is below the highest one published on GitHub gains a line
+A Run whose version is below the highest one published on GitHub gains a line
 above that header, which is also the first thing it logged hours earlier:
 
-A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g ticket-runner`.
+A newer version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g ticket-runner`.
 ticket-runner <version> run <runId> · <duration> · <credential>
 
   merged   #3 Run: drain the Frontier (PR #12)
 
 Frontier empty.
 
-Nothing is printed where this copy is the latest Version, where it is above it —
-a development checkout runs a commit past the Version it reports, and is
+Nothing is printed where this copy is the latest version, where it is above it —
+a development checkout runs a commit past the version it reports, and is
 compared by number only — or where GitHub could not be asked at all. No answer
 is an answer, and none of them stops a Run.
 
@@ -67,8 +67,8 @@ Tickets in flight at once, and each takes as long as its own Stages take.
 
 `released` is a Ticket the rate limit or a transient API failure stopped
 mid-flight — an API error with a 5xx status or none, after the CLI had given up
-retrying it — or the API key running out of budget: its Claim was undone, and
-the State file it has been keeping since it was claimed says where the next Run resumes it from. Nobody has to do anything about it, which is
+retrying it — or the API key running out of budget: its claim was undone, and
+the state file it has been keeping since it was claimed says where the next Run resumes it from. Nobody has to do anything about it, which is
 why it is not `handed`. It stops the Run filling Lanes, so no Ticket is claimed
 after it; the Lanes still busy finish what they hold, and whatever they end as
 has its row after the `released` one:
@@ -114,16 +114,16 @@ its own last line in place of `API failure.`, with the reset time where a Stage
 was told one, because that is the line that says when the next Run can start.
 Each `released` row keeps its own cause.
 
-A Ticket whose failing Check or red CI the Base branch fails too is released
-the same way, its Fix budget as it was: the pipeline ran the Check commands at
-the branch's merge-base with the Base branch, and one of them failed there. Its
-row says so in place of the rate limit, and the last line names the Base
+A Ticket whose failing Check or red CI the base branch fails too is released
+the same way, its fix budget as it was: the pipeline ran the Check commands at
+the branch's merge-base with the base branch, and one of them failed there. Its
+row says so in place of the rate limit, and the last line names the base
 branch, the command and the merge-base, shortened to seven characters. The Note
 the pipeline posted about it on the standing Notes issue follows the row, as a
 Stage's Note does, from the `pipeline`:
 
-  released #6 Rebase conflict resolution · failing Base branch at checks
-  noted    #31 comment · from #6 pipeline · The Base branch `main` fails `npm test`.
+  released #6 Rebase conflict resolution · failing base branch at checks
+  noted    #31 comment · from #6 pipeline · The base branch `main` fails `npm test`.
 
 Base branch `main` fails `npm test` at 1a2b3c4.
 
@@ -135,7 +135,7 @@ the Run that took it.
 blocker held back all Run, and otherwise the guard reason that kept it from
 being claimed — `spec`, `no-criteria` or `body-only-blockers` for Planning a
 guard rejected, `claimed` or `not-ready` for an issue that is nobody's to take.
-A stranded Ticket is not one of those: it wears this checkout's own Claim, so it
+A stranded Ticket is not one of those: it wears this checkout's own claim, so it
 is resumed rather than `skipped` as `claimed`.
 
 A Run given Ticket numbers, `ticket-runner run 12 13 57 99`, has a row for every
@@ -161,7 +161,7 @@ once that Ticket merges. The Tickets it was not given have no row at all: the
 Run left them as it found them.
 
 `noted` is a Note a Stage made, or the one the pipeline makes about a failing
-Base branch, and follows the row of the Ticket whose Stage, or whose Release,
+base branch, and follows the row of the Ticket whose Stage, or whose Release,
 made it. Its number is where the Note went, not where it came from: `comment`
 for a Note that reached an issue already there — the Ticket it named, or a
 standing Notes issue already open — and `new` for the one Note of a Run that
@@ -180,8 +180,8 @@ stands, except that out of API budget outranks the rate limit and an API
 failure, and the rate limit outranks an API failure.
 
 `billed` is a Stage whose `system/init` event named another `apiKeySource` than
-the Run's credential: anything but `none` on a subscription Run, anything but
-`ANTHROPIC_API_KEY` on an `--api-key` Run. It follows its Ticket's rows, and the
+the subscription or API key the Run's Stages are billed to: anything but `none`
+on a subscription Run, anything but `ANTHROPIC_API_KEY` on an `--api-key` Run. It follows its Ticket's rows, and the
 Run's log named it when the Stage came back. A key an `apiKeyHelper` in the
 Host's settings supplies is one, which no environment variable removes. The
 row ends with that Stage's own amount where it reported one, on a subscription
