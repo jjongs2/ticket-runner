@@ -19,33 +19,115 @@ import type { Verdict } from "./verdict.js";
 /** {@link UNCHECKED_BOX}, extended to capture the criterion text after the box. */
 const CHECKBOX_LINE = new RegExp(`${UNCHECKED_BOX}( .*)$`, "gm");
 
+/** {@link TICKED_BOX}, likewise: a line whose criterion is written, though not open. */
+const TICKED_CHECKBOX_LINE = new RegExp(`${TICKED_BOX}( .*)$`, "gm");
+
 /** {@link TICKED_BOX}, over every line of a text rather than the first. */
 const TICKED_LINE = new RegExp(TICKED_BOX, "gm");
+
+/** One parenthetical closing a criterion, with the space before it. */
+const TRAILING_PARENTHETICAL = /\s*\([^()]*\)$/;
+
+/** Where the verify Stage cut a passage, with any space around the cut. */
+const ELLIPSIS = /\s*(?:\.\.\.|…)\s*/;
 
 /**
  * The same criterion as the verify Stage reported it.
  *
  * The Stage is asked for the criterion verbatim and mostly obliges, but it
  * reflows and recases often enough that an exact match would leave half a
- * Ticket unticked. Whitespace and case are the differences worth forgiving;
- * anything more and the risk is ticking a box nobody graded.
+ * Ticket unticked. Whitespace and case are the differences worth forgiving on
+ * every criterion; anything more and the risk is ticking a box nobody graded.
+ *
+ * A criterion that matches no checkbox even so gets {@link secondChance}, which
+ * forgives the two other ways the Stage was seen to depart from a line: a note
+ * appended in parentheses, and passages cut to `...` or `…`. Those are looser than a
+ * criterion's whole text, so they tick a line only when they pick out one.
  */
 function normalise(text: string): string {
   return text.trim().replaceAll(/\s+/g, " ").toLowerCase();
 }
 
 /**
- * `text` with every unticked box whose criterion is in `met` ticked.
+ * A pattern for the lines a {@link normalise}d criterion could have been read
+ * from: as it stands, or with one trailing parenthetical dropped, and in either
+ * with each `...` or `…` read as any run of characters.
  *
- * Returns the text unchanged when nothing matched, which is how the caller
- * knows there is nothing to write back.
+ * The verify Stage appends a note such as `(table)` to a criterion that ends in
+ * a colon and puts its content in a block below it, and cuts passages of a long
+ * criterion to an ellipsis. Both are seen in the Stage's own output, and nothing
+ * else is forgiven here. A form with no text of its own left would match any
+ * line, so it is not offered.
+ *
+ * `undefined` when no form is left.
  */
-export function tickCriteria(text: string, met: string[]): string {
-  const wanted = new Set(met.map(normalise));
-  if (wanted.size === 0) return text;
+function secondChance(criterion: string): RegExp | undefined {
+  const dropped = criterion.replace(TRAILING_PARENTHETICAL, "");
+  const forms = [...new Set([criterion, dropped])]
+    .map((form) => form.split(ELLIPSIS))
+    .filter((passages) => passages.some((passage) => passage !== ""))
+    .map((passages) => passages.map(escapeRegExp).join(".*"));
+  if (forms.length === 0) return undefined;
+  return new RegExp(`^(?:${forms.join("|")})$`);
+}
 
-  return text.replaceAll(CHECKBOX_LINE, (line, bullet: string, rest: string) =>
-    wanted.has(normalise(rest)) ? `${bullet}[x]${rest}` : line,
+function escapeRegExp(text: string): string {
+  return text.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+}
+
+/**
+ * `texts` with every unticked box whose criterion is in `met` ticked, the texts
+ * being every place one Ticket writes its criteria: its body and its comments.
+ *
+ * A criterion ticks every line it matches exactly, after {@link normalise}. One
+ * that matches no checkbox line in any of the texts, ticked or not, is then
+ * offered its {@link secondChance} against the lines still unticked, all the
+ * texts' together, and ticks a line only when exactly one matches. Two lines
+ * that fit equally well are a guess, and a wrong tick claims a criterion was
+ * graded that never was; an unticked one only says the match failed.
+ *
+ * Returns each text unchanged when nothing in it matched, which is how the
+ * caller knows there is nothing to write back.
+ */
+export function tickCriteria(texts: readonly string[], met: readonly string[]): string[] {
+  const wanted = new Set(met.map(normalise));
+  if (wanted.size === 0) return [...texts];
+
+  const exact = texts.map((text) =>
+    text.replaceAll(CHECKBOX_LINE, (line, bullet: string, rest: string) =>
+      wanted.has(normalise(rest)) ? `${bullet}[x]${rest}` : line,
+    ),
+  );
+
+  const written = new Set(
+    texts.flatMap((text) =>
+      [CHECKBOX_LINE, TICKED_CHECKBOX_LINE].flatMap((pattern) =>
+        [...text.matchAll(pattern)].map(([, , rest = ""]) => normalise(rest)),
+      ),
+    ),
+  );
+  const missed = [...wanted].filter((criterion) => !written.has(criterion));
+  if (missed.length === 0) return exact;
+
+  const open = exact.flatMap((text, place) =>
+    [...text.matchAll(CHECKBOX_LINE)].map(({ index, 2: rest = "" }) => ({
+      key: `${place}:${index}`,
+      text: normalise(rest),
+    })),
+  );
+  const chosen = new Set<string>();
+  for (const criterion of missed) {
+    const pattern = secondChance(criterion);
+    if (pattern === undefined) continue;
+    const matches = open.filter((line) => pattern.test(line.text));
+    if (matches.length === 1 && matches[0] !== undefined) chosen.add(matches[0].key);
+  }
+  if (chosen.size === 0) return exact;
+
+  return exact.map((text, place) =>
+    text.replaceAll(CHECKBOX_LINE, (line, bullet: string, rest: string, index: number) =>
+      chosen.has(`${place}:${index}`) ? `${bullet}[x]${rest}` : line,
+    ),
   );
 }
 
@@ -57,7 +139,10 @@ export function tickCriteria(text: string, met: string[]): string {
  * back whole. Triage posts its brief as a comment, and nothing says all the
  * criteria are in one place, so every comment is offered the same edit.
  *
- * A criterion the Stage reworded past {@link normalise} matches nothing and is
+ * The body and the comments are matched together, because a criterion's second
+ * chance must pick out one line on the whole Ticket, not one in each place.
+ *
+ * A criterion the Stage reworded past both chances matches nothing and is
  * left as it was, which is said out loud rather than passed over in silence: a
  * merged Ticket with an unticked criterion is otherwise a mystery.
  */
@@ -73,16 +158,19 @@ export async function tickMetCriteria(
   if (met.length === 0) return;
 
   const issue = await tracker.getIssue(ticket);
+  const [body = issue.body, ...comments] = tickCriteria(
+    [issue.body, ...issue.comments.map((comment) => comment.body)],
+    met,
+  );
   let ticked = 0;
 
-  const body = tickCriteria(issue.body, met);
   if (body !== issue.body) {
     await tracker.updateIssueBody(ticket, body);
     ticked += ticks(issue.body, body);
   }
 
-  for (const comment of issue.comments) {
-    const edited = tickCriteria(comment.body, met);
+  for (const [place, comment] of issue.comments.entries()) {
+    const edited = comments[place] ?? comment.body;
     if (edited === comment.body || comment.id === undefined) continue;
     await tracker.updateComment(comment.id, edited);
     ticked += ticks(comment.body, edited);

@@ -80,7 +80,7 @@ describe("the shape the guard, the ticker, the tick count and the Note escaper s
   });
 
   it.each(CRITERIA)("is ticked by the merge in %j", (text) => {
-    expect(tickCriteria(text, ["it works"])).toContain("[x] it works");
+    expect(tickCriteria([text], ["it works"])).toEqual([expect.stringContaining("[x] it works")]);
   });
 
   it.each(CRITERIA)("is counted as ticked by the merge in %j", async (text) => {
@@ -97,7 +97,7 @@ describe("the shape the guard, the ticker, the tick count and the Note escaper s
 
   it.each(NOT_CRITERIA)("is not read into %j by the guard, the ticker or a Note", (text) => {
     expect(guardCountsCriteria(text)).toBe(false);
-    expect(tickCriteria(text, ["it works"])).toBe(text);
+    expect(tickCriteria([text], ["it works"])).toEqual([text]);
     expect(posted(text)).toContain(text);
   });
 });

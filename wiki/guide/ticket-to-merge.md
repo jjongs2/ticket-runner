@@ -310,7 +310,7 @@ The Ticket is merged, so nothing below can hand it off. Each step's failure is l
 
 Rows carry a few words only. Anything a human has to act on is its own comment, since those are worth a notification: a hand-off, a guard warning, a Note.
 
-**Ticking met criteria.** After the merge, every criterion the Verdict marked `met` is ticked (`- [ ]` → `- [x]`) wherever it is written: the body, or any comment, such as the one triage posted its brief in. Matching forgives differences in whitespace and case only. An `unverifiable` criterion stays unticked, because nobody gathered evidence for it. A criterion the Stage reworded past matching is left unticked, and the Run log says how many were not matched.
+**Ticking met criteria.** After the merge, every criterion the Verdict marked `met` is ticked (`- [ ]` → `- [x]`) wherever it is written: the body, or any comment, such as the one triage posted its brief in. Matching forgives differences in whitespace and case. A criterion that matches no checkbox even so, ticked or not, gets a second chance: with one trailing parenthetical dropped, such as the `(table)` the verify Stage appends to a criterion whose content sits in a block below it, and with each `...` or `…` read as any run of characters. That looser match is tried against the lines the first pass left unticked, across the body and every comment together, and ticks a line only when exactly one matches; with none or more than one, the criterion stays unticked. An `unverifiable` criterion stays unticked, because nobody gathered evidence for it. A criterion the Stage reworded past matching is left unticked, and the Run log says how many were not matched.
 
 ## Notes
 
