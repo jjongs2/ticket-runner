@@ -378,9 +378,11 @@ async function route(routing: NoteRouting, note: Note): Promise<RoutedNote> {
         return { origin, stage, issue: ticket, opened: false, summary: text.summary };
       }
     } catch (error) {
+      // The message last, as every other event logs one, so what a failed
+      // command printed follows the line it is printed under.
       routing.log?.(
-        `#${origin} could not comment its Note on #${ticket} ` +
-          `(${(error as Error).message}); sending it to triage instead`,
+        `#${origin} could not comment its Note on #${ticket}, sending it to triage instead: ` +
+          (error as Error).message,
       );
       return await sendToTriage(routing, { ...from, intended: ticket });
     }
