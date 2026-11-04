@@ -1,15 +1,21 @@
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { defineConfig, type DefaultTheme } from "vitepress";
 import { withMermaid } from "vitepress-plugin-mermaid";
+import { alternates, neutralPaths, neutralStub } from "./languages";
 import { fonts, mermaidTheme, paletteCss } from "./palette";
 
 const repo = "https://github.com/jjongs2/ticket-runner";
 const editPattern = `${repo}/edit/main/wiki/:path`;
 const glossary = `${repo}/blob/main/GLOSSARY.md`;
+const origin = "https://jjongs2.github.io";
+const base = "/ticket-runner/";
 
 type Page = { link: string; en: string; ko: string };
 type Section = { en: string; ko: string; pages: Page[] };
 
-// One list drives both sidebars, so a page added to one locale is added to the other.
+// One list drives both sidebars and the neutral URLs, so a page added to one locale is
+// added to the other, and has a neutral URL that opens it in the reader's language.
 const sections: Section[] = [
   {
     en: "Using it",
@@ -33,18 +39,29 @@ const sections: Section[] = [
 ];
 
 function sidebar(lang: "en" | "ko"): DefaultTheme.SidebarItem[] {
-  const prefix = lang === "ko" ? "/ko" : "";
   return sections.map((s) => ({
     text: s[lang],
     collapsed: false,
-    items: s.pages.map((p) => ({ text: p[lang], link: prefix + p.link })),
+    items: s.pages.map((p) => ({ text: p[lang], link: `/${lang}${p.link}` })),
   }));
+}
+
+// A neutral URL is a static stub, not a page of the site, so the build writes one beside
+// the pages for the home and every page of the list: `guide/running.html` is served at
+// both `/guide/running` and `/guide/running.html`.
+function writeNeutralStubs(outDir: string) {
+  for (const path of neutralPaths(sections)) {
+    const file = join(outDir, path === "" ? "index.html" : `${path}.html`);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, neutralStub(base, path));
+  }
 }
 
 export default withMermaid(
   defineConfig({
     title: "ticket-runner",
-    base: "/ticket-runner/",
+    lang: "en",
+    base,
     cleanUrls: true,
     lastUpdated: true,
     appearance: "dark",
@@ -54,23 +71,32 @@ export default withMermaid(
       ["link", { rel: "stylesheet", href: fonts.stylesheet }],
       ["style", {}, paletteCss],
     ],
+    transformHead: ({ pageData }) => alternates(origin, base, pageData.relativePath),
+    buildEnd: ({ outDir }) => writeNeutralStubs(outDir),
     themeConfig: {
       search: { provider: "local" },
       socialLinks: [{ icon: "github", link: repo }],
       editLink: { pattern: editPattern },
+      // The 404 belongs to neither language, and its title link would otherwise be the
+      // neutral home. The theme takes logoLink as written, so it carries the base.
+      logoLink: `${base}en/`,
     },
+    // No root locale: every page is under /en/ or /ko/, and a path without a prefix is a
+    // neutral URL's stub or the 404.
     locales: {
-      root: {
+      en: {
         label: "English",
         lang: "en",
+        link: "/en/",
         description: "How ticket-runner carries a Ticket from the board to a merge while nobody watches.",
         themeConfig: {
           nav: [
-            { text: "Guide", link: "/guide/installation" },
+            { text: "Guide", link: "/en/guide/installation" },
             { text: "Glossary", link: glossary },
           ],
           sidebar: sidebar("en"),
           outline: { level: [2, 3] },
+          logoLink: `${base}en/`,
         },
       },
       ko: {
@@ -84,6 +110,7 @@ export default withMermaid(
             { text: "용어집", link: glossary },
           ],
           sidebar: sidebar("ko"),
+          logoLink: `${base}ko/`,
           outline: { level: [2, 3], label: "이 페이지에서" },
           docFooter: { prev: "이전", next: "다음" },
           lastUpdated: { text: "마지막 수정" },
