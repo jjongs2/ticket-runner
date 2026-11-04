@@ -6,15 +6,19 @@
  * `throwOnFailure` in `adapters/exec.ts` builds it so, and nothing about how
  * it is built changes here. What changes is how it is shown. Wherever one line
  * is expected — a hand-off's `Failure:` line, a draft pull request's opening,
- * a Run summary's row, a console log line — the first line goes, and the
- * output goes where the whole of it can be read. No line of the output is
- * picked as the reason: a rule that picked one would name the wrong cause on
- * an output nobody has seen yet, and the output is never dropped.
+ * a Run summary's row, a console log line — the command and how it exited
+ * go, as one line, and the output goes where the whole of it can be read. No
+ * line of the output is picked as the reason: a rule that picked one would
+ * name the wrong cause on an output nobody has seen yet, and the output is
+ * never dropped.
  */
 
 /** A message's one line, and the output that followed it. */
 export interface SplitMessage {
-  /** The first line that says anything: the command and how it exited. */
+  /**
+   * The command and how it exited, from the first line that says anything,
+   * with the lines of an argument that ran over several elided.
+   */
   line: string;
   /** Everything after it, trimmed; empty when the message is one line. */
   output: string;
@@ -24,13 +28,37 @@ export function splitMessage(message: string): SplitMessage {
   const lines = message.split("\n");
   const first = lines.findIndex((line) => line.trim() !== "");
   if (first === -1) return { line: "", output: "" };
+  const last = commandEnd(lines, first);
+  // A command whose arguments ran over several lines — a pull request's body,
+  // a comment's — is given by its first line and its last, which closes it
+  // and says how it exited. The lines between are what the pipeline itself
+  // wrote, not what the command printed, so they are neither line nor output.
+  const line =
+    last === first ? lines[first]!.trim() : `${lines[first]!.trim()} … ${lines[last]!.trim()}`;
   return {
-    line: lines[first]!.trim(),
+    line,
     output: lines
-      .slice(first + 1)
+      .slice(last + 1)
       .join("\n")
       .trim(),
   };
+}
+
+/** The end of a quoted command and how it exited: `` …` exited 1 ``. */
+const EXITED = /` exited -?\d+$/;
+
+/**
+ * The line a message's command ends on: its first, unless that line opens a
+ * quoted command it does not close and a later line closes it with how it
+ * exited. `throwOnFailure` joins the arguments as they are, so an argument
+ * with a newline in it carries the command onto the lines after.
+ */
+function commandEnd(lines: string[], first: number): number {
+  const opening = lines[first]!.trim();
+  const opensCommand = (opening.match(/`/g) ?? []).length % 2 === 1;
+  if (!opensCommand || EXITED.test(opening)) return first;
+  const end = lines.findIndex((line, index) => index > first && EXITED.test(line.trim()));
+  return end === -1 ? first : end;
 }
 
 /**

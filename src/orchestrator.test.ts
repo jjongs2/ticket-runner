@@ -840,6 +840,28 @@ describe("rebase", () => {
     expect(draft.body).toContain(evidence);
   });
 
+  it("gives a GitHub call whose arguments ran over several lines one line, and only its output as evidence", async () => {
+    // The message `throwOnFailure` builds for the `gh api` call a squash merge
+    // makes: the commit message is an argument with newlines in it.
+    const output = "HTTP 502: Bad Gateway (https://api.github.com/repos/o/r/pulls/100/merge)";
+    const command =
+      "`gh api --method PUT repos/{owner}/{repo}/pulls/100/merge -f merge_method=squash " +
+      "-f commit_title=feat: x (#100) -f commit_message=Closes #1";
+    tracker.squashMerge = async () => {
+      throw new Error(`${command}\n\nWhat it does.\n\nCo-Authored-By: someone\` exited 1\n${output}`);
+    };
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "merge" });
+    const line = `${command} … Co-Authored-By: someone\` exited 1`;
+    expect(handoffBody()).toContain(`- Failure: ${line}\n- Branch`);
+    expect(handoffBody()).toContain(
+      ["<details><summary>Evidence</summary>", "", "```", output, "```"].join("\n"),
+    );
+    expect(handoffBody()).not.toContain("What it does.");
+  });
+
   it("sends no conflict Stage in when the branch rebases cleanly", async () => {
     await run();
 

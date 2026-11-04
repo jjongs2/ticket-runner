@@ -54,6 +54,25 @@ const SSH_OUTPUT = [
 /** The message that reached the hand-off, whole. */
 const UNEXPECTED = `${PULL_FAILED}\n${SSH_OUTPUT}`;
 
+/**
+ * A `gh api` call that opens a pull request and fails, as `throwOnFailure`
+ * builds its message: the body is an argument with newlines in it, so the
+ * command runs over several lines before it says how it exited.
+ */
+const GH_UNEXPECTED = [
+  "`gh api --method POST repos/{owner}/{repo}/pulls -f base=main -f head=agent/5-x -f title=feat: x -f body=Closes #5",
+  "",
+  "What it does.",
+  " -F draft=false` exited 1",
+  "HTTP 502: Bad Gateway",
+].join("\n");
+/** The one line it is shown as: the command's first line and its last. */
+const GH_FAILED =
+  "`gh api --method POST repos/{owner}/{repo}/pulls -f base=main -f head=agent/5-x " +
+  "-f title=feat: x -f body=Closes #5 … -F draft=false` exited 1";
+/** Its Evidence block: what `gh` printed, and nothing of the body. */
+const GH_EVIDENCE = ["<details><summary>Evidence</summary>", "", "```", "HTTP 502: Bad Gateway", "```"].join("\n");
+
 /** The fenced Evidence block a hand-off and its draft pull request both carry. */
 const SSH_EVIDENCE = ["<details><summary>Evidence</summary>", "", "```", SSH_OUTPUT, "```"].join("\n");
 
@@ -139,6 +158,14 @@ describe("draftPullRequestBody", () => {
 
     expect(body).toContain(`**Handed off at rebase.** ${PULL_FAILED}\n\n`);
     expect(body).toContain(SSH_EVIDENCE);
+  });
+
+  it("opens a GitHub failure whose arguments ran over several lines with one line", () => {
+    const body = draftPullRequestBody({ ...base, stage: "pr", failure: GH_UNEXPECTED });
+
+    expect(body).toContain(`**Handed off at pr.** ${GH_FAILED}\n\n`);
+    expect(body).toContain(GH_EVIDENCE);
+    expect(body).not.toContain("What it does.");
   });
 
   it("shows no evidence for a failure the pipeline gave one line", () => {
@@ -279,6 +306,14 @@ describe("handoffComment", () => {
 
     expect(comment).toContain(`- Failure: ${PULL_FAILED}\n- Branch`);
     expect(comment).toContain(SSH_EVIDENCE);
+  });
+
+  it("gives a GitHub failure whose arguments ran over several lines one line", () => {
+    const comment = handoffComment({ ...base, stage: "pr", failure: GH_UNEXPECTED, evidence: "" });
+
+    expect(comment).toContain(`- Failure: ${GH_FAILED}\n- Branch`);
+    expect(comment).toContain(GH_EVIDENCE);
+    expect(comment).not.toContain("What it does.");
   });
 
   it("says so when the Ticket had already spent its fix budget", () => {
@@ -499,6 +534,20 @@ describe("runSummary", () => {
 
     expect(summary).toContain(`  handed   #5 Fix Stage with a single retry · rebase · ${PULL_FAILED}\n`);
     expect(summary).not.toContain("Permission denied");
+  });
+
+  it("gives a GitHub failure whose arguments ran over several lines one line", () => {
+    const summary = runSummary({
+      credential: "subscription",
+      version: VERSION,
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [{ ...handed, stage: "pr", failure: GH_UNEXPECTED }],
+      stop: { reason: "frontier", blocked: [] },
+    });
+
+    expect(summary).toContain(`  handed   #5 Fix Stage with a single retry · pr · ${GH_FAILED}\n`);
+    expect(summary).not.toContain("Bad Gateway");
   });
 
   it("says where the rate limit landed on a released Ticket", () => {
