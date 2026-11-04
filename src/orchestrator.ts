@@ -920,8 +920,8 @@ async function passOver(
  * config names. Everything a Stage differs in is the prompt, where it runs and
  * where it logs; the limits come from one place so no Stage can quietly skip them.
  *
- * The credential is the Run's too, and what the Stage says it actually ran on
- * is checked here for the same reason: a Stage billed somewhere the Run did not
+ * What the Stages are billed to is the Run's too, and what the Stage says it
+ * actually ran on is checked here for the same reason: a Stage billed somewhere the Run did not
  * choose is named whichever Stage it was.
  */
 async function runStage(
@@ -959,8 +959,8 @@ async function runStage(
 
 /**
  * Add a Stage to what the Run was billed, and name it in the log now when its
- * `system/init` event reported another `apiKeySource` than the Run's credential
- * expects; the summary names it again at the end. A Stage that reported none,
+ * `system/init` event reported another `apiKeySource` than the Run's
+ * subscription or API key expects; the summary names it again at the end. A Stage that reported none,
  * one that never started, is not named: there is nothing it said to set
  * against the Run's choice. The log line carries no amount: the summary is the
  * only place one is printed.

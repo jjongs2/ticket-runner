@@ -263,7 +263,7 @@ describe("the command line", () => {
   });
 });
 
-describe("the credential a Stage runs on", () => {
+describe("what a Stage is billed to", () => {
   /** What a Host with a key in its profile exports. */
   const KEY = "sk-ant-api03-host-key-value";
 

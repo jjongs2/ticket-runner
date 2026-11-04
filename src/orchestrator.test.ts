@@ -126,7 +126,7 @@ const repoRoot = "/repo";
 let worktree: string;
 /** The Run log, for the lines a Ticket is expected to print — or not to. */
 let logged: string[];
-/** The Stages the Run named for running on another credential than its own. */
+/** The Stages the Run named for being billed to something other than its own. */
 let billing: Billing;
 
 beforeEach(() => {
@@ -2274,7 +2274,7 @@ describe("the rate limit of a Run on the API key", () => {
   });
 });
 
-describe("a Stage that ran on another credential than its Run's", () => {
+describe("a Stage billed to something other than its Run's subscription or API key", () => {
   it("is named in the log and kept for the summary", async () => {
     runner.queue("verify", stageResult({ result: PASSING_VERDICT, apiKeySource: "apiKeyHelper" }));
 

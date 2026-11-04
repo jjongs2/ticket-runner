@@ -430,7 +430,7 @@ function isInitEvent(event: unknown): event is InitEvent {
 
 /**
  * What the session said it was billed to: the first init event's word on it.
- * A waking for a background agent is the same session on the same credential.
+ * A waking for a background agent is the same session, billed to the same.
  */
 function keySource(events: unknown[]): string | undefined {
   const source = events.find(isInitEvent)?.apiKeySource;

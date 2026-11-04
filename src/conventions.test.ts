@@ -95,7 +95,7 @@ describe("the conventions document", () => {
     ["Acceptance Criteria", "the only thing the verify Stage grades"],
     ["Check", "a command the pipeline runs itself on a Ticket's code"],
     ["Lane", "each Lane holds one Ticket in progress"],
-    ["Release", "gives a Ticket back to the pipeline"],
+    ["Release", "given back to the pipeline for a later Run to take up again"],
     ["Stop", "finish the Tickets its Lanes hold and take no more"],
   ])("glosses %s", (_term, gloss) => {
     expect(conventionsDoc("0.4.0")).toContain(gloss);
