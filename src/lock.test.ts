@@ -72,6 +72,12 @@ describe("the lock commit's message", () => {
   it("says Free when nobody does", () => {
     expect(lockCommitMessage(undefined)).toBe("Free");
   });
+
+  it("names a Ticket the command named as `#<n>` without its `#`", () => {
+    expect(lockCommitMessage(holder({ host: CLOUD, command: "ticket-runner run #12 13 ##140" }))).toBe(
+      "Held by run run-1 on the cloud Host of session `session_01abc`: ticket-runner run 12 13 140",
+    );
+  });
 });
 
 describe("a holder's standing", () => {

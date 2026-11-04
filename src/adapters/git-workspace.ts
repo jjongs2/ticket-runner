@@ -641,14 +641,17 @@ export class GitWorkspace implements Workspace {
     });
   }
 
+  // These messages name the Ticket as `ticket <n>`, never `#<n>`: GitHub links
+  // a pushed commit that mentions `#<n>` to issue `<n>`, on whatever branch the
+  // commit is, so every write would leave a line on the Ticket's timeline.
   async writeState(state: TicketState): Promise<void> {
-    await this.changeState(`Record #${state.ticket} at ${state.state}`, [
+    await this.changeState(`Record ticket ${state.ticket} at ${state.state}`, [
       { name: stateFileName(state.ticket), contents: stateFileContents(state) },
     ]);
   }
 
   async removeState(ticket: number): Promise<void> {
-    await this.changeState(`Forget #${ticket}`, [
+    await this.changeState(`Forget ticket ${ticket}`, [
       { remove: stateFileName(ticket) },
       { remove: transcriptsDir(ticket) },
     ]);
@@ -665,8 +668,9 @@ export class GitWorkspace implements Workspace {
     if (files.length === 0) return undefined;
 
     const directory = `${transcriptsDir(ticket)}/${runId}/`;
+    // `ticket <n>`, not `#<n>`, for the reason given above writeState.
     await this.changeState(
-      `Keep #${ticket}'s transcripts from ${runId}`,
+      `Keep ticket ${ticket}'s transcripts from ${runId}`,
       files.map((file) => ({ name: `${directory}${file.name}`, from: file.path })),
     );
     return { branch: STATE_BRANCH, path: directory };

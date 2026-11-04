@@ -57,10 +57,17 @@ export function lockFileContents(holder: LockHolder | undefined): string {
 /**
  * The commit message a lock change carries, which is what GitHub shows beside
  * the branch: who holds the Target, or that nobody does.
+ *
+ * A command that named a Ticket as `#<n>`, as `ticket-runner run #12` may, is
+ * written here without the `#`: GitHub links a pushed commit that mentions
+ * `#<n>` to issue `<n>`, on whatever branch the commit is, so every take would
+ * leave a line on that Ticket's timeline. The lock file keeps the command as it
+ * was typed.
  */
 export function lockCommitMessage(holder: LockHolder | undefined): string {
   if (holder === undefined) return "Free";
-  return `Held by run ${holder.runId} on ${describeHost(holder.host)}: ${holder.command}`;
+  const command = holder.command.replace(/#+(?=\d)/g, "");
+  return `Held by run ${holder.runId} on ${describeHost(holder.host)}: ${command}`;
 }
 
 /**
