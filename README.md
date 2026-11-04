@@ -42,7 +42,7 @@ It fits a repository where:
   [`gh`](https://cli.github.com/), and `claude` with the
   [`mattpocock-skills`](https://github.com/mattpocock/skills) plugin, version 1.2.3 or later
 
-It merges to your Base branch without asking. It is for repositories where that is what you want.
+It merges to your base branch without asking. It is for repositories where that is what you want.
 
 ## Try it
 
@@ -58,7 +58,7 @@ npx ticket-runner run    # work through every ready issue
 `init` writes a few files for you to review and commit: `.gitignore` lines, a conventions
 document, a section in `CLAUDE.md` and a Claude skill. It also creates the triage labels and
 turns on squash merging and branch deletion on merge. It commits nothing, and a session reads
-those files only once they are on your Base branch, so push them before the first `run`.
+those files only once they are on your base branch, so push them before the first `run`.
 
 To keep it, install it globally:
 
@@ -75,7 +75,7 @@ npm install -g ticket-runner
 | `ticket-runner run --api-key` | Bill every session to your `ANTHROPIC_API_KEY`, not your Claude plan |
 | `ticket-runner stop` | Ask the Run in progress to finish what it holds and take no more |
 | `ticket-runner remove` | Take the pipeline out of this repository |
-| `ticket-runner -v` | Print the Version |
+| `ticket-runner -v` | Print the version |
 
 A Run can also be started from the Claude app, in a Claude Code cloud session on the Target:
 say "run it". A cloud session always runs on your plan, so it refuses `--api-key`.
