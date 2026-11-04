@@ -1,7 +1,9 @@
 import DefaultTheme from "vitepress/theme";
-import { onMounted, watch, nextTick } from "vue";
+import { h, onMounted, watch, nextTick } from "vue";
 import { getScrollOffset, inBrowser, useRoute, type Router, type Theme } from "vitepress";
 import mediumZoom from "medium-zoom";
+import { languageOf, rememberLanguage } from "../languages";
+import NotFound from "./NotFound.vue";
 import "./custom.css";
 
 // Mermaid renders after the page mounts, so the diagrams are looked for a few times.
@@ -75,11 +77,12 @@ function currentHeading(): string | null {
 // Both locales give a page the same heading anchors, so switching language
 // lands on the section being read instead of the top of the page. The theme's
 // language link carries the URL's anchor, which goes stale once the reader scrolls.
-function keepSectionOnLanguageSwitch(router: Router) {
+function keepSectionOnLanguageSwitch(router: Router, base: string) {
   router.onBeforeRouteChange = (href) => {
     const to = new URL(href, location.href);
-    const twin = (path: string) => path.replace("/ko/", "/");
-    if (to.pathname === location.pathname || twin(to.pathname) !== twin(location.pathname)) return;
+    const pageOf = (path: string) => languageOf(path, base)?.rest;
+    const page = pageOf(location.pathname);
+    if (to.pathname === location.pathname || page === undefined || pageOf(to.pathname) !== page) return;
     const id = currentHeading();
     const target = id ? `${to.pathname}#${id}` : to.pathname;
     if (target === to.pathname + to.hash) return;
@@ -112,6 +115,26 @@ function holdHeading(id: string) {
   observer.observe(doc);
 }
 
+// A pick is the reader following a link in the language menu, the desktop one or the
+// mobile one, in this tab or a new one; the next neutral URL follows it. The desktop
+// menu is the nav bar's own from 1280px and sits in its "…" flyout below that. The listeners
+// capture, so they see the click before the router turns it into a route change.
+// Reaching the other language any other way records nothing.
+function rememberLanguagePicks(base: string) {
+  const menus = [".VPNavBarTranslations", ".VPNavBarExtra .translations", ".VPNavScreenTranslations"]
+    .map((menu) => `${menu} a[href]`)
+    .join(", ");
+  const record = (e: MouseEvent) => {
+    if (e.type === "auxclick" && e.button !== 1) return;
+    const link = e.target instanceof Element ? e.target.closest<HTMLAnchorElement>(menus) : null;
+    if (!link) return;
+    const picked = languageOf(new URL(link.href, location.href).pathname, base)?.language;
+    if (picked) rememberLanguage(() => localStorage, picked);
+  };
+  document.addEventListener("click", record, true);
+  document.addEventListener("auxclick", record, true);
+}
+
 function holdHeadingAfterRouteChange(router: Router) {
   router.onAfterRouteChange = async (href) => {
     const id = decodeURIComponent(new URL(href, location.href).hash.slice(1));
@@ -123,9 +146,12 @@ function holdHeadingAfterRouteChange(router: Router) {
 
 export default {
   extends: DefaultTheme,
-  enhanceApp({ router }) {
+  Layout: () => h(DefaultTheme.Layout, null, { "not-found": () => h(NotFound) }),
+  enhanceApp({ router, siteData }) {
     if (!inBrowser) return;
-    keepSectionOnLanguageSwitch(router);
+    const base = siteData.value.base;
+    keepSectionOnLanguageSwitch(router, base);
+    rememberLanguagePicks(base);
     holdHeadingAfterRouteChange(router);
   },
   setup() {

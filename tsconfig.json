@@ -15,5 +15,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["scripts", "src", "vitest.config.ts"]
+  "include": ["scripts", "src", "vitest.config.ts", "wiki/.vitepress/languages.ts", "wiki/.vitepress/languages.test.ts"]
 }
