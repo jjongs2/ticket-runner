@@ -35,10 +35,10 @@ flowchart TD
     K2 --> P
     P --> CI["CI 대기"]
     CI -->|통과| M["squash merge"]
-    K -->|"고칠 수 있음, budget 남음"| F["fix Stage"]
-    V -->|"고칠 수 있음, budget 남음"| F
-    X -->|"충돌 남음, budget 남음"| F
-    CI -->|"실패, budget 남음"| F
+    K -->|"고칠 수 있음, fix 기회 남음"| F["fix Stage"]
+    V -->|"고칠 수 있음, fix 기회 남음"| F
+    X -->|"충돌 남음, fix 기회 남음"| F
+    CI -->|"실패, fix 기회 남음"| F
     F -->|commit함| K
     F -->|commit 없음| H["Hand-off"]
     O["그 밖의 실패, 또는 두 번째 실패"] --> H
@@ -157,9 +157,9 @@ merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 �
 
 fix 기회는 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사람에게 넘어갑니다. fix Stage는 같은 branch에서 플러그인 스킬 없이 새로 띄운 세션이고, 실패와 그 근거를 받아 그 결함 하나를 고칩니다. `unmet` 기준 때문에 불려 왔는데 그중 하나라도 문서로 남은 결정이나 다른 기준을 뒤집어야만 충족된다면, 아무것도 commit하지 말고 이유를 밝히라고 합니다. 그러면 Ticket이 사람에게 넘어갑니다.
 
-새 세션이 고칠 수 있는 결함만 budget을 씁니다.
+새 세션이 고칠 수 있는 결함만 fix 기회를 씁니다.
 
-| 실패 | 위치 | budget을 쓰나? |
+| 실패 | 위치 | fix 기회를 쓰나? |
 |---|---|---|
 | 어떤 commit에도 없는 변경 | checks | 예 |
 | Check가 실패하거나 시간 초과 | checks | 예 |
