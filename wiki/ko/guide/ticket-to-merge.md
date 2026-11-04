@@ -47,7 +47,7 @@ flowchart TD
 
 fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종류와 상관없이 두 번째 실패, 또는 fix Stage가 손쓸 수 없는 실패는 Hand-off입니다. rate limit, API 장애, API 예산으로 멈춘 Stage와 Base branch도 똑같이 겪는 실패([아래](#a-failure-the-base-branch-shares))는 이 그림을 아예 벗어나 Ticket을 [Release](./stopping-and-resuming.md#release-on-a-rate-limit)합니다.
 
-[Hand-off](./stopping-and-resuming.md#hand-off)는 claim을 풀고, `ready-for-human`을 달고, 실패와 작업이 있는 곳을 코멘트로 남기고, 열린 pull request를 draft로 되돌립니다. branch와 state file은 Target의 remote에 남고, 넘겨진 Stage들의 transcript도 그 옆에 남습니다. 사람이 볼 즈음에는 작업한 Host가 없어졌을 수도 있기 때문입니다. 사람이 Ticket의 라벨을 `ready-for-agent`로 바꾸면 Ticket이 파이프라인으로 돌아가고, implement Stage를 다시 돌리지 않고 도달한 지점부터 이어 갑니다. state file을 지우는 것은 Run이 덮어쓰지 않으려 한, 이미 있던 branch 때문에 setup에서 일어난 Hand-off뿐입니다. 거기서는 이 Run의 Stage가 하나도 돌지 않았으니 파이프라인이 이어 갈 것이 없습니다.
+[Hand-off](./stopping-and-resuming.md#hand-off)는 claim을 풀고, `ready-for-human`을 달고, 실패와 작업이 있는 곳을 코멘트로 남기고, 열린 pull request를 draft로 되돌립니다. branch와 state file은 Target의 remote에 남고, 넘겨진 Stage들의 transcript도 그 옆에 남습니다. 사람이 볼 즈음에는 작업한 Host가 없어졌을 수도 있기 때문입니다. 사람이 Ticket의 라벨을 `ready-for-agent`로 바꾸면 Ticket이 파이프라인으로 돌아가고, implement Stage를 다시 돌리지 않고 도달한 지점부터 이어 갑니다. state file은 파이프라인의 작업이 남지 않는 [setup에서의 Hand-off](./stopping-and-resuming.md#when-a-hand-off-does-less)에서 지워집니다. 새로 시작한 Ticket이 worktree가 생기기 전에 실패했거나, Run이 덮어쓰지 않으려 한 branch가 이미 있던 경우입니다. 거기서는 이 Run의 Stage가 하나도 돌지 않았으니 파이프라인이 이어 갈 것이 없습니다.
 
 ## Claim {#the-claim}
 

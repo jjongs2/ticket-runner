@@ -1061,6 +1061,22 @@ describe("failures the pipeline did not expect", () => {
     expect(workspace.calls).not.toContain(`push:${BRANCH}`);
   });
 
+  it("removes the State file of a fresh Ticket that failed before its worktree existed", async () => {
+    let stateWhenCreating: unknown;
+    workspace.createWorktree = async () => {
+      stateWhenCreating = workspace.state(TICKET);
+      throw new Error("worktree path already exists");
+    };
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "setup" });
+    // No branch stood in the way: this is the other setup Hand-off that drops the file.
+    expect(await workspace.hasBranch(BRANCH)).toBe(false);
+    expect(stateWhenCreating).toBeDefined();
+    expect(workspace.state(TICKET)).toBeUndefined();
+  });
+
   it("blames the PR step when the push fails", async () => {
     workspace.push = async () => {
       throw new Error("remote rejected");
