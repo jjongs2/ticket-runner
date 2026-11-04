@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
+import { alive, groupAlive } from "./liveness.js";
 
 /**
  * Killing a command together with everything it started.
@@ -207,17 +208,13 @@ function signal(tree: Tree, name: NodeJS.Signals): void {
   for (const pid of tree.pids) send(pid, name);
 }
 
+/** A zombie is gone: what is left of it waits only on its parent to reap it. */
 function anyAlive(tree: Tree): boolean {
-  return [...tree.groups].some((group) => alive(-group)) || [...tree.pids].some(alive);
-}
-
-/** A negative id is a process group. */
-function alive(id: number): boolean {
-  return send(id, 0);
+  return [...tree.pids].some(alive) || [...tree.groups].some(groupAlive);
 }
 
 /** Whether the signal reached anything; one already gone is not an error here. */
-function send(id: number, name: NodeJS.Signals | 0): boolean {
+function send(id: number, name: NodeJS.Signals): boolean {
   try {
     process.kill(id, name);
     return true;

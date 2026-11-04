@@ -128,10 +128,7 @@ describe("the wall-clock limit", () => {
     const script = `${leaveDescendantHolding("stdout")} setTimeout(() => {}, 5_000);`;
     const startedAt = Date.now();
 
-    // A short grace, so the time it took says whether the call waited on the
-    // descendant holding stdout and not how soon the Host reaped what the
-    // kill left behind: the kill waits out its grace while one is a zombie.
-    const result = await exec("node", ["-e", script], { timeoutMs: 200, killGraceMs: 300 });
+    const result = await exec("node", ["-e", script], { timeoutMs: 200 });
 
     expect(Date.now() - startedAt).toBeLessThan(2_000);
     expect(result.exitCode).toBe(124);

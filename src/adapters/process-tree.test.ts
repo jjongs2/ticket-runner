@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { goneSoon } from "../testing/liveness.js";
+import { goneSoon, leaveGroupLeader } from "../testing/liveness.js";
 import { killTree, markedInPs, processesMarked } from "./process-tree.js";
 
 const MARK = { name: "TICKET_RUNNER_SESSION", value: "3f2c9a10-killed" };
@@ -65,5 +65,26 @@ describe("a kill that cannot read any environment", () => {
 
     expect(await goneSoon(command.pid ?? 0)).toBe(true);
     expect(await goneSoon(leader)).toBe(true);
+  });
+});
+
+describe("a kill whose processes are left as zombies", () => {
+  it("settles once they are dead, without waiting for their parent to reap them", async () => {
+    // Its parent never reaps it, as an init that is slow to reap leaves an orphan.
+    const parent = spawn("node", ["-e", leaveGroupLeader("30")], {
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    try {
+      const sleeper = await firstPid(parent);
+      const startedAt = Date.now();
+
+      await killTree(sleeper, 3_000);
+
+      expect(Date.now() - startedAt).toBeLessThan(1_500);
+      expect(() => process.kill(sleeper, 0)).not.toThrow();
+      expect(() => process.kill(-sleeper, 0)).not.toThrow();
+    } finally {
+      parent.kill("SIGKILL");
+    }
   });
 });

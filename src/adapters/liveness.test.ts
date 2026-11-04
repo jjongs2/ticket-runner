@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { alive, goneSoon } from "./liveness.js";
+import { goneSoon, leaveGroupLeader } from "../testing/liveness.js";
+import { alive, groupAlive } from "./liveness.js";
 
 /** The first line a child prints, as a pid. */
 function firstPid(child: ReturnType<typeof spawn>): Promise<number> {
@@ -51,6 +52,32 @@ describe("whether a process is alive", () => {
 
       expect(await goneSoon(zombie)).toBe(true);
       expect(() => process.kill(zombie, 0)).not.toThrow();
+    } finally {
+      parent.kill("SIGKILL");
+    }
+  });
+});
+
+describe("whether a process group is alive", () => {
+  it("is yes for one with a member that is running", () => {
+    const leader = spawn("sleep", ["30"], { detached: true, stdio: "ignore" });
+    try {
+      expect(groupAlive(leader.pid ?? 0)).toBe(true);
+    } finally {
+      leader.kill("SIGKILL");
+    }
+  });
+
+  it("is no for one whose only member is a zombie, though it can still be signalled", async () => {
+    const parent = spawn("node", ["-e", leaveGroupLeader("0.3")], {
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    try {
+      const zombie = await firstPid(parent);
+
+      expect(await goneSoon(zombie)).toBe(true);
+      expect(groupAlive(zombie)).toBe(false);
+      expect(() => process.kill(-zombie, 0)).not.toThrow();
     } finally {
       parent.kill("SIGKILL");
     }
