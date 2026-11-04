@@ -668,7 +668,7 @@ export class GitWorkspace implements Workspace {
     if (files.length === 0) return undefined;
 
     const directory = `${transcriptsDir(ticket)}/${runId}/`;
-    // `ticket <n>`, not `#<n>`, as in {@link writeState}.
+    // `ticket <n>`, not `#<n>`, for the reason given above writeState.
     await this.changeState(
       `Keep ticket ${ticket}'s transcripts from ${runId}`,
       files.map((file) => ({ name: `${directory}${file.name}`, from: file.path })),

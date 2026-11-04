@@ -1646,32 +1646,17 @@ describe("the Run lock", () => {
     expect(await on(HERE, {}).runLockHolder()).toBeUndefined();
     expect(git(remote, "branch", "--list", LOCK_BRANCH)).toBe("");
   });
-});
 
-describe("the pipeline's own branches on GitHub", () => {
-  /**
-   * GitHub links a pushed commit that mentions `#<n>` to issue `<n>`, on
-   * whatever branch the commit is, so a message that did would put a line on
-   * that Ticket's timeline every time the pipeline wrote.
-   */
-  it("carry no `#<n>` in any commit message, however the Run was started", async () => {
-    const host: Host = { kind: "workstation", id: "4f1c0ffee", name: "desk" };
-    const workspace = new GitWorkspace(repo, "origin", {
-      host,
-      checkProcess: () => ({ alive: true, startedAt: "A" }),
-    });
+  it("and the state branch carry no `#<n>` GitHub would link to a Ticket, in any commit message", async () => {
+    const workspace = on(HERE, { 111: "A" });
     const logs = stageLogDir(repo, "run-1", 4);
     mkdirSync(logs, { recursive: true });
     writeFileSync(join(logs, "implement.command"), "claude -p implement\n");
     const messages: string[] = [];
-    const stateTip = () => messages.push(git(remote, "log", "-1", "--format=%B", STATE_BRANCH));
+    const recordStateTip = () =>
+      messages.push(git(remote, "log", "-1", "--format=%B", STATE_BRANCH));
 
-    await workspace.takeRunLock({
-      pid: 111,
-      command: "ticket-runner run #4 #12",
-      runId: "run-1",
-      startedAt: "2026-09-17T09:00:00.000Z",
-    });
+    await workspace.takeRunLock({ ...claim, command: "ticket-runner run #4 #12" });
     await workspace.writeState({
       ticket: 4,
       branch: "agent/4-x",
@@ -1680,11 +1665,11 @@ describe("the pipeline's own branches on GitHub", () => {
       runId: "run-1",
       updatedAt: "2026-09-17T09:00:00.000Z",
     });
-    stateTip();
+    recordStateTip();
     await workspace.keepTranscripts(4, "run-1");
-    stateTip();
+    recordStateTip();
     await workspace.removeState(4);
-    stateTip();
+    recordStateTip();
     await workspace.releaseRunLock();
     messages.push(...git(remote, "log", "--format=%B%x00", LOCK_BRANCH).split("\0"));
 

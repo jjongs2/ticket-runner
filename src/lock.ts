@@ -66,8 +66,8 @@ export function lockFileContents(holder: LockHolder | undefined): string {
  */
 export function lockCommitMessage(holder: LockHolder | undefined): string {
   if (holder === undefined) return "Free";
-  const message = `Held by run ${holder.runId} on ${describeHost(holder.host)}: ${holder.command}`;
-  return message.replace(/#(?=\d)/g, "");
+  const command = holder.command.replace(/#+(?=\d)/g, "");
+  return `Held by run ${holder.runId} on ${describeHost(holder.host)}: ${command}`;
 }
 
 /**
