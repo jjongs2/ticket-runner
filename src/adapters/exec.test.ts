@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { describe, expect, it } from "vitest";
+import { alive, goneSoon } from "../testing/liveness.js";
 import { exec } from "./exec.js";
 
 /** Printing one variable is enough to see what the child actually inherited. */
@@ -127,7 +128,10 @@ describe("the wall-clock limit", () => {
     const script = `${leaveDescendantHolding("stdout")} setTimeout(() => {}, 5_000);`;
     const startedAt = Date.now();
 
-    const result = await exec("node", ["-e", script], { timeoutMs: 200 });
+    // A short grace, so the time it took says whether the call waited on the
+    // descendant holding stdout and not how soon the Host reaped what the
+    // kill left behind: the kill waits out its grace while one is a zombie.
+    const result = await exec("node", ["-e", script], { timeoutMs: 200, killGraceMs: 300 });
 
     expect(Date.now() - startedAt).toBeLessThan(2_000);
     expect(result.exitCode).toBe(124);
@@ -150,28 +154,9 @@ describe("the wall-clock limit", () => {
 });
 
 describe("the kill at the wall-clock limit", () => {
-  /** Whether a process of that id is still there to be signalled. */
-  function alive(pid: number): boolean {
-    try {
-      process.kill(pid, 0);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
   /** The pid a child printed, the way each script below names its background process. */
   function backgroundPid(stdout: string): number {
     return Number(stdout.trim().split("\n")[0]);
-  }
-
-  /** A killed process lingers as a zombie until its new parent reaps it. */
-  async function goneSoon(pid: number): Promise<boolean> {
-    for (let tries = 0; tries < 20; tries += 1) {
-      if (!alive(pid)) return true;
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-    return false;
   }
 
   it("takes a process the command started in the background with it", async () => {

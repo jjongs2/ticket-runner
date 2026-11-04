@@ -1,28 +1,10 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { goneSoon } from "../testing/liveness.js";
 import { killTree, markedInPs, processesMarked } from "./process-tree.js";
 
 const MARK = { name: "TICKET_RUNNER_SESSION", value: "3f2c9a10-killed" };
-
-/** Whether a process of that id is still there to be signalled. */
-function alive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** A killed process lingers as a zombie until its new parent reaps it. */
-async function goneSoon(pid: number): Promise<boolean> {
-  for (let tries = 0; tries < 20; tries += 1) {
-    if (!alive(pid)) return true;
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  return false;
-}
 
 /** The first line a child prints, as a pid. */
 function firstPid(child: ReturnType<typeof spawn>): Promise<number> {
