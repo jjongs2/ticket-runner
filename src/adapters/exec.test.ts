@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { alive, goneSoon } from "../testing/liveness.js";
-import { exec } from "./exec.js";
+import { type Execution, exec, throwOnFailure } from "./exec.js";
 
 /** Printing one variable is enough to see what the child actually inherited. */
 function printEnv(name: string): [string, string[]] {
@@ -358,5 +358,47 @@ describe("a child that exits on its own", () => {
     expect(result.exitCode).toBe(3);
     expect(result.stdout).toBe("onelast");
     expect(result.output).toBe("onelast");
+  });
+});
+
+describe("throwOnFailure", () => {
+  const failed: Execution = {
+    exitCode: 1,
+    stdout: "",
+    stderr: "HTTP 502: Bad Gateway",
+    output: "HTTP 502: Bad Gateway",
+    timedOut: false,
+  };
+
+  /** The message `throwOnFailure` throws for a failed run of this command. */
+  function messageFor(command: string, args: string[]): string {
+    try {
+      throwOnFailure(command, args, failed);
+    } catch (error) {
+      return (error as Error).message;
+    }
+    throw new Error("throwOnFailure did not throw");
+  }
+
+  it("names the command and how it exited on the first line, and its output after", () => {
+    expect(messageFor("git", ["pull", "--ff-only", "origin", "main"])).toBe(
+      "`git pull --ff-only origin main` exited 1\nHTTP 502: Bad Gateway",
+    );
+  });
+
+  it("shows an argument with a newline in it by its first line alone", () => {
+    const body = "Closes `#5\r\n\n- ❓ CLI works — No browser: `npx playwright install` exited 1\n";
+
+    const message = messageFor("gh", ["api", "-f", `body=${body}`, "-F", "draft=false"]);
+
+    expect(message).toBe(
+      "`gh api -f body=Closes `#5 … -F draft=false` exited 1\nHTTP 502: Bad Gateway",
+    );
+  });
+
+  it("returns a run that succeeded as it is", () => {
+    const succeeded = { ...failed, exitCode: 0 };
+
+    expect(throwOnFailure("git", ["status"], succeeded)).toBe(succeeded);
   });
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { UNCHECKED_BOX } from "./acceptance-criteria.js";
+import { throwOnFailure } from "./adapters/exec.js";
 import { MAX_TAIL_CHARS } from "./log-tail.js";
 import { type Billing, emptyBilling } from "./credential.js";
 import type { RunStop } from "./run.js";
@@ -54,24 +55,69 @@ const SSH_OUTPUT = [
 /** The message that reached the hand-off, whole. */
 const UNEXPECTED = `${PULL_FAILED}\n${SSH_OUTPUT}`;
 
+/** What `gh` printed when a call to open a pull request failed. */
+const GH_OUTPUT = "HTTP 502: Bad Gateway";
+
 /**
- * A `gh api` call that opens a pull request and fails, as `throwOnFailure`
- * builds its message: the body is an argument with newlines in it, so the
- * command runs over several lines before it says how it exited.
+ * The message `throwOnFailure` builds when the `gh api` call that opens a
+ * pull request with this body fails.
  */
-const GH_UNEXPECTED = [
-  "`gh api --method POST repos/{owner}/{repo}/pulls -f base=main -f head=agent/5-x -f title=feat: x -f body=Closes #5",
-  "",
-  "What it does.",
-  " -F draft=false` exited 1",
-  "HTTP 502: Bad Gateway",
-].join("\n");
-/** The one line it is shown as: the command's first line and its last. */
-const GH_FAILED =
-  "`gh api --method POST repos/{owner}/{repo}/pulls -f base=main -f head=agent/5-x " +
-  "-f title=feat: x -f body=Closes #5 … -F draft=false` exited 1";
+function failedPullRequest(body: string): string {
+  const args = [
+    "api",
+    "--method",
+    "POST",
+    "repos/{owner}/{repo}/pulls",
+    "-f",
+    "base=main",
+    "-f",
+    "head=agent/5-x",
+    "-f",
+    "title=feat: x",
+    "-f",
+    `body=${body}`,
+    "-F",
+    "draft=false",
+  ];
+  const result = { exitCode: 1, stdout: "", stderr: GH_OUTPUT, output: GH_OUTPUT, timedOut: false };
+  try {
+    throwOnFailure("gh", args, result);
+  } catch (error) {
+    return (error as Error).message;
+  }
+  throw new Error("throwOnFailure did not throw");
+}
+
+/** The one line such a failure is shown as, for a body whose first line is this. */
+function ghFailed(bodyLine: string): string {
+  return (
+    "`gh api --method POST repos/{owner}/{repo}/pulls -f base=main -f head=agent/5-x " +
+    `-f title=feat: x -f body=${bodyLine} … -F draft=false\` exited 1`
+  );
+}
+
+/**
+ * Pull request bodies a failed `gh api` call can carry, each with the first
+ * line it is shown by: a plain one; one with a line of its own that ends as a
+ * failed command does, as an unverifiable criterion's evidence can; and one
+ * whose first line has an odd number of backticks.
+ */
+const GH_BODIES = [
+  { case: "a plain body", body: "Closes #5\n\nWhat it does.\n\nRun `r1`\n", first: "Closes #5" },
+  {
+    case: "a body with a line that says how another command exited",
+    body: "Closes #5\n\nWhat it does.\n\n- ❓ CLI works — No browser: `npx playwright install` exited 1\n",
+    first: "Closes #5",
+  },
+  {
+    case: "a body whose first line has an odd number of backticks",
+    body: "Closes `#5\n\nWhat it does.\n",
+    first: "Closes `#5",
+  },
+];
+
 /** Its Evidence block: what `gh` printed, and nothing of the body. */
-const GH_EVIDENCE = ["<details><summary>Evidence</summary>", "", "```", "HTTP 502: Bad Gateway", "```"].join("\n");
+const GH_EVIDENCE = ["<details><summary>Evidence</summary>", "", "```", GH_OUTPUT, "```"].join("\n");
 
 /** The fenced Evidence block a hand-off and its draft pull request both carry. */
 const SSH_EVIDENCE = ["<details><summary>Evidence</summary>", "", "```", SSH_OUTPUT, "```"].join("\n");
@@ -160,10 +206,10 @@ describe("draftPullRequestBody", () => {
     expect(body).toContain(SSH_EVIDENCE);
   });
 
-  it("opens a GitHub failure whose arguments ran over several lines with one line", () => {
-    const body = draftPullRequestBody({ ...base, stage: "pr", failure: GH_UNEXPECTED });
+  it.each(GH_BODIES)("opens a GitHub failure on $case with its command and how it exited", (gh) => {
+    const body = draftPullRequestBody({ ...base, stage: "pr", failure: failedPullRequest(gh.body) });
 
-    expect(body).toContain(`**Handed off at pr.** ${GH_FAILED}\n\n`);
+    expect(body).toContain(`**Handed off at pr.** ${ghFailed(gh.first)}\n\n`);
     expect(body).toContain(GH_EVIDENCE);
     expect(body).not.toContain("What it does.");
   });
@@ -308,12 +354,18 @@ describe("handoffComment", () => {
     expect(comment).toContain(SSH_EVIDENCE);
   });
 
-  it("gives a GitHub failure whose arguments ran over several lines one line", () => {
-    const comment = handoffComment({ ...base, stage: "pr", failure: GH_UNEXPECTED, evidence: "" });
+  it.each(GH_BODIES)("gives a GitHub failure on $case its command and how it exited", (gh) => {
+    const comment = handoffComment({
+      ...base,
+      stage: "pr",
+      failure: failedPullRequest(gh.body),
+      evidence: "",
+    });
 
-    expect(comment).toContain(`- Failure: ${GH_FAILED}\n- Branch`);
+    expect(comment).toContain(`- Failure: ${ghFailed(gh.first)}\n- Branch`);
     expect(comment).toContain(GH_EVIDENCE);
     expect(comment).not.toContain("What it does.");
+    expect(comment).not.toContain("playwright");
   });
 
   it("says so when the Ticket had already spent its fix budget", () => {
@@ -536,18 +588,21 @@ describe("runSummary", () => {
     expect(summary).not.toContain("Permission denied");
   });
 
-  it("gives a GitHub failure whose arguments ran over several lines one line", () => {
+  it.each(GH_BODIES)("gives a GitHub failure on $case its command and how it exited", (gh) => {
     const summary = runSummary({
       credential: "subscription",
       version: VERSION,
       runId: "r1",
       durationMs: 0,
-      outcomes: [{ ...handed, stage: "pr", failure: GH_UNEXPECTED }],
+      outcomes: [{ ...handed, stage: "pr", failure: failedPullRequest(gh.body) }],
       stop: { reason: "frontier", blocked: [] },
     });
 
-    expect(summary).toContain(`  handed   #5 Fix Stage with a single retry · pr · ${GH_FAILED}\n`);
+    expect(summary).toContain(
+      `  handed   #5 Fix Stage with a single retry · pr · ${ghFailed(gh.first)}\n`,
+    );
     expect(summary).not.toContain("Bad Gateway");
+    expect(summary).not.toContain("playwright");
   });
 
   it("says where the rate limit landed on a released Ticket", () => {

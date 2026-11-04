@@ -13,8 +13,8 @@ const SSH_OUTPUT = [
 
 /**
  * The message `throwOnFailure` builds for a `gh api` call that opens a pull
- * request and fails: the body is an argument with newlines in it, so the
- * command runs over several lines before it says how it exited.
+ * request and fails: the body is an argument with newlines in it, one of them
+ * ending as a failed command's line does.
  */
 function failedPullRequest(): string {
   const args = [
@@ -29,7 +29,7 @@ function failedPullRequest(): string {
     "-f",
     "title=feat: x",
     "-f",
-    "body=Closes #5\n\nWhat it does.\n\nRun `r1`\n",
+    "body=Closes #5\n\nWhat it does.\n\n- ❓ CLI works — No browser: `npx playwright install` exited 1\n",
     "-F",
     "draft=false",
   ];
@@ -45,7 +45,7 @@ function failedPullRequest(): string {
 /** What `gh` printed for it. */
 const GH_OUTPUT = "HTTP 502: Bad Gateway (https://api.github.com/repos/o/r/pulls)";
 
-/** The one line it is shown as: the command's first line and its last. */
+/** The one line it is shown as: the command, with the body by its first line. */
 const PR_FAILED =
   "`gh api --method POST repos/{owner}/{repo}/pulls -f base=main -f head=agent/5-x " +
   "-f title=feat: x -f body=Closes #5 … -F draft=false` exited 1";
@@ -65,7 +65,7 @@ describe("splitMessage", () => {
     });
   });
 
-  it("gives a command whose arguments ran over several lines one line, and only its output", () => {
+  it("gives a command with an argument of several lines one line, and only its output", () => {
     expect(splitMessage(failedPullRequest())).toEqual({ line: PR_FAILED, output: GH_OUTPUT });
   });
 
