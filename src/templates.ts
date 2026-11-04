@@ -758,7 +758,6 @@ function ticketRows(outcome: TicketOutcome, credential: Credential): string[] {
   ];
 }
 
-
 /** `text`, or as much of it as fits with an ellipsis standing in for the rest. */
 function truncate(text: string, limit: number): string {
   return text.length <= limit ? text : `${text.slice(0, limit - 1).trimEnd()}\u2026`;

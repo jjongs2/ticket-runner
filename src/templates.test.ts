@@ -41,11 +41,9 @@ const VERSION = "0.4.0+331d79c";
 /** Why most summaries here end: nothing left on the Frontier. */
 const FRONTIER_EMPTY: RunStop = { reason: "frontier", blocked: [] };
 
-/**
- * The message the `git pull` of #288's Hand-off failed with, whole: the
- * command and how it exited, then what SSH printed.
- */
+/** The command #288's Hand-off failed on, and how it exited. */
 const PULL_FAILED = "`git pull --ff-only origin main` exited 1";
+/** What SSH printed for it. */
 const SSH_OUTPUT = [
   "git@github.com: Permission denied (publickey).",
   "fatal: Could not read from remote repository.",
@@ -53,6 +51,7 @@ const SSH_OUTPUT = [
   "Please make sure you have the correct access rights",
   "and the repository exists.",
 ].join("\n");
+/** The message that reached the hand-off, whole. */
 const UNEXPECTED = `${PULL_FAILED}\n${SSH_OUTPUT}`;
 
 /** The fenced Evidence block a hand-off and its draft pull request both carry. */
