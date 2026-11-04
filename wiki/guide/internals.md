@@ -75,6 +75,7 @@ claude --print <prompt> --output-format stream-json --verbose \
   | `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | `1` | the Host user's memory is about their projects, not the Target |
   | `CLAUDE_CODE_SHELL` | `/bin/bash`, only where it exists | a zsh shell aborts a command on a glob that matches nothing |
   `ANTHROPIC_AUTH_TOKEN` and every other variable are inherited as they are.
+- Every process a Stage starts inherits both marks. The Stage mark is a tripwire against an honest mistake, not a sandbox: a session that unsets it gets through, and keeping two Runs off one Target is the Run lock's job. The session mark is kept apart from it because two Lanes in the same Stage share the Stage mark.
 - It writes the [Stage's files](./running.md#logs-and-transcripts) from the moment the Stage starts, never with the key's value in them: command files reach the Target's remote with a Hand-off.
 - It reads the `apiKeySource` of the session's `system/init` event, which the orchestrator sets against the Run's Credential.
 - It kills the child at `maxMinutes`, with everything it started, and classifies a failure as `rate-limited`, `api-error`, `out-of-budget`, `timed-out`, `turn-capped`, `nonzero-exit` or `invalid-result`. A session that succeeds is never any of the first three, and they are read off a failed one like this:
@@ -195,7 +196,9 @@ Tests sit beside each module as `*.test.ts`.
 
 A [Version](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is a number that `main` carries as a tag `v<x.y.z>`, published to npm and with a GitHub Release. An installed copy reports it. Machines install a Version, never `main`, so two machines that report `0.5.2` run the same code ([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
 
-A human cuts one by merging a Version PR, which [`/cut-a-version`](https://github.com/jjongs2/ticket-runner/blob/main/.claude/skills/cut-a-version/SKILL.md) drafts; the steps and the checks on it are in [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md#versions).
+A human cuts one by merging a Version PR, which [`/cut-a-version`](https://github.com/jjongs2/ticket-runner/blob/main/.claude/skills/cut-a-version/SKILL.md) drafts; the steps and the checks on it are in [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md#versions). The pull request raises the number and carries the release notes. The agent running the skill proposes the number by the rule `CONTRIBUTING.md` gives and drafts the notes, and the human's review and merge are the decision, because when to cut a version is a Planning decision, never inferred from what merged.
+
+The release notes say what changed since the last version, grouped for a reader rather than listed per pull request, and what a Target or its human has to do after upgrading. They are kept in `CHANGELOG.md`, one section per version, and published as the body of that version's GitHub Release.
 
 ### The stamp
 
@@ -208,6 +211,8 @@ The Version is resolved once, in the CLI, and handed down. Every stamp one Run w
 | `0.5.2+331d79c.dirty` | a development checkout with uncommitted changes |
 | `unknown` | no readable `package.json` |
 
+A development checkout adds the commit because between two versions the number alone says nothing.
+
 The same string is stamped on:
 
 | Where | So that |
@@ -218,6 +223,8 @@ The same string is stamped on:
 | `version.txt` in the Run's directory | a transcript sits beside the pipeline that wrote it |
 | the conventions document's first line (the number only) | `init` and a Run can tell which side is behind |
 | the refusal of a config key the install does not know | a stale install is told apart from a wrong config |
+
+The conventions document's stamp is also the version an Operator installs on a cloud Host whose own setup installed none. A Host whose setup did install one runs that one, whatever the stamp says.
 
 ### The newer-Version check
 
@@ -306,6 +313,7 @@ This repository is a Target of its own pipeline. Its conventions are in [`CONTRI
 - [`src/ports/`](https://github.com/jjongs2/ticket-runner/tree/main/src/ports), [`src/adapters/`](https://github.com/jjongs2/ticket-runner/tree/main/src/adapters), [`src/testing/`](https://github.com/jjongs2/ticket-runner/tree/main/src/testing)
 - [`src/cli.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/cli.ts), [`src/start.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts), [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts), [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts)
 - [`src/adapters/version.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts), [`src/version-number.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/version-number.ts), [`src/version-pr.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/version-pr.ts), [`src/staleness.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/staleness.ts)
-- [`scripts/version.ts`](https://github.com/jjongs2/ticket-runner/blob/main/scripts/version.ts), [`.github/workflows/`](https://github.com/jjongs2/ticket-runner/tree/main/.github/workflows)
+- [`scripts/version.ts`](https://github.com/jjongs2/ticket-runner/blob/main/scripts/version.ts), [`.github/workflows/`](https://github.com/jjongs2/ticket-runner/tree/main/.github/workflows), [`.claude/skills/cut-a-version/`](https://github.com/jjongs2/ticket-runner/blob/main/.claude/skills/cut-a-version/SKILL.md), [`docs/templates/version-notes.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/version-notes.md)
+- [`src/stage-guard.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stage-guard.ts), [`docs/templates/operator-skill.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/operator-skill.md)
 - [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md), [`CHANGELOG.md`](https://github.com/jjongs2/ticket-runner/blob/main/CHANGELOG.md)
 - [ADR-0001](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0001-humans-plan-the-pipeline-executes.md) to [ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)

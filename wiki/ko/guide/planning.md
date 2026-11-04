@@ -5,7 +5,7 @@ description: GitHub 이슈가 파이프라인이 가져가는 Ticket이 되는 �
 
 # 일 계획하기
 
-파이프라인은 계획하지 않습니다. Planning은 사람 몫으로 두고, 파이프라인은 Planning이 넘겨준 것만 받아 갑니다([ADR-0001](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0001-humans-plan-the-pipeline-executes.md)). 넘겨받은 것을 믿고 일하는 만큼, 이슈에서 읽는 것은 몇 가지뿐이고 그것도 엄격하게 읽습니다. 그중 하나라도 어긋난 이슈는 짐작하지 않고 거절합니다.
+파이프라인은 계획하지 않습니다. Planning은 사람 몫으로 두고, 파이프라인은 Planning이 넘겨준 것만 받아 Ticket을 고르는 데서 merge까지 사람 없이 처리합니다([ADR-0001](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0001-humans-plan-the-pipeline-executes.md)). 넘겨받은 것을 믿고 일하는 만큼, 이슈에서 읽는 것은 몇 가지뿐이고 그것도 엄격하게 읽습니다. 그중 하나라도 어긋난 이슈는 짐작하지 않고 거절합니다.
 
 | Ticket에 필요한 것 | 이유 |
 |---|---|
@@ -95,7 +95,7 @@ blocker 중 하나라도 열려 있으면 Ticket은 기다립니다. 같은 Run�
 
 ## Guard {#guards}
 
-Planning은 몇 가지 알려진 방식으로 어긋납니다. [Guard](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 이런 Candidate를 claim하기 전에 건너뛰고, 그 이유를 한 번 알려 줍니다. Planning 결과를 고친 뒤 다시 돌리면 됩니다.
+Planning은 몇 가지 알려진 방식으로 어긋납니다. [Guard](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 이런 Candidate를 claim하기 전에 건너뛰고, 그 이유를 한 번 알려 줍니다. 이슈를 대신 고치지는 않으니, Planning 결과를 고친 뒤 다시 돌리면 됩니다. Run이 살펴보는 열린 `ready-for-agent` 이슈는 모두 후보이고, Frontier는 후보 중 claim된 것과 막힌 것을 뺀 나머지입니다.
 
 ```mermaid
 flowchart TD

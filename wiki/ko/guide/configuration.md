@@ -54,7 +54,7 @@ Invalid ticket-runner.json: stages: Unrecognized key: "implment". Refused by tic
 
 - `baseBranch`: 문자열
 
-[Base branch](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 모든 Ticket이 출발하고 merge되어 들어가는 branch입니다. 이 필드가 없으면 GitHub가 저장소의 기본 branch라고 부르는 것을 쓰니, `master`를 쓰는 Target도 따로 설정할 필요가 없습니다. Run이 시작할 때 한 번 정합니다.
+[Base branch](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 모든 Ticket이 출발하고 merge되어 들어가는 branch입니다. Run은 Ticket을 이 branch 위로 rebase하고, Ticket의 pull request도 이 branch를 대상으로 열며, Ticket이 merge되면 main checkout을 이 branch로 pull합니다. 이 필드가 없으면 GitHub가 저장소의 기본 branch라고 부르는 것을 쓰니, `master`를 쓰는 Target도 따로 설정할 필요가 없습니다. Run이 시작할 때 한 번 정합니다.
 
 ## `lanes` {#lanes}
 
