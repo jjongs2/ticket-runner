@@ -1,13 +1,1 @@
-{
-  "held": true,
-  "host": {
-    "kind": "cloud",
-    "id": "cse_018yTBwhqBEzeed1yHPn5gvY",
-    "name": "vm"
-  },
-  "pid": 14720,
-  "command": "ticket-runner run 292",
-  "runId": "2026-11-04T13-27-14-786",
-  "startedAt": "2026-11-04T13:27:19.905Z",
-  "processStartedAt": "553554"
-}
+{ "held": false }
