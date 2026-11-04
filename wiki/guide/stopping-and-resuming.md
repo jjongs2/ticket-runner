@@ -154,7 +154,7 @@ What the Release does:
 - writes a `⏸ rate limited` or `⏸ API failure` row in the Progress comment, which is the whole report
 - brings the State file up to date, to `claimed` if the implement Stage was stopped and `implemented` if a later Stage was, and keeps the Fix budget as it was, except that a fix Stage stopped this way spends nothing
 - undoes the Claim: adds `ready-for-agent`, removes `in-progress`, and unassigns
-- posts no comment, so nobody is notified, and opens no draft pull request
+- posts no comment of its own and opens no draft pull request. Its row notifies watchers only when it opens a new progress comment: when the stopped Stage is the first to report on the Ticket, or the Ticket was taken back from a human
 
 The Run then claims nothing more, because what stopped one Stage would stop the next. The busy Lanes finish their own Tickets, and the Run ends without waiting for the limit to reset. Its last line says why, and when the limit resets where the CLI said ([The summary](./running.md#the-summary)). A released Ticket counts as taken, so the exit code is `0` unless something was handed off.
 
@@ -215,7 +215,7 @@ A [Stranded Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.
 
 An unreadable State file was probably written by a newer pipeline.
 
-Stranded Tickets fill free Lanes before anything the Frontier offers ([Running](./running.md#run)), each resumed from its branch on the remote by whichever Host's Run swept it. A narrowed Run resumes only the Stranded Tickets among those it was given.
+Stranded Tickets fill free Lanes before anything the Frontier offers ([Running](./running.md#run)), each resumed by whichever Host's Run swept it, from the copy [Resuming into a worktree](#resuming-into-a-worktree) picks. A narrowed Run resumes only the Stranded Tickets among those it was given.
 
 A kill still costs more than a Stop. Whatever the Stage had not yet committed and pushed is lost. A worktree left in the middle of a rebase is aborted back to the branch tip before the Checks grade it.
 

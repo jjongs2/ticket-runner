@@ -154,7 +154,7 @@ Release가 하는 일:
 - Progress comment에 `⏸ rate limited`나 `⏸ API failure` 줄을 하나 남깁니다. 보고는 이게 전부입니다.
 - State file을 최신으로 맞춥니다. implement Stage가 멈췄으면 `claimed`, 그 뒤의 Stage가 멈췄으면 `implemented`입니다. Fix budget은 그대로 가져가되, 이렇게 멈춘 게 fix Stage 자신이면 쓴 것으로 치지 않습니다.
 - Claim을 되돌립니다. `ready-for-agent`를 붙이고, `in-progress`를 떼고, 담당자를 해제합니다.
-- 코멘트를 달지 않으니 아무에게도 알림이 가지 않고, draft pull request도 열지 않습니다.
+- 따로 코멘트를 달지 않고, draft pull request도 열지 않습니다. 그 줄은 새 진행 상황 코멘트를 열 때만 알림을 보냅니다. 멈춘 Stage가 그 Ticket에서 처음 보고하는 Stage이거나, 사람에게서 되찾아 온 Ticket일 때입니다.
 
 그 뒤로 Run은 더 claim하지 않습니다. 한 Stage를 멈춘 원인은 다음 Stage도 멈출 테니까요. 바쁜 Lane은 자기 Ticket을 끝까지 마치고, Run은 한도가 풀리기를 기다리지 않고 끝납니다. 마지막 줄이 그 이유를 말하고, CLI가 알려 준 경우에는 한도가 풀리는 시각도 담습니다([요약](./running.md#the-summary)). Release된 Ticket도 가져간 것으로 치니, Hand-off가 없으면 종료 코드는 `0`입니다.
 
@@ -215,7 +215,7 @@ kill된 Run은 아무것도 놓아주지 않습니다. 그 Ticket들은 Claim을
 
 읽을 수 없는 State file은 아마 더 새 파이프라인이 쓴 파일입니다.
 
-Stranded Ticket은 Frontier가 내놓는 것보다 먼저 빈 Lane을 채웁니다([실행하기](./running.md#run)). 어느 Host든 sweep한 Run이 remote의 branch에서 이어받습니다. 범위를 좁힌 Run은 받은 Ticket 가운데 Stranded Ticket인 것만 이어받습니다.
+Stranded Ticket은 Frontier가 내놓는 것보다 먼저 빈 Lane을 채웁니다([실행하기](./running.md#run)). 어느 Host든 sweep한 Run이 이어받으며, 어느 사본에서 출발할지는 [worktree로 이어받기](#resuming-into-a-worktree)에서 정합니다. 범위를 좁힌 Run은 받은 Ticket 가운데 Stranded Ticket인 것만 이어받습니다.
 
 그래도 kill은 Stop보다 비쌉니다. Stage가 아직 commit하고 push하지 못한 것은 사라집니다. rebase 도중에 멈춘 worktree는 Check가 판정하기 전에 rebase를 abort해 branch tip으로 되돌립니다.
 

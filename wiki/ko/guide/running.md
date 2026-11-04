@@ -255,7 +255,7 @@ Run이 Ticket을 끝낼 때마다 보고하고, 끝나면 요약과 종료 코�
 - **transcript는 VM과 함께 사라집니다.** Hand-off된 Ticket의 것만 State branch에 남습니다.
 - **Stage는 늘 요금제로 돌아갑니다.** 클라우드 세션은 `ANTHROPIC_API_KEY`를 무시하니, `--api-key`를 받아 놓고 지키지 못하는 대신 거절합니다.
 
-그 밖에는 클라우드 Host도 워크스테이션과 같은 Target에 같은 Run을 돌립니다. claim은 어느 Host에서 하든 같은 `gh` 사용자를 담당자로 지정하니, Run이 어디서 돌았는지는 보드에 드러나지 않습니다.
+그 밖에는 클라우드 Host도 워크스테이션과 같은 Target에 같은 Run을 돌립니다. claim은 어느 Host에서 하든 같은 `gh` 사용자를 담당자로 지정하니, 담당자만 봐서는 Run이 어디서 돌았는지 알 수 없습니다.
 
 ## 관련 페이지 {#related-pages}
 

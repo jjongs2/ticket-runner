@@ -255,7 +255,7 @@ A cloud Host differs from a workstation in a few ways the pipeline accounts for:
 - **Transcripts go with the VM**, except a handed-off Ticket's, which are kept on the State branch.
 - **Stages always run on your plan.** A cloud session ignores `ANTHROPIC_API_KEY`, so `--api-key` is refused there rather than accepted and not honoured.
 
-In everything else a cloud Host runs the same Run against the same Target as a workstation. A claim assigns the same `gh` user whichever Host made it, so nothing on the board says where a Run ran.
+In everything else a cloud Host runs the same Run against the same Target as a workstation. A claim assigns the same `gh` user whichever Host made it, so the assignee does not say where a Run ran.
 
 ## Related pages
 
