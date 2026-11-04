@@ -14,7 +14,7 @@ A [Run](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) exists s
 | `ticket-runner run --lanes 2` | The same Run, two Tickets at once | as above |
 | `ticket-runner run --api-key` | The same Run, billed to the `ANTHROPIC_API_KEY` your shell exports | as above |
 | `ticket-runner stop` | Asks the Run in this Target to finish what it holds and take no more | `0` sent · `2` nobody to send it to |
-| `ticket-runner -v` | Prints which Version this is | `0` |
+| `ticket-runner -v` | Prints which version this is | `0` |
 | `ticket-runner -h` | Prints the usage | `0` (`2` when no command is given) |
 
 `init` and `remove` are on [Install and remove](./installation.md). An unknown command or option, or a bad argument, is refused with the usage and exit code `2`.
@@ -28,7 +28,7 @@ The plugin's `/implement-spec` also carries a Spec's Tickets to code. It runs in
 | Who watches | You, in your own session, free to steer it | Nobody; you read the summary and the board afterwards |
 | Unit of work | A whole Spec, in one session | A Ticket, with its own branch and pull request |
 | Gates | The skill's own steps, then your review | The Checks, the verify Stage and CI, for every Ticket |
-| How it ends | When the session is done, with the Spec's work waiting for your review | With each Ticket merged into the Base branch or handed to a human |
+| How it ends | When the session is done, with the Spec's work waiting for your review | With each Ticket merged into the base branch or handed to a human |
 | Resuming | Nothing on the board records how far it got, so what is left is yours to work out | A [Stranded Ticket](./stopping-and-resuming.md) resumes in the next Run, on any Host |
 | Mark on the board | None while it works | `in-progress` and an assignee while a Run holds a Ticket |
 
@@ -42,7 +42,7 @@ It then takes Tickets through its [Lanes](https://github.com/jjongs2/ticket-runn
 
 ```mermaid
 flowchart TD
-  A["Take the Run lock"] --> B["Sweep the State branch<br>for Stranded Tickets"]
+  A["Take the Run lock"] --> B["Sweep the state branch<br>for Stranded Tickets"]
   B --> C{"A Lane free?"}
   C -- yes --> D{"A Stranded Ticket left?"}
   D -- yes --> E["Resume it in the free Lane"] --> C
@@ -62,7 +62,7 @@ flowchart TD
 - **A free Lane looks at the Frontier again while another Lane is busy**, five minutes after the Run last listed it. A Ticket you label `ready-for-agent`, or whose last blocker you close, mid-Run is taken without waiting for a busy Lane to end. A Run with one Lane never does this.
 - **A [Release](./stopping-and-resuming.md#release-on-a-rate-limit) stops the filling**: the busy Lanes finish, and the next Run is yours or an Operator's to start.
 - **The Run ends** when no Lane is busy and nothing is left to take: the Frontier is empty, or everything on it is blocked.
-- **Leave the main checkout to the Run.** It pulls the Base branch there before each rebase and after each merge. Uncommitted changes the pull would overwrite hand the Ticket off, and commits on a checked-out Base branch that the remote lacks are rebased into the next pull request. Work in a worktree of your own meanwhile.
+- **Leave the main checkout to the Run.** It pulls the base branch there before each rebase and after each merge. Uncommitted changes the pull would overwrite hand the Ticket off, and commits on a checked-out base branch that the remote lacks are rebased into the next pull request. Work in a worktree of your own meanwhile.
 
 What happens to each Ticket inside a Lane is on [From Ticket to merge](./ticket-to-merge.md). Stranded Tickets and Releases are on [Hand-offs, stopping and resuming](./stopping-and-resuming.md).
 
@@ -90,7 +90,7 @@ The pipeline keeps no budget of its own. Give the key a workspace of its own in 
 - The numbers say which Tickets, not the order: stranded ones first, then the rest lowest number first.
 - Blockers still hold. A named Ticket blocked by another named Ticket is taken once that one merges in the same Run.
 
-Every named Ticket the Run did not take gets a `skipped` row saying why. Only a Guard's reason is also commented on the issue.
+Every named Ticket the Run did not take gets a `skipped` row saying why. Only a guard's reason is also commented on the issue.
 
 | Row | Meaning |
 |---|---|
@@ -99,7 +99,7 @@ Every named Ticket the Run did not take gets a `skipped` row saying why. Only a 
 | `not-ready` | It is not labelled `ready-for-agent`, or it has closed |
 | `no-issue` | No issue has that number |
 | `pull-request` | The number is a pull request |
-| `spec`, `no-criteria`, `body-only-blockers` | A [Guard](./planning.md#guards) refused it |
+| `spec`, `no-criteria`, `body-only-blockers` | A [guard](./planning.md#guards) refused it |
 
 A named Ticket that a Stop or a Release kept the Run from reaching has no row; the last line of the summary says why the Run stopped.
 
@@ -129,7 +129,7 @@ A second `stop` prints the same, and the Run ignores the second signal. What a S
 
 ## `-v`
 
-`-v`, or `--version`, prints which Version this is, such as `0.5.2`. The same string is stamped on everything a Run writes ([The stamp](./internals.md#the-stamp)).
+`-v`, or `--version`, prints which version this is, such as `0.5.2`. The same string is stamped on everything a Run writes ([The stamp](./internals.md#the-stamp)).
 
 ## Refused before it starts
 
@@ -140,7 +140,7 @@ A second `stop` prints the same, and the Run ignores the second signal. What a S
 | The shell belongs to a Stage | ``Refusing to start: TICKET_RUNNER_STAGE is set to `implement`, …`` |
 | `--api-key` with no key exported | `` `--api-key` runs every Stage on the `ANTHROPIC_API_KEY` this shell exports, and it exports none. … `` |
 | `--api-key` on a cloud Host | `` `--api-key` needs a workstation Host: a cloud session runs every Stage on the subscription, … `` |
-| The Target is not set up, still holds local State files, or has no Check | See [Target readiness](./installation.md#target-readiness-what-run-refuses) |
+| The Target is not set up, still holds local state files, or has no Check | See [Target readiness](./installation.md#target-readiness-what-run-refuses) |
 
 One Run at a time per Target, whichever Host it is on. [The Run lock](./stopping-and-resuming.md#the-run-lock) says when a lock is taken over by itself and how to release one another Host left.
 
@@ -160,16 +160,16 @@ ticket-runner 0.5.2 run 2026-09-17T09-00-00-000 · 84m · subscription
 Frontier blocked.
 ```
 
-The header ends with what the Stages were billed to: `subscription`, or `API key` on an `--api-key` Run. An `--api-key` Run follows it with its [Spend](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), `API key · $12.34`: what that key was billed for the Stages that ran on it, as the CLI prices them, which can differ from the Console's. It ends `+`, `$12.34+`, when a Stage stopped before reporting all of its figure, so the Run spent at least that much. A subscription Run shows no amount, and adds `extra usage` when a Stage ran on the plan's extra usage. A Run that took nothing prints `  nothing to do` in place of the rows.
+The header ends with what the Stages were billed to: `subscription`, or `API key` on an `--api-key` Run. An `--api-key` Run follows it with its spend, `API key · $12.34`: what that key was billed for the Stages that ran on it, as the CLI prices them, which can differ from the Console's. It ends `+`, `$12.34+`, when a Stage stopped before reporting all of its figure, so the Run spent at least that much. A subscription Run shows no amount, and adds `extra usage` when a Stage ran on the plan's extra usage. A Run that took nothing prints `  nothing to do` in place of the rows.
 
 | Row | Meaning |
 |---|---|
 | `merged` | Merged; the pull request is named |
 | `handed` | Handed off to a human: the Stage it stopped at, and why |
-| `released` | Released at the named Stage by the `rate limit` (`API rate limit` on an `--api-key` Run), an `API failure`, or `out of API budget`, or at `checks` or `ci` by a `failing Base branch`. Nobody has to do anything about the Ticket |
-| `skipped` | Passed over, with the reason ([Guards](./planning.md#guards), or the table above) |
-| `billed` | A Stage of the Ticket above that said, in its `apiKeySource`, it ran on another Credential than the header's: an `apiKeyHelper` in the Host's settings, say, which no environment variable removes. It ends with that Stage's own amount, `· $4.15`, where it gave one, which the header's leaves out |
-| `noted` | A [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) the row above made, `from #<n> pipeline` when it is the pipeline's own about a failing Base branch, and where it went: `comment` on an issue already there, the Notes issue included, or `new` for the one Note that opened the Notes issue |
+| `released` | Released at the named Stage by the `rate limit` (`API rate limit` on an `--api-key` Run), an `API failure`, or `out of API budget`, or at `checks` or `ci` by a `failing base branch`. Nobody has to do anything about the Ticket |
+| `skipped` | Passed over, with the reason ([guards](./planning.md#guards), or the table above) |
+| `billed` | A Stage of the Ticket above that said, in its `apiKeySource`, it was billed to something other than what the header names: an `apiKeyHelper` in the Host's settings, say, which no environment variable removes. It ends with that Stage's own amount, `· $4.15`, where it gave one, which the header's leaves out |
+| `noted` | A [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) the row above made, `from #<n> pipeline` when it is the pipeline's own about a failing base branch, and where it went: `comment` on an issue already there, the Notes issue included, or `new` for the one Note that opened the Notes issue |
 
 | Last line | Why the Run ended |
 |---|---|
@@ -178,7 +178,7 @@ The header ends with what the Stages were billed to: `subscription`, or `API key
 | `Rate limited · resets 2026-09-20 03:40 UTC.` | A Release by the rate limit stopped it. The time is the one the CLI gave for the limit's reset, in UTC; a Run it gave none ends `Rate limited.`. An `--api-key` Run says `API rate limited` |
 | `API failure.` | A Release by a transient API failure stopped it, and the rate limit released no Ticket after it: the rate limit outranks an API failure on the last line |
 | `Out of API budget.` | A Release by the key's credit or spend limit stopped it. It outranks the rate limit and an API failure, since only it needs you: look at the Console |
-| ``Base branch `main` fails `npm test` at 1a2b3c4.`` | A Release over a failing Base branch stopped it: the Check, and the merge-base it failed at. Mend it on the Base branch; the Note on the standing Notes issue has its output |
+| ``Base branch `main` fails `npm test` at 1a2b3c4.`` | A Release over a failing base branch stopped it: the Check, and the merge-base it failed at. Mend it on the base branch; the Note on the standing Notes issue has its output |
 | `Stopped at 22:07 · finishing #4 #9.` | A Stop arrived at that time (UTC), while those Tickets were in its Lanes |
 
 A Run a Stop or a Release ended prints no `blocked` rows, since it never reached the end of the Frontier.
@@ -204,13 +204,13 @@ ticket-runner run 2026-09-17T09-00-00-000 · 1 lane
 #4 merged · PR #12
 ```
 
-Nothing is printed while a Stage runs or CI is awaited, which can take an hour; a Stage's own output is in its `.stdout` file below. A narrowed Run's first line adds the Tickets named, and a resumed Ticket says `resumed from <state>` in place of `claimed`. A Stage that ran on another Credential than the Run's is named as it comes back: `#4 implement ran on apiKeySource apiKeyHelper, not the subscription (none)`. Warnings and refusals go to stderr.
+Nothing is printed while a Stage runs or CI is awaited, which can take an hour; a Stage's own output is in its `.stdout` file below. A narrowed Run's first line adds the Tickets named, and a resumed Ticket says `resumed from <state>` in place of `claimed`. A Stage billed to something other than what the Run bills its Stages to is named as it comes back: `#4 implement ran on apiKeySource apiKeyHelper, not the subscription (none)`. Warnings and refusals go to stderr.
 
 Everything a Stage did goes to disk, under the Target's gitignored `.ticket-runner/`. The run id is the start time in UTC, such as `2026-09-17T09-00-00-000`.
 
 | Path under `.ticket-runner/runs/<runId>/` | Holds |
 |---|---|
-| `version.txt` | The Version that ran, written before the first Stage |
+| `version.txt` | The version that ran, written before the first Stage |
 | `<n>/<stage>.command` | The exact command line, environment included, to rerun the Stage by hand: `env -u ANTHROPIC_API_KEY …` for a Stage run without the key, `ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" …` for one run on it, never its value |
 | `<n>/<stage>.stdout`, `<n>/<stage>.stderr` | Output as the Stage printed it, appended live |
 | `<n>/<stage>.transcript.jsonl` | The session's stream-json events |
@@ -224,7 +224,7 @@ On a workstation, a Run lasts only while the machine stays on: one that sleeps, 
 
 Before the first Run from the app:
 
-1. Run `init` on a workstation, and commit and push what it wrote to the Base branch. The cloud session sees only the repository.
+1. Run `init` on a workstation, and commit and push what it wrote to the base branch. The cloud session sees only the repository.
 2. Let the cloud environment reach npm, GitHub, apt and your Target's own package registry, which readying the Host installs from.
 
 `gh` needs nothing: the cloud session authenticates it.
@@ -240,7 +240,7 @@ Before the first Run from the app:
 
 Readying the Host installs only what the cloud environment's setup script did not:
 
-1. **The pipeline.** A copy the setup script installed is used as it is, whichever Version it is. Otherwise the Operator installs the Version stamped on the Target's conventions document; with no stamp, it installs nothing and asks you to run `init` from a workstation.
+1. **The pipeline.** A copy the setup script installed is used as it is, whichever version it is. Otherwise the Operator installs the version stamped on the Target's conventions document; with no stamp, it installs nothing and asks you to run `init` from a workstation.
 2. **The `mattpocock-skills` plugin**, from the official marketplace.
 3. **`gh`**, from apt.
 4. **The Target's own dependencies**, in the main checkout, where every worktree's Checks find them.
@@ -250,9 +250,9 @@ It reports each Ticket as the Run ends it, then the summary and what the exit co
 A cloud Host differs from a workstation in a few ways the pipeline accounts for:
 
 - **Nothing can be deleted on the remote.** That is why `init` switches on deleting a pull request's branch at merge, and why `remove` refuses to run on a cloud Host.
-- **Every issue body, comment and pull request body gets a "Generated by Claude Code" line**, which the proxy appends and nobody can turn off. The squash commit is composed by the pipeline, so none of it reaches the Base branch.
+- **Every issue body, comment and pull request body gets a "Generated by Claude Code" line**, which the proxy appends and nobody can turn off. The squash commit is composed by the pipeline, so none of it reaches the base branch.
 - **A reclaimed VM is a kill.** It leaves Stranded Tickets, which the next Run on any Host resumes, and a lock no other Host will presume dead: a human releases it, through an Operator or on GitHub.
-- **Transcripts go with the VM**, except a handed-off Ticket's, which are kept on the State branch.
+- **Transcripts go with the VM**, except a handed-off Ticket's, which are kept on the state branch.
 - **Stages always run on your plan.** A cloud session ignores `ANTHROPIC_API_KEY`, so `--api-key` is refused there rather than accepted and not honoured.
 
 In everything else a cloud Host runs the same Run against the same Target as a workstation. A claim assigns the same `gh` user whichever Host made it, so the assignee does not say where a Run ran.

@@ -1,13 +1,13 @@
 ---
 name: cut-a-version
-description: Cut a Version of ticket-runner by opening the Version PR that raises the number and carries the notes.
+description: Cut a version of ticket-runner by opening the release PR that raises the number and carries the notes.
 disable-model-invocation: true
 ---
 
-# Cut a Version
+# Cut a version
 
-A Version is cut by merging a **Version PR** (ADR-0007): it raises the number in
-`package.json` and the lock file, and adds that Version's section to
+A version is cut by merging a **release PR** (ADR-0007): it raises the number in
+`package.json` and the lock file, and adds that version's section to
 `CHANGELOG.md`. The push to `main` does the rest — the tag, and a GitHub Release
 whose body is the section.
 
@@ -18,8 +18,8 @@ checkout, not this one.
 
 ## 1. Check the checkout
 
-The Version PR carries only the files `CONTRIBUTING.md`'s Versions section
-lists, and step 7 commits those and nothing else. List every other tracked
+The release PR carries only the files `CONTRIBUTING.md` lists under `## Versions`,
+and step 7 commits those and nothing else. List every other tracked
 file the checkout has changed:
 
 ```bash
@@ -45,7 +45,7 @@ gh issue list --state closed --limit 1000 \
 ```
 
 Every subject in the span is a pull request that landed. The issues are those
-closed after the last Version's commit, to the second: a search by its date
+closed after the last version's commit, to the second: a search by its date
 would also count the ones closed earlier that day, and miss some closed after
 it, since GitHub reads a date in UTC.
 
@@ -111,7 +111,7 @@ always asks for, from two places:
 
 - What the span's own issues and pull requests ask. Read the body of each
   issue closed as completed in the span and of each pull request that landed
-  in it, and carry into `After upgrading` anything they ask of the Version
+  in it, and carry into `After upgrading` anything they ask of the release
   notes or of a Target after upgrading. A Ticket can name that note as the
   guard for a case its code leaves to the human, and its pull request does not
   always repeat the request.
@@ -140,7 +140,7 @@ BASE_REF=main npx tsx scripts/version.ts check
 
 `npm version` writes `package.json` and `package-lock.json` in one go, and the
 check is the one the pull request will run. `mark` rewrites this repository's
-own copy of the conventions document, which carries the Version that wrote it:
+own copy of the conventions document, which carries the version that wrote it:
 this repository is a Target of its own pipeline, and its test suite refuses a
 copy the new number would have written differently. Done when the check prints
 that the number may merge.
@@ -161,7 +161,7 @@ and then step 5's check — and back here with the result.
 Done when the maintainer has approved this number and these notes in so many
 words. A question, or a correction already applied, is not yet approval.
 
-## 7. Open the Version PR
+## 7. Open the release PR
 
 ```bash
 git switch -c version/<number>
@@ -178,4 +178,4 @@ opens: the section as the tag workflow will extract it, so the notes are read
 in the pull request exactly as they will be published.
 
 Done when the pull request is open and its link is handed to the maintainer:
-their review and their merge are what cut the Version.
+their review and their merge are what cut the version.

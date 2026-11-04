@@ -28,9 +28,9 @@ Run은 무인으로 돌기 때문에, 빠진 게 있다면 Ticket 도중이 아�
 | 이슈 트래커로 GitHub Issues를 골라 저장소에서 한 번 실행해 둔 `/setup-matt-pocock-skills` | 이 설정이 있어야 계획용 스킬이 Spec과 Ticket을 GitHub 이슈로 만듦. 실행하면 묻고 나서 `docs/agents/issue-tracker.md`와 `CLAUDE.md`의 `## Agent skills` 블록을 쓰므로, 이 둘이 있으면 돌린 것 | – |
 | `.github/workflows`의 CI 워크플로 | check가 하나도 없는 pull request는 merge되지 않음. [`gates.ci`](./configuration.md#gates)를 끄면 예외 | `init`이 알려 줌 |
 | 파이프라인이 직접 돌릴 Check | `package.json`의 `test`, `typecheck` 스크립트, 또는 [`checks`](./configuration.md#checks)에 적은 명령 | `init`이 알려 주고, 없으면 `run`이 거절 |
-| main checkout에 설치된 Target 자체의 의존성 | Ticket의 worktree는 거기 있는 의존성을 쓰고, 따로 설치해 주는 것은 없음. 없으면 merge-base에서도 모든 Check가 실패하고, Run은 [실패하는 Base branch](./stopping-and-resuming.md#release-over-a-failing-base-branch)로 끝남 | – |
+| main checkout에 설치된 Target 자체의 의존성 | Ticket의 worktree는 거기 있는 의존성을 쓰고, 따로 설치해 주는 것은 없음. 없으면 merge-base에서도 모든 Check가 실패하고, Run은 [실패하는 base branch](./stopping-and-resuming.md#release-over-a-failing-base-branch)로 끝남 | – |
 
-merge는 Base branch를 main checkout으로 pull하기만 합니다. 그러니 의존성을 추가하는 Ticket이 merge된 뒤에는 다음 Run 전에 거기서 다시 설치하세요.
+merge는 base branch를 main checkout으로 pull하기만 합니다. 그러니 의존성을 추가하는 Ticket이 merge된 뒤에는 다음 Run 전에 거기서 다시 설치하세요.
 
 플러그인은 Anthropic 공식 마켓플레이스에서 받습니다. 워크스테이션에서도 [Operator](./running.md#from-the-claude-app)가 클라우드 Host에 설치할 때와 같은 방법으로 설치합니다. 설치된 버전은 `claude plugin list`로 확인합니다.
 
@@ -45,18 +45,18 @@ claude plugin install mattpocock-skills@claude-plugins-official
 npm install -g ticket-runner
 ```
 
-업그레이드도 같은 명령입니다. 그다음 쓰던 것보다 새로운 Version마다 [Release](https://github.com/jjongs2/ticket-runner/releases)의 **After upgrading**을 읽으세요. `init` 다시 실행하기처럼 Target에서 해야 할 일이 적혀 있습니다.
+업그레이드도 같은 명령입니다. 그다음 쓰던 것보다 새로운 버전마다 [Release](https://github.com/jjongs2/ticket-runner/releases)의 **After upgrading**을 읽으세요. `init` 다시 실행하기처럼 Target에서 해야 할 일이 적혀 있습니다.
 
-GitHub의 Version tag에서 바로 설치해도 됩니다. 이 범위는 `main`이 아니라 가장 높은 tag를 가리키므로, 받는 사본은 언제나 tag가 붙은, 이름 있는 Version입니다([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
+GitHub의 버전 tag에서 바로 설치해도 됩니다. 이 범위는 `main`이 아니라 가장 높은 tag를 가리키므로, 받는 사본은 언제나 tag가 붙은, 이름 있는 버전입니다([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
 
 ```bash
 npm install -g "github:jjongs2/ticket-runner#semver:*"
 ```
 
-`init`과 `run`은 GitHub Release로 공개된 가장 새로운 Version을 찾아봅니다. 그게 지금 사본이 보고하는 번호보다 높으면 한 줄을 출력할 뿐, 아무것도 거절하지 않습니다.
+`init`과 `run`은 GitHub Release로 공개된 가장 새로운 버전을 찾아봅니다. 그게 지금 사본이 보고하는 번호보다 높으면 한 줄을 출력할 뿐, 아무것도 거절하지 않습니다.
 
 ```text
-A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g ticket-runner`.
+A newer version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g ticket-runner`.
 ```
 
 지금 사본이 최신이거나 더 앞서 있을 때, 또는 GitHub에 물어볼 수조차 없을 때(네트워크나 `gh`가 없을 때)는 아무것도 출력하지 않습니다.
@@ -76,8 +76,8 @@ npx ticket-runner remove   # 다 써 봤으면
 
 | 하려는 일 | 입력 |
 |---|---|
-| 예전에 캐시된 것 말고 가장 새 Version 쓰기 | `npx ticket-runner@latest …` |
-| 명령마다 같은 Version 쓰기 | `npx ticket-runner@<version> …` |
+| 예전에 캐시된 것 말고 가장 새 버전 쓰기 | `npx ticket-runner@latest …` |
+| 명령마다 같은 버전 쓰기 | `npx ticket-runner@<version> …` |
 | `npx`가 남긴 것 지우기 | `~/.npm/_npx` 삭제 |
 
 ## `init`으로 Target 준비하기 {#set-a-target-up-with-init}
@@ -87,7 +87,7 @@ cd ~/code/acme
 ticket-runner init
 ```
 
-commit은 하지 않습니다. 첫 Run 전에 쓴 내용을 commit해서 Base branch에 push하세요. Ticket의 worktree는 remote에서 branch를 따 오니, Stage는 Base branch에 들어간 뒤에야 conventions 문서를 읽고, 클라우드 Host는 push된 것만 봅니다. Ticket을 claim하지 않으므로 [Run lock](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)도 잡지 않습니다.
+commit은 하지 않습니다. 첫 Run 전에 쓴 내용을 commit해서 base branch에 push하세요. Ticket의 worktree는 remote에서 branch를 따 오니, Stage는 base branch에 들어간 뒤에야 conventions 문서를 읽고, 클라우드 Host는 push된 것만 봅니다. Ticket을 claim하지 않으므로 [Run lock](./stopping-and-resuming.md#the-run-lock)도 잡지 않습니다.
 
 ### 쓰는 것 {#what-it-writes}
 
@@ -95,11 +95,11 @@ commit은 하지 않습니다. 첫 Run 전에 쓴 내용을 commit해서 Base br
 |---|---|---|
 | `.gitignore` 줄 두 개 | `.gitignore`: `.worktrees/`, `.ticket-runner/` | 어떤 표기로든 이미 무시하고 있으면 추가하지 않음 |
 | 빈 설정 파일 | `{}`만 담긴 `ticket-runner.json` | 한번 생기면 건드리지 않음 |
-| Version이 찍힌 conventions 문서 | `docs/agents/pipeline-conventions.md` | 내용이 다르면 다시 씀 |
+| 버전이 찍힌 conventions 문서 | `docs/agents/pipeline-conventions.md` | 내용이 다르면 다시 씀 |
 | 그 문서를 가리키는 섹션 | `CLAUDE.md`, 없으면 새로 만듦 | `CLAUDE.md`가 이미 문서를 가리키면 추가하지 않음 |
 | Operator의 스킬 | `.claude/skills/ticket-runner/SKILL.md` | 내용이 다르면 다시 씀 |
 
-conventions 문서와 스킬은 파이프라인의 글이라, 거기서 고친 내용은 다음 `init`에서 사라집니다. 예외가 하나 있습니다. 문서 첫 줄에는 숨은 `<!-- ticket-runner:version <number> -->` 표시가 있는데, 이 표시가 지금 실행 중인 것보다 *새* Version을 가리키면 `init`은 문서와 스킬을 그대로 두고 업그레이드하라고만 알립니다. 다시 쓰면 Target을 과거로 되돌리는 셈이기 때문입니다.
+conventions 문서와 스킬은 파이프라인의 글이라, 거기서 고친 내용은 다음 `init`에서 사라집니다. 예외가 하나 있습니다. 문서 첫 줄에는 숨은 `<!-- ticket-runner:version <number> -->` 표시가 있는데, 이 표시가 지금 실행 중인 것보다 *새* 버전을 가리키면 `init`은 문서와 스킬을 그대로 두고 업그레이드하라고만 알립니다. 다시 쓰면 Target을 과거로 되돌리는 셈이기 때문입니다.
 
 ### GitHub에서 하는 일 {#what-it-does-on-github}
 
@@ -144,37 +144,37 @@ Not ready: 1 item is yours to put right.
 
 그래서 `ticket-runner init && ticket-runner run`은 어차피 안 될 Run을 시작하기 전에 멈춥니다.
 
-## Target readiness: `run`이 거절하는 경우 {#target-readiness-what-run-refuses}
+## Target 준비 상태: `run`이 거절하는 경우 {#target-readiness-what-run-refuses}
 
 `run`은 아무것도 고치지 않습니다. `init`이 뒀어야 할 항목이 있는지 이 순서로 확인하고, 처음 빠진 항목에서 종료 코드 `2`로 거절합니다. 어느 Host에서나 똑같이 확인하므로, 워크스테이션의 Run이 받아들인 Target은 Operator가 Claude 앱에서 돌려도 받아들여집니다.
 
 | 순서 | 거절하는 경우 |
 |---|---|
 | 1 | `.gitignore`가 `.worktrees/`나 `.ticket-runner/`를 무시하지 않음 |
-| 2 | `docs/agents/pipeline-conventions.md`가 없거나 Version 표시가 없음 |
+| 2 | `docs/agents/pipeline-conventions.md`가 없거나 버전 표시가 없음 |
 | 3 | `CLAUDE.md`가 그 문서의 경로를 언급하지 않음 |
 | 4 | Operator의 스킬이 없음 |
 | 5 | `gh`가 설치되어 있지 않음. 이때는 `init`보다 설치를 먼저 안내 |
 | 6 | `labels`가 정한 이름의 triage 라벨이 하나라도 없음 |
 | 7 | 저장소가 merge된 pull request의 branch를 남겨 둠 |
-| 8 | remote의 Base branch(예: `origin/main`)에 2, 3, 4번 항목 중 하나가 없음. worktree는 모두 여기서 만들어지므로, `init`을 다시 돌리라는 대신 `init`이 쓴 것을 commit하고 push하라고 안내 |
+| 8 | remote의 base branch(예: `origin/main`)에 2, 3, 4번 항목 중 하나가 없음. worktree는 모두 여기서 만들어지므로, `init`을 다시 돌리라는 대신 `init`이 쓴 것을 commit하고 push하라고 안내 |
 
 ```text
 $ ticket-runner run
 This Target is not set up: `.gitignore` does not ignore `.worktrees/`. Run `ticket-runner init` here and start again; a Run puts nothing in place itself.
 ```
 
-readiness는 있는지와 Version 표시만 보고, 내용은 보지 않습니다. 다른 Version이 쓴 conventions 문서는 경고로 그치고, Run은 그대로 진행합니다.
+준비 상태 확인은 있는지와 버전 표시만 보고, 내용은 보지 않습니다. 다른 버전이 쓴 conventions 문서는 경고로 그치고, Run은 그대로 진행합니다.
 
 ```text
 warning: This Target's `docs/agents/pipeline-conventions.md` was left by 0.4.0, and this Run is 0.5.2 — run `ticket-runner init` here to bring it up to date.
 ```
 
-readiness보다 먼저 오는 거절이 하나 있습니다. 클라우드 Host에서, 또는 `ANTHROPIC_API_KEY`를 export하지 않고 [`--api-key`](./running.md#api-key)를 준 경우입니다.
+준비 상태 확인보다 먼저 오는 거절이 하나 있습니다. 클라우드 Host에서, 또는 `ANTHROPIC_API_KEY`를 export하지 않고 [`--api-key`](./running.md#api-key)를 준 경우입니다.
 
-readiness 다음에 거절이 두 가지 더 있습니다.
+준비 상태 확인 다음에 거절이 두 가지 더 있습니다.
 
-- **checkout에 남은 State file.** 초기 파이프라인은 Ticket의 재개 상태를 `.ticket-runner/state/`에 뒀는데, 지금은 Target의 remote에 두고, 옮겨 주는 것은 없습니다. 이 디렉터리에 State file이 남아 있으면 Run은 해당 Ticket을 나열하며 거절합니다. 그 파일을 쓴 Version으로 Ticket을 마무리하거나 사람에게 넘긴 다음, 디렉터리를 지우세요.
+- **checkout에 남은 state file.** 초기 파이프라인은 Ticket의 재개 상태를 `.ticket-runner/state/`에 뒀는데, 지금은 Target의 remote에 두고, 옮겨 주는 것은 없습니다. 이 디렉터리에 state file이 남아 있으면 Run은 해당 Ticket을 나열하며 거절합니다. 그 파일을 쓴 버전으로 Ticket을 마무리하거나 사람에게 넘긴 다음, 디렉터리를 지우세요.
 - **Check 없음.** [Checks 게이트](./configuration.md#gates)가 켜져 있는데 설정하거나 추론할 수 있는 Check 명령이 없으면, 검사하지 않은 코드를 merge하느니 Run을 거절합니다.
 
 ## `remove`로 걷어 내기 {#take-it-out-with-remove}
@@ -189,7 +189,7 @@ ticket-runner remove --yes  # 묻지 않고 그대로
 
 ```mermaid
 flowchart TD
-  A["ticket-runner remove"] --> B{"Stage 셸, 클라우드 Host,<br>gh 미인증, 또는<br>더 새 Version이 준비한 Target?"}
+  A["ticket-runner remove"] --> B{"Stage 셸, 클라우드 Host,<br>gh 미인증, 또는<br>더 새 버전이 준비한 Target?"}
   B -- 예 --> R["거절, exit 2<br>바뀐 것 없음"]
   B -- 아니오 --> C{"파이프라인의 흔적이<br>남아 있나?"}
   C -- 아니오 --> N["지울 것 없음, exit 0"]
@@ -201,7 +201,7 @@ flowchart TD
   F -- 예 --> RL["lock 풀기"] --> R
   F -- 아니오 --> Q{"물어봤고 y라고 답했나?"}
   Q -- 아니오 --> RL
-  Q -- "예, 또는 --yes" --> G["파일, worktree, branch,<br>.gitignore 줄, 라벨, State branch 제거"]
+  Q -- "예, 또는 --yes" --> G["파일, worktree, branch,<br>.gitignore 줄, 라벨, state branch 제거"]
   G --> H{"모든 제거가 성공?"}
   H -- 예 --> I["ticket-runner.json과<br>lock branch 삭제, exit 0"]
   H -- 아니오 --> J["ticket-runner.json 유지,<br>lock 풀기, exit 1"]
@@ -255,7 +255,7 @@ Target마다 먼저 `ticket-runner remove`를 실행하세요. 명령을 지운 
 - [일 계획하기](./planning.md): 파이프라인이 가져가는 Ticket이 되려면
 - [실행하기](./running.md): Run을 시작하고, 좁히고, 멈추기
 - [설정](./configuration.md): 라벨을 포함한 `ticket-runner.json`의 필드
-- [Hand-off, 멈추고 이어 하기](./stopping-and-resuming.md): `remove`가 지우는 Run lock과 State branch
+- [Hand-off, 멈추고 이어 하기](./stopping-and-resuming.md): `remove`가 지우는 Run lock과 state branch
 
 ## 참고 자료 {#references}
 

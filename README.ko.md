@@ -13,7 +13,7 @@
 
 체인은 둘로 나뉩니다. **Planning**은 사람 몫입니다. `/grilling`, `/to-spec`, `/to-tickets`(또는
 `/triage`)로 기능 하나를 작은 GitHub 이슈 여러 개로 나눕니다. 이슈마다 `ready-for-agent` 라벨과
-Acceptance Criteria 체크리스트가 달리고, blocker가 연결됩니다. **Execution**은 파이프라인 몫입니다.
+Acceptance Criteria 체크리스트가 달리고, blocker가 연결됩니다. **실행**은 파이프라인 몫입니다.
 그런 이슈 가운데 blocker가 모두 닫힌 것마다 다음을 합니다.
 
 1. 이슈를 맡고, 그 이슈의 branch와 git worktree를 만듭니다.
@@ -40,7 +40,7 @@ Acceptance Criteria 체크리스트가 달리고, blocker가 연결됩니다. **
   [`mattpocock-skills`](https://github.com/mattpocock/skills) 플러그인 1.2.3 이상 버전을 설치한 `claude`가
   있습니다.
 
-파이프라인은 묻지 않고 Base branch에 merge합니다. 그걸 원하는 저장소에 쓰세요.
+파이프라인은 묻지 않고 base branch에 merge합니다. 그걸 원하는 저장소에 쓰세요.
 
 ## 써 보기
 
@@ -55,7 +55,7 @@ npx ticket-runner run    # 준비된 이슈를 모두 처리합니다
 
 `init`은 검토하고 commit할 파일 몇 개를 씁니다. `.gitignore` 줄, conventions 문서, `CLAUDE.md`의 한
 섹션, Claude skill 하나입니다. 또 triage 라벨을 만들고, squash merge와 merge 시 branch 삭제를 켭니다.
-commit은 하지 않습니다. 세션은 이 파일들이 Base branch에 올라간 뒤에야 읽으므로, 첫 `run` 전에
+commit은 하지 않습니다. 세션은 이 파일들이 base branch에 올라간 뒤에야 읽으므로, 첫 `run` 전에
 push하세요.
 
 계속 쓰려면 전역으로 설치하세요.
@@ -73,7 +73,7 @@ npm install -g ticket-runner
 | `ticket-runner run --api-key` | 모든 세션을 Claude 요금제 대신 `ANTHROPIC_API_KEY`로 과금합니다. |
 | `ticket-runner stop` | 진행 중인 Run에게 맡은 것만 끝내고 더 맡지 말라고 합니다. |
 | `ticket-runner remove` | 이 저장소에서 파이프라인을 걷어 냅니다. |
-| `ticket-runner -v` | Version을 출력합니다. |
+| `ticket-runner -v` | 버전을 출력합니다. |
 
 Claude 앱에서도 Run을 시작할 수 있습니다. Target에서 Claude Code 클라우드 세션을 열고 "run it"이라고
 말하면 됩니다. 클라우드 세션은 늘 요금제로 돌기 때문에 `--api-key`를 거절합니다.

@@ -14,7 +14,7 @@ description: Run 시작하기, Lane 주기, API 키로 과금하기, 지정한 T
 | `ticket-runner run --lanes 2` | 같은 Run을 Ticket 두 개씩 동시에 | 위와 같음 |
 | `ticket-runner run --api-key` | 같은 Run을 셸이 export한 `ANTHROPIC_API_KEY`로 과금 | 위와 같음 |
 | `ticket-runner stop` | 이 Target의 Run에게 맡은 것만 마치고 더 가져가지 말라고 요청 | `0` 보냄 · `2` 보낼 상대 없음 |
-| `ticket-runner -v` | 이 사본의 Version을 출력 | `0` |
+| `ticket-runner -v` | 이 사본의 버전을 출력 | `0` |
 | `ticket-runner -h` | 사용법을 출력 | `0` (명령 없이 실행하면 `2`) |
 
 `init`과 `remove`는 [설치와 제거](./installation.md)에 있습니다. 모르는 명령이나 옵션, 잘못된 인자는 사용법과 함께 종료 코드 `2`로 거절합니다.
@@ -28,7 +28,7 @@ description: Run 시작하기, Lane 주기, API 키로 과금하기, 지정한 T
 | 지켜보는 사람 | 나. 내 세션에서 보면서 방향을 틀 수 있음 | 없음. 끝난 뒤 요약과 보드를 읽음 |
 | 일의 단위 | Spec 하나 전체를 세션 하나에서 | Ticket 하나. branch와 pull request가 Ticket마다 따로 |
 | 게이트 | 스킬이 밟는 단계, 그다음 나의 검토 | Ticket마다 Check, verify Stage, CI |
-| 끝나는 모습 | 세션이 끝나면 Spec의 작업이 내 검토를 기다림 | Ticket마다 Base branch에 merge되거나 사람에게 넘어감 |
+| 끝나는 모습 | 세션이 끝나면 Spec의 작업이 내 검토를 기다림 | Ticket마다 base branch에 merge되거나 사람에게 넘어감 |
 | 이어 하기 | 어디까지 했는지 보드에 남는 기록이 없어 남은 일은 내가 가려내야 함 | [Stranded Ticket](./stopping-and-resuming.md)을 다음 Run이 어느 Host에서든 이어 감 |
 | 보드에 남는 표시 | 작업하는 동안 없음 | Run이 맡은 동안 `in-progress`와 담당자 |
 
@@ -42,12 +42,12 @@ description: Run 시작하기, Lane 주기, API 키로 과금하기, 지정한 T
 
 ```mermaid
 flowchart TD
-  A["Run lock 잡기"] --> B["State branch에서<br>Stranded Ticket 훑기"]
+  A["Run lock 잡기"] --> B["state branch에서<br>Stranded Ticket 훑기"]
   B --> C{"빈 Lane이 있나?"}
   C -- 예 --> D{"남은 Stranded Ticket이 있나?"}
   D -- 예 --> E["빈 Lane에서 재개"] --> C
   D -- 아니오 --> F["Frontier를 다시 조회,<br>낮은 번호부터"]
-  F --> G["다음 Ticket을<br>빈 Lane에 Claim"] --> C
+  F --> G["다음 Ticket을<br>빈 Lane에 claim"] --> C
   C -- "없음, 또는 가져갈 게 없음" --> H["Lane 하나가 끝날 때까지 대기,<br>빈 Lane이 있으면 5분까지만"]
   H --> I{"Release됐거나 Stop이 왔나?"}
   I -- 예 --> J["더는 Lane을 채우지 않음,<br>바쁜 Lane은 마저 끝냄"]
@@ -62,7 +62,7 @@ flowchart TD
 - **다른 Lane이 바쁜 동안 빈 Lane은 Frontier를 다시 봅니다.** Run이 마지막으로 조회한 지 5분이 지나면 봅니다. Run 도중 `ready-for-agent`를 붙이거나 마지막 blocker를 닫은 Ticket은 바쁜 Lane이 끝나기를 기다리지 않고 들어갑니다. Lane이 하나인 Run은 이렇게 하지 않습니다.
 - **[Release](./stopping-and-resuming.md#release-on-a-rate-limit)가 일어나면 채우기를 멈춥니다.** 바쁜 Lane은 마저 끝내고, 다음 Run은 사람이나 Operator가 시작합니다.
 - **Run이 끝나는 때**는 바쁜 Lane이 없고 가져갈 것도 남지 않았을 때입니다. Frontier가 비었거나, 남은 것이 모두 막혀 있을 때죠.
-- **main checkout은 Run에게 맡겨 두세요.** Run은 rebase하기 전과 merge한 뒤마다 거기로 Base branch를 pull합니다. commit하지 않은 변경을 pull이 덮어쓰게 되면 Ticket이 Hand-off되고, checkout된 Base branch에 remote에 없는 commit이 있으면 다음 pull request에 rebase되어 들어갑니다. 그동안 작업은 따로 만든 worktree에서 하세요.
+- **main checkout은 Run에게 맡겨 두세요.** Run은 rebase하기 전과 merge한 뒤마다 거기로 base branch를 pull합니다. commit하지 않은 변경을 pull이 덮어쓰게 되면 Ticket이 Hand-off되고, checkout된 base branch에 remote에 없는 commit이 있으면 다음 pull request에 rebase되어 들어갑니다. 그동안 작업은 따로 만든 worktree에서 하세요.
 
 Lane 안에서 Ticket 하나에 일어나는 일은 [Ticket 하나가 merge되기까지](./ticket-to-merge.md)에 있습니다. Stranded Ticket과 Release는 [Hand-off, 멈추고 이어 하기](./stopping-and-resuming.md)에 있습니다.
 
@@ -90,7 +90,7 @@ Stage는 모두 `claude -p` 세션입니다. `-p`에서는 `ANTHROPIC_API_KEY`�
 - 번호는 어떤 Ticket인지를 말할 뿐 순서를 정하지 않습니다. Stranded Ticket이 먼저, 나머지는 낮은 번호부터입니다.
 - blocker는 그대로 유효합니다. 지정한 Ticket이 지정한 다른 Ticket에 막혀 있으면, 그 Ticket이 같은 Run에서 merge된 뒤에 가져갑니다.
 
-지정했는데 Run이 가져가지 않은 Ticket에는 이유를 적은 `skipped` 줄이 붙습니다. 이슈에 코멘트까지 다는 것은 Guard의 이유뿐입니다.
+지정했는데 Run이 가져가지 않은 Ticket에는 이유를 적은 `skipped` 줄이 붙습니다. 이슈에 코멘트까지 다는 것은 guard의 이유뿐입니다.
 
 | 줄 | 뜻 |
 |---|---|
@@ -99,7 +99,7 @@ Stage는 모두 `claude -p` 세션입니다. `-p`에서는 `ANTHROPIC_API_KEY`�
 | `not-ready` | `ready-for-agent` 라벨이 없거나 이미 닫힘 |
 | `no-issue` | 그 번호의 이슈가 없음 |
 | `pull-request` | 그 번호는 pull request |
-| `spec`, `no-criteria`, `body-only-blockers` | [Guard](./planning.md#guards)가 거절함 |
+| `spec`, `no-criteria`, `body-only-blockers` | [guard](./planning.md#guards)가 거절함 |
 
 Stop이나 Release 때문에 Run이 손대지 못한 지정 Ticket에는 줄이 없습니다. Run이 왜 멈췄는지는 요약의 마지막 줄이 말해 줍니다.
 
@@ -116,7 +116,7 @@ Stop은 Run에게 Lane이 맡고 있는 Ticket만 merge나 Hand-off까지 마치
 Ctrl+C in that Run's own terminal stops it at once instead, at the cost of killing the Stages it is running and leaving their Tickets stranded for the next Run.
 ```
 
-Target에서는 lock 말고 아무것도 필요 없습니다. 설정도, `gh` 로그인도, readiness도요.
+Target에서는 lock 말고 아무것도 필요 없습니다. 설정도, `gh` 로그인도, 준비 상태 확인도요.
 
 | 찾은 것 | 출력 | 종료 코드 |
 |---|---|---|
@@ -129,7 +129,7 @@ Target에서는 lock 말고 아무것도 필요 없습니다. 설정도, `gh` �
 
 ## `-v` {#v}
 
-`-v` 또는 `--version`은 `0.5.2`처럼 이 사본의 Version을 출력합니다. Run이 쓰는 모든 것에 같은 문자열이 찍힙니다([찍히는 번호](./internals.md#the-stamp)).
+`-v` 또는 `--version`은 `0.5.2`처럼 이 사본의 버전을 출력합니다. Run이 쓰는 모든 것에 같은 문자열이 찍힙니다([찍히는 번호](./internals.md#the-stamp)).
 
 ## 시작 전에 거절되는 경우 {#refused-before-it-starts}
 
@@ -140,7 +140,7 @@ Target에서는 lock 말고 아무것도 필요 없습니다. 설정도, `gh` �
 | 셸이 Stage의 것임 | ``Refusing to start: TICKET_RUNNER_STAGE is set to `implement`, …`` |
 | 키를 export하지 않고 `--api-key` | `` `--api-key` runs every Stage on the `ANTHROPIC_API_KEY` this shell exports, and it exports none. … `` |
 | 클라우드 Host에서 `--api-key` | `` `--api-key` needs a workstation Host: a cloud session runs every Stage on the subscription, … `` |
-| Target이 준비되지 않았거나, 로컬 State file이 아직 있거나, Check가 없음 | [Target readiness](./installation.md#target-readiness-what-run-refuses) 참고 |
+| Target이 준비되지 않았거나, 로컬 state file이 아직 있거나, Check가 없음 | [Target 준비 상태](./installation.md#target-readiness-what-run-refuses) 참고 |
 
 Target 하나에는 한 번에 Run 하나뿐입니다. 어느 Host에서 돌든 마찬가지입니다. lock을 언제 알아서 넘겨받는지, 다른 Host가 남긴 lock은 어떻게 푸는지는 [Run lock](./stopping-and-resuming.md#the-run-lock)에 있습니다.
 
@@ -160,16 +160,16 @@ ticket-runner 0.5.2 run 2026-09-17T09-00-00-000 · 84m · subscription
 Frontier blocked.
 ```
 
-머리 줄 끝은 Stage를 무엇으로 과금했는지입니다. `subscription`, 또는 `--api-key` Run이면 `API key`. `--api-key` Run은 그 뒤에 [Spend](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)를 붙입니다(`API key · $12.34`). 그 키로 실행한 Stage에 청구된 금액을 CLI가 직접 매긴 값이라 Console의 금액과 다를 수 있습니다. 금액을 다 알리기 전에 멈춘 Stage가 있으면 `$12.34+`처럼 `+`로 끝나며, 적어도 그만큼 썼다는 뜻입니다. subscription Run은 금액을 보여 주지 않고, Stage가 요금제의 extra usage를 썼으면 `extra usage`를 붙입니다. 아무것도 가져가지 않은 Run은 줄 대신 `  nothing to do`를 출력합니다.
+머리 줄 끝은 Stage를 무엇으로 과금했는지입니다. `subscription`, 또는 `--api-key` Run이면 `API key`. `--api-key` Run은 그 뒤에 사용 금액을 붙입니다(`API key · $12.34`). 그 키로 실행한 Stage에 청구된 금액을 CLI가 직접 매긴 값이라 Console의 금액과 다를 수 있습니다. 금액을 다 알리기 전에 멈춘 Stage가 있으면 `$12.34+`처럼 `+`로 끝나며, 적어도 그만큼 썼다는 뜻입니다. subscription Run은 금액을 보여 주지 않고, Stage가 요금제의 extra usage를 썼으면 `extra usage`를 붙입니다. 아무것도 가져가지 않은 Run은 줄 대신 `  nothing to do`를 출력합니다.
 
 | 줄 | 뜻 |
 |---|---|
 | `merged` | merge됨. pull request 번호가 붙음 |
 | `handed` | 사람에게 Hand-off됨. 멈춘 Stage와 이유가 붙음 |
-| `released` | 해당 Stage에서 `rate limit`(`--api-key` Run이면 `API rate limit`), `API failure`, `out of API budget`으로, 또는 `checks`나 `ci`에서 `failing Base branch`로 Release됨. 그 Ticket을 두고 사람이 할 일은 없음 |
-| `skipped` | 이유와 함께 넘어감([Guard](./planning.md#guards), 또는 위의 표) |
-| `billed` | 위 Ticket의 Stage가 `apiKeySource`로 머리 줄과 다른 Credential을 댐. 예를 들어 Host 설정의 `apiKeyHelper`가 준 키인데, 이것은 환경 변수로 뺄 수 없음. 그 Stage가 금액을 알렸으면 `· $4.15`처럼 끝에 붙고, 머리 줄의 금액에는 들어가지 않음 |
-| `noted` | 바로 윗줄이 남긴 [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)와 간 곳. Base branch 실패에 대한 파이프라인 자신의 Note면 `from #<n> pipeline`. 이미 있는 이슈(열려 있던 Notes 이슈 포함)면 `comment`, Notes 이슈를 새로 연 Note 하나만 `new` |
+| `released` | 해당 Stage에서 `rate limit`(`--api-key` Run이면 `API rate limit`), `API failure`, `out of API budget`으로, 또는 `checks`나 `ci`에서 `failing base branch`로 Release됨. 그 Ticket을 두고 사람이 할 일은 없음 |
+| `skipped` | 이유와 함께 넘어감([guard](./planning.md#guards), 또는 위의 표) |
+| `billed` | 위 Ticket의 Stage가 `apiKeySource`로 알린 과금처가 머리 줄과 다름. 예를 들어 Host 설정의 `apiKeyHelper`가 준 키인데, 이것은 환경 변수로 뺄 수 없음. 그 Stage가 금액을 알렸으면 `· $4.15`처럼 끝에 붙고, 머리 줄의 금액에는 들어가지 않음 |
+| `noted` | 바로 윗줄이 남긴 [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)와 간 곳. base branch 실패에 대한 파이프라인 자신의 Note면 `from #<n> pipeline`. 이미 있는 이슈(열려 있던 Notes 이슈 포함)면 `comment`, Notes 이슈를 새로 연 Note 하나만 `new` |
 
 | 마지막 줄 | Run이 끝난 이유 |
 |---|---|
@@ -178,7 +178,7 @@ Frontier blocked.
 | `Rate limited · resets 2026-09-20 03:40 UTC.` | rate limit으로 Release되어 멈춤. 시각은 CLI가 알려 준, 한도가 풀리는 시각(UTC)이고, 알려 주지 않았으면 `Rate limited.`로 끝남. `--api-key` Run이면 `API rate limited` |
 | `API failure.` | 일시적인 API 장애로 Release되어 멈췄고, 그 뒤 rate limit으로 Release된 Ticket이 없음. 마지막 줄에서는 rate limit이 API 장애보다 앞섬 |
 | `Out of API budget.` | 키의 크레딧이나 지출 한도로 Release되어 멈춤. 사람이 손써야 하는 것은 이것뿐이라 rate limit과 API 장애보다 앞섬. Console을 확인하세요. |
-| ``Base branch `main` fails `npm test` at 1a2b3c4.`` | Base branch 실패로 Release되어 멈춤. 실패한 Check와 merge-base를 알려 줌. Base branch에서 고치면 되고, 출력은 상설 Notes 이슈의 Note에 있음 |
+| ``Base branch `main` fails `npm test` at 1a2b3c4.`` | base branch 실패로 Release되어 멈춤. 실패한 Check와 merge-base를 알려 줌. base branch에서 고치면 되고, 출력은 상설 Notes 이슈의 Note에 있음 |
 | `Stopped at 22:07 · finishing #4 #9.` | 그 시각(UTC)에 Stop이 왔고, 그때 그 Ticket들이 Lane에 있었음 |
 
 Stop이나 Release로 끝난 Run은 Frontier 끝까지 가 보지 못했으니 `blocked` 줄을 출력하지 않습니다.
@@ -204,13 +204,13 @@ ticket-runner run 2026-09-17T09-00-00-000 · 1 lane
 #4 merged · PR #12
 ```
 
-Stage가 도는 동안이나 CI를 기다리는 동안에는 아무것도 출력하지 않고, 이 시간은 한 시간이 될 수도 있습니다. Stage 자신의 출력은 아래의 `.stdout` 파일에 있습니다. 좁힌 Run이면 첫 줄에 지정한 Ticket이 덧붙고, 재개한 Ticket은 `claimed` 대신 `resumed from <state>`라고 출력합니다. Run과 다른 Credential로 실행된 Stage는 끝나는 즉시 알려 줍니다. `#4 implement ran on apiKeySource apiKeyHelper, not the subscription (none)`. 경고와 거절은 stderr로 갑니다.
+Stage가 도는 동안이나 CI를 기다리는 동안에는 아무것도 출력하지 않고, 이 시간은 한 시간이 될 수도 있습니다. Stage 자신의 출력은 아래의 `.stdout` 파일에 있습니다. 좁힌 Run이면 첫 줄에 지정한 Ticket이 덧붙고, 재개한 Ticket은 `claimed` 대신 `resumed from <state>`라고 출력합니다. Run과 다른 곳에 과금된 Stage는 끝나는 즉시 알려 줍니다. `#4 implement ran on apiKeySource apiKeyHelper, not the subscription (none)`. 경고와 거절은 stderr로 갑니다.
 
 Stage가 한 일은 모두 Target의 gitignore된 `.ticket-runner/` 아래 디스크에 남습니다. run id는 `2026-09-17T09-00-00-000`처럼 UTC 시작 시각입니다.
 
 | `.ticket-runner/runs/<runId>/` 아래 경로 | 담는 것 |
 |---|---|
-| `version.txt` | 돌린 Version. 첫 Stage 전에 씀 |
+| `version.txt` | 돌린 버전. 첫 Stage 전에 씀 |
 | `<n>/<stage>.command` | 환경 변수까지 포함한 정확한 명령줄. 그대로 붙여 넣으면 Stage를 다시 돌릴 수 있음. 키 없이 실행한 Stage는 `env -u ANTHROPIC_API_KEY …`, 키로 실행한 Stage는 `ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" …`로 시작하고, 키 값은 적지 않음 |
 | `<n>/<stage>.stdout`, `<n>/<stage>.stderr` | Stage가 출력하는 대로 실시간으로 덧붙인 출력 |
 | `<n>/<stage>.transcript.jsonl` | 세션의 stream-json 이벤트 |
@@ -224,7 +224,7 @@ Stage가 한 일은 모두 Target의 gitignore된 `.ticket-runner/` 아래 디�
 
 앱에서 첫 Run을 하기 전에:
 
-1. 워크스테이션에서 `init`을 실행하고, 쓴 내용을 commit해서 Base branch에 push하세요. 클라우드 세션은 저장소만 봅니다.
+1. 워크스테이션에서 `init`을 실행하고, 쓴 내용을 commit해서 base branch에 push하세요. 클라우드 세션은 저장소만 봅니다.
 2. 클라우드 환경이 npm, GitHub, apt, 그리고 Target 자체의 패키지 레지스트리에 닿을 수 있게 하세요. Host를 준비할 때 거기서 설치합니다.
 
 `gh`는 따로 할 게 없습니다. 클라우드 세션이 인증해 줍니다.
@@ -240,7 +240,7 @@ Stage가 한 일은 모두 Target의 gitignore된 `.ticket-runner/` 아래 디�
 
 Host 준비는 클라우드 환경의 setup 스크립트가 설치하지 않은 것만 채웁니다.
 
-1. **파이프라인.** setup 스크립트가 설치한 사본이 있으면 Version과 상관없이 그대로 씁니다. 없으면 Target의 conventions 문서에 찍힌 Version을 설치합니다. 찍힌 Version이 없으면 아무것도 설치하지 않고, 워크스테이션에서 `init`을 실행해 달라고 합니다.
+1. **파이프라인.** setup 스크립트가 설치한 사본이 있으면 버전과 상관없이 그대로 씁니다. 없으면 Target의 conventions 문서에 찍힌 버전을 설치합니다. 찍힌 버전이 없으면 아무것도 설치하지 않고, 워크스테이션에서 `init`을 실행해 달라고 합니다.
 2. **`mattpocock-skills` 플러그인**, 공식 마켓플레이스에서
 3. **`gh`**, apt에서
 4. **Target 자체의 의존성**, main checkout에. 모든 worktree의 Check가 거기서 찾아 씁니다.
@@ -250,9 +250,9 @@ Run이 Ticket을 끝낼 때마다 보고하고, 끝나면 요약과 종료 코�
 클라우드 Host는 몇 가지가 워크스테이션과 다르고, 파이프라인은 그것을 감안합니다.
 
 - **remote에서 아무것도 지울 수 없습니다.** 그래서 `init`이 merge 때 pull request branch를 지우는 설정을 켜고, `remove`는 클라우드 Host에서 실행을 거절합니다.
-- **이슈 본문, 코멘트, pull request 본문마다 "Generated by Claude Code" 줄이 붙습니다.** 프록시가 덧붙이는 것이라 끌 수 없습니다. squash commit은 파이프라인이 직접 작성하니 Base branch에는 들어가지 않습니다.
+- **이슈 본문, 코멘트, pull request 본문마다 "Generated by Claude Code" 줄이 붙습니다.** 프록시가 덧붙이는 것이라 끌 수 없습니다. squash commit은 파이프라인이 직접 작성하니 base branch에는 들어가지 않습니다.
 - **회수된 VM은 kill입니다.** Stranded Ticket을 남기고, 다음 Run이 어느 Host에서든 재개합니다. 남은 lock은 다른 Host가 죽었다고 단정하지 않으니 사람이 풀어야 합니다. Operator를 통해서든 GitHub에서든요.
-- **transcript는 VM과 함께 사라집니다.** Hand-off된 Ticket의 것만 State branch에 남습니다.
+- **transcript는 VM과 함께 사라집니다.** Hand-off된 Ticket의 것만 state branch에 남습니다.
 - **Stage는 늘 요금제로 돌아갑니다.** 클라우드 세션은 `ANTHROPIC_API_KEY`를 무시하니, `--api-key`를 받아 놓고 지키지 못하는 대신 거절합니다.
 
 그 밖에는 클라우드 Host도 워크스테이션과 같은 Target에 같은 Run을 돌립니다. claim은 어느 Host에서 하든 같은 `gh` 사용자를 담당자로 지정하니, 담당자만 봐서는 Run이 어디서 돌았는지 알 수 없습니다.

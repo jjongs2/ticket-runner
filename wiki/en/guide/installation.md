@@ -28,9 +28,9 @@ A Run works unattended, so anything missing has to be caught before it starts, n
 | `/setup-matt-pocock-skills`, run once in the repository with GitHub Issues as the tracker | The planning skills file Specs and Tickets as GitHub issues because of it. It asks before it writes `docs/agents/issue-tracker.md` and an `## Agent skills` block in `CLAUDE.md`, which show it ran | – |
 | A CI workflow in `.github/workflows` | A pull request with no checks is never merged, unless [`gates.ci`](./configuration.md#gates) is off | `init` reports it |
 | A Check the pipeline can run itself | `test` and `typecheck` scripts in `package.json`, or commands in [`checks`](./configuration.md#checks) | `init` reports it; `run` refuses without one |
-| The Target's own dependencies, installed in the main checkout | A Ticket's worktree finds them there, and nothing installs them for it. Without them every Check fails, at the merge-base too, and the Run ends on a [failing Base branch](./stopping-and-resuming.md#release-over-a-failing-base-branch) | – |
+| The Target's own dependencies, installed in the main checkout | A Ticket's worktree finds them there, and nothing installs them for it. Without them every Check fails, at the merge-base too, and the Run ends on a [failing base branch](./stopping-and-resuming.md#release-over-a-failing-base-branch) | – |
 
-A merge only pulls the Base branch into the main checkout, so after a Ticket that adds a dependency, install again there before the next Run.
+A merge only pulls the base branch into the main checkout, so after a Ticket that adds a dependency, install again there before the next Run.
 
 The plugin comes from Anthropic's official marketplace, on a workstation as an [Operator](./running.md#from-the-claude-app) installs it on a cloud Host. `claude plugin list` shows the version installed:
 
@@ -45,18 +45,18 @@ claude plugin install mattpocock-skills@claude-plugins-official
 npm install -g ticket-runner
 ```
 
-The same line upgrades it. Then read **After upgrading** in the [Release](https://github.com/jjongs2/ticket-runner/releases) of each Version newer than the one you had: it says what your Targets need, such as running `init` again.
+The same line upgrades it. Then read **After upgrading** in the [Release](https://github.com/jjongs2/ticket-runner/releases) of each version newer than the one you had: it says what your Targets need, such as running `init` again.
 
-Installing straight from GitHub's Version tags works too. The range asks for the highest tag rather than `main`, so the copy you get is always a Version it can name ([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)):
+Installing straight from GitHub's version tags works too. The range asks for the highest tag rather than `main`, so the copy you get is always a version it can name ([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)):
 
 ```bash
 npm install -g "github:jjongs2/ticket-runner#semver:*"
 ```
 
-`init` and `run` both look up the newest Version published as a GitHub Release. When it is above the number this copy reports, they print one line, and refuse nothing:
+`init` and `run` both look up the newest version published as a GitHub Release. When it is above the number this copy reports, they print one line, and refuse nothing:
 
 ```text
-A newer Version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g ticket-runner`.
+A newer version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g ticket-runner`.
 ```
 
 Nothing is printed when this copy is the latest or ahead of it, or when GitHub could not be asked at all (no network, no `gh`).
@@ -76,8 +76,8 @@ npx ticket-runner remove   # when you are done with it
 
 | To | Type |
 |---|---|
-| Take the newest Version rather than one npm cached earlier | `npx ticket-runner@latest …` |
-| Keep one Version between commands | `npx ticket-runner@<version> …` |
+| Take the newest version rather than one npm cached earlier | `npx ticket-runner@latest …` |
+| Keep one version between commands | `npx ticket-runner@<version> …` |
 | Clear what `npx` left behind | delete `~/.npm/_npx` |
 
 ## Set a Target up with `init`
@@ -87,7 +87,7 @@ cd ~/code/acme
 ticket-runner init
 ```
 
-It commits nothing. Commit what it wrote and push it to the Base branch before the first Run: a Ticket's worktree is branched from the remote, so a Stage reads the conventions document only once the Base branch carries it, and a cloud Host sees only what is pushed. It takes no [Run lock](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), because it claims no Ticket.
+It commits nothing. Commit what it wrote and push it to the base branch before the first Run: a Ticket's worktree is branched from the remote, so a Stage reads the conventions document only once the base branch carries it, and a cloud Host sees only what is pushed. It takes no [Run lock](./stopping-and-resuming.md#the-run-lock), because it claims no Ticket.
 
 ### What it writes
 
@@ -95,11 +95,11 @@ It commits nothing. Commit what it wrote and push it to the Base branch before t
 |---|---|---|
 | Two ignore lines | `.gitignore`: `.worktrees/`, `.ticket-runner/` | Added unless already ignored, in any spelling |
 | An empty config file | `ticket-runner.json`, containing `{}` | Never touched once it exists |
-| The conventions document, stamped with its Version | `docs/agents/pipeline-conventions.md` | Rewritten when its text differs |
+| The conventions document, stamped with its version | `docs/agents/pipeline-conventions.md` | Rewritten when its text differs |
 | A section pointing at that document | `CLAUDE.md`, created if missing | Added unless `CLAUDE.md` already names the document |
 | The Operator's skill | `.claude/skills/ticket-runner/SKILL.md` | Rewritten when its text differs |
 
-The conventions document and the skill are the pipeline's own text, so an edit there does not survive the next `init`, with one exception. The document's first line carries a hidden `<!-- ticket-runner:version <number> -->` mark. When that mark names a *newer* Version than the one running, `init` leaves the document and the skill exactly as they are and says to upgrade instead, because rewriting them would take the Target backwards.
+The conventions document and the skill are the pipeline's own text, so an edit there does not survive the next `init`, with one exception. The document's first line carries a hidden `<!-- ticket-runner:version <number> -->` mark. When that mark names a *newer* version than the one running, `init` leaves the document and the skill exactly as they are and says to upgrade instead, because rewriting them would take the Target backwards.
 
 ### What it does on GitHub
 
@@ -151,20 +151,20 @@ So `ticket-runner init && ticket-runner run` stops before a Run that could not w
 | Order | Refused when |
 |---|---|
 | 1 | `.gitignore` does not ignore `.worktrees/` or `.ticket-runner/` |
-| 2 | `docs/agents/pipeline-conventions.md` is missing, or carries no Version mark |
+| 2 | `docs/agents/pipeline-conventions.md` is missing, or carries no version mark |
 | 3 | `CLAUDE.md` does not mention that document's path |
 | 4 | The Operator's skill is missing |
 | 5 | `gh` is not installed; the refusal names the install before `init` |
 | 6 | A triage label is missing, as `labels` spells it |
 | 7 | The repository keeps a pull request's branch after it merges |
-| 8 | The remote's Base branch, such as `origin/main`, misses item 2, 3 or 4. Every worktree is made from it, so the refusal says to commit and push what `init` wrote, not to run `init` |
+| 8 | The remote's base branch, such as `origin/main`, misses item 2, 3 or 4. Every worktree is made from it, so the refusal says to commit and push what `init` wrote, not to run `init` |
 
 ```text
 $ ticket-runner run
 This Target is not set up: `.gitignore` does not ignore `.worktrees/`. Run `ticket-runner init` here and start again; a Run puts nothing in place itself.
 ```
 
-Readiness asks for presence and the Version mark, never content. A conventions document another Version wrote is only a warning, and the Run goes on:
+Readiness asks for presence and the version mark, never content. A conventions document another version wrote is only a warning, and the Run goes on:
 
 ```text
 warning: This Target's `docs/agents/pipeline-conventions.md` was left by 0.4.0, and this Run is 0.5.2 — run `ticket-runner init` here to bring it up to date.
@@ -174,7 +174,7 @@ One refusal comes before readiness: [`--api-key`](./running.md#api-key) on a clo
 
 Two more come after it:
 
-- **State files in the checkout.** An early pipeline kept a Ticket's resume state under `.ticket-runner/state/`; it now lives on the Target's remote, and nothing migrates it. A Run refuses while that directory holds State files and names their Tickets. Finish those Tickets with the Version that wrote them, or hand them to a human, then delete the directory.
+- **State files in the checkout.** An early pipeline kept a Ticket's resume state under `.ticket-runner/state/`; it now lives on the Target's remote, and nothing migrates it. A Run refuses while that directory holds state files and names their Tickets. Finish those Tickets with the version that wrote them, or hand them to a human, then delete the directory.
 - **No Check.** With the [Checks gate](./configuration.md#gates) on and no Check command configured or inferable, a Run refuses rather than merge unchecked code.
 
 ## Take it out with `remove`
@@ -189,7 +189,7 @@ ticket-runner remove --yes  # the same, without asking
 
 ```mermaid
 flowchart TD
-  A["ticket-runner remove"] --> B{"Stage shell, cloud Host,<br>gh not authenticated, or<br>set up by a newer Version?"}
+  A["ticket-runner remove"] --> B{"Stage shell, cloud Host,<br>gh not authenticated, or<br>set up by a newer version?"}
   B -- yes --> R["Refused, exit 2<br>nothing changed"]
   B -- no --> C{"Anything of the<br>pipeline's here?"}
   C -- no --> N["Nothing to remove, exit 0"]
@@ -201,7 +201,7 @@ flowchart TD
   F -- yes --> RL["Release the lock"] --> R
   F -- no --> Q{"Asked, and answered y?"}
   Q -- no --> RL
-  Q -- "yes, or --yes" --> G["Remove files, worktrees, branches,<br>ignore lines, the label, the State branch"]
+  Q -- "yes, or --yes" --> G["Remove files, worktrees, branches,<br>ignore lines, the label, the state branch"]
   G --> H{"Every removal worked?"}
   H -- yes --> I["Delete ticket-runner.json<br>and the lock branch, exit 0"]
   H -- no --> J["Keep ticket-runner.json,<br>release the lock, exit 1"]
@@ -255,7 +255,7 @@ Run `ticket-runner remove` in each Target first; the uninstalled command cannot 
 - [Planning the work](./planning.md): what makes an issue a Ticket the pipeline will take.
 - [Running](./running.md): starting, narrowing and stopping a Run.
 - [Configuration](./configuration.md): the fields of `ticket-runner.json`, the labels among them.
-- [Hand-offs, stopping and resuming](./stopping-and-resuming.md): the Run lock and the State branch `remove` deletes.
+- [Hand-offs, stopping and resuming](./stopping-and-resuming.md): the Run lock and the state branch `remove` deletes.
 
 ## References
 
