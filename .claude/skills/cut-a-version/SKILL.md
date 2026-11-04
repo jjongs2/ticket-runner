@@ -18,7 +18,7 @@ checkout, not this one.
 
 ## 1. Check the checkout
 
-The release PR carries only the files `CONTRIBUTING.md`'s Versions section
+The release PR carries only the files `CONTRIBUTING.md`'s versions section
 lists, and step 7 commits those and nothing else. List every other tracked
 file the checkout has changed:
 
