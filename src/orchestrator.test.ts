@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { UNCHECKED_BOX } from "./acceptance-criteria.js";
+import { throwOnFailure } from "./adapters/exec.js";
 import { resolveBaseBranch } from "./base-branch.js";
 import type { Config } from "./config.js";
 import { type Billing, type Credential, emptyBilling } from "./credential.js";
@@ -815,6 +816,65 @@ describe("rebase", () => {
     expect(workspace.calls).not.toContain("rebase");
     expect(tracker.calls).not.toContain("squashMerge:100");
     expect(handoffBody()).toContain("Not possible to fast-forward");
+  });
+
+  it("gives a pull that failed unexpectedly one line, and its whole output as evidence", async () => {
+    // The message `throwOnFailure` built for #288's pull, as it reached the Run.
+    const ssh = [
+      "git@github.com: Permission denied (publickey).",
+      "fatal: Could not read from remote repository.",
+      "",
+      "Please make sure you have the correct access rights",
+      "and the repository exists.",
+    ].join("\n");
+    const pull = "`git pull --ff-only origin main` exited 1";
+    workspace.pullBaseFailure = new Error(`${pull}\n${ssh}`);
+    const evidence = ["<details><summary>Evidence</summary>", "", "```", ssh, "```"].join("\n");
+
+    await run();
+
+    expect(handoffBody()).toContain(`- Failure: ${pull}\n- Branch`);
+    expect(handoffBody()).toContain(evidence);
+    const draft = tracker.pullRequest(100);
+    expect(draft.draft).toBe(true);
+    expect(draft.body).toContain(`**Handed off at rebase.** ${pull}\n\n`);
+    expect(draft.body).toContain(evidence);
+  });
+
+  it("gives a GitHub call with an argument of several lines one line, and only its output as evidence", async () => {
+    // The `gh api` call a squash merge makes, failing: the commit message is an
+    // argument with newlines in it, one of them ending as a failed command's
+    // line does.
+    const output = "HTTP 502: Bad Gateway (https://api.github.com/repos/o/r/pulls/100/merge)";
+    const args = [
+      "api",
+      "--method",
+      "PUT",
+      "repos/{owner}/{repo}/pulls/100/merge",
+      "-f",
+      "merge_method=squash",
+      "-f",
+      "commit_title=feat: x (#100)",
+      "-f",
+      "commit_message=Closes #1\n\nWhat it does.\n\nA failed push is reported as `git push` exited 128\n",
+    ];
+    tracker.squashMerge = async () => {
+      throwOnFailure("gh", args, { exitCode: 1, stdout: "", stderr: output, output, timedOut: false });
+      throw new Error("throwOnFailure did not throw");
+    };
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "merge" });
+    const line =
+      "`gh api --method PUT repos/{owner}/{repo}/pulls/100/merge -f merge_method=squash " +
+      "-f commit_title=feat: x (#100) -f commit_message=Closes #1 …` exited 1";
+    expect(handoffBody()).toContain(`- Failure: ${line}\n- Branch`);
+    expect(handoffBody()).toContain(
+      ["<details><summary>Evidence</summary>", "", "```", output, "```"].join("\n"),
+    );
+    expect(handoffBody()).not.toContain("What it does.");
+    expect(handoffBody()).not.toContain("exited 128");
   });
 
   it("sends no conflict Stage in when the branch rebases cleanly", async () => {

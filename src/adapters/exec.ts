@@ -186,18 +186,33 @@ export async function execOrThrow(
   return throwOnFailure(command, args, await exec(command, args, options));
 }
 
-/** Turn a non-zero exit into an error naming the command and its output. */
+/**
+ * Turn a non-zero exit into an error naming the command and its output.
+ *
+ * The message's first line is the whole command and how it exited, and every
+ * line after it is what the command printed, so whatever shows the message on
+ * one line takes its first. An argument with a newline in it — a pull
+ * request's body, a commit message — is shown by its first line and ` …`:
+ * the rest is what the pipeline wrote, not what the command printed, and
+ * given whole it would carry the command onto lines a reader takes for its
+ * output.
+ */
 export function throwOnFailure(
   command: string,
   args: string[],
   result: Execution,
 ): Execution {
   if (result.exitCode !== 0) {
-    throw new Error(
-      `\`${command} ${args.join(" ")}\` exited ${result.exitCode}\n${result.output.trim()}`,
-    );
+    const shown = [command, ...args.map(firstLineOf)].join(" ");
+    throw new Error(`\`${shown}\` exited ${result.exitCode}\n${result.output.trim()}`);
   }
   return result;
+}
+
+/** An argument as a failed command's message shows it: on one line. */
+function firstLineOf(arg: string): string {
+  const newline = arg.search(/\r?\n/);
+  return newline === -1 ? arg : `${arg.slice(0, newline).trimEnd()} …`;
 }
 
 /**

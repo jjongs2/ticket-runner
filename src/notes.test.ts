@@ -467,7 +467,13 @@ describe("when a Ticket will not take a Note", () => {
         summary: "the flag is wrong",
       },
     ]);
-    expect(lines.join("\n")).toContain("could not comment its Note on #404");
+    // The error's message comes last, so the output a failed command carries
+    // follows the line the Run's log prints it under.
+    expect(lines).toContainEqual(
+      expect.stringMatching(
+        new RegExp(`^#${ORIGIN} could not comment its Note on #404, sending it to triage instead: \\S`),
+      ),
+    );
   });
 
   it("tells triage which Ticket the Note was reaching for", async () => {

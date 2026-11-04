@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { endSentence } from "./failure-message.js";
 import { type Host, describeHost, sameHost } from "./host.js";
 import type { HeldLock, LockHolder } from "./ports/workspace.js";
 
@@ -128,7 +129,7 @@ export function lockHeldMessage({ holder, onAnotherHost }: HeldLock): string {
  */
 export function unreleasedLockMessage(reason: string): string {
   return (
-    `Could not release the Run lock: ${reason}. It still names this Run on the ` +
+    `Could not release the Run lock: ${endSentence(reason)} It still names this Run on the ` +
     `\`${LOCK_BRANCH}\` branch. The next Run on this Host takes it over by itself; for a ` +
     `Run on any other Host, commit a \`${LOCK_FILE}\` that reads \`${FREE_LOCK}\` to that ` +
     "branch on GitHub, or ask an Operator to."

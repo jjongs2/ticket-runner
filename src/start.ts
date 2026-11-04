@@ -3,6 +3,7 @@ import type { Config } from "./config.js";
 import { type Credential, credentialRefusal, emptyBilling } from "./credential.js";
 import { type HostKind, hostKind } from "./host.js";
 import { BaseBranchChecks } from "./failing-base.js";
+import { printEachOutputOnce } from "./failure-message.js";
 import { Landing } from "./landing.js";
 import { StandingNotes } from "./notes.js";
 import { lockHeldMessage, unreleasedLockMessage } from "./lock.js";
@@ -198,10 +199,14 @@ async function execute(
     host,
     baseBranch,
   }: { credential: Credential; host: HostKind; baseBranch: string },
-  log: (line: string) => void,
+  print: (line: string) => void,
   stopping: StopSignal,
 ): Promise<number> {
   const { work, repoRoot, config, tracker, runner, workspace, runId, version } = options;
+  // Every event of the Run goes through this, and one cause tends to fail
+  // several of them with the same output, so each output is printed once. The
+  // summary is printed as it is: it is one block, written once.
+  const log = printEachOutputOnce(print);
 
   // Before the first Stage, and before the tracker is asked anything: a
   // transcript has to sit beside the pipeline that wrote it, and the Run
@@ -268,7 +273,7 @@ async function execute(
     });
 
   const { outcomes, stop } = await processRun(pipeline, stopping, work.tickets);
-  log(`\n${summary(outcomes, stop)}`);
+  print(`\n${summary(outcomes, stop)}`);
   return exitCode(outcomes, work.tickets !== undefined);
 }
 

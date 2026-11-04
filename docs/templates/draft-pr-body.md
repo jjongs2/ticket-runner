@@ -17,6 +17,31 @@ Run wrote, with a verdict nothing is merging on and a last line about another
 place. A draft is opened before the transcripts are kept, because the state
 records it, so its body is written again once they are.
 
+## When the failure was unexpected
+
+````
+Closes #<n>
+
+**Handed off at <stage>.** `<command>` exited <code>
+
+<details><summary>Evidence</summary>
+
+```
+<what the command printed>
+```
+
+</details>
+
+See the hand-off comment on #<n> for the branch, worktree and evidence.
+...
+````
+
+A failure the pipeline did not expect gives its opening line as the hand-off
+comment's `Failure:` line does: the command and how it exited, on one line. What
+the command printed follows in the same fenced Evidence block the comment
+carries, whole. A failure the pipeline expected has its evidence in the comment
+only, and the body has no such block.
+
 ## When nothing was kept
 
 ```

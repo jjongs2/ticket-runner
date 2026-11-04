@@ -916,6 +916,34 @@ describe("the Run log", () => {
     expect(ticketLines).toHaveLength(7);
     for (const line of ticketLines) expect(line).toMatch(/^#\d+ /);
   });
+
+  it("prints a failure's output once, however many events it fails", async () => {
+    // #288's Run: one remote refusing SSH failed every push and the pull the
+    // rebase starts with, each event with the same five lines.
+    const ssh = [
+      "git@github.com: Permission denied (publickey).",
+      "fatal: Could not read from remote repository.",
+      "",
+      "Please make sure you have the correct access rights",
+      "and the repository exists.",
+    ].join("\n");
+    const pull = "`git pull --ff-only origin main` exited 1";
+    workspace.push = async (_cwd, branch) => {
+      throw new Error(`\`git push -u origin ${branch}\` exited 128\n${ssh}`);
+    };
+    workspace.pullBaseFailure = new Error(`${pull}\n${ssh}`);
+    tracker.addIssue({ number: 4 });
+
+    const { out, lines } = await start();
+
+    expect(out.split(ssh)).toHaveLength(2);
+    const repeats = lines.filter((line) => line.endsWith(" · the same output as above"));
+    expect(repeats.length).toBeGreaterThan(1);
+    for (const line of repeats) expect(line).not.toContain("\n");
+    expect(lines).toContain(`#4 handed off at rebase · ${pull} · the same output as above`);
+    // The summary's row gives the one line, and its output is the hand-off's.
+    expect(out).toContain(`  handed   #4 Ticket 4 · rebase · ${pull}\n`);
+  });
 });
 
 /**
