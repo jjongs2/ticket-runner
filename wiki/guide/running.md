@@ -74,7 +74,7 @@ What happens to each Ticket inside a Lane is on [From Ticket to merge](./ticket-
 
 Every Stage is a `claude -p` session. Under `-p` an `ANTHROPIC_API_KEY` outranks your Claude login without asking, so a Run starts each Stage without that key, whatever your shell exports, and the Stages run on your plan. `ANTHROPIC_AUTH_TOKEN` is passed on as it is, for a gateway or proxy.
 
-`--api-key` bills every Stage of this one Run to the `ANTHROPIC_API_KEY` your shell exports instead. Whose money a Run spends is the Host's business, so it is a flag and never a field of `ticket-runner.json`. It is how the monthly API credits of a Max or Team plan are spent: they cover `claude -p` only on a key. It is refused before the lock where no key is exported and on a cloud Host ([Refused before it starts](#refused-before-it-starts)). A Run the plan's limit stops does not switch to the key by itself.
+`--api-key` bills every Stage of this one Run to the `ANTHROPIC_API_KEY` your shell exports instead. Whose money a Run spends is the Host's business, so it is a flag and never a field of `ticket-runner.json`. It is how the monthly API credits of a Max or Team plan are spent: they cover `claude -p` only on a key. It is refused before the lock where no key is exported and on a cloud Host ([Refused before it starts](#refused-before-it-starts)). What the Stages are billed to is chosen once, when the Run starts, and held for the whole Run: a Run the plan's limit stops does not switch to the key by itself.
 
 | On an `--api-key` Run | What happens |
 |---|---|

@@ -74,7 +74,7 @@ Lane 안에서 Ticket 하나에 일어나는 일은 [Ticket 하나가 merge되�
 
 Stage는 모두 `claude -p` 세션입니다. `-p`에서는 `ANTHROPIC_API_KEY`가 묻지도 않고 Claude 로그인보다 앞서기 때문에, Run은 셸이 무엇을 export하든 그 키를 빼고 Stage를 시작합니다. 그래서 Stage는 요금제로 돌아갑니다. `ANTHROPIC_AUTH_TOKEN`은 게이트웨이나 프록시를 위해 그대로 넘깁니다.
 
-`--api-key`를 주면 이 Run의 모든 Stage를 대신 셸이 export한 `ANTHROPIC_API_KEY`로 과금합니다. 누구의 돈을 쓸지는 Host가 정할 일이라, `ticket-runner.json`의 필드가 아니라 플래그로만 받습니다. Max나 Team 요금제에 딸린 월간 API 크레딧은 키로 돌린 `claude -p`에만 쓰이니, 그 크레딧을 쓰는 방법이 이것입니다. 키를 export하지 않았거나 클라우드 Host라면 lock을 잡기 전에 거절합니다([시작 전에 거절되는 경우](#refused-before-it-starts)). 요금제 한도로 멈춘 Run이 알아서 키로 넘어가지는 않습니다.
+`--api-key`를 주면 이 Run의 모든 Stage를 대신 셸이 export한 `ANTHROPIC_API_KEY`로 과금합니다. 누구의 돈을 쓸지는 Host가 정할 일이라, `ticket-runner.json`의 필드가 아니라 플래그로만 받습니다. Max나 Team 요금제에 딸린 월간 API 크레딧은 키로 돌린 `claude -p`에만 쓰이니, 그 크레딧을 쓰는 방법이 이것입니다. 키를 export하지 않았거나 클라우드 Host라면 lock을 잡기 전에 거절합니다([시작 전에 거절되는 경우](#refused-before-it-starts)). Stage를 무엇으로 과금할지는 Run이 시작할 때 한 번 정하고 Run 내내 그대로 둡니다. 요금제 한도로 멈춘 Run이 알아서 키로 넘어가지는 않습니다.
 
 | `--api-key` Run에서 | 일어나는 일 |
 |---|---|

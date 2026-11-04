@@ -215,7 +215,7 @@ kill된 Run은 아무것도 놓아주지 않습니다. 그 Ticket들은 Claim을
 
 읽을 수 없는 State file은 아마 더 새 파이프라인이 쓴 파일입니다.
 
-Stranded Ticket은 Frontier가 내놓는 것보다 먼저 빈 Lane을 채웁니다([실행하기](./running.md#run)). 어느 Host든 sweep한 Run이 remote의 branch에서 이어받습니다. 범위를 좁힌 Run은 받은 Ticket 가운데 stranded인 것만 이어받습니다.
+Stranded Ticket은 Frontier가 내놓는 것보다 먼저 빈 Lane을 채웁니다([실행하기](./running.md#run)). 어느 Host든 sweep한 Run이 remote의 branch에서 이어받습니다. 범위를 좁힌 Run은 받은 Ticket 가운데 Stranded Ticket인 것만 이어받습니다.
 
 그래도 kill은 Stop보다 비쌉니다. Stage가 아직 commit하고 push하지 못한 것은 사라집니다. rebase 도중에 멈춘 worktree는 Check가 판정하기 전에 rebase를 abort해 branch tip으로 되돌립니다.
 

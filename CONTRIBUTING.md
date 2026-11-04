@@ -116,6 +116,6 @@ In that Korean text, git's terms are written in English, never transliterated (`
 
 The two renamed words, release PR and release notes, are set phrases, and neither is the Release the glossary lists, which is always capitalised.
 
-Commands, program output and the strings it prints, such as labels and Progress cells, stay as they are; a comment in a code block is translated, its code is not. The prose of the wiki and the READMEs, in either language, uses no em-dash (—), and an empty cell in a table's body is an en dash (–).
+Commands, program output and the strings it prints, such as labels and progress cells, stay as they are; a comment in a code block is translated, its code is not. The prose of the wiki and the READMEs, in either language, uses no em-dash (—), and an empty cell in a table's body is an en dash (–).
 
 In English and Korean text alike, prose says pull request, never PR; PR stays only where space is tight — a `PR #<n>` reference, a table cell, a label, a name — and in the set phrase release PR.

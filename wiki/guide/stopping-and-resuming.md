@@ -215,7 +215,7 @@ A [Stranded Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.
 
 An unreadable State file was probably written by a newer pipeline.
 
-Stranded Tickets fill free Lanes before anything the Frontier offers ([Running](./running.md#run)), each resumed from its branch on the remote by whichever Host's Run swept it. A narrowed Run resumes only the stranded Tickets among those it was given.
+Stranded Tickets fill free Lanes before anything the Frontier offers ([Running](./running.md#run)), each resumed from its branch on the remote by whichever Host's Run swept it. A narrowed Run resumes only the Stranded Tickets among those it was given.
 
 A kill still costs more than a Stop. Whatever the Stage had not yet committed and pushed is lost. A worktree left in the middle of a rebase is aborted back to the branch tip before the Checks grade it.
 
