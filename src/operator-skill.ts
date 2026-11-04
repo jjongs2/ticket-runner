@@ -11,8 +11,8 @@ import { readFileSync } from "node:fs";
  * Its text is a shape like every other the pipeline writes, so it lives with
  * them in `docs/templates/`, and it is read from there rather than copied into
  * this module: the package carries that one file for this. The text names no
- * Version. The Operator reads the one to install off the conventions document's
- * mark, so a Target is never rewritten for a Version that changed nothing here.
+ * version. The Operator reads the one to install off the conventions document's
+ * mark, so a Target is never rewritten for a version that changed nothing here.
  */
 
 /** Where the skill goes in a Target, relative to the Target's root. */

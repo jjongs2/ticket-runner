@@ -1,4 +1,4 @@
-name: Version PR
+name: Release PR
 
 on:
   pull_request:
@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 jobs:
-  version-pr:
+  release-pr:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -19,7 +19,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # A pull request that leaves the number alone passes untouched; a Version
+      # A pull request that leaves the number alone passes untouched; a release
       # PR is failed with every reason it may not merge.
       - run: npx tsx scripts/version.ts check
         env:

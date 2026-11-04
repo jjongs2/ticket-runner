@@ -16,20 +16,20 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          # Every tag, so a push that cuts no Version is recognised as one.
+          # Every tag, so a push that cuts no version is recognised as one.
           fetch-depth: 0
-      # A Version is three things, the tag, the same Version on npm and its
+      # A version is three things, the tag, the same version on npm and its
       # GitHub Release, so each is read and a push makes whichever is missing,
       # in that order. A re-run of a job that went red halfway therefore heals
-      # the Version, and so does the next push, whatever it carries.
+      # the version, and so does the next push, whatever it carries.
       - id: version
-        name: What this Version is missing
+        name: What this version is missing
         env:
           GH_TOKEN: ${{ github.token }}
         # Each of `tag`, `npm` and `release` under `missing` is `true` or
         # `false`, and gates its own step below. A lookup that failed reads as
         # missing rather than as present: the worst a network blip costs is a
-        # red job the next push heals, because `npm publish` refuses a Version
+        # red job the next push heals, because `npm publish` refuses a version
         # npm already has and `gh release create` a GitHub Release that is
         # already there.
         run: |
@@ -45,7 +45,7 @@ jobs:
             echo "$tag does not exist; this push cuts it."
             missing tag true
           fi
-          # `npm view` prints nothing for a Version the package does not have,
+          # `npm view` prints nothing for a version the package does not have,
           # and fails for a package npm has never heard of.
           if [ "$(npm view "$name@$version" version 2>/dev/null || true)" = "$version" ]; then
             missing npm false
@@ -73,7 +73,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # The message is the tag name, so the tags page shows the Version and
+          # The message is the tag name, so the tags page shows the version and
           # not the subject of the commit it points at.
           git tag -a "$TAG" -m "$TAG" "$GITHUB_SHA"
           git push origin "refs/tags/$TAG"
@@ -86,7 +86,7 @@ jobs:
           # Trusted publishing needs an npm newer than the one Node 22 bundles.
           npm install -g npm@^11.5.1
           # Published from the commit the tag names, never from this push's, so
-          # a Version healed by a later push is byte for byte the code its tag
+          # a version healed by a later push is byte for byte the code its tag
           # names. The package runs nothing on publish, so it needs no install.
           git worktree add --detach "$RUNNER_TEMP/tagged" "refs/tags/$TAG"
           cd "$RUNNER_TEMP/tagged"
@@ -94,7 +94,7 @@ jobs:
       - if: steps.version.outputs.missing-release == 'true'
         run: npm ci
       # After npm, and skipped when publishing there failed, so a GitHub Release
-      # exists only for a Version npm has: the newer-Version line a Run prints
+      # exists only for a version npm has: the newer-version line a Run prints
       # reads GitHub Releases and names the npm install.
       - name: Publish the GitHub Release
         if: steps.version.outputs.missing-release == 'true'
@@ -104,7 +104,7 @@ jobs:
         run: |
           set -euo pipefail
           # The notes are read from this checkout, so a push that heals a half
-          # cut Version publishes the same section the Version PR was reviewed
+          # cut version publishes the same section the release PR was reviewed
           # with.
           npx tsx scripts/version.ts notes > "$RUNNER_TEMP/version-notes.md"
           if [ -s "$RUNNER_TEMP/version-notes.md" ]; then

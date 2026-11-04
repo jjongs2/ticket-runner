@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { pipelineVersion } from "./adapters/version.js";
 import { CONVENTIONS_PATH, conventionsDoc, conventionsMark } from "./conventions.js";
+import { bareAcronymPRs, capitalisedDroppedWords } from "./testing/dropped-words.js";
 
 describe("the conventions document", () => {
   /**
@@ -10,8 +11,8 @@ describe("the conventions document", () => {
    * drifts silently from the text `init` writes, and the one repository where
    * the difference would be noticed is the one nobody checks.
    *
-   * Written by this checkout's own Version, because the document carries the
-   * number that wrote it: a Version PR that raises the number and leaves the
+   * Written by this checkout's own version, because the document carries the
+   * number that wrote it: a release PR that raises the number and leaves the
    * copy here alone is a Target `init` would rewrite, and this is what says so.
    */
   it("is checked in here exactly as `init` writes it", async () => {
@@ -58,29 +59,64 @@ describe("the conventions document", () => {
    * one thing its readers must never meet: it sits on the first line, inside an
    * HTML comment, so the heading renders as it always did.
    */
-  it("carries the Version in a hidden marker on its first line", () => {
+  it("carries the version in a hidden marker on its first line", () => {
     const [first = "", ...rest] = conventionsDoc("0.4.0").split("\n");
 
     expect(first).toBe("# ticket-runner conventions <!-- ticket-runner:version 0.4.0 -->");
     expect(rest.join("\n")).not.toContain("ticket-runner:version");
   });
 
+  /**
+   * A Target carries no glossary, so a word the glossary dropped reads to an
+   * agent there as a term it has no definition for. Written as the ordinary
+   * word it is, it needs none.
+   */
+  it("writes the words the glossary dropped as ordinary words", () => {
+    const doc = conventionsDoc("0.4.0");
+
+    expect(capitalisedDroppedWords(doc)).toEqual([]);
+    expect(bareAcronymPRs(doc)).toEqual([]);
+  });
+
+  /**
+   * The terms the glossary does list are capitalised, and an agent in a Target
+   * has never seen their definitions, so the document says each in a few words
+   * where it first uses it.
+   */
+  it.each([
+    ["Target", "the repository a Run takes its work from"],
+    ["Run", "one invocation of the pipeline"],
+    ["Host", "the machine it executes on"],
+    ["Ticket", "GitHub issues each sized for one session of work"],
+    ["Stage", "one Claude Code session with a single purpose"],
+    ["Note", "defects it met that belong to another Ticket or to none yet"],
+    ["Hand-off", "given to a human in a Hand-off"],
+    ["Operator", "the Claude session a human opens on a cloud Host"],
+    ["Acceptance Criteria", "the only thing the verify Stage grades"],
+    ["Check", "a command the pipeline runs itself on a Ticket's code"],
+    ["Lane", "the places it holds a Ticket in progress"],
+    ["Release", "gives a Ticket back to the pipeline"],
+    ["Stop", "finish the Tickets its Lanes hold and take no more"],
+  ])("glosses %s", (_term, gloss) => {
+    expect(conventionsDoc("0.4.0")).toContain(gloss);
+  });
+
   it("marks a development checkout with its number and not its commit", () => {
     expect(conventionsMark(conventionsDoc("0.4.0+331d79c.dirty"))).toBe("0.4.0");
   });
 
-  it("says nothing about Versions beyond the mark it bears", () => {
+  it("says nothing about versions beyond the mark it bears", () => {
     const body = conventionsDoc("0.4.0").split("\n").slice(1).join("\n");
 
     expect(body.toLowerCase()).not.toContain("version");
   });
 });
 
-describe("a copy with no Version to stamp", () => {
+describe("a copy with no version to stamp", () => {
   /**
    * A marker nothing can read is a marker that is not there, so none is
    * written: `init` would otherwise rewrite the same document every time it
-   * ran, reporting each time that the copy carried no Version.
+   * ran, reporting each time that the copy carried no version.
    */
   it("carries no marker rather than one saying so", () => {
     const doc = conventionsDoc("unknown");
