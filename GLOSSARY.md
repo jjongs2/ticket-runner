@@ -71,7 +71,7 @@ Giving a claimed Ticket to a human, which is how every ending of one that is nei
 _Avoid_: handover, escalation, bail-out, failure (a Ticket is handed off for reasons that are nobody's defect too)
 
 **Release**:
-Giving a Ticket back to the pipeline because something outside the Ticket stopped its work, such as a usage limit or a failing base branch. Nothing is said on the Ticket, and a later Run takes it up again.
+Giving a Ticket back to the pipeline because something outside the Ticket stopped its work, such as a usage limit or a failing base branch. The Ticket records where its work stopped but asks nothing of a human, and a later Run takes it up again.
 _Avoid_: pause, defer, requeue, unclaim
 
 **Stop**:
