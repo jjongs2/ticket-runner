@@ -2412,8 +2412,8 @@ describe("a Check the Base branch fails too", () => {
     expect(tracker.pullRequests).toEqual([]);
   });
 
-  it("posts one Note on the standing Notes issue, naming the Check and quoting its output", async () => {
-    workspace.failCheck("npm test", "FAIL src/date.test.ts");
+  it("posts one Note on the standing Notes issue, naming the Check and quoting its output there and on the branch", async () => {
+    workspace.failCheck("npm test", "FAIL src/clock.test.ts\n  2246 ms is not below 2000 ms");
     workspace.failBaseCheck("npm test", "FAIL src/date.test.ts\n  expected 2026 to be 2025");
 
     await run();
@@ -2424,6 +2424,9 @@ describe("a Check the Base branch fails too", () => {
     expect(note?.body).toContain("**The Base branch `main` fails `npm test`.**");
     expect(note?.body).toContain(`at ${MERGE_BASE}, the merge-base of \`${BRANCH}\` with \`main\``);
     expect(note?.body).toContain("```\nFAIL src/date.test.ts\n  expected 2026 to be 2025\n```");
+    expect(note?.body).toContain(
+      `\`npm test\` failed on \`${BRANCH}\`. The tail of the branch's output:\n\n\`\`\`\nFAIL src/clock.test.ts\n  2246 ms is not below 2000 ms\n\`\`\``,
+    );
     // Nobody's Ticket is commented on: the Ticket did nothing wrong.
     expect(notices().filter(({ issue }) => issue === TICKET)).toEqual([]);
   });
@@ -2480,7 +2483,7 @@ describe("a Check the Base branch fails too", () => {
   });
 
   it("releases a Ticket whose CI failed when the merge-base fails one of the Check commands", async () => {
-    tracker.ci = { state: "failed", summary: "checks/typecheck failed", excerpt: "" };
+    tracker.ci = { state: "failed", summary: "checks/typecheck failed", excerpt: "typecheck\nerror TS2322" };
     workspace.failBaseCheck("npm run typecheck", "error TS2345");
 
     const outcome = await run();
@@ -2496,6 +2499,10 @@ describe("a Check the Base branch fails too", () => {
     expect(runner.stages()).toEqual(["implement", "verify"]);
     expect(progressTable()).toContain("| ci | ⏸ `npm run typecheck` fails on the Base branch |");
     expect(pipelineNotes()[0]?.body).toContain("From the pipeline, releasing #2 at ci");
+    // The branch's part is the failing jobs' logs a fix Stage would have been handed.
+    expect(pipelineNotes()[0]?.body).toContain(
+      `CI on the pull request from \`${BRANCH}\` reported checks/typecheck failed. The tail of the failing jobs' logs:\n\n\`\`\`\ntypecheck\nerror TS2322\n\`\`\``,
+    );
     expect(state()).toMatchObject({ fixUsed: false, pullRequest: 100, rebaseFirst: true });
     expect(tracker.pullRequest(100).merged).toBe(false);
   });
@@ -2560,7 +2567,7 @@ describe("Tickets in several Lanes failing against one merge-base", () => {
 
   it("run the Check there once between them and post one Note", async () => {
     tracker.addIssue({ number: SECOND, title: "The second Ticket" });
-    workspace.failCheck("npm test", "FAIL src/date.test.ts");
+    workspace.failCheck("npm test", "FAIL src/clock.test.ts");
     workspace.failBaseCheck("npm test", "FAIL src/date.test.ts");
     const settings = config({ lanes: 2 });
     const shared: Pipeline = {
@@ -2588,6 +2595,10 @@ describe("Tickets in several Lanes failing against one merge-base", () => {
     expect(atBase.map((check) => check.command)).toEqual(["npm test"]);
     const notes = tracker.comments.filter(({ body }) => body.includes("From the pipeline"));
     expect(notes).toHaveLength(1);
+    // It quotes the branch of the Ticket that posted it, the one its provenance names.
+    const poster = /releasing #(\d+) at/.exec(notes[0]?.body ?? "")?.[1];
+    expect(notes[0]?.body).toContain(`failed on \`agent/${poster}-`);
+    expect(notes[0]?.body).toContain("```\nFAIL src/clock.test.ts\n```");
     expect(outcomes.flatMap((outcome) => ("notes" in outcome ? outcome.notes : []))).toHaveLength(1);
   });
 });

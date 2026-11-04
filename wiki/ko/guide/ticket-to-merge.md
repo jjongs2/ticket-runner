@@ -136,7 +136,7 @@ remote에 있는 그대로의 merge-base를 깨끗하게 checkout하고, 같은 
 | 함께 실패 | ``⏸ `<command>` fails on the Base branch`` | Release. budget은 썼든 안 썼든 그대로 |
 | checkout하거나 돌리지 못함 | 통과한 것으로 봄 | Fix budget을 쓰고, 이유는 Run 로그에 남김 |
 
-Release는 상설 Notes 이슈에 파이프라인 자신의 Note를 올리고, 거기에 명령 이름과 출력의 끝부분을 담습니다. Release되는 Ticket이 몇 개든 Run 하나에서 merge-base commit 하나당 한 번만 올립니다. 다음에 할 일은 [Base branch가 실패할 때의 Release](./stopping-and-resuming.md#release-over-a-failing-base-branch)에 있습니다.
+Release는 상설 Notes 이슈에 파이프라인 자신의 Note를 올리고, 거기에 명령 이름과 출력의 끝부분을 담습니다. Release되는 Ticket이 몇 개든 Run 하나에서 merge-base commit 하나당 한 번만 올립니다. 비교하는 것은 명령뿐이라 branch가 그 명령에 다르게 실패해도 똑같이 Release되므로, Note는 merge-base의 출력 옆에 branch 자신의 실패를 branch의 것이라고 밝혀 함께 담습니다. 실패한 Check 출력의 끝부분, CI라면 fix Stage가 받았을 실패한 job들의 로그입니다. Note를 올린 Ticket의 실패이며, 같은 commit에서 나중에 Release되는 Ticket은 아무것도 보태지 않습니다. 다음에 할 일은 [Base branch가 실패할 때의 Release](./stopping-and-resuming.md#release-over-a-failing-base-branch)에 있습니다.
 
 ## verify Stage와 Verdict {#the-verify-stage-and-its-verdict}
 

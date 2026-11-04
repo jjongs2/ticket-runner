@@ -84,6 +84,12 @@ From the pipeline, releasing #<origin> at <checks|ci>
 <the last lines the command printed>
 ```
 
+The branch's own failure, which need not be the same: `<command>` <failed|timed out> on `<branch>`. The tail of the branch's output:
+
+```
+<the last lines it printed on the branch>
+```
+
 **Impact**: every Ticket whose branch inherits <commit> fails the same Check. #<origin> was released with its Fix budget as it was, and the Run claimed no more Tickets.
 
 **Next**: mend `<command>` on `<base>`. The next Run takes the released Tickets up again from their State files, rebased onto `<base>` before their Checks.
@@ -91,6 +97,28 @@ From the pipeline, releasing #<origin> at <checks|ci>
 
 `<checks|ci>` is `checks` when the Check failed on the branch and `ci` when CI
 did.
+
+The branch's own failure is quoted beside the merge-base's because only the
+command is compared: a branch that fails it differently, a timing test that
+ran slow say, is released all the same, and without its output here nothing a
+human can read says how it failed. It is the failure of the Ticket that posts
+the Note; a Ticket released later in the Run over the same commit adds
+nothing. For a failure at CI that paragraph reads instead:
+
+````
+The branch's own failure, which need not be the same: CI on the pull request from `<branch>` reported <the checks CI reported red>. The tail of the failing jobs' logs:
+
+```
+<the failing jobs' logs, as a fix Stage would be handed them>
+```
+````
+
+The logs are the text a fix Stage is given, each a job's name and its tail, at
+most three jobs, so they are not cut again: only trimmed and, like every
+quote here, their checkboxes escaped. When no failing check was an Actions job,
+the sentence ends `No failing job had a log to quote.` where they would be
+introduced.
+
 `<commit>` is the full commit, so it can be checked out as it is. The tail is
 the one a CI log excerpt keeps: the last 40 lines the command printed, and no
 more than their last 4,000 characters, so long lines cannot push the Note past
@@ -99,8 +127,9 @@ says what, such as `… (20 earlier lines omitted)` or, for one line longer than
 the cap, `… (the start of this line omitted)`. It sits in a fence longer than
 any run of backticks in it; it is the pipeline's own words around it, so only
 the tail has its checkboxes escaped. A command that printed nothing has no
-fence, and its Evidence ends `It printed nothing.` where the tail would be
-introduced.
+fence, and its sentence ends `It printed nothing.` where the tail would be
+introduced. The branch's tail is cut, fenced and escaped the same way, in a
+fence of its own.
 
 Every part of a Stage's Note is the Stage's own words, with one edit: a `- [ ]`
 at the start of a list item is escaped to `- \[ \]`. An unescaped one would read as an Acceptance

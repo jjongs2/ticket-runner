@@ -1304,13 +1304,13 @@ describe("waiting for CI", () => {
     const outcome = await ci({}, [checks("fail")], { "100": ok(output) }).waitForCi(12, 60_000);
     const note = failingBaseNote({
       origin: 6,
-      point: "ci",
       baseBranch: "main",
       branch: "agent/6-x",
       commit: "1a2b3c4d",
       command: "npm test",
       output,
       timedOut: false,
+      onBranch: { point: "ci", summary: "check-0 failed", excerpt: "" },
     });
 
     const excerptTail = excerptOf(outcome).replace(/^check-0\n/, "");
