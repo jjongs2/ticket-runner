@@ -136,7 +136,7 @@ The merge-base, as the remote holds it, is checked out clean, and the command ru
 | fails too | ``⏸ `<command>` fails on the Base branch`` | A Release; the budget stays as it was, spent or not |
 | could not be checked out or run | as if it passed | Spends the Fix budget, and the Run log says why |
 
-The Release posts the pipeline's own Note on the standing Notes issue, naming the command and quoting the tail of its output, once per Run and merge-base commit however many Tickets it releases. What to do next is on [Release over a failing Base branch](./stopping-and-resuming.md#release-over-a-failing-base-branch).
+The Release posts the pipeline's own Note on the standing Notes issue, naming the command and quoting the tail of its output, once per Run and merge-base commit however many Tickets it releases. Only the command is compared, so a branch that fails it differently is released all the same; the Note quotes the branch's own failure beside the merge-base's, marked as the branch's: the tail of the failing Check's output, or for CI the failing jobs' logs a fix Stage would have been handed. It is the failure of the Ticket that posted the Note; a Ticket released later over the same commit adds nothing. What to do next is on [Release over a failing Base branch](./stopping-and-resuming.md#release-over-a-failing-base-branch).
 
 ## The verify Stage and its Verdict
 

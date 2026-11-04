@@ -172,10 +172,12 @@ A Stage of a Run started with [`--api-key`](./running.md#api-key) can be refused
 A failing Check or red CI is inherited, not brought, when the pipeline runs the Check commands again in a clean worktree at the branch's merge-base with the base branch and one fails there too ([A failure the Base branch shares](./ticket-to-merge.md#a-failure-the-base-branch-shares)). The Ticket is released as on a rate limit, with these differences:
 
 - the Progress row reads ``⏸ `<command>` fails on the Base branch``, and the Run's last line names the command and the merge-base
-- the pipeline posts one Note on the standing Notes issue with the tail of the command's output; the Ticket itself gets no comment
+- the pipeline posts one Note on the standing Notes issue with the tail of the command's output at the merge-base, and beside it the branch's own failure; the Ticket itself gets no comment
 - the next Run rebases the branch onto the Base branch before its Checks
 
 The Fix budget stays as it was, spent or not: a Ticket whose budget is already spent is released, not handed off. An open pull request stays open, and the next Run updates it.
+
+Read the branch's part of the Note before mending anything: the merge-base and the branch failed the same command, not necessarily the same way. A branch whose failure is its own is released by every Run until the Base branch passes the command, and mending the Base branch's failure alone does not free it to merge, only to reach a fix Stage.
 
 Mend the Check on the Base branch, then start a Run. Each released Ticket is rebased onto the mended Base branch before its Checks; a rebase that conflicts goes to the Conflict Stage, and one it cannot resolve spends the Fix budget, as at the Landing. A Run started before the Base branch is mended releases the Ticket again.
 

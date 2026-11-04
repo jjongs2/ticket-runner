@@ -426,12 +426,26 @@ export function noteComment(subject: NoteSubject): string {
   return [NOTE_MARKER, noteProvenance(subject), "", paragraphs.join("\n\n"), ""].join("\n");
 }
 
+/**
+ * How the Ticket's own branch failed, before the merge-base was graded: a Check
+ * in its worktree, or CI on its pull request.
+ */
+export type BranchFailure =
+  | { point: "checks"; command: string; output: string; timedOut: boolean }
+  | {
+      point: "ci";
+      /** Which checks went red, as CI reported them. */
+      summary: string;
+      /** The tail of the failing jobs' logs, which a fix Stage would be handed; empty when none had one. */
+      excerpt: string;
+    };
+
 /** A Check the Base branch fails, as the pipeline's own Note reports it. */
 export interface FailingBaseNote {
   /** The Ticket the failure released. */
   origin: number;
-  /** Where the Ticket's branch failed: its Checks, or CI on its pull request. */
-  point: "checks" | "ci";
+  /** How the Ticket's branch failed, which the Note quotes beside the merge-base's output. */
+  onBranch: BranchFailure;
   baseBranch: string;
   /** The Ticket's branch, whose merge-base with the Base branch `commit` is. */
   branch: string;
@@ -455,30 +469,59 @@ export function failingBaseSummary(baseBranch: string, command: string): string 
  * Signed and laid out as a Stage's Note is, so triage reads it the same way,
  * with the provenance naming the pipeline rather than a Stage. The tail of the
  * output is the one a CI log excerpt keeps, so long lines cannot push the Note
- * past what GitHub takes in a comment. It is fenced with more backticks than
- * any run of them inside it, so a fence the output prints cannot close it early.
+ * past what GitHub takes in a comment.
+ *
+ * The branch's own failure is quoted beside it, because only the command is
+ * compared: a branch that fails the command differently is released all the
+ * same, and its failure would otherwise be nowhere a human can read it. For CI
+ * that is the failing jobs' logs as a fix Stage would be handed them, which are
+ * tails already.
  */
 export function failingBaseNote(note: FailingBaseNote): string {
-  const { baseBranch, branch, commit, command } = note;
-  const tail = logTail(note.output);
+  const { baseBranch, branch, commit, command, onBranch } = note;
   const where = `\`${command}\` ${note.timedOut ? "timed out" : "failed"} in a clean worktree at ${commit}, the merge-base of \`${branch}\` with \`${baseBranch}\`.`;
-  const fence = "`".repeat(Math.max(3, ...[...tail.matchAll(/`+/g)].map(([run]) => run.length + 1)));
-  const evidence =
-    tail === ""
-      ? `**Evidence**: ${where} It printed nothing.`
-      : `**Evidence**: ${where} The tail of its output:\n\n${fence}\n${escapeCheckboxes(tail)}\n${fence}`;
+  const opening = "The branch's own failure, which need not be the same:";
+  const branchPart =
+    onBranch.point === "checks"
+      ? quoted(
+          `${opening} \`${onBranch.command}\` ${onBranch.timedOut ? "timed out" : "failed"} on \`${branch}\`.`,
+          "The tail of the branch's output:",
+          logTail(onBranch.output),
+          "It printed nothing.",
+        )
+      : quoted(
+          `${opening} CI on the pull request from \`${branch}\` reported ${onBranch.summary}.`,
+          "The tail of the failing jobs' logs:",
+          onBranch.excerpt.trim(),
+          "No failing job had a log to quote.",
+        );
   return [
     NOTE_MARKER,
-    `From the pipeline, releasing #${note.origin} at ${note.point}`,
+    `From the pipeline, releasing #${note.origin} at ${onBranch.point}`,
     "",
     [
       `**${failingBaseSummary(baseBranch, command)}**`,
-      evidence,
+      `**Evidence**: ${quoted(where, "The tail of its output:", logTail(note.output), "It printed nothing.")}`,
+      branchPart,
       `**Impact**: every Ticket whose branch inherits ${commit} fails the same Check. #${note.origin} was released with its Fix budget as it was, and the Run claimed no more Tickets.`,
       `**Next**: mend \`${command}\` on \`${baseBranch}\`. The next Run takes the released Tickets up again from their State files, rebased onto \`${baseBranch}\` before their Checks.`,
     ].join("\n\n"),
     "",
   ].join("\n");
+}
+
+/**
+ * A sentence of the pipeline's own and the output it introduces, or `ifEmpty`
+ * in place of the introduction when there was no output.
+ *
+ * The output is fenced with more backticks than any run of them inside it, so a
+ * fence the output prints cannot close it early, and only the output has its
+ * checkboxes escaped, since the words around it are the pipeline's.
+ */
+function quoted(sentence: string, introduction: string, output: string, ifEmpty: string): string {
+  if (output === "") return `${sentence} ${ifEmpty}`;
+  const fence = "`".repeat(Math.max(3, ...[...output.matchAll(/`+/g)].map(([run]) => run.length + 1)));
+  return `${sentence} ${introduction}\n\n${fence}\n${escapeCheckboxes(output)}\n${fence}`;
 }
 
 /** Whether an issue's body says it is the standing Notes issue. */

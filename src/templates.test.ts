@@ -934,16 +934,26 @@ describe("a Note that fell back to the standing Notes issue", () => {
 describe("failingBaseNote", () => {
   const subject = {
     origin: 6,
-    point: "checks" as const,
     baseBranch: "main",
     branch: "agent/6-x",
     commit: "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d",
     command: "npm test",
     output: "FAIL src/date.test.ts\n  expected 2026 to be 2025\n",
     timedOut: false,
+    onBranch: {
+      point: "checks" as const,
+      command: "npm test",
+      output: "FAIL src/clock.test.ts\n  2246 ms is not below 2000 ms\n",
+      timedOut: false,
+    },
   };
+  /** The same Note for a Ticket whose pull request CI failed. */
+  const atCi = (excerpt: string) => ({
+    ...subject,
+    onBranch: { point: "ci" as const, summary: "test failed, lint cancelled", excerpt },
+  });
 
-  it("is the pipeline's Note: the failing Check, where it fails, and the tail of what it printed", () => {
+  it("is the pipeline's Note: the failing Check, where it fails, and the tail of what it printed there and on the branch", () => {
     expect(failingBaseNote(subject)).toBe(
       [
         NOTE_MARKER,
@@ -956,6 +966,13 @@ describe("failingBaseNote", () => {
         "```",
         "FAIL src/date.test.ts",
         "  expected 2026 to be 2025",
+        "```",
+        "",
+        "The branch's own failure, which need not be the same: `npm test` failed on `agent/6-x`. The tail of the branch's output:",
+        "",
+        "```",
+        "FAIL src/clock.test.ts",
+        "  2246 ms is not below 2000 ms",
         "```",
         "",
         "**Impact**: every Ticket whose branch inherits 1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d fails the same Check. #6 was released with its Fix budget as it was, and the Run claimed no more Tickets.",
@@ -980,15 +997,15 @@ describe("failingBaseNote", () => {
     expect(note).toContain("line 50\n````");
   });
 
-  /** What the Note quotes between its fences. */
-  const quoted = (note: string) => (/^```\n([\s\S]*)\n```$/m.exec(note) as RegExpExecArray)[1] as string;
+  /** What the Note quotes between its first fences, the merge-base's output. */
+  const firstQuote = (note: string) => (/^```\n([\s\S]*?)\n```$/m.exec(note) as RegExpExecArray)[1] as string;
 
   it("quotes no more characters than the cap, saying what it left out, when the lines are long", () => {
     const error = `src/x.ts(1,1): error TS2322: Type '${"{ a: string; }".repeat(150)}' is not assignable.`;
     const output = Array.from({ length: 60 }, (_, index) => `${index + 1} ${error}`).join("\n");
     const note = failingBaseNote({ ...subject, output });
 
-    const [omission, ...kept] = quoted(note).split("\n");
+    const [omission, ...kept] = firstQuote(note).split("\n");
     expect(error.length).toBeGreaterThan(2_000);
     expect(omission).toBe("… (59 earlier lines omitted)");
     expect(kept.join("\n").length).toBeLessThanOrEqual(MAX_TAIL_CHARS);
@@ -1000,28 +1017,71 @@ describe("failingBaseNote", () => {
     const output = `${"x".repeat(5_000)}assertion failed`;
     const note = failingBaseNote({ ...subject, output });
 
-    const [omission, ...kept] = quoted(note).split("\n");
+    const [omission, ...kept] = firstQuote(note).split("\n");
     expect(omission).toBe("… (the start of this line omitted)");
     expect(kept.join("\n")).toBe(output.slice(-MAX_TAIL_CHARS));
   });
 
   it("says a Check the limit killed timed out, and one that printed nothing printed nothing", () => {
-    const note = failingBaseNote({ ...subject, output: " \n", timedOut: true });
+    const note = failingBaseNote({
+      ...subject,
+      output: " \n",
+      timedOut: true,
+      onBranch: { ...subject.onBranch, output: "", timedOut: true },
+    });
 
     expect(note).toContain("`npm test` timed out in a clean worktree");
     expect(note).toContain("`main`. It printed nothing.");
+    expect(note).toContain("`npm test` timed out on `agent/6-x`. It printed nothing.");
     expect(note).not.toContain("```");
   });
 
-  it("defuses a checkbox in the output it quotes", () => {
-    const note = failingBaseNote({ ...subject, output: "- [ ] todo\n" });
+  it("defuses a checkbox in the output it quotes, the merge-base's and the branch's", () => {
+    const note = failingBaseNote({
+      ...subject,
+      output: "- [ ] todo\n",
+      onBranch: { ...subject.onBranch, output: "* [ ] also\n" },
+    });
 
     expect(new RegExp(UNCHECKED_BOX, "m").test(note)).toBe(false);
   });
 
+  it("quotes only the tail of the branch's output, in a fence of its own", () => {
+    const lines = Array.from({ length: 50 }, (_, index) => `branch line ${index + 1}`);
+    lines[49] = "``` and ````";
+    const note = failingBaseNote({ ...subject, onBranch: { ...subject.onBranch, output: lines.join("\n") } });
+
+    expect(note).toContain("```\nFAIL src/date.test.ts\n  expected 2026 to be 2025\n```\n");
+    expect(note).not.toContain("branch line 10\n");
+    expect(note).toContain("`````\n… (10 earlier lines omitted)\nbranch line 11\n");
+    expect(note).toContain("``` and ````\n`````\n");
+  });
+
   it("says CI was what failed when CI was", () => {
-    expect(failingBaseNote({ ...subject, point: "ci" }).split("\n")[1]).toBe(
-      "From the pipeline, releasing #6 at ci",
+    expect(failingBaseNote(atCi("test\nFAIL")).split("\n")[1]).toBe("From the pipeline, releasing #6 at ci");
+  });
+
+  it("quotes the failing jobs' logs for CI as a fix Stage would be handed them", () => {
+    const excerpt = [
+      "test",
+      ...Array.from({ length: 40 }, (_, index) => `test line ${index + 1}`),
+      "",
+      "lint",
+      "(the log was unavailable; the job is at https://github.com/o/r/actions/runs/1/job/2)",
+    ].join("\n");
+    const note = failingBaseNote(atCi(excerpt));
+
+    expect(note).toContain(
+      "The branch's own failure, which need not be the same: CI on the pull request from `agent/6-x` reported test failed, lint cancelled. The tail of the failing jobs' logs:",
+    );
+    expect(note).toContain(`\n\`\`\`\n${excerpt}\n\`\`\`\n`);
+  });
+
+  it("says CI had no log to quote when no failing check was an Actions job", () => {
+    const note = failingBaseNote(atCi(""));
+
+    expect(note).toContain(
+      "CI on the pull request from `agent/6-x` reported test failed, lint cancelled. No failing job had a log to quote.",
     );
   });
 });

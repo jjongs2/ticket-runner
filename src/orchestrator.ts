@@ -47,6 +47,7 @@ import {
 import { retryLogDir, stageLogDir } from "./run-log.js";
 import { holdsClaim } from "./stranded.js";
 import {
+  type BranchFailure,
   RELEASE_WORDS,
   releaseWords,
   draftPullRequestBody,
@@ -239,11 +240,18 @@ class Releasing extends Error {
     readonly reason: ReleaseCause,
     readonly limitResetsAt?: string,
     /** The Check the Base branch fails too, for a Release over it. */
-    readonly failingBase?: FailingBase,
+    readonly failingBase?: InheritedFailure,
   ) {
     super(`the ${point} Stage was stopped · ${RELEASE_WORDS[reason]}`);
   }
 }
+
+/**
+ * A Check the Base branch fails, and how the branch itself failed, which the
+ * Note about it quotes beside the merge-base's output: only the command is
+ * compared, so the two need not be the same failure.
+ */
+type InheritedFailure = FailingBase & { onBranch: BranchFailure };
 
 /** An error the pipeline did not raise itself, blamed on the step it was on. */
 function asTicketFailure(error: unknown, point: FailurePoint): TicketFailure {
@@ -1257,7 +1265,7 @@ async function runChecks(
       // Asked before the row is written, because the row is what differs: a
       // Check the Base branch fails too is nothing the Ticket did.
       await releaseIfTheBaseFails(pipeline, {
-        point: "checks",
+        onBranch: { point: "checks", command, output: result.output, timedOut: result.timedOut },
         worktree,
         commands: [command],
         progress,
@@ -1333,13 +1341,14 @@ async function inheritedFailure(
 async function releaseIfTheBaseFails(
   pipeline: Pipeline,
   {
-    point,
+    onBranch,
     worktree,
     commands,
     progress,
     durationMs,
   }: {
-    point: "checks" | "ci";
+    /** How the branch failed, which is also where: its Checks, or CI. */
+    onBranch: BranchFailure;
     worktree: string;
     commands: readonly string[];
     progress: Progress;
@@ -1350,11 +1359,14 @@ async function releaseIfTheBaseFails(
   const inherited = await inheritedFailure(pipeline, worktree, commands);
   if (inherited === undefined) return;
   await progress.record({
-    point,
+    point: onBranch.point,
     outcome: `⏸ \`${inherited.command}\` fails on the Base branch`,
     durationMs,
   });
-  throw new Releasing(point, "implemented", "failing-base", undefined, inherited);
+  throw new Releasing(onBranch.point, "implemented", "failing-base", undefined, {
+    ...inherited,
+    onBranch,
+  });
 }
 
 /**
@@ -1729,7 +1741,7 @@ async function requireGreenCi(
       // none, and a failure the clock brings starts after its last green run.
       // So the merge-base is graded with the Checks, which CI runs too.
       await releaseIfTheBaseFails(pipeline, {
-        point: "ci",
+        onBranch: { point: "ci", summary: outcome.summary, excerpt: outcome.excerpt },
         worktree,
         commands: pipeline.config.checks,
         progress,
@@ -1805,7 +1817,7 @@ async function release(
     ...(stopped.failingBase === undefined ? {} : { rebaseFirst: true }),
   });
   if (stopped.failingBase !== undefined) {
-    await noteFailingBase(pipeline, { issue, branch, stopped, failing: stopped.failingBase, notes });
+    await noteFailingBase(pipeline, { issue, branch, failing: stopped.failingBase, notes });
   }
 
   // The claim, undone in the order it was made, so the assignee — which is what
@@ -1848,14 +1860,12 @@ async function noteFailingBase(
   {
     issue,
     branch,
-    stopped,
     failing,
     notes,
   }: {
     issue: Issue;
     branch: string;
-    stopped: Releasing;
-    failing: FailingBase;
+    failing: InheritedFailure;
     notes: RoutedNote[];
   },
 ): Promise<void> {
@@ -1869,7 +1879,6 @@ async function noteFailingBase(
         number,
         failingBaseNote({
           origin,
-          point: stopped.point === "ci" ? "ci" : "checks",
           baseBranch: pipeline.baseBranch,
           branch,
           ...failing,

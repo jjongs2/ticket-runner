@@ -172,10 +172,12 @@ Release가 하는 일:
 Check나 CI가 실패해 파이프라인이 branch와 base branch의 merge-base에서 깨끗한 worktree로 Check 명령을 다시 돌렸는데 그중 하나가 거기서도 실패하면, branch가 들여온 것이 아니라 물려받은 실패입니다([Base branch도 함께 실패할 때](./ticket-to-merge.md#a-failure-the-base-branch-shares)). 이때는 rate limit 때처럼 Ticket을 Release하되, 다른 점은 이렇습니다.
 
 - Progress 줄에 ``⏸ `<command>` fails on the Base branch``라고 적고, Run의 마지막 줄은 그 명령과 merge-base를 밝힙니다.
-- 상설 Notes 이슈에 명령 출력의 끝부분을 담은 Note 하나를 올립니다. Ticket 자체에는 코멘트를 달지 않습니다.
+- 상설 Notes 이슈에 merge-base에서의 명령 출력 끝부분과, 그 옆에 branch 자신의 실패를 담은 Note 하나를 올립니다. Ticket 자체에는 코멘트를 달지 않습니다.
 - 다음 Run은 Check 전에 branch를 Base branch 위로 rebase합니다.
 
 Fix budget은 썼든 안 썼든 그대로입니다. budget을 이미 쓴 Ticket도 Hand-off가 아니라 Release됩니다. 열려 있던 pull request는 그대로 두고, 다음 Run이 갱신합니다.
+
+무언가를 고치기 전에 Note에서 branch의 몫을 먼저 읽으세요. merge-base와 branch는 같은 명령에 실패했을 뿐, 같은 방식으로 실패했다는 보장은 없습니다. 자기만의 실패를 가진 branch는 Base branch가 그 명령을 통과할 때까지 매 Run마다 Release되고, Base branch의 실패만 고쳐서는 merge되지 않고 fix Stage에 이를 뿐입니다.
 
 Base branch에서 Check를 고친 뒤 Run을 시작하세요. Release된 Ticket은 Check 전에 고친 Base branch 위로 rebase됩니다. rebase가 충돌하면 Conflict Stage로 가고, 해결하지 못하면 Landing에서처럼 Fix budget을 씁니다. Base branch를 고치기 전에 Run을 시작하면 Ticket은 다시 Release됩니다.
 
