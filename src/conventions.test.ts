@@ -90,11 +90,11 @@ describe("the conventions document", () => {
     ["Ticket", "GitHub issues each sized for one session of work"],
     ["Stage", "one Claude Code session with a single purpose"],
     ["Note", "defects it met that belong to another Ticket or to none yet"],
-    ["Hand-off", "given to a human in a Hand-off"],
+    ["Hand-off", "A Hand-off gives a Ticket to a human rather than merging it"],
     ["Operator", "the Claude session a human opens on a cloud Host"],
     ["Acceptance Criteria", "the only thing the verify Stage grades"],
     ["Check", "a command the pipeline runs itself on a Ticket's code"],
-    ["Lane", "the places it holds a Ticket in progress"],
+    ["Lane", "each Lane holds one Ticket in progress"],
     ["Release", "gives a Ticket back to the pipeline"],
     ["Stop", "finish the Tickets its Lanes hold and take no more"],
   ])("glosses %s", (_term, gloss) => {

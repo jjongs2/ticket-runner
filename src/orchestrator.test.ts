@@ -1182,8 +1182,8 @@ describe("the transcripts a hand-off keeps on the remote", () => {
 
     await run();
 
-    // The draft pull request is part of the state; transcripts kept before it would sit
-    // beside a state a resuming Run opens a second pull request over.
+    // The draft pull request is part of the state; transcripts kept before it
+    // would sit beside a state a resuming Run opens a second pull request over.
     expect(stateWhenKept).toMatchObject({ pullRequest: 100 });
   });
 
@@ -1603,7 +1603,8 @@ describe("the fix Stage", () => {
 
     await run();
 
-    // The merge carries the second verdict, so the pull request a human reads must too.
+    // The merge carries the second verdict, so the pull request a human reads
+    // must too.
     expect(tracker.calls).toContain("updatePullRequestBody:100");
     expect(tracker.pullRequest(100).body).toContain(
       "**Verdict:** 1 met · 0 unmet · 0 unverifiable",

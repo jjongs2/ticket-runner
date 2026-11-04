@@ -5,13 +5,14 @@
  *
  * A dropped word is an ordinary word, so it is lowercase wherever English
  * would write any word in lowercase. A word that opens a sentence, a line or a
- * label keeps its capital, so only a word following a lowercase letter, a digit
- * or a comma and a space is read as mid-sentence: a check that cannot tell a
+ * label keeps its capital, so only a word following a lowercase letter, a digit,
+ * a comma, a semicolon or a closing parenthesis and a space is read as
+ * mid-sentence: a check that cannot tell a
  * heading from prose would refuse the one and miss nothing in the other.
  */
 
 const DROPPED =
-  /(?<=[a-z0-9,;)] )(?:Executions?|Candidates?|Claims?|Base branch(?:es)?|Credentials?|Spend|Run Lock|Stage Mark|Session [Mm]arks?|Target Readiness|Progress|Guards?|Verify|Conflict|Verdicts?|Fix [Bb]udgets?|States?|Versions?)\b/g;
+  /(?<=[a-z0-9,;)] )(?:Executions?|Candidates?|Claims?|Base branch(?:es)?|Credentials?|Spend|Run Locks?|Stage Marks?|Session [Mm]arks?|Target Readiness|Progress|Guards?|Verify|Conflict|Verdicts?|Fix [Bb]udgets?|States?|Versions?)\b/g;
 
 /** A bare `PR` that is neither a `PR #<n>` reference nor the set phrase release PR. */
 const PR = /(?<!release )\bPRs?\b(?! #)/g;

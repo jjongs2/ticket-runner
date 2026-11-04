@@ -382,7 +382,8 @@ export class FakeTracker implements Tracker {
     const pr = this.pullRequest(number);
     pr.merged = true;
     pr.squashCommit = commit;
-    // The pull request body closes the Ticket, which is how a Run's Frontier shrinks.
+    // The pull request body closes the Ticket, which is how a Run's Frontier
+    // shrinks.
     const closes = /Closes #(\d+)/.exec(pr.body);
     if (closes) this.closed.add(Number.parseInt(closes[1] as string, 10));
     this.onSquashMerge?.(number);

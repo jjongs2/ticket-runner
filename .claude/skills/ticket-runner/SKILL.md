@@ -1,13 +1,13 @@
 ---
 name: ticket-runner
-description: Operate ticket-runner on this repository from a Claude Code cloud session — ready the Host (the machine the pipeline runs on), start a Run (one invocation of the pipeline) in the background, narrowed to the Tickets (GitHub issues each sized for one session of work) the human names when they name any, report what it prints, pass on a Stop (the human's request that a Run finish the Tickets it holds and take no more), and release a Run lock a vanished Host left behind. Use when the human asks to run the pipeline ("run it"), to work particular Tickets, to stop the Run, or to release its lock. Never from a Stage (a session a Run started for one purpose).
+description: Operate ticket-runner on this repository from a Claude Code cloud session — ready the Host (the machine the pipeline runs on), start a Run (one invocation of the pipeline) in the background, narrowed to the Tickets (GitHub issues each sized for one session of work) the human names when they name any, report what it prints, pass on a Stop (the human's request that a Run finish the Tickets it holds and take no more), and release a Run lock a vanished Host left behind. Use when the human asks to run the pipeline ("run it"), to work particular Tickets, to stop the Run, or to release its lock. Never from a Stage (a Claude Code session a Run started for a single purpose).
 ---
 
 # Operating ticket-runner
 
 You are the Operator: the Claude session a human opened on this repository to run `ticket-runner` for them, and to watch and steer it from the app. You start the Run, report what it prints, pass on a Stop, and release a lock when asked. Nothing else. The Run does the work, and everything else a human wants of a Ticket goes through the board.
 
-If `TICKET_RUNNER_STAGE` is set in your shell, you are a Stage of a Run, a Claude Code session the Run started for a single purpose, not an Operator. Stop here and use none of this.
+If `TICKET_RUNNER_STAGE` is set in your shell, you are a Stage of a Run, not an Operator. Stop here and use none of this.
 
 ## Ready the Host
 
@@ -35,7 +35,7 @@ Install only what this Host does not already have. What the cloud environment's 
    apt-get install -y gh
    ```
 
-   The `gh` apt offers is older than GitHub's own, and enough: the pipeline reaches GitHub through `gh api` alone. If the install fails, start nothing and tell the human what apt printed: a Run started without `gh` is refused as a Target, the repository a Run works on, that is not set up, saying only that `gh` is not installed and must be installed first.
+   The `gh` apt offers is older than GitHub's own, and enough: the pipeline reaches GitHub through `gh api` alone. If the install fails, start nothing and tell the human what apt printed: a Run started without `gh` is refused, because its Target, the repository a Run takes its work from and merges into, is not set up, saying only that `gh` is not installed and must be installed first.
 
 4. This repository's own dependencies, in this checkout. Every Ticket's worktree lives inside this checkout, and a Check, a command the pipeline runs itself on a Ticket's code to gate it, such as its tests, uses what is installed here when it finds nothing installed in its worktree. Without them every Check fails to start and spends its Ticket's fix budget, the fix Stages it is allowed, on that. If they are installed here already, `node_modules/` beside a `package.json` for instance, use them as they are. Otherwise work out the install command from what this repository declares, its lockfile first and then its README or contributing guide, and run it at the root of this checkout: `npm ci` beside a `package-lock.json`, say. A repository that declares no dependencies needs nothing here. If the install fails, start nothing and tell the human what the install printed.
 
@@ -54,7 +54,7 @@ Start one at a time. While a Run of yours is running, start no other.
 
 ## Report
 
-Report what the Run prints as it prints it, in a form a phone screen reads: one short line per Ticket that ended, saying which Ticket and whether it merged, was handed off to a human, was released for a later Run to take up again, or was skipped, and why when the Run gives a reason. Pass on a refusal as it is worded: it names what to do.
+Report what the Run prints as it prints it, in a form a phone screen reads: one short line per Ticket that ended, saying which Ticket and whether it merged, was handed off (given to a human to carry on), was released (given back for a later Run to take up again) or was skipped, and why when the Run gives a reason. Pass on a refusal as it is worded: it names what to do.
 
 When the Run ends, report its summary and what its exit code means: `1` at least one Ticket was handed off to a human, `2` nothing was taken at all, because the Run was refused or because it was given Ticket numbers and took none of them, every one skipped or blocked, and `0` otherwise.
 

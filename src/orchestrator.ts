@@ -264,13 +264,12 @@ function asTicketFailure(error: unknown, point: FailurePoint): TicketFailure {
  * Take one Ticket from claimed to merged, hand it to a human, or pass it over.
  *
  * The happy path is: guards → claim → worktree and branch → implement Stage →
- * Checks → verify Stage → rebase → pull request → CI → squash merge → cleanup. Work left
- * uncommitted, a failing Check, an unmet criterion, a red CI or a rebase
- * conflict the conflict Stage could not resolve spends the Ticket's fix budget
- * and starts again at the Checks; every other failure, and every second
- * failure, ends in a hand-off.
- * Nothing ends in a merge that has not been through a green pass of the whole
- * gauntlet.
+ * Checks → verify Stage → rebase → pull request → CI → squash merge → cleanup.
+ * Work left uncommitted, a failing Check, an unmet criterion, a red CI or a
+ * rebase conflict the conflict Stage could not resolve spends the Ticket's fix
+ * budget and starts again at the Checks; every other failure, and every second
+ * failure, ends in a hand-off. Nothing ends in a merge that has not been
+ * through a green pass of the whole gauntlet.
  *
  * A Stage the subscription rate limit or a transient API failure stopped ends
  * none of that: the Ticket is released, and a Run started once the limit has
@@ -286,8 +285,8 @@ function asTicketFailure(error: unknown, point: FailurePoint): TicketFailure {
  * listing, so the guards ask again.
  *
  * From the pull of the base branch before the rebase to the pull after the
- * merge the Ticket holds the Run's Landing, so no other Ticket of the same Run moves the base
- * branch underneath the branch CI is grading (ADR-0005).
+ * merge the Ticket holds the Run's Landing, so no other Ticket of the same Run
+ * moves the base branch underneath the branch CI is grading (ADR-0005).
  */
 export async function processTicket(
   pipeline: Pipeline,
@@ -1414,7 +1413,8 @@ async function verify(
   // and a worktree that will not discard them is no reason to lose them too.
   await collectNotes(pipeline, issue.number, "verify", result, notes);
 
-  // verify is allowed to write throwaway tests; none of them reach the pull request.
+  // verify is allowed to write throwaway tests; none of them reach the pull
+  // request.
   await pipeline.workspace.discardChanges(worktree);
 
   if (!result.ok) throw await stageDidNotFinish(pipeline, progress, "verify", result);
@@ -1934,25 +1934,27 @@ interface HandOff {
 }
 
 /**
- * Hand the Ticket to a human: a draft pull request to review, a comment naming where the
- * work is, and the labels a human filters on. The branch, the worktree and the
- * state file stay put, so a human who relabels the Ticket `ready-for-agent`
- * hands it back and the next Run carries on from what it reached. The Stages'
- * transcripts go up beside the state, since the Host they were written on may
- * be gone by the time a human looks, and the comment says where they and the
- * branch are. The draft pull request's body says where they are too, once they are
- * kept: a draft is opened first, because the state records it, and one that
- * was already open is rewritten, since its body is an earlier Run's.
+ * Hand the Ticket to a human: a draft pull request to review, a comment naming
+ * where the work is, and the labels a human filters on. The branch, the
+ * worktree and the state file stay put, so a human who relabels the Ticket
+ * `ready-for-agent` hands it back and the next Run carries on from what it
+ * reached. The Stages' transcripts go up beside the state, since the Host they
+ * were written on may be gone by the time a human looks, and the comment says
+ * where they and the branch are. The draft pull request's body says where they
+ * are too, once they are kept: a draft is opened first, because the state
+ * records it, and one that was already open is rewritten, since its body is an
+ * earlier Run's.
  *
  * A Ticket handed over before its worktree was created has none: nothing was
- * branched, so there is no directory to name and nothing to push a draft pull request out
- * of. Both are left out rather than written as a path that is not there and a
- * push that fails.
+ * branched, so there is no directory to name and nothing to push a draft pull
+ * request out of. Both are left out rather than written as a path that is not
+ * there and a push that fails.
  *
  * Where a human is sent and what the pipeline pushes are two different facts. A
  * Ticket refused at setup over a branch still checked out somewhere names that
  * worktree and stops there: the work in it is a human's, and pushing it or
- * opening a pull request that says `Closes #<n>` over it would claim it for this Run.
+ * opening a pull request that says `Closes #<n>` over it would claim it for
+ * this Run.
  *
  * The same fact mostly decides the state file. A worktree this Run may push out
  * of is one a Stage of it worked in, and what it left is the pipeline's to
@@ -1983,8 +1985,9 @@ async function handOff(
 
   // Nothing of this Run's is on the branch, so nothing may leave the Ticket
   // looking resumable: the next Run must not implement over what a human holds.
-  // Wrapped because the hand-off itself — the draft pull request, the comment, the labels
-  // — is what a human is waiting for, and no file is worth losing it over.
+  // Wrapped because the hand-off itself — the draft pull request, the comment,
+  // the labels — is what a human is waiting for, and no file is worth losing it
+  // over.
   if (!keepsState) {
     try {
       await workspace.removeState(ticket);
@@ -2007,7 +2010,8 @@ async function handOff(
   if (pullRequest !== undefined) {
     await tracker.convertPullRequestToDraft(pullRequest);
   } else if (worktree?.pushable === true) {
-    // A draft pull request is worth trying for, but never worth losing the relabel over.
+    // A draft pull request is worth trying for, but never worth losing the
+    // relabel over.
     try {
       await workspace.push(worktree.path, branch);
       const pr = await tracker.createPullRequest({

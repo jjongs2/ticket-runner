@@ -33,12 +33,12 @@ describe("the Operator's skill", () => {
     ["Run", "one invocation of the pipeline"],
     ["Ticket", "issues each sized for one session of work"],
     ["Stop", "finish the Tickets it holds and take no more"],
-    ["Stage", "a session a Run started"],
+    ["Stage", "a Claude Code session a Run started for a single purpose"],
     ["Operator", "the Claude session a human opened on this repository"],
-    ["Target", "the repository a Run works on"],
+    ["Target", "the repository a Run takes its work from and merges into"],
     ["Check", "a command the pipeline runs itself on a Ticket's code"],
-    ["Hand-off", "handed off to a human"],
-    ["Release", "released for a later Run to take up again"],
+    ["Hand-off", "handed off (given to a human to carry on)"],
+    ["Release", "released (given back for a later Run to take up again)"],
   ])("glosses %s", (_term, gloss) => {
     expect(operatorSkill()).toContain(gloss);
   });

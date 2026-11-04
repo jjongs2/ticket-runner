@@ -24,9 +24,9 @@ export const CREDENTIAL_WORDS: Record<Credential, string> = {
 
 /**
  * The `apiKeySource` a Stage's `system/init` event reports when it was billed
- * to what the Run chose. Any other is a Stage billed somewhere the Run did not
- * choose: a key an `apiKeyHelper` in the Host's settings supplied, say, which
- * no environment variable removes.
+ * to the subscription or API key its Run started with. Any other is a Stage
+ * billed somewhere the Run did not choose: a key an `apiKeyHelper` in the
+ * Host's settings supplied, say, which no environment variable removes.
  */
 export function expectedKeySource(credential: Credential): string {
   return credential === "api-key" ? API_KEY_ENV_VAR : "none";
@@ -54,7 +54,7 @@ export interface StrayStage {
  * comment carry no amount.
  */
 export interface Billing {
-  /** Every Stage billed to something other than what the Run chose, in order. */
+  /** Every Stage billed to something other than its Run's subscription or API key, in order. */
   strays: StrayStage[];
   /**
    * The spend, in dollars: the CLI's figures for the Stages of an `--api-key`

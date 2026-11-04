@@ -180,8 +180,8 @@ stands, except that out of API budget outranks the rate limit and an API
 failure, and the rate limit outranks an API failure.
 
 `billed` is a Stage whose `system/init` event named another `apiKeySource` than
-the one the Run's Stages are billed to: anything but `none` on a subscription Run, anything but
-`ANTHROPIC_API_KEY` on an `--api-key` Run. It follows its Ticket's rows, and the
+the subscription or API key the Run's Stages are billed to: anything but `none`
+on a subscription Run, anything but `ANTHROPIC_API_KEY` on an `--api-key` Run. It follows its Ticket's rows, and the
 Run's log named it when the Stage came back. A key an `apiKeyHelper` in the
 Host's settings supplies is one, which no environment variable removes. The
 row ends with that Stage's own amount where it reported one, on a subscription
