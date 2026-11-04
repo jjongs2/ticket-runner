@@ -78,7 +78,8 @@ export default withMermaid(
       socialLinks: [{ icon: "github", link: repo }],
       editLink: { pattern: editPattern },
       // The 404 belongs to neither language, and its title link would otherwise be the
-      // neutral home. The theme takes logoLink as written, so it carries the base.
+      // neutral home. The theme takes logoLink as written, so it carries the base, and
+      // each locale sets its own, since this one would otherwise apply to both.
       logoLink: `${base}en/`,
     },
     // No root locale: every page is under /en/ or /ko/, and a path without a prefix is a

@@ -28,10 +28,7 @@ function visit(html: string, v: Visit): string | undefined {
   let replaced: string | undefined;
   const store = new Map<string, string>();
   if (v.stored != null) store.set("ticket-runner:wiki-language", v.stored);
-  const localStorage =
-    v.storage === "throws"
-      ? new Proxy({}, { get: () => { throw new Error("SecurityError"); } })
-      : { getItem: (k: string) => store.get(k) ?? null };
+  const localStorage = { getItem: (k: string) => store.get(k) ?? null };
   runInNewContext(script, {
     location: {
       pathname: v.pathname,

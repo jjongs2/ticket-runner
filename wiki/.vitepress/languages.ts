@@ -50,7 +50,7 @@ location.replace(base + lang + "/" + rest + location.search + location.hash);
 
 // Korean link text as character references, so the stub reads right whatever charset
 // the browser assumes before it reaches the meta tag.
-function ascii(text: string): string {
+function characterReferences(text: string): string {
   return text.replace(/[^\x00-\x7f]/g, (c) => `&#${c.codePointAt(0)};`);
 }
 
@@ -75,7 +75,7 @@ export function neutralStub(base: string, path: string): string {
 <noscript><meta http-equiv="refresh" content="0; url=${en}"></noscript>
 </head>
 <body>
-<p><a href="${en}" lang="en">English</a> &middot; <a href="${ko}" lang="ko">${ascii("한국어")}</a></p>
+<p><a href="${en}" lang="en">English</a> &middot; <a href="${ko}" lang="ko">${characterReferences("한국어")}</a></p>
 </body>
 </html>
 `;

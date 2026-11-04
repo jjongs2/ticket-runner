@@ -80,9 +80,9 @@ function currentHeading(): string | null {
 function keepSectionOnLanguageSwitch(router: Router, base: string) {
   router.onBeforeRouteChange = (href) => {
     const to = new URL(href, location.href);
-    const twin = (path: string) => languageOf(path, base)?.rest;
-    const page = twin(location.pathname);
-    if (to.pathname === location.pathname || page === undefined || twin(to.pathname) !== page) return;
+    const pageOf = (path: string) => languageOf(path, base)?.rest;
+    const page = pageOf(location.pathname);
+    if (to.pathname === location.pathname || page === undefined || pageOf(to.pathname) !== page) return;
     const id = currentHeading();
     const target = id ? `${to.pathname}#${id}` : to.pathname;
     if (target === to.pathname + to.hash) return;
@@ -116,11 +116,14 @@ function holdHeading(id: string) {
 }
 
 // A pick is the reader following a link in the language menu, the desktop one or the
-// mobile one, in this tab or a new one; the next neutral URL follows it. The listeners
+// mobile one, in this tab or a new one; the next neutral URL follows it. The desktop
+// menu is the nav bar's own from 1280px and sits in its "…" flyout below that. The listeners
 // capture, so they see the click before the router turns it into a route change.
 // Reaching the other language any other way records nothing.
 function rememberLanguagePicks(base: string) {
-  const menus = ".VPNavBarTranslations a[href], .VPNavScreenTranslations a[href]";
+  const menus = [".VPNavBarTranslations", ".VPNavBarExtra .translations", ".VPNavScreenTranslations"]
+    .map((menu) => `${menu} a[href]`)
+    .join(", ");
   const record = (e: MouseEvent) => {
     if (e.type === "auxclick" && e.button !== 1) return;
     const link = e.target instanceof Element ? e.target.closest<HTMLAnchorElement>(menus) : null;
