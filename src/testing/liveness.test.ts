@@ -47,6 +47,8 @@ describe("whether a process is alive", () => {
     try {
       const zombie = await firstPid(parent);
 
+      // Asked until it says no, since `sleep 0` may not have exited yet.
+
       expect(await goneSoon(zombie)).toBe(true);
       expect(() => process.kill(zombie, 0)).not.toThrow();
     } finally {

@@ -2,12 +2,19 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 /**
- * Whether a process a test killed is still alive.
+ * Whether a process a test killed is gone.
  *
- * `process.kill(pid, 0)` alone would not do: it still succeeds on a zombie, a
+ * `process.kill(pid, 0)` alone would not say: it still succeeds on a zombie, a
  * process that is dead but not yet reaped, and a killed orphan stays one until
- * the Host's init reaps it, which on some Hosts takes seconds. A zombie counts
- * as gone here; a process that is running, sleeping or stopped counts as alive.
+ * the machine's init reaps it, which on a cloud Host takes seconds.
+ *
+ * Scaffolding the tests are built from rather than a word the pipeline uses, so
+ * it is not in `GLOSSARY.md`.
+ */
+
+/**
+ * Whether the process is alive: running, sleeping or stopped. A zombie is not,
+ * though it can still be signalled.
  */
 export function alive(pid: number): boolean {
   try {
@@ -51,6 +58,7 @@ function stateOf(pid: number): string | undefined {
   return stat.slice(stat.lastIndexOf(")") + 1).trim().split(/\s+/)[0];
 }
 
+/** The state `ps` prints for the process, or nothing once it has gone. */
 function stateFromPs(pid: number): string | undefined {
   const listed = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" });
   if (listed.error !== undefined) throw listed.error;
