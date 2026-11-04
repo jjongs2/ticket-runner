@@ -1406,6 +1406,19 @@ describe("the State a Ticket keeps", () => {
       expect(onRemote()).toEqual([]);
     });
 
+    it("commits each change with a message that names the Ticket without `#`", async () => {
+      const tip = () => git(remote, "log", "-1", "--format=%B", STATE_BRANCH);
+
+      await workspace.writeState(state);
+      expect(tip()).toBe("Record ticket 4 at implemented");
+
+      await workspace.keepTranscripts(4, "run-1");
+      expect(tip()).toBe("Keep ticket 4's transcripts from run-1");
+
+      await workspace.removeState(4);
+      expect(tip()).toBe("Forget ticket 4");
+    });
+
     it("are read by nothing that reads the State", async () => {
       await workspace.writeState(state);
       await workspace.keepTranscripts(4, "run-1");
@@ -1632,5 +1645,50 @@ describe("the Run lock", () => {
   it("reads nobody, and creates nothing, where the remote has no lock branch", async () => {
     expect(await on(HERE, {}).runLockHolder()).toBeUndefined();
     expect(git(remote, "branch", "--list", LOCK_BRANCH)).toBe("");
+  });
+});
+
+describe("the pipeline's own branches on GitHub", () => {
+  /**
+   * GitHub links a pushed commit that mentions `#<n>` to issue `<n>`, on
+   * whatever branch the commit is, so a message that did would put a line on
+   * that Ticket's timeline every time the pipeline wrote.
+   */
+  it("carry no `#<n>` in any commit message, however the Run was started", async () => {
+    const host: Host = { kind: "workstation", id: "4f1c0ffee", name: "desk" };
+    const workspace = new GitWorkspace(repo, "origin", {
+      host,
+      checkProcess: () => ({ alive: true, startedAt: "A" }),
+    });
+    const logs = stageLogDir(repo, "run-1", 4);
+    mkdirSync(logs, { recursive: true });
+    writeFileSync(join(logs, "implement.command"), "claude -p implement\n");
+    const messages: string[] = [];
+    const stateTip = () => messages.push(git(remote, "log", "-1", "--format=%B", STATE_BRANCH));
+
+    await workspace.takeRunLock({
+      pid: 111,
+      command: "ticket-runner run #4 #12",
+      runId: "run-1",
+      startedAt: "2026-09-17T09:00:00.000Z",
+    });
+    await workspace.writeState({
+      ticket: 4,
+      branch: "agent/4-x",
+      state: "claimed",
+      fixUsed: false,
+      runId: "run-1",
+      updatedAt: "2026-09-17T09:00:00.000Z",
+    });
+    stateTip();
+    await workspace.keepTranscripts(4, "run-1");
+    stateTip();
+    await workspace.removeState(4);
+    stateTip();
+    await workspace.releaseRunLock();
+    messages.push(...git(remote, "log", "--format=%B%x00", LOCK_BRANCH).split("\0"));
+
+    expect(messages.filter((message) => message.trim() !== "")).toHaveLength(6);
+    expect(messages.filter((message) => /#\d/.test(message))).toEqual([]);
   });
 });
