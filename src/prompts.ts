@@ -233,9 +233,7 @@ function verifyChecksLine(checks: readonly string[]): string {
  *
  * It is also told to fix the cause the evidence points at, not the patch the
  * evidence may still propose, and to test that fix the way the next verify will
- * attack it. In #292 it implemented a verify's proposed patch word for word and
- * tested only the counterexample it was handed, and the next verify broke the
- * patch with the next input.
+ * attack it, for the reason {@link verifyInstructions} gives.
  */
 const fixInstructions = (
   base: string,

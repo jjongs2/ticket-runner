@@ -770,7 +770,7 @@ describe("an unmet criterion's evidence", () => {
     expect(prompt).toMatch(/your regression test covers the cause, not only that counterexample/i);
   });
 
-  it("is spoken of to no fix Stage sent in for another kind of failure", () => {
+  it("is not raised with a fix Stage sent in for anything but unmet criteria", () => {
     for (const kind of OTHER_KINDS) {
       const prompt = fixPrompt(url, { ...FAILED_CHECK, kind }, BASE, "", OTHER_TARGET, NO_CHECKS);
 
