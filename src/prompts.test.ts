@@ -78,16 +78,6 @@ describe("implementPrompt", () => {
     expect(prompt).not.toMatch(/the repo's commit convention/);
   });
 
-  // The fix Stage has always been told this; the implement Stage heard it only
-  // from the conventions document, which no longer repeats the Stage prompts.
-  it("tells the session to create no branch and switch to none", () => {
-    const prompt = implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS);
-
-    expect(prompt).toMatch(/commit all of your work to the branch that is already checked out/i);
-    expect(prompt).toMatch(/do not create a branch/i);
-    expect(prompt).toMatch(/do not switch to another/i);
-  });
-
   // A bare `/code-review` also matches the CLI's own built-in skill.
   it("names the review skill by its plugin wherever it refers to it", () => {
     const mentions = implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS).match(/\S*code-review\S*/g) ?? [];
@@ -479,6 +469,23 @@ describe("the Notes channel", () => {
 
   it("asks the Stage that only rebases for no Notes", () => {
     expect(conflictPrompt(url, CONFLICT, BASE, "", OTHER_TARGET, NO_CHECKS)).not.toContain("Notes for other Tickets");
+  });
+});
+
+describe("the branch a Stage works on", () => {
+  // The pipeline pushes the branch it checked out, and the conventions document
+  // leaves this to the prompts, so every Stage that commits hears it here.
+  it("is the only one every Stage that commits is told to use", () => {
+    const prompts = [
+      implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS),
+      fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS),
+      conflictPrompt(url, CONFLICT, BASE, "", OTHER_TARGET, NO_CHECKS),
+    ];
+
+    for (const prompt of prompts) {
+      expect(prompt).toMatch(/do not create a branch, and do not switch to another/i);
+    }
+    expect(prompts[0]).toMatch(/commit all of your work to the branch that is already checked out/i);
   });
 });
 

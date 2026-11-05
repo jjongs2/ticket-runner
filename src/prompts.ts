@@ -51,6 +51,12 @@ const FINISH_GUIDANCE = `- Never end your turn while uncommitted work waits on a
 - Leave the worktree clean: commit your work and remove every untracked file that is not ignored and that no commit carries, test output included. The pipeline refuses a worktree holding changes no commit carries.
 - Keep gitignored files, such as dependencies you installed. The pipeline does not count them against a clean worktree, and deleting them only leaves the next Stage to install them again.`;
 
+/**
+ * What every Stage that commits is told about branches, in one sentence: the
+ * pipeline pushes the branch it checked out, so work on any other is lost.
+ */
+const NO_OTHER_BRANCH = "Do not create a branch, and do not switch to another.";
+
 /** The Check commands as a prompt names them. */
 function checkList(checks: readonly string[]): string {
   return checks.map((command) => `\`${command}\``).join(", ");
@@ -106,7 +112,7 @@ ${titleGuidance(base)}
 ${FINISH_GUIDANCE}
 - Do not spawn nested review agents beyond what the skill itself does.
 - Do not open pull requests and do not close the issue; the pipeline does both.
-- Commit all of your work to the branch that is already checked out. Do not create a branch, and do not switch to another.`;
+- Commit all of your work to the branch that is already checked out. ${NO_OTHER_BRANCH}`;
 
 /**
  * Appended to the two Stages that write code, which are the two that meet
@@ -223,7 +229,7 @@ const fixInstructions = (
   checks: readonly string[],
 ) => `You are the fix Stage of an unattended pipeline. The Ticket below is already implemented on the branch you are on, and one gate failed. You are what its fix budget bought, and the budget is spent: a second failure of any kind hands the Ticket to a human.
 
-- Commit your fix on the branch you are on, in this worktree. Do not create a branch, do not open pull requests, and do not close the Ticket.
+- Commit your fix on the branch you are on, in this worktree. ${NO_OTHER_BRANCH} Do not open pull requests, and do not close the Ticket.
 - Start from the evidence: reproduce the failure, find what actually causes it, and fix that rather than the symptom.
 - Where the failure is an unmet Acceptance Criterion, add the regression test that would have caught it and commit it with the fix.${kind === "unmet-criteria" ? HUMAN_DECISION_LINE : ""}
 - Stay inside this Ticket's Acceptance Criteria and the defects this branch introduced. Anything else you find belongs to another Ticket, not to this session; record it as a Note rather than mending it.${codeChecksLine(checks, false)}
@@ -251,7 +257,7 @@ const conflictInstructions = (
 - Where the two sides are compatible, keep both intents. Where they are not, keep the behaviour this Ticket's Acceptance Criteria ask for, and keep \`${base}\`'s everywhere the Ticket is silent.
 - Resolve, do not redesign. Change a file the conflict did not touch only to repair what the merge itself broke, such as a renamed name or a moved field. Implement nothing new, and change no behaviour this Ticket's Acceptance Criteria cover: verify does not grade the branch again after you.
 - Leave no conflict marker behind in any file, committed or not.
-- Do not push, do not open pull requests, and do not close the Ticket.${conflictChecksLine(checks)}`;
+- ${NO_OTHER_BRANCH} Do not push, do not open pull requests, and do not close the Ticket.${conflictChecksLine(checks)}`;
 
 /** The Checks as the conflict Stage is told about them: the pipeline's to run in full. */
 function conflictChecksLine(checks: readonly string[]): string {

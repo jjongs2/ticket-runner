@@ -35,14 +35,14 @@ describe("the conventions document", () => {
   /**
    * What a Target's own conventions must fit, and why, without what the Stage
    * prompts already tell a Stage about its `title` answer. Not every squash
-   * commit carries the shape: a branch with no subject in it lands under the
-   * Ticket title (`pullRequestTitle`).
+   * commit carries the shape: a pull request with no candidate in it takes the
+   * Ticket title (`pullRequestTitle`), and so may a handed-off one.
    */
   it("says under Commits that the Target's conventions must fit the shape the pipeline titles in", () => {
     const commits = section(conventionsDoc("0.4.0"), "Commits");
 
     expect(commits).toContain("own commit conventions must fit this shape");
-    expect(commits).toContain("the pipeline titles its pull requests in it");
+    expect(commits).toContain("the pipeline titles its pull requests in it where it can");
     expect(commits).toContain("the squash commits they land as");
     expect(commits).toContain("Ticket's title");
     expect(commits).not.toContain("`title`");
