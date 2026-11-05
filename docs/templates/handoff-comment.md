@@ -5,6 +5,8 @@
 - Branch `<branch>` on the remote · worktree `<path>` · PR #<pr> (draft)
 - Transcripts: `ticket-<n>/<runId>/` on the `ticket-runner/state` branch
 
+**The <stage> Stage said:** <the Stage's noCommitReason>
+
 <details><summary>Evidence</summary>
 
 ```
@@ -28,6 +30,18 @@ a Ticket that merges leaves none behind. The line is dropped when nothing was
 kept: a hand-off that removes the state keeps no transcripts either, a Run that
 ran no Stage of the Ticket has none, and a remote that refused the write has
 none to point at.
+
+The `said` paragraph quotes the reason an implement or fix Stage answered in
+`noCommitReason` when it finished and the hand-off is for its committing
+nothing: an implement Stage that left no commits beyond the base branch, or a
+fix Stage whose branch did not grow. It sits outside the Evidence block so a
+human reads it without unfolding anything, and the failure line and the
+evidence stay as they would be without it. It is dropped when the Stage gave
+no reason, did not finish, or committed, and every other hand-off, a later one
+of the same Ticket included, has none. It is the Stage's prose posted on the
+Ticket, whose comments are read for Acceptance Criteria, so a `- [ ]` at the
+head of any of its lines is escaped to `- \[ \]`, as a Note's is. The draft
+pull request body does not carry it; it points at this comment.
 
 The worktree clause is dropped when there is no worktree to name: a Ticket that
 failed before its worktree was created never had one, and a path that is not on

@@ -35,12 +35,19 @@ const TICKET_REFERENCE = /\s*\(#\d+\)$/;
 
 /**
  * The `--json-schema` the implement and fix Stages are invoked with: the title
- * of the whole branch, and the Notes channel beside it.
+ * of the whole branch, the Notes channel beside it, and why the Stage ended
+ * with no new commit when it did.
  *
- * Both are required, so a Stage always says something about each: an empty
- * Notes list when it found nothing, and a title however little it did. The
- * parsers forgive either one on its own ({@link parseTitle} and `parseNotes`),
- * so a bad title never costs the Notes and bad Notes never cost the title.
+ * All three are required, so a Stage always says something about each: an
+ * empty Notes list when it found nothing, a title however little it did, and an
+ * empty reason when it committed. The parsers forgive each one on its own
+ * ({@link parseTitle}, `parseNotes` and {@link parseNoCommitReason}), so a bad
+ * answer to one never costs the others.
+ *
+ * The reason is asked for in its own field because, under `--json-schema`, the
+ * answer is all of the session the pipeline reads: a last message in prose is
+ * only an earlier turn of the transcript. A Stage that ends with no new commit
+ * hands the Ticket to a human, and the hand-off quotes the reason (#306).
  */
 export const CODE_STAGE_JSON_SCHEMA = {
   type: "object",
@@ -50,8 +57,13 @@ export const CODE_STAGE_JSON_SCHEMA = {
       description: `Write ${BRANCH_TITLE}: \`${SUBJECT_SHAPE}\`, without the \`(#<n>)\`. It titles the pull request and the squash commit that lands.`,
     },
     notes: CODE_STAGE_NOTES_LIST_SCHEMA,
+    noCommitReason: {
+      type: "string",
+      description:
+        "When you end with no new commit on the branch, say why in a few sentences: ending so hands the Ticket to a human, and the hand-off comment quotes this. Otherwise an empty string.",
+    },
   },
-  required: ["title", "notes"],
+  required: ["title", "notes", "noCommitReason"],
   additionalProperties: false,
 } as const;
 
@@ -79,6 +91,22 @@ export function parseTitle(result: unknown): string | undefined {
   if (typeof result !== "object" || result === null) return undefined;
   const raw = (result as { title?: unknown }).title;
   return typeof raw === "string" ? asTitle(raw) : undefined;
+}
+
+/**
+ * Why a code Stage ended with no new commit, as it answered it, or nothing
+ * when it gave no reason.
+ *
+ * Forgiving, as the title and the Notes beside it are: output that is not an
+ * object and a missing, blank or non-string reason each cost the reason alone.
+ * The lines are kept as the Stage wrote them; only the ends are trimmed.
+ */
+export function parseNoCommitReason(result: unknown): string | undefined {
+  if (typeof result !== "object" || result === null) return undefined;
+  const raw = (result as { noCommitReason?: unknown }).noCommitReason;
+  if (typeof raw !== "string") return undefined;
+  const reason = raw.trim();
+  return reason === "" ? undefined : reason;
 }
 
 /**

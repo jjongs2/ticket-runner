@@ -105,6 +105,16 @@ const UNMET_VERDICT = verdictResult([
 /** What a code Stage answers: a title for the whole branch, and no Notes. */
 const titled = (title: string) => stageResult({ result: { title, notes: [] } });
 
+/** A code Stage's structured answer, with whatever it said about committing. */
+const answer = (fields: { noCommitReason?: string }) => ({
+  title: "fix(cli): mend the thing",
+  notes: [],
+  ...fields,
+});
+
+const FIX_REASON =
+  "Criterion 1 cannot be met without overturning ADR-0003, which forbids the feed. A human has to decide.";
+
 /**
  * The comments a human is notified about. The progress comment is not one of
  * them after its first Stage, which is the whole point of editing it in place.
@@ -657,6 +667,46 @@ describe("implement Stage failures", () => {
     expect(outcome).toMatchObject({ outcome: "handed-off", stage: "implement" });
     expect(handoffBody()).toMatch(/no new commits/i);
     expect(runner.stages()).toEqual(["implement"]);
+  });
+
+  it("quotes the reason an implement Stage gave for leaving no commits", async () => {
+    workspace.commits = [];
+    const reason = "The Ticket asks for a flag the CLI already has.";
+    runner.queue("implement", stageResult({ result: answer({ noCommitReason: reason }) }));
+
+    await run();
+
+    expect(handoffBody()).toContain(
+      "- Failure: the implement Stage left no new commits on the branch",
+    );
+    expect(handoffBody()).toContain(`**The implement Stage said:** ${reason}`);
+  });
+
+  it("shows no reason from an implement Stage that left no commits and did not finish", async () => {
+    workspace.commits = [];
+    runner.queue("implement", {
+      ok: false,
+      failure: "timed-out",
+      result: answer({ noCommitReason: "Ran out of time." }),
+    });
+
+    await run();
+
+    expect(handoffBody()).not.toContain("Ran out of time.");
+  });
+
+  it("shows no reason from an implement Stage that committed, in the hand-off that comes later", async () => {
+    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+    runner.queue(
+      "implement",
+      stageResult({ result: answer({ noCommitReason: "Nothing to do here." }) }),
+    );
+    runner.leaves("fix", () => workspace.commits.push("fix(cli): mend the thing (#2)"));
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "checks" });
+    expect(handoffBody()).not.toContain("Nothing to do here.");
   });
 });
 
@@ -1758,6 +1808,68 @@ describe("a fix Stage that committed nothing", () => {
     );
   });
 
+  it("quotes the reason it gave, beside the failure line and the evidence it was sent in with", async () => {
+    runner.queue(
+      "verify",
+      stageResult({
+        result: verdictResult([
+          {
+            text: "it reads the feed",
+            status: "unmet",
+            evidence: "ADR-0003 forbids the feed",
+          },
+        ]),
+      }),
+    );
+    runner.queue("fix", stageResult({ result: answer({ noCommitReason: FIX_REASON }) }));
+
+    await run();
+
+    const body = handoffBody();
+    expect(body).toContain(`**The fix Stage said:** ${FIX_REASON}`);
+    expect(body).toContain("- Failure: the fix Stage left no new commits on the branch");
+    expect(body).toContain("- it reads the feed — ADR-0003 forbids the feed");
+    expect(body.indexOf("The fix Stage said")).toBeLessThan(body.indexOf("<details>"));
+  });
+
+  it("keeps the reason out of the draft pull request body", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    runner.queue("fix", stageResult({ result: answer({ noCommitReason: FIX_REASON }) }));
+
+    await run();
+
+    expect(handoffBody()).toContain(FIX_REASON);
+    expect(tracker.pullRequest(100).body).not.toContain(FIX_REASON);
+  });
+
+  it.each([
+    ["gave no reason", answer({})],
+    ["gave a blank one", answer({ noCommitReason: "  " })],
+    ["answered no object at all", "I committed nothing"],
+  ])("shows no reason when the Stage %s", async (_case, result) => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    runner.queue("fix", stageResult({ result }));
+
+    await run();
+
+    expect(handoffBody()).toContain("the fix Stage left no new commits on the branch");
+    expect(handoffBody()).not.toContain("Stage said");
+  });
+
+  it("shows no reason from a Stage that did not finish", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    runner.queue("fix", {
+      ok: false,
+      failure: "turn-capped",
+      result: answer({ noCommitReason: FIX_REASON }),
+    });
+
+    await run();
+
+    expect(handoffBody()).toContain("Failed at **fix**");
+    expect(handoffBody()).not.toContain(FIX_REASON);
+  });
+
   it("routes the Notes it made before its own outcome is judged", async () => {
     const other = 7;
     tracker.addIssue({ number: other, title: "Progress comment" });
@@ -1796,6 +1908,18 @@ describe("a fix Stage that committed nothing", () => {
 
     expect(outcome).toMatchObject({ outcome: "merged" });
     expect(progressTable()).toContain("| fix | ✅ committed | 7 | 0m |");
+  });
+
+  it("shows no reason from a Stage that committed, in the hand-off that comes later", async () => {
+    runner.leaves("fix", () => workspace.commits.push("fix(cli): mend the thing (#2)"));
+    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+    runner.queue("fix", stageResult({ result: answer({ noCommitReason: FIX_REASON }) }));
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "checks" });
+    expect(handoffBody()).not.toContain(FIX_REASON);
+    expect(handoffBody()).not.toContain("Stage said");
   });
 });
 

@@ -1,13 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { CODE_STAGE_NOTES_LIST_SCHEMA } from "./note-schema.js";
-import { CODE_STAGE_JSON_SCHEMA, SUBJECT_SHAPE, parseTitle, pullRequestTitle } from "./title.js";
+import { parseNotes } from "./notes.js";
+import {
+  CODE_STAGE_JSON_SCHEMA,
+  SUBJECT_SHAPE,
+  parseNoCommitReason,
+  parseTitle,
+  pullRequestTitle,
+} from "./title.js";
 
 const TICKET_TITLE = "A pull request is titled after its first commit";
 
 describe("CODE_STAGE_JSON_SCHEMA", () => {
-  it("requires a title and the Notes list, and nothing else", () => {
-    expect(CODE_STAGE_JSON_SCHEMA.required).toEqual(["title", "notes"]);
+  it("requires a title, the Notes list and a reason for no new commit, and nothing else", () => {
+    expect(CODE_STAGE_JSON_SCHEMA.required).toEqual(["title", "notes", "noCommitReason"]);
     expect(CODE_STAGE_JSON_SCHEMA.properties.title.type).toBe("string");
+    expect(CODE_STAGE_JSON_SCHEMA.properties.noCommitReason.type).toBe("string");
     expect(CODE_STAGE_JSON_SCHEMA.properties.notes).toBe(CODE_STAGE_NOTES_LIST_SCHEMA);
     expect(CODE_STAGE_JSON_SCHEMA.additionalProperties).toBe(false);
   });
@@ -19,6 +27,59 @@ describe("CODE_STAGE_JSON_SCHEMA", () => {
     expect(description).toContain(`\`${SUBJECT_SHAPE}\``);
     expect(SUBJECT_SHAPE).toBe("<type>(<scope>): <summary>");
     expect(description).toContain("without the `(#<n>)`");
+  });
+});
+
+describe("the noCommitReason field", () => {
+  it("asks why in a few sentences when the Stage ends with no new commit, and otherwise for an empty string", () => {
+    const { description } = CODE_STAGE_JSON_SCHEMA.properties.noCommitReason;
+
+    expect(description).toMatch(/no new commit/);
+    expect(description).toContain("a few sentences");
+    expect(description).toMatch(/otherwise.*empty string/i);
+  });
+});
+
+describe("parseNoCommitReason", () => {
+  it("reads the reason a Stage gave, trimmed", () => {
+    expect(
+      parseNoCommitReason({
+        title: "feat: x",
+        notes: [],
+        noCommitReason: "  Criterion 2 overturns ADR-0003.\n",
+      }),
+    ).toBe("Criterion 2 overturns ADR-0003.");
+  });
+
+  it("keeps the lines of a reason that runs over several", () => {
+    expect(parseNoCommitReason({ noCommitReason: "One.\n\nTwo." })).toBe("One.\n\nTwo.");
+  });
+
+  it("yields no reason for a missing, blank or non-string field", () => {
+    expect(parseNoCommitReason({ title: "feat: x", notes: [] })).toBeUndefined();
+    expect(parseNoCommitReason({ noCommitReason: "" })).toBeUndefined();
+    expect(parseNoCommitReason({ noCommitReason: " \n\t" })).toBeUndefined();
+    expect(parseNoCommitReason({ noCommitReason: 7 })).toBeUndefined();
+    expect(parseNoCommitReason({ noCommitReason: ["why"] })).toBeUndefined();
+    expect(parseNoCommitReason({ noCommitReason: null })).toBeUndefined();
+  });
+
+  it("yields no reason for output that is not an object", () => {
+    expect(parseNoCommitReason(undefined)).toBeUndefined();
+    expect(parseNoCommitReason(null)).toBeUndefined();
+    expect(parseNoCommitReason("I committed nothing")).toBeUndefined();
+  });
+
+  it("costs neither the title nor the Notes when the reason is bad", () => {
+    const result = {
+      title: "feat: title the branch",
+      notes: [{ summary: "the log rotates twice" }],
+      noCommitReason: 42,
+    };
+
+    expect(parseNoCommitReason(result)).toBeUndefined();
+    expect(parseTitle(result)).toBe("feat: title the branch");
+    expect(parseNotes(result)).toEqual([{ summary: "the log rotates twice" }]);
   });
 });
 

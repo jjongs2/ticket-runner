@@ -2,7 +2,7 @@
 
 The exact shapes written to GitHub and the terminal: the pipeline's own, which the orchestrator embeds, the Operator's skill, which `init` copies into a Target as it is, and the one a release PR carries. This folder is the source of truth for every shape, so change it here first. Angle-bracket fields are filled in; everything else is literal.
 
-Humans read all of these, so each stays short: one line of status, details folded away.
+Humans read all of these, so each stays short: one line of status, details folded away. A Stage's reason for committing nothing is the one detail `handoff-comment.md` leaves unfolded, since it is what the human acts on.
 
 `squash-commit.txt` is the exception to the folding: `git log` renders no HTML, so it is plain text and carries counts rather than per-criterion evidence. Its first line is the pull request title, and the rest is the merge body. `notes-issue.md` is written the same way: its first line is the issue title.
 
@@ -33,4 +33,4 @@ Markers are how the pipeline finds its own writing again. A marker is the first 
 
 `notes-issue.md` is the one marker that is not on a comment at all: it is the first line of an issue body, and the only thing that identifies the standing Notes issue. A title can be renamed and a comment can be deleted; a body the pipeline wrote and never rewrites is what survives both. Its marker is deliberately not `note-comment.md`'s — one marks the issue, the other marks the Notes on it.
 
-`note-comment.md` is the only template that quotes an agent's prose back to GitHub, so it escapes a leading `- [ ]` to `- \[ \]`. A Ticket's checkboxes are its Acceptance Criteria to every part of the pipeline that reads them, and a Note is not asking for any.
+`note-comment.md` and `handoff-comment.md` are the templates that quote an agent's prose back to GitHub: a Note, and the reason a Stage gave for committing nothing. Both escape a leading `- [ ]` to `- \[ \]`. A Ticket's checkboxes are its Acceptance Criteria to every part of the pipeline that reads them, and neither is asking for any.

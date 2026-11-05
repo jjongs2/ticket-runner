@@ -312,6 +312,12 @@ export interface HandoffComment {
   fixUsed?: boolean;
   /** Where the Stages' transcripts were kept on the remote, when any were. */
   transcripts?: KeptTranscripts;
+  /**
+   * Why the Stage this hand-off is for committed nothing, as it answered it in
+   * `noCommitReason`. Set only for an implement or fix Stage that finished and
+   * left no new commit, which is the one hand-off the reason explains.
+   */
+  reason?: string;
 }
 
 export function handoffComment(handoff: HandoffComment): string {
@@ -336,8 +342,22 @@ export function handoffComment(handoff: HandoffComment): string {
       ? []
       : [`- Transcripts: ${keptPlace(handoff.transcripts)}`]),
     "",
+    ...stageSaid(handoff.stage, handoff.reason),
     ...evidenceBlock(shown.evidence),
   ].join("\n");
+}
+
+/**
+ * The reason a Stage gave for committing nothing, as a paragraph of its own
+ * between the hand-off's lines and its folded evidence, so a human reads it
+ * without unfolding anything; nothing when it gave none.
+ *
+ * The Stage's prose is posted on the Ticket, whose comments are read for
+ * Acceptance Criteria, so its checkboxes are defused as a Note's are.
+ */
+function stageSaid(stage: FailurePoint, reason: string | undefined): string[] {
+  if (reason === undefined || reason.trim() === "") return [];
+  return [`**The ${stage} Stage said:** ${escapeCheckboxes(reason.trim())}`, ""];
 }
 
 /**
@@ -389,21 +409,22 @@ export interface NoteSubject {
   because?: string;
 }
 
-/** {@link UNCHECKED_BOX}, over every line of a Note rather than the first. */
-const NOTE_CHECKBOX = new RegExp(UNCHECKED_BOX, "gm");
+/** {@link UNCHECKED_BOX}, over every line of a Stage's prose rather than the first. */
+const PROSE_CHECKBOX = new RegExp(UNCHECKED_BOX, "gm");
 
 /**
- * One part of a Note's prose, with every checkbox defused.
+ * A Stage's prose — one part of a Note, or the reason it gave for committing
+ * nothing — with every checkbox defused.
  *
  * `- [ ]` is Acceptance Criteria to everything that reads a Ticket: the
  * `no-criteria` guard counts one as a usable Ticket, verify grades it, and the
- * merge ticks it. A Note is prose a human should read, not work anyone
+ * merge ticks it. A Stage's prose is for a human to read, not work anyone
  * promised, so its boxes are escaped into the text they were meant to be.
  * Brackets anywhere but at the head of a list item are left alone, because that
  * is the only shape those readers recognise.
  */
-function escapeCheckboxes(note: string): string {
-  return note.replaceAll(NOTE_CHECKBOX, (_, bullet: string) => `${bullet}\\[ \\]`);
+function escapeCheckboxes(prose: string): string {
+  return prose.replaceAll(PROSE_CHECKBOX, (_, bullet: string) => `${bullet}\\[ \\]`);
 }
 
 /**

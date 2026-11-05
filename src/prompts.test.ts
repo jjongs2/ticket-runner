@@ -662,6 +662,30 @@ describe("a defect the branch introduced", () => {
   });
 });
 
+describe("a code Stage that ends without a new commit", () => {
+  const KINDS = [
+    "failed-check",
+    "unmet-criteria",
+    "failed-ci",
+    "unresolved-conflict",
+    "uncommitted-work",
+  ] as const;
+
+  it.each(KINDS)("is told by the fix prompt, sent in for %s, to say why in `noCommitReason`", (kind) => {
+    const prompt = fixPrompt(url, { ...FAILED_CHECK, kind }, BASE, "", OTHER_TARGET, NO_CHECKS);
+
+    expect(prompt).toMatch(/if you end without a new commit, say why in `noCommitReason`/i);
+    expect(prompt).not.toMatch(/last message/i);
+  });
+
+  it("is not invited by the implement prompt to end that way: the schema alone asks it", () => {
+    const prompt = implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS);
+
+    expect(prompt).not.toContain("noCommitReason");
+    expect(prompt).not.toMatch(/without a new commit/i);
+  });
+});
+
 describe("a criterion that needs a human decision", () => {
   const UNMET = {
     kind: "unmet-criteria" as const,
@@ -678,13 +702,14 @@ describe("a criterion that needs a human decision", () => {
     expect(prompt).toMatch(/say in its evidence that a human decision is needed/i);
   });
 
-  it("makes the fix Stage commit nothing and say why", () => {
+  it("makes the fix Stage commit nothing and say why in `noCommitReason`", () => {
     const prompt = fixPrompt(url, UNMET, BASE, "", OTHER_TARGET, NO_CHECKS);
 
     expect(prompt).toMatch(
       /any unmet criterion cannot be met without overturning a documented decision or another criterion/i,
     );
-    expect(prompt).toMatch(/commit nothing and say why/i);
+    expect(prompt).toMatch(/commit nothing and give your reason in `noCommitReason`/i);
+    expect(prompt).not.toMatch(/last message/i);
   });
 
   it("is not raised with a fix Stage sent in for anything but unmet criteria", () => {
