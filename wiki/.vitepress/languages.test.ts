@@ -6,6 +6,7 @@ import {
   languageOf,
   neutralPaths,
   neutralStub,
+  otherLanguageLink,
   rememberLanguage,
 } from "./languages.js";
 
@@ -170,6 +171,23 @@ describe("the language a path names", () => {
   it("is none for a neutral URL", () => {
     expect(languageOf("/ticket-runner/guide/running", base)).toBeNull();
     expect(languageOf("/ticket-runner/", base)).toBeNull();
+  });
+});
+
+describe("the language menu's link on a not-found page", () => {
+  it("is the same path under the other language's prefix", () => {
+    expect(otherLanguageLink("/ticket-runner/ko/guide/nope", base)).toBe("/en/guide/nope");
+    expect(otherLanguageLink("/ticket-runner/en/guide/running", base)).toBe("/ko/guide/running");
+  });
+
+  it("is the other language's home for a language's home", () => {
+    expect(otherLanguageLink("/ticket-runner/en/", base)).toBe("/ko/");
+    expect(otherLanguageLink("/ticket-runner/ko", base)).toBe("/en/");
+  });
+
+  it("is none for a path that names no language", () => {
+    expect(otherLanguageLink("/ticket-runner/guide/nope", base)).toBeNull();
+    expect(otherLanguageLink("/ticket-runner/", base)).toBeNull();
   });
 });
 

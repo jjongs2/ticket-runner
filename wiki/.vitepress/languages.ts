@@ -27,6 +27,15 @@ export function languageOf(pathname: string, base: string): { language: Language
   return match ? { language: match[1] as Language, rest: match[2] ?? "" } : null;
 }
 
+// The language menu's link on a not-found page at `pathname`: the same path under the
+// other language's prefix, without the base, as the theme writes its links. Null for a
+// path that names no language, whose menu is left as the theme makes it.
+export function otherLanguageLink(pathname: string, base: string): string | null {
+  const page = languageOf(pathname, base);
+  if (!page) return null;
+  return `/${page.language === "en" ? "ko" : "en"}/${page.rest}`;
+}
+
 // The stub's script, in the plain JavaScript every browser runs, since a stub loads
 // nothing: a remembered pick, else the first of the browser's languages whose primary
 // subtag is ko or en, else English. Storage that cannot be read counts as no pick.

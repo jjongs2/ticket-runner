@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig, type DefaultTheme } from "vitepress";
 import { withMermaid } from "vitepress-plugin-mermaid";
 import { alternates, neutralPaths, neutralStub } from "./languages";
@@ -10,6 +11,7 @@ const editPattern = `${repo}/edit/main/wiki/:path`;
 const glossary = `${repo}/blob/main/GLOSSARY.md`;
 const origin = "https://jjongs2.github.io";
 const base = "/ticket-runner/";
+const langsWrapper = fileURLToPath(new URL("./theme/langs.ts", import.meta.url));
 
 type Page = { link: string; en: string; ko: string };
 type Section = { en: string; ko: string; pages: Page[] };
@@ -49,6 +51,24 @@ function sidebar(lang: "en" | "ko"): DefaultTheme.SidebarItem[] {
 // A neutral URL is a static stub, not a page of the site, so the build writes one beside
 // the pages for the home and every page of the list: `guide/running.html` is served at
 // both `/guide/running` and `/guide/running.html`.
+// A build fails if no component took theme/langs.ts through the alias below, as it would
+// once VitePress moved or renamed the theme's composable, so the broken link cannot come
+// back unseen.
+function requireLangsAlias() {
+  let aliased = false;
+  return {
+    name: "require-langs-alias",
+    apply: "build" as const,
+    load(id: string) {
+      if (id === langsWrapper) aliased = true;
+      return null;
+    },
+    buildEnd() {
+      if (!aliased) throw new Error("No theme component imported theme/langs.ts: the alias for the language menu matched nothing.");
+    },
+  };
+}
+
 function writeNeutralStubs(outDir: string) {
   for (const path of neutralPaths(sections)) {
     const file = join(outDir, path === "" ? "index.html" : `${path}.html`);
@@ -72,6 +92,20 @@ export default withMermaid(
     ],
     transformHead: ({ pageData }) => alternates(origin, base, pageData.relativePath),
     buildEnd: ({ outDir }) => writeNeutralStubs(outDir),
+    // The theme's language menu links a broken URL on a not-found page; theme/langs.ts
+    // wraps the composable every menu takes its links from. The theme's components import
+    // it by this relative path, which only they use.
+    vite: {
+      resolve: {
+        alias: [
+          {
+            find: /^\.\.\/composables\/langs$/,
+            replacement: langsWrapper,
+          },
+        ],
+      },
+      plugins: [requireLangsAlias()],
+    },
     themeConfig: {
       search: { provider: "local" },
       socialLinks: [{ icon: "github", link: repo }],
