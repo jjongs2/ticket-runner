@@ -1138,6 +1138,26 @@ async function pushCommitted(
   }
 }
 
+/**
+ * The failure of a code Stage that finished with no new commit, carrying the
+ * reason it gave, if any, for the hand-off to quote. Never one a fix Stage is
+ * bought for: the implement Stage's has nothing to grade, and the fix Stage's
+ * comes after the budget is spent.
+ */
+function leftNoCommits(
+  stage: "implement" | "fix",
+  evidence: string,
+  result: StageResult,
+): TicketFailure {
+  return new TicketFailure(
+    stage,
+    `the ${stage} Stage left no new commits on the branch`,
+    evidence,
+    undefined,
+    parseNoCommitReason(result.result),
+  );
+}
+
 async function implement(
   pipeline: Pipeline,
   issue: Issue,
@@ -1185,13 +1205,7 @@ async function implement(
   // why, where the Stage said.
   if (commits === 0) {
     await progress.record(stageRow("implement", result, "❌ no commits"));
-    throw new TicketFailure(
-      "implement",
-      "the implement Stage left no new commits on the branch",
-      "",
-      undefined,
-      parseNoCommitReason(result.result),
-    );
+    throw leftNoCommits("implement", "", result);
   }
 
   await progress.record(stageRow("implement", result, "✅ committed"));
@@ -1540,13 +1554,7 @@ async function fix(
   // evidence it was sent in with need not ask the question at all.
   if (!grew) {
     await progress.record(stageRow("fix", result, "❌ no commits"));
-    throw new TicketFailure(
-      "fix",
-      "the fix Stage left no new commits on the branch",
-      failure.evidence,
-      undefined,
-      parseNoCommitReason(result.result),
-    );
+    throw leftNoCommits("fix", failure.evidence, result);
   }
 
   await progress.record(stageRow("fix", result, "✅ committed"));

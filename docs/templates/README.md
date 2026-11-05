@@ -2,7 +2,7 @@
 
 The exact shapes written to GitHub and the terminal: the pipeline's own, which the orchestrator embeds, the Operator's skill, which `init` copies into a Target as it is, and the one a release PR carries. This folder is the source of truth for every shape, so change it here first. Angle-bracket fields are filled in; everything else is literal.
 
-Humans read all of these, so each stays short: one line of status, details folded away.
+Humans read all of these, so each stays short: one line of status, details folded away. A Stage's reason for committing nothing is the one detail `handoff-comment.md` leaves unfolded, since it is what the human acts on.
 
 `squash-commit.txt` is the exception to the folding: `git log` renders no HTML, so it is plain text and carries counts rather than per-criterion evidence. Its first line is the pull request title, and the rest is the merge body. `notes-issue.md` is written the same way: its first line is the issue title.
 
