@@ -33,4 +33,4 @@ Markers are how the pipeline finds its own writing again. A marker is the first 
 
 `notes-issue.md` is the one marker that is not on a comment at all: it is the first line of an issue body, and the only thing that identifies the standing Notes issue. A title can be renamed and a comment can be deleted; a body the pipeline wrote and never rewrites is what survives both. Its marker is deliberately not `note-comment.md`'s — one marks the issue, the other marks the Notes on it.
 
-`note-comment.md` is the only template that quotes an agent's prose back to GitHub, so it escapes a leading `- [ ]` to `- \[ \]`. A Ticket's checkboxes are its Acceptance Criteria to every part of the pipeline that reads them, and a Note is not asking for any.
+`note-comment.md` and `handoff-comment.md` are the templates that quote an agent's prose back to GitHub: a Note, and the reason a Stage gave for committing nothing. Both escape a leading `- [ ]` to `- \[ \]`. A Ticket's checkboxes are its Acceptance Criteria to every part of the pipeline that reads them, and neither is asking for any.

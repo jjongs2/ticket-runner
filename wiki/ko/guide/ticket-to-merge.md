@@ -79,9 +79,9 @@ claim은 Ticket에 '가져감' 표시를 해서 다른 Run이 가져가지 않�
 
 | Stage | 프롬프트 첫머리 | 구조화된 답변 |
 |---|---|---|
-| implement | `/mattpocock-skills:implement <issue URL>` | 선택 항목 `title`과 [`notes`](#notes) |
+| implement | `/mattpocock-skills:implement <issue URL>` | 선택 항목 `title`, [`notes`](#notes), `noCommitReason` |
 | verify | `Ticket: <issue URL>`, 스킬 없음 | 판정, 선택 항목 `notes` |
-| fix | `Ticket: <issue URL>`, 스킬 없음 | 선택 항목 `title`과 `notes` |
+| fix | `Ticket: <issue URL>`, 스킬 없음 | 선택 항목 `title`, `notes`, `noCommitReason` |
 | conflict | `Ticket: <issue URL>`, 스킬 없음 | 없음 |
 
 프롬프트 마지막에는 Stage별 [`extraPrompt`](./configuration.md#stages)가 붙습니다.
@@ -107,7 +107,7 @@ Stage마다 디스크에 무엇을 남기는지는 [로그와 transcript](./runn
 implement 스킬이 Ticket을 읽고, 만들고, 리뷰합니다. 세션이 끝나면 파이프라인은 [Note](#notes)를 보내고, `title`을 기록하고, commit이 있으면 branch를 push합니다. 다른 Host의 Run도 거기서 이어 갈 수 있게 하려는 것입니다. 그다음은 이렇습니다.
 
 - 끝까지 가지 못한 Stage는 `implement`에서 Hand-off됩니다.
-- base branch보다 commit이 하나도 늘지 않은 branch도 Hand-off됩니다. 조용히 포기한 에이전트는 판정할 거리를 남기지 않기 때문입니다.
+- base branch보다 commit이 하나도 늘지 않은 branch도 Hand-off됩니다. 조용히 포기한 에이전트는 판정할 거리를 남기지 않기 때문입니다. Stage가 `noCommitReason`에 이유를 답했다면 hand-off 코멘트가 그 이유를 인용합니다.
 - 그 외에는 state file이 `implemented`로 넘어가, 이후 어떤 Run도 이 Stage 비용을 다시 치르지 않습니다.
 
 ## Check {#the-checks}
@@ -155,7 +155,7 @@ merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 �
 
 ## fix Stage와 fix 기회 {#the-fix-stage-and-the-fix-budget}
 
-fix 기회는 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사람에게 넘어갑니다. fix Stage는 같은 branch에서 플러그인 스킬 없이 새로 띄운 세션이고, 실패와 그 근거를 받아 그 결함 하나를 고칩니다. `unmet` 기준 때문에 불려 왔는데 그중 하나라도 문서로 남은 결정이나 다른 기준을 뒤집어야만 충족된다면, 아무것도 commit하지 말고 이유를 밝히라고 합니다. 그러면 Ticket이 사람에게 넘어갑니다. 그렇지 않다면 근거에 적힌 수정안은 답이 아니라 실마리로만 봅니다. 원인은 직접 찾고, 더 좁은 수정에 만족하기 전에 Ticket의 범위 안에서 그 원인을 고칠 방법을 찾습니다. commit하기 전에는 받은 반례만이 아니라 그 원인에서 만든 입력으로도 수정을 시험합니다.
+fix 기회는 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사람에게 넘어갑니다. fix Stage는 같은 branch에서 플러그인 스킬 없이 새로 띄운 세션이고, 실패와 그 근거를 받아 그 결함 하나를 고칩니다. `unmet` 기준 때문에 불려 왔는데 그중 하나라도 문서로 남은 결정이나 다른 기준을 뒤집어야만 충족된다면, 아무것도 commit하지 말고 `noCommitReason`에 이유를 밝히라고 합니다. 그러면 Ticket이 사람에게 넘어갑니다. 그렇지 않다면 근거에 적힌 수정안은 답이 아니라 실마리로만 봅니다. 원인은 직접 찾고, 더 좁은 수정에 만족하기 전에 Ticket의 범위 안에서 그 원인을 고칠 방법을 찾습니다. commit하기 전에는 받은 반례만이 아니라 그 원인에서 만든 입력으로도 수정을 시험합니다.
 
 새 세션이 고칠 수 있는 결함만 fix 기회를 씁니다.
 
@@ -178,7 +178,7 @@ fix 기회는 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사�
 | merge 실패 | merge | 아니요, Hand-off |
 | 어디서든 rate limit, 일시적인 API 장애, API 키의 예산 소진 | 어디든 | 아니요, Release |
 
-fix Stage가 끝나면 Ticket은 Check부터 다시 시작합니다. verify Stage를 포함해 모든 게이트가 수정본을 다시 판정하므로, 수정본도 처음 구현과 같은 기준을 통과해야 합니다. fix Stage 후 branch가 자라지 않았다면 곧바로 Hand-off입니다. 아무도 건드리지 않은 branch를 다시 판정해 봐야 똑같이 실패할 뿐이기 때문입니다. squash하거나 amend한 branch도 자라지 않은 것으로 봅니다. 이때 hand-off 코멘트에는 fix Stage가 받았던 근거가 실리므로, 사람에게 넘어간 `unmet` 기준은 그 근거가 묻는 질문과 함께 도착합니다.
+fix Stage가 끝나면 Ticket은 Check부터 다시 시작합니다. verify Stage를 포함해 모든 게이트가 수정본을 다시 판정하므로, 수정본도 처음 구현과 같은 기준을 통과해야 합니다. fix Stage 후 branch가 자라지 않았다면 곧바로 Hand-off입니다. 아무도 건드리지 않은 branch를 다시 판정해 봐야 똑같이 실패할 뿐이기 때문입니다. squash하거나 amend한 branch도 자라지 않은 것으로 봅니다. 이때 hand-off 코멘트에는 fix Stage가 받았던 근거가 실리고, 무엇 때문에 불려 왔든 Stage가 `noCommitReason`에 답한 commit하지 않은 이유도 인용됩니다.
 
 rate limit, API 장애, API 예산으로 멈춘 fix Stage는 fix 기회를 쓰지 않습니다. fix 기회는 파이프라인이 Ticket을 맡을 때마다 fix Stage 한 번입니다. Release는 Ticket에 대해 아무것도 바꾸지 않았으니 이미 쓴 fix 기회를 다음 Run에 그대로 넘깁니다. Hand-off는 fix 기회를 되돌려 줍니다. Ticket은 사람의 손을 거쳐야만 돌아오고, 새 fix 기회는 그 사람이 손본 것을 위한 것이기 때문입니다. 자세한 것은 [Ticket 돌려주기](./stopping-and-resuming.md#handing-a-ticket-back)에 있습니다.
 

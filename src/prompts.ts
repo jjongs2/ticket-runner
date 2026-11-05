@@ -227,8 +227,9 @@ function verifyChecksLine(checks: readonly string[]): string {
 
 /**
  * The fix Stage's brief. Sent in for unmet criteria, it is told what to do when
- * one of them needs a human decision: commit nothing, which hands the Ticket to
- * a human with the criteria and their evidence. Left to itself it worked around
+ * one of them needs a human decision: commit nothing and say why in
+ * `noCommitReason`, which hands the Ticket to a human with the criteria, their
+ * evidence and that reason. Left to itself it worked around
  * every such criterion it met, and the verify behind it passed the workaround.
  *
  * It is also told to fix the cause the evidence points at, not the patch the
@@ -247,7 +248,19 @@ const fixInstructions = (
 - Stay inside this Ticket's Acceptance Criteria and the defects this branch introduced. Anything else you find belongs to another Ticket, not to this session; record it as a Note rather than mending it.${codeChecksLine(checks, false)}
 ${FINISH_GUIDANCE}
 - Write commit subjects in the \`${SUBJECT_SHAPE}\` shape. The pipeline re-runs the Checks and the verify Stage as soon as you finish.
-${titleGuidance(base)}`;
+${titleGuidance(base)}
+${NO_COMMIT_LINE}`;
+
+/**
+ * What every fix Stage is told about ending without a new commit, whatever it
+ * was sent in for. Ending so hands the Ticket to a human, and the reason the
+ * Stage answers is the one thing of what it said that reaches the hand-off:
+ * under `--json-schema` a last message in prose stays in the transcript. The
+ * implement Stage is not told this: the schema's description is all it reads
+ * of the field, so its prompt does not invite it to end without committing.
+ */
+const NO_COMMIT_LINE =
+  "- If you end without a new commit, say why in `noCommitReason`, in a few sentences: committing nothing hands the Ticket to a human, and the hand-off comment quotes your reason. Otherwise answer it empty.";
 
 /** How the fix Stage sent in for unmet criteria reaches and tests a fix of the cause. */
 const UNMET_CAUSE_LINES = `
@@ -256,7 +269,7 @@ const UNMET_CAUSE_LINES = `
 
 /** What the fix Stage sent in for unmet criteria does with one only a human can settle. */
 const HUMAN_DECISION_LINE = `
-- When any unmet criterion ${NEEDS_A_HUMAN}, as the verify Stage's evidence may already say, commit nothing and say why in your last message. Do not work around it: a fix Stage that commits nothing hands the Ticket to a human, with the unmet criteria and their evidence.`;
+- When any unmet criterion ${NEEDS_A_HUMAN}, as the verify Stage's evidence may already say, commit nothing and give your reason in \`noCommitReason\`: which criterion, and what it collides with. Do not work around it: a fix Stage that commits nothing hands the Ticket to a human, with the unmet criteria, their evidence and your reason.`;
 
 /**
  * The conflict Stage's brief. It may reach past the conflicted files only to

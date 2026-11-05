@@ -79,9 +79,9 @@ Every Stage runs in the Ticket's worktree with `--permission-prompts none`, the 
 
 | Stage | Prompt opens with | Structured answer |
 |---|---|---|
-| implement | `/mattpocock-skills:implement <issue URL>` | optional `title` and [`notes`](#notes) |
+| implement | `/mattpocock-skills:implement <issue URL>` | optional `title`, [`notes`](#notes) and `noCommitReason` |
 | verify | `Ticket: <issue URL>`, no skill | the verdict, optional `notes` |
-| fix | `Ticket: <issue URL>`, no skill | optional `title` and `notes` |
+| fix | `Ticket: <issue URL>`, no skill | optional `title`, `notes` and `noCommitReason` |
 | conflict | `Ticket: <issue URL>`, no skill | none |
 
 The prompt ends with the Stage's [`extraPrompt`](./configuration.md#stages).
@@ -107,7 +107,7 @@ What each Stage leaves on disk is on [Logs and transcripts](./running.md#logs-an
 The implement skill reads the Ticket, builds it and reviews it. When the session ends, the pipeline routes its [Notes](#notes), records its `title`, and pushes the branch if it has commits, so a Run on another Host can resume from it. Then:
 
 - A Stage that did not finish is a Hand-off at `implement`.
-- A branch with no commits beyond the base branch is a Hand-off: an agent that gave up silently leaves nothing to grade.
+- A branch with no commits beyond the base branch is a Hand-off: an agent that gave up silently leaves nothing to grade. The hand-off comment quotes the reason the Stage gave in `noCommitReason`, when it gave one.
 - Otherwise the state file moves to `implemented`, so no later Run pays for this Stage again.
 
 ## The Checks
@@ -155,7 +155,7 @@ A verify after a fix for unmet criteria gets the first verdict's unmet criteria 
 
 ## The fix Stage and the fix budget
 
-The fix budget is one fix Stage per Ticket, and whatever still fails after it goes to a human. The fix Stage is a fresh session on the same branch, with no plugin skill, given the failure and its evidence to mend that one defect. Sent in for unmet criteria, it commits nothing and says why when one cannot be met without overturning a documented decision or another criterion, which hands the Ticket to a human. Otherwise it takes a fix the evidence proposes as a lead, not the answer: it finds the cause itself, looks for a fix of that cause within the Ticket's scope before settling for a narrower one, and before committing tests its fix with inputs built from that cause, not only with the counterexample it was given.
+The fix budget is one fix Stage per Ticket, and whatever still fails after it goes to a human. The fix Stage is a fresh session on the same branch, with no plugin skill, given the failure and its evidence to mend that one defect. Sent in for unmet criteria, it commits nothing and says why in `noCommitReason` when one cannot be met without overturning a documented decision or another criterion, which hands the Ticket to a human. Otherwise it takes a fix the evidence proposes as a lead, not the answer: it finds the cause itself, looks for a fix of that cause within the Ticket's scope before settling for a narrower one, and before committing tests its fix with inputs built from that cause, not only with the counterexample it was given.
 
 Only a defect a fresh session could mend spends the budget:
 
@@ -178,7 +178,7 @@ Only a defect a fresh session could mend spends the budget:
 | The merge failed | merge | No, Hand-off |
 | A rate limit, a transient API failure or an API key out of budget, anywhere | any | No, a Release |
 
-After a fix Stage, the Ticket starts again at the Checks. Every gate grades the fix, the verify Stage included, so a fix is held to the same bar as the first attempt. A fix Stage whose branch did not grow is a Hand-off straight away: re-grading an untouched branch could only fail the same way. A squashed or amended branch counts as not grown. Its hand-off comment carries the evidence the fix Stage was sent in with, so an unmet criterion left for a human arrives with the question its evidence asks.
+After a fix Stage, the Ticket starts again at the Checks. Every gate grades the fix, the verify Stage included, so a fix is held to the same bar as the first attempt. A fix Stage whose branch did not grow is a Hand-off straight away: re-grading an untouched branch could only fail the same way. A squashed or amended branch counts as not grown. Its hand-off comment carries the evidence the fix Stage was sent in with, and quotes the reason the Stage gave in `noCommitReason` for committing nothing, whatever it was sent in for.
 
 A fix Stage stopped by the rate limit, an API failure or the API budget spends nothing. The fix budget is one fix Stage each time the pipeline takes the Ticket up: a Release carries a spent budget over to the next Run, having changed nothing about the Ticket, and a Hand-off restores it, because the Ticket only comes back through a human's hands and whatever they did to it is what the fresh budget is for. More on [Handing a Ticket back](./stopping-and-resuming.md#handing-a-ticket-back).
 

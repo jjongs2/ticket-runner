@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { UNCHECKED_BOX } from "./acceptance-criteria.js";
+import { tickCriteria } from "./criteria.js";
 import { throwOnFailure } from "./adapters/exec.js";
 import { MAX_TAIL_CHARS } from "./log-tail.js";
 import { type Billing, emptyBilling } from "./credential.js";
@@ -377,6 +378,80 @@ describe("handoffComment", () => {
   it("says nothing about the budget when no fix Stage ran", () => {
     expect(handoffComment(base)).toContain("Failed at **verify**.");
     expect(handoffComment(base)).not.toMatch(/fix budget/i);
+  });
+
+  describe("with the reason a Stage gave for committing nothing", () => {
+    const noCommits = {
+      ...base,
+      stage: "fix" as const,
+      failure: "the fix Stage left no new commits on the branch",
+      evidence: "- it reads the feed — ADR-0003 forbids the feed",
+      fixUsed: true,
+      reason: "Criterion 2 needs the feed, and ADR-0003 forbids it. A human has to choose.",
+    };
+
+    it("shows it labelled as that Stage's, outside the folded Evidence block", () => {
+      const comment = handoffComment(noCommits);
+
+      const said =
+        "**The fix Stage said:** Criterion 2 needs the feed, and ADR-0003 forbids it. A human has to choose.";
+      expect(comment).toContain(`\n\n${said}\n\n<details>`);
+      expect(comment.indexOf(said)).toBeLessThan(comment.indexOf("<details>"));
+    });
+
+    it("keeps the failure line and the evidence as they are without it", () => {
+      const { reason, ...without } = noCommits;
+
+      const comment = handoffComment(noCommits);
+
+      expect(comment.replace(`**The fix Stage said:** ${reason}\n\n`, "")).toBe(
+        handoffComment(without),
+      );
+      expect(comment).toContain("- Failure: the fix Stage left no new commits on the branch");
+      expect(comment).toContain("- it reads the feed — ADR-0003 forbids the feed");
+    });
+
+    it("names the implement Stage when the hand-off is that Stage's", () => {
+      const comment = handoffComment({
+        ...base,
+        stage: "implement",
+        failure: "the implement Stage left no new commits on the branch",
+        evidence: "",
+        reason: "The Ticket asks for a file that already exists.",
+      });
+
+      expect(comment).toContain(
+        "- Failure: the implement Stage left no new commits on the branch",
+      );
+      expect(comment).toContain(
+        "**The implement Stage said:** The Ticket asks for a file that already exists.",
+      );
+      expect(comment).not.toContain("<details>");
+    });
+
+    it("shows nothing when there is no reason, or only a blank one", () => {
+      const { reason, ...without } = noCommits;
+
+      expect(handoffComment(without)).not.toContain("Stage said");
+      expect(handoffComment({ ...without, reason: " \n " })).toBe(handoffComment(without));
+    });
+
+    it("defuses a checkbox at the head of any of its lines, so the Ticket's criteria stay as they were", () => {
+      const body = "## Acceptance criteria\n\n- [ ] it reads the feed";
+      const reason = "- [ ] it writes the feed\nTwo criteria collide:\n  * [ ] nested too";
+
+      const comment = handoffComment({ ...noCommits, reason });
+
+      expect(comment).toContain("- \\[ \\] it writes the feed");
+      expect(comment).toContain("  * \\[ \\] nested too");
+      expect(new RegExp(UNCHECKED_BOX, "m").test(comment)).toBe(false);
+      // The merge ticks what it finds on the body and the comments together:
+      // the hand-off adds no box for it to tick, nor one it reads as written.
+      expect(tickCriteria([body, comment], ["it writes the feed", "nested too"])).toEqual([
+        body,
+        comment,
+      ]);
+    });
   });
 });
 

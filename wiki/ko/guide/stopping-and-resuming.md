@@ -70,7 +70,8 @@ Failure 줄은 무엇이 Ticket을 멈췄는지 말합니다. 그에 따라 할 
 | Failure | 돌려주기 전에 바꿀 것 |
 |---|---|
 | Stage가 분 한도를 넘겼거나 턴 한도에 닿음 | [`stages`](./configuration.md#stages)에서 그 Stage의 `maxMinutes`나 `maxTurns`를 늘리거나, Ticket을 나누기 |
-| implement가 commit을 남기지 않음 | transcript를 읽고, Ticket을 더 작게 또는 더 분명하게 고치기 |
+| implement가 commit을 남기지 않음 | hand-off 코멘트에서 Stage가 밝힌 이유를 읽고(없다면 transcript를 읽고), Ticket을 더 작게 또는 더 분명하게 고치기 |
+| fix Stage가 새 commit을 남기지 않음 | hand-off 코멘트에서 Stage가 밝힌 이유를 읽고, 그 이유가 묻는 결정을 내리거나 branch에서 코드를 손으로 고치기 |
 | fix 뒤에도 Check, 기준, CI가 여전히 실패 | 코멘트의 근거를 읽고 branch에서 코드를 손으로 고치기. 기준이라면 다음 행처럼 다시 쓰기 |
 | fix 뒤에도 기준이 충족되지 않음, 또는 근거 없음 | 코드를 손으로 고치거나, 세션이 코드를 돌려 보거나 읽어서 확인할 수 있게 기준을 다시 쓰기([Acceptance Criteria](./planning.md#acceptance-criteria)) |
 | CI 시간 초과 | [`ciTimeoutMinutes`](./configuration.md#ci)를 늘리기 |

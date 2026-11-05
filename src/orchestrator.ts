@@ -60,7 +60,12 @@ import {
   squashCommit,
 } from "./templates.js";
 import type { StartTimer } from "./timer.js";
-import { CODE_STAGE_JSON_SCHEMA, parseTitle, pullRequestTitle } from "./title.js";
+import {
+  CODE_STAGE_JSON_SCHEMA,
+  parseNoCommitReason,
+  parseTitle,
+  pullRequestTitle,
+} from "./title.js";
 import {
   type Verdict,
   VERDICT_JSON_SCHEMA,
@@ -191,6 +196,10 @@ export interface Pipeline {
  * A failure that ends the Ticket, unless the fix budget can still buy it a
  * second try. `kind` is set on exactly the failures a fix Stage is given:
  * everything else is a hand-off the moment it is thrown.
+ *
+ * `reason` is set on exactly one failure of each code Stage: the Stage
+ * finished and left no new commit, and it said why. The hand-off quotes it, and
+ * since it lives on this failure alone, no other hand-off of the Ticket can.
  */
 class TicketFailure extends Error {
   constructor(
@@ -198,6 +207,7 @@ class TicketFailure extends Error {
     readonly summary: string,
     readonly evidence: string = "",
     readonly kind?: FailureKind,
+    readonly reason?: string,
   ) {
     super(summary);
   }
@@ -1152,9 +1162,9 @@ async function implement(
     cwd: worktree,
     logDir,
     jsonSchema: CODE_STAGE_JSON_SCHEMA,
-    // The title and the Notes are side channels, not the Stage's product: a
-    // session that emitted neither has implemented the Ticket exactly as it
-    // always did.
+    // The title, the Notes and the reason for no commit are side channels,
+    // not the Stage's product: a session that emitted none of them has
+    // implemented the Ticket exactly as it always did.
     resultRequired: false,
   });
   await collectNotes(pipeline, issue.number, "implement", result, notes);
@@ -1171,12 +1181,16 @@ async function implement(
   // failure, not something to verify. A resumed Ticket's branch is not clean —
   // it carries what the Stage a Release stopped had committed — so this
   // asks the same question there: is there anything at all to grade. Whether it
-  // is enough is the verdict's business, not this guard's.
+  // is enough is the verdict's business, not this guard's. The hand-off quotes
+  // why, where the Stage said.
   if (commits === 0) {
     await progress.record(stageRow("implement", result, "❌ no commits"));
     throw new TicketFailure(
       "implement",
       "the implement Stage left no new commits on the branch",
+      "",
+      undefined,
+      parseNoCommitReason(result.result),
     );
   }
 
@@ -1519,15 +1533,19 @@ async function fix(
   // changed: a session that squashed the branch shorter, or amended in place,
   // is read here as having committed nothing.
   //
-  // The hand-off carries the evidence the Stage was sent in with. Committing
+  // The hand-off carries the evidence the Stage was sent in with, and the
+  // reason the Stage gave for committing nothing where it gave one. Committing
   // nothing is also how a fix Stage hands back an unmet criterion only a human
-  // can settle, and the human then reads the question where it was asked.
+  // can settle, and that reason is the one place it says which, and why: the
+  // evidence it was sent in with need not ask the question at all.
   if (!grew) {
     await progress.record(stageRow("fix", result, "❌ no commits"));
     throw new TicketFailure(
       "fix",
       "the fix Stage left no new commits on the branch",
       failure.evidence,
+      undefined,
+      parseNoCommitReason(result.result),
     );
   }
 
@@ -2077,6 +2095,7 @@ async function handOff(
       ...(worktree === undefined ? {} : { worktree: worktree.path }),
       ...(transcripts === undefined ? {} : { transcripts }),
       evidence: failure.evidence,
+      ...(failure.reason === undefined ? {} : { reason: failure.reason }),
       fixUsed,
       ...(pullRequest === undefined ? {} : { pullRequest }),
     }),
