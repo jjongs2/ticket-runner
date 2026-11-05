@@ -142,16 +142,18 @@ function rememberLanguagePicks(base: string) {
 // a navigation that ends on the not-found page reloads its URL once, which revalidates the
 // HTML. The router's first route change is the page load, and a not-found page reached by
 // loading its URL is a real one, so that one is not reloaded and no reload repeats.
-function afterRouteChange(router: Router) {
+// A navigation another one overtook left the route as it was, and reloads nothing.
+function reloadNotFoundOrHoldHeading(router: Router) {
   let loaded = false;
   router.onAfterRouteChange = async (href) => {
     const navigated = loaded;
     loaded = true;
-    if (navigated && router.route.data.isNotFound) {
+    const url = new URL(href, location.href);
+    if (navigated && router.route.data.isNotFound && router.route.path === url.pathname) {
       location.reload();
       return;
     }
-    const id = decodeURIComponent(new URL(href, location.href).hash.slice(1));
+    const id = decodeURIComponent(url.hash.slice(1));
     if (!id) return;
     await nextTick();
     holdHeading(id);
@@ -166,7 +168,7 @@ export default {
     const base = siteData.value.base;
     keepSectionOnLanguageSwitch(router, base);
     rememberLanguagePicks(base);
-    afterRouteChange(router);
+    reloadNotFoundOrHoldHeading(router);
   },
   setup() {
     const route = useRoute();

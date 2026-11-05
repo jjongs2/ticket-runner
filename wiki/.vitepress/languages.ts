@@ -29,7 +29,7 @@ export function languageOf(pathname: string, base: string): { language: Language
 
 // The language menu's link on a not-found page at `pathname`: the same path under the
 // other language's prefix, without the base, as the theme writes its links. Null for a
-// path that names no language, where the theme shows no language menu.
+// path that names no language, whose menu is left as the theme makes it.
 export function otherLanguageLink(pathname: string, base: string): string | null {
   const page = languageOf(pathname, base);
   if (!page) return null;
