@@ -135,8 +135,22 @@ function rememberLanguagePicks(base: string) {
   document.addEventListener("auxclick", record, true);
 }
 
-function holdHeadingAfterRouteChange(router: Router) {
+// GitHub Pages lets a browser keep each file for ten minutes, and VitePress writes each
+// page's chunk names into the HTML. Within ten minutes of a deploy, a cached page can ask
+// for a chunk the deploy removed; VitePress then refetches its page list, which can come
+// from the same cache, and shows the not-found page at the URL of a page that exists. So
+// a navigation that ends on the not-found page reloads its URL once, which revalidates the
+// HTML. The router's first route change is the page load, and a not-found page reached by
+// loading its URL is a real one, so that one is not reloaded and no reload repeats.
+function afterRouteChange(router: Router) {
+  let loaded = false;
   router.onAfterRouteChange = async (href) => {
+    const navigated = loaded;
+    loaded = true;
+    if (navigated && router.route.data.isNotFound) {
+      location.reload();
+      return;
+    }
     const id = decodeURIComponent(new URL(href, location.href).hash.slice(1));
     if (!id) return;
     await nextTick();
@@ -152,7 +166,7 @@ export default {
     const base = siteData.value.base;
     keepSectionOnLanguageSwitch(router, base);
     rememberLanguagePicks(base);
-    holdHeadingAfterRouteChange(router);
+    afterRouteChange(router);
   },
   setup() {
     const route = useRoute();
