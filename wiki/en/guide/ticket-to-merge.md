@@ -140,7 +140,7 @@ The Release posts the pipeline's own Note on the standing Notes issue, naming th
 
 ## The verify Stage and its verdict
 
-No human reviews the code before it merges, and the session that wrote it is the last one to trust on whether it works. So a fresh session, with no plugin skill, tries to prove each Acceptance Criterion is **not** met. It reads the criteria from the body and the comments, runs the code, may write throwaway tests, and must not commit. A criterion that cannot be met without overturning a documented decision or another criterion is `unmet`, with evidence saying a human decision is needed. Its scratch files are discarded afterwards, so they never reach the pull request. What it finds beside the criteria leaves the session as a [Note](#notes), because the verdict has a slot per criterion and none for anything else.
+No human reviews the code before it merges, and the session that wrote it is the last one to trust on whether it works. So a fresh session, with no plugin skill, tries to prove each Acceptance Criterion is **not** met. It reads the criteria from the body and the comments, runs the code, may write throwaway tests, and must not commit. A criterion that cannot be met without overturning a documented decision or another criterion is `unmet`, with evidence saying a human decision is needed. An `unmet` criterion's evidence states the failure: where it sits, what was run or read, what was expected, what came back, and the counterexample. It proposes no fix, though it may quote a limit the Ticket, a documented decision or another criterion sets, naming where it comes from. Its scratch files are discarded afterwards, so they never reach the pull request. What it finds beside the criteria leaves the session as a [Note](#notes), because the verdict has a slot per criterion and none for anything else.
 
 The **verdict** grades each criterion `met`, `unmet` or `unverifiable`, with evidence. The agent's own pass or fail is advisory; the pipeline decides for itself: **no criterion unmet and at least one met.**
 
@@ -155,7 +155,7 @@ A verify after a fix for unmet criteria gets the first verdict's unmet criteria 
 
 ## The fix Stage and the fix budget
 
-The fix budget is one fix Stage per Ticket, and whatever still fails after it goes to a human. The fix Stage is a fresh session on the same branch, with no plugin skill, given the failure and its evidence to mend that one defect. Sent in for unmet criteria, it commits nothing and says why when one cannot be met without overturning a documented decision or another criterion, which hands the Ticket to a human.
+The fix budget is one fix Stage per Ticket, and whatever still fails after it goes to a human. The fix Stage is a fresh session on the same branch, with no plugin skill, given the failure and its evidence to mend that one defect. Sent in for unmet criteria, it commits nothing and says why when one cannot be met without overturning a documented decision or another criterion, which hands the Ticket to a human. Otherwise it takes a fix the evidence proposes as a lead, not the answer: it finds the cause itself, looks for a fix of that cause within the Ticket's scope before settling for a narrower one, and before committing tests its fix with inputs built from that cause, not only with the counterexample it was given.
 
 Only a defect a fresh session could mend spends the budget:
 

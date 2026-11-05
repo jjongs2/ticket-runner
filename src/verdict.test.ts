@@ -113,6 +113,13 @@ describe("VERDICT_JSON_SCHEMA", () => {
     expect(VERDICT_JSON_SCHEMA.properties.notes.type).toBe("array");
   });
 
+  it("describes a criterion's evidence as what was run or read and what it showed, proposing no fix", () => {
+    const { description } = VERDICT_JSON_SCHEMA.properties.criteria.items.properties.evidence;
+
+    expect(description).toMatch(/^What you ran or read, and what it showed/);
+    expect(description).toMatch(/proposes no fix/i);
+  });
+
   it("requires the criteria and the pass flag, and never the Notes", () => {
     expect(VERDICT_JSON_SCHEMA.required).toEqual(["criteria", "pass"]);
   });

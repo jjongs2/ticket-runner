@@ -694,6 +694,95 @@ describe("a criterion that needs a human decision", () => {
   });
 });
 
+describe("an unmet criterion's evidence", () => {
+  const UNMET = {
+    kind: "unmet-criteria" as const,
+    summary: "1 of 1 criteria unmet",
+    evidence: "- it works — npm test is red",
+  };
+  const OTHER_KINDS = [
+    "failed-check",
+    "failed-ci",
+    "unresolved-conflict",
+    "uncommitted-work",
+  ] as const;
+
+  /** The fix Stage's section that carries the unmet criteria, heading to fenced evidence. */
+  function failureSectionOf(prompt: string): string {
+    const start = prompt.indexOf("## The failure:");
+    const end = prompt.indexOf(`\`\`\`\n${UNMET.evidence}`, start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    return prompt.slice(start, end);
+  }
+
+  it("states the failure to verify: where, what was run or read, expected, got, the counterexample", () => {
+    const prompt = verifyPrompt(url, "", OTHER_TARGET, NO_CHECKS);
+
+    expect(prompt).toMatch(
+      /an `unmet` criterion's evidence states the failure: where it sits, what you ran or read, what you expected, what came back, and the counterexample/i,
+    );
+  });
+
+  it("proposes no fix and no direction for one, a human decision's judgement included", () => {
+    const prompt = verifyPrompt(url, "", OTHER_TARGET, NO_CHECKS);
+
+    expect(prompt).toMatch(/it proposes no fix and no direction for one/i);
+    expect(prompt).toMatch(
+      /neither does what you say about whether a human decision is needed/i,
+    );
+  });
+
+  it("may still quote a limit, naming its source, and still names a collision", () => {
+    const prompt = verifyPrompt(url, "", OTHER_TARGET, NO_CHECKS);
+
+    expect(prompt).toMatch(
+      /may quote a limit the Ticket, a documented decision or another criterion sets, naming where it comes from/i,
+    );
+    expect(prompt).toMatch(/a human decision is needed, naming what it collides with/i);
+  });
+
+  it("leaves a Note's `next` carrying the fix", () => {
+    expect(verifyPrompt(url, "", OTHER_TARGET, NO_CHECKS)).toMatch(
+      /`next` is the fix, or the decision a human has to take/i,
+    );
+  });
+
+  it("is a lead to the fix Stage, in the section that carries it, and the cause is the Stage's to find", () => {
+    const section = failureSectionOf(fixPrompt(url, UNMET, BASE, "", OTHER_TARGET, NO_CHECKS));
+
+    expect(section).toMatch(/a fix this evidence proposes is a lead, not the answer/i);
+    expect(section).toMatch(/find the cause yourself/i);
+  });
+
+  it("sends the fix Stage after a fix of the cause within the Ticket's scope first", () => {
+    expect(fixPrompt(url, UNMET, BASE, "", OTHER_TARGET, NO_CHECKS)).toMatch(
+      /look for a fix of the cause you found within the scope this Ticket sets before you settle for a narrower one/i,
+    );
+  });
+
+  it("has the fix Stage test with inputs built from the cause, and its regression test cover the cause", () => {
+    const prompt = fixPrompt(url, UNMET, BASE, "", OTHER_TARGET, NO_CHECKS);
+
+    expect(prompt).toMatch(
+      /before you commit, test your fix with inputs built from the cause you found, of the kind a verify Stage trying to falsify the criterion would try, and not only with the counterexample you were given/i,
+    );
+    expect(prompt).toMatch(/your regression test covers the cause, not only that counterexample/i);
+  });
+
+  it("is not raised with a fix Stage sent in for anything but unmet criteria", () => {
+    for (const kind of OTHER_KINDS) {
+      const prompt = fixPrompt(url, { ...FAILED_CHECK, kind }, BASE, "", OTHER_TARGET, NO_CHECKS);
+
+      expect(prompt).not.toMatch(/is a lead, not the answer/i);
+      expect(prompt).not.toMatch(/find the cause yourself/i);
+      expect(prompt).not.toMatch(/a fix of the cause you found within the scope/i);
+      expect(prompt).not.toMatch(/inputs built from the cause/i);
+      expect(prompt).not.toMatch(/regression test covers the cause/i);
+    }
+  });
+});
+
 describe("a verify after a fix for unmet criteria", () => {
   const PREVIOUS = "- it works — npm test is red";
 
