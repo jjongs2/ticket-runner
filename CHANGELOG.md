@@ -4,6 +4,59 @@ One section per Version, newest first, written in the Version PR that cut it and
 published as the body of that Version's GitHub Release (ADR-0007). The shape is
 `docs/templates/version-notes.md`.
 
+## 0.6.5 (2026-11-05)
+
+The conventions document `init` writes is cut to what the Stage prompts do not say, and a code Stage that commits nothing now says why in its Hand-off.
+
+### Stages
+
+- The verify Stage's evidence proposes no fix; the fix Stage treats one as a lead ([#310])
+- A code Stage that commits nothing has its reason quoted in the Hand-off ([#312])
+- A timed-out Stage's kill counts a zombie process as gone ([#295])
+
+### Runs
+
+- A Hand-off gives an unexpected failure one `Failure:` line, with its output printed once ([#302])
+- The failing-base Note quotes the branch's own failure ([#298])
+- A met criterion that matches no checkbox line gets a second chance to be ticked ([#297])
+- State and lock commits no longer mention `#<n>`, so GitHub stops linking them to its issue ([#296])
+
+### Conventions
+
+- The conventions document is cut to what the Stage prompts do not say ([#309])
+- The pipeline's text and the two documents `init` writes lowercase the words the glossary dropped ([#300])
+
+### Wiki
+
+- The wiki opens in the reader's language and system colour scheme, and a not-found page reloads a stale URL ([#301], [#308], [#311])
+
+### Docs
+
+- The glossary is cut to 18 terms, and a word it does not list is an ordinary word ([#287], [#293], [#304], [#314])
+- The hand-written pull request template is dropped ([#294])
+
+### After upgrading
+
+Run `ticket-runner init` in each Target, then commit and push what it writes: the conventions document is shorter, and it and the Operator's skill now gloss the glossary's terms and write the words it dropped in lowercase.
+
+[#287]: https://github.com/jjongs2/ticket-runner/pull/287
+[#293]: https://github.com/jjongs2/ticket-runner/pull/293
+[#294]: https://github.com/jjongs2/ticket-runner/pull/294
+[#295]: https://github.com/jjongs2/ticket-runner/pull/295
+[#296]: https://github.com/jjongs2/ticket-runner/pull/296
+[#297]: https://github.com/jjongs2/ticket-runner/pull/297
+[#298]: https://github.com/jjongs2/ticket-runner/pull/298
+[#300]: https://github.com/jjongs2/ticket-runner/pull/300
+[#301]: https://github.com/jjongs2/ticket-runner/pull/301
+[#302]: https://github.com/jjongs2/ticket-runner/pull/302
+[#304]: https://github.com/jjongs2/ticket-runner/pull/304
+[#308]: https://github.com/jjongs2/ticket-runner/pull/308
+[#309]: https://github.com/jjongs2/ticket-runner/pull/309
+[#310]: https://github.com/jjongs2/ticket-runner/pull/310
+[#311]: https://github.com/jjongs2/ticket-runner/pull/311
+[#312]: https://github.com/jjongs2/ticket-runner/pull/312
+[#314]: https://github.com/jjongs2/ticket-runner/pull/314
+
 ## 0.6.4 (2026-11-03)
 
 A free Lane now takes a Ticket that joins the Frontier mid-Run, and the Run summary says what an API-key Run spent.
