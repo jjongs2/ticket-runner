@@ -4,11 +4,10 @@
  * (ADR-0002).
  */
 
-import { CONVENTIONS_PATH } from "./conventions.js";
 import type { FailureKind } from "./lifecycle.js";
 import { OWN_DEFECT } from "./note-schema.js";
 import { STAGE_ENV_VAR } from "./stage-guard.js";
-import { BRANCH_TITLE } from "./title.js";
+import { BRANCH_TITLE, SUBJECT_SHAPE } from "./title.js";
 
 /**
  * Appended to every Stage prompt, the fix Stage included, in every Target. The
@@ -81,7 +80,7 @@ function codeChecksLine(checks: readonly string[], afterReview: boolean): string
  * was already pushed without rewriting it.
  */
 const titleGuidance = (base: string) =>
-  `- Answer a \`title\` beside your Notes: ${BRANCH_TITLE}, in the \`<type>(<scope>): <summary>\` shape \`${CONVENTIONS_PATH}\` states and without the \`(#<n>)\`. It titles the pull request and the squash commit on \`${base}\`, so each commit subject describes only its own commit.`;
+  `- Answer a \`title\` beside your Notes: ${BRANCH_TITLE}, in the \`${SUBJECT_SHAPE}\` shape and without the \`(#<n>)\`. It titles the pull request and the squash commit on \`${base}\`, so each commit subject describes only its own commit.`;
 
 /**
  * Guidance appended to every implement Stage, working around known defects of
@@ -107,7 +106,7 @@ ${titleGuidance(base)}
 ${FINISH_GUIDANCE}
 - Do not spawn nested review agents beyond what the skill itself does.
 - Do not open pull requests and do not close the issue; the pipeline does both.
-- Commit all of your work to the branch that is already checked out.`;
+- Commit all of your work to the branch that is already checked out. Do not create a branch, and do not switch to another.`;
 
 /**
  * Appended to the two Stages that write code, which are the two that meet
@@ -229,7 +228,7 @@ const fixInstructions = (
 - Where the failure is an unmet Acceptance Criterion, add the regression test that would have caught it and commit it with the fix.${kind === "unmet-criteria" ? HUMAN_DECISION_LINE : ""}
 - Stay inside this Ticket's Acceptance Criteria and the defects this branch introduced. Anything else you find belongs to another Ticket, not to this session; record it as a Note rather than mending it.${codeChecksLine(checks, false)}
 ${FINISH_GUIDANCE}
-- Write commit subjects in the convention \`${CONVENTIONS_PATH}\` states. The pipeline re-runs the Checks and the verify Stage as soon as you finish.
+- Write commit subjects in the \`${SUBJECT_SHAPE}\` shape. The pipeline re-runs the Checks and the verify Stage as soon as you finish.
 ${titleGuidance(base)}`;
 
 /** What the fix Stage sent in for unmet criteria does with one only a human can settle. */

@@ -8,6 +8,7 @@ import {
   implementPrompt,
   verifyPrompt,
 } from "./prompts.js";
+import { SUBJECT_SHAPE } from "./title.js";
 
 const url = "https://github.com/jjongs2/ticket-runner/issues/2";
 
@@ -69,11 +70,22 @@ describe("implementPrompt", () => {
     expect(prompt).toMatch(/do not close/i);
   });
 
-  it("names the conventions document rather than \"the repo's commit convention\"", () => {
+  it("states the subject shape itself rather than pointing at the conventions document", () => {
     const prompt = implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS);
 
-    expect(prompt).toContain(CONVENTIONS_PATH);
+    expect(prompt).toContain(`\`${SUBJECT_SHAPE}\``);
+    expect(prompt).not.toContain(CONVENTIONS_PATH);
     expect(prompt).not.toMatch(/the repo's commit convention/);
+  });
+
+  // The fix Stage has always been told this; the implement Stage heard it only
+  // from the conventions document, which no longer repeats the Stage prompts.
+  it("tells the session to create no branch and switch to none", () => {
+    const prompt = implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS);
+
+    expect(prompt).toMatch(/commit all of your work to the branch that is already checked out/i);
+    expect(prompt).toMatch(/do not create a branch/i);
+    expect(prompt).toMatch(/do not switch to another/i);
   });
 
   // A bare `/code-review` also matches the CLI's own built-in skill.
@@ -223,10 +235,15 @@ describe("fixPrompt", () => {
     expectsCleanWorktreeKeepingIgnoredFiles(fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS));
   });
 
-  it("names the conventions document rather than \"the repo's commit convention\"", () => {
+  it("states the subject shape itself, for its commits and its title alike", () => {
     const prompt = fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS);
+    const lines = prompt.split("\n");
+    const commits = lines.find((line) => line.startsWith("- Write commit subjects"));
+    const title = lines.find((line) => line.startsWith("- Answer a `title`"));
 
-    expect(prompt).toContain(CONVENTIONS_PATH);
+    expect(commits).toContain(`\`${SUBJECT_SHAPE}\``);
+    expect(title).toContain(`\`${SUBJECT_SHAPE}\``);
+    expect(prompt).not.toContain(CONVENTIONS_PATH);
     expect(prompt).not.toMatch(/the repo's commit convention/);
   });
 
@@ -462,6 +479,22 @@ describe("the Notes channel", () => {
 
   it("asks the Stage that only rebases for no Notes", () => {
     expect(conflictPrompt(url, CONFLICT, BASE, "", OTHER_TARGET, NO_CHECKS)).not.toContain("Notes for other Tickets");
+  });
+});
+
+describe("the conventions document", () => {
+  // A Stage hears the rules it acts on from its own prompt; the document is for
+  // the readers the pipeline does not brief, and repeats none of them.
+  it("is named by no Stage prompt", () => {
+    const prompts = [
+      implementPrompt(url, BASE, "", SELF_HOSTED, CHECKS),
+      verifyPrompt(url, "", SELF_HOSTED, CHECKS),
+      fixPrompt(url, FAILED_CHECK, BASE, "", SELF_HOSTED, CHECKS),
+      fixPrompt(url, { ...FAILED_CHECK, kind: "unmet-criteria" }, BASE, "", SELF_HOSTED, CHECKS),
+      conflictPrompt(url, CONFLICT, BASE, "", SELF_HOSTED, CHECKS),
+    ];
+
+    for (const prompt of prompts) expect(prompt).not.toContain(CONVENTIONS_PATH);
   });
 });
 

@@ -32,12 +32,32 @@ describe("the conventions document", () => {
     expect(checks).toContain("`lanes`");
   });
 
-  it("says under Commits that a Stage's title answer, not the first commit, titles the pull request", () => {
+  /**
+   * What a Target's own conventions must fit, and why, without what the Stage
+   * prompts already tell a Stage about its `title` answer. Not every squash
+   * commit carries the shape: a branch with no subject in it lands under the
+   * Ticket title (`pullRequestTitle`).
+   */
+  it("says under Commits that the Target's conventions must fit the shape the pipeline titles in", () => {
     const commits = section(conventionsDoc("0.4.0"), "Commits");
 
-    expect(commits).toContain("`title` the implement and fix Stages each answer");
-    expect(commits).toContain("becomes the pull request title");
-    expect(commits).not.toMatch(/first commit/i);
+    expect(commits).toContain("own commit conventions must fit this shape");
+    expect(commits).toContain("the pipeline titles its pull requests in it");
+    expect(commits).toContain("the squash commits they land as");
+    expect(commits).toContain("Ticket's title");
+    expect(commits).not.toContain("`title`");
+    expect(commits).not.toMatch(/implement|fix Stage|becomes the pull request title/);
+    expect(commits).not.toMatch(/every squash commit/i);
+  });
+
+  /** A Stage hears these from its own prompt, so the document does not repeat them. */
+  it("repeats none of the rules the Stage prompts state", () => {
+    const doc = conventionsDoc("0.4.0");
+
+    expect(doc).not.toContain("## What a Stage does not do");
+    expect(doc).not.toMatch(/commits only to the branch already checked out/);
+    expect(section(doc, "Branches")).toContain("`agent/<n>-<slug>` belongs to the pipeline");
+    expect(section(doc, "Branches")).toContain("`ticket-runner/lock` and `ticket-runner/state`");
   });
 
   /**

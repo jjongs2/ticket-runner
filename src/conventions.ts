@@ -11,6 +11,12 @@
  * vocabulary, the review rules, the test policy are the Target's business, and a
  * document that took them over would be rewritten out from under it.
  *
+ * It is for the readers the pipeline does not brief: humans, attended Claude
+ * sessions in a Target, and the Planning skills that write Tickets. It leaves
+ * out what the Stage prompts already say, such as how a Stage titles its branch
+ * and that it opens no pull request: a Stage hears those from its own prompt,
+ * and a second copy here would only drift from it.
+ *
  * The one thing it says about versions is the mark it bears: which pipeline
  * wrote the copy a Target carries, hidden on the first line so no reader of the
  * document meets it. That is a direction comparing text never gives — `init`
@@ -83,17 +89,12 @@ Besides names such as GitHub and Claude Code, a capitalised word below is one of
 
 - Subject: \`<type>(<scope>): <summary>\`.
 - The type and scope vocabulary is this repository's own. The pipeline reads the shape, never the words.
-- A commit subject describes its own commit. The whole branch is summarised by the \`title\` the implement and fix Stages each answer beside their Notes: one line in the same shape. The latest one becomes the pull request title, and the pull request title becomes the subject of the squash commit that lands.
+- This repository's own commit conventions must fit this shape: the pipeline titles its pull requests in it, and so the squash commits they land as. Only a branch that offers no subject in this shape lands under the Ticket's title instead.
 
 ## Branches
 
 - \`agent/<n>-<slug>\` belongs to the pipeline. A Run creates one per Ticket, works in a worktree of it, and pushes it after every Stage that commits. The repository deletes it when the pull request merges, a setting \`ticket-runner init\` switches on. Nothing else branches there.
 - \`ticket-runner/lock\` and \`ticket-runner/state\` belong to the pipeline too. The first says which Run holds this repository, and the second keeps the state file of every Ticket a Run can resume, and the transcripts of the Stages of a handed-off Ticket. A Hand-off gives a Ticket to a human rather than merging it, and leaves its work where they can carry on from it. Nothing else commits to either, except a human, or an Operator a human asked, the Claude session a human opens on a cloud Host from the Claude app to start a Run, watch it and stop it, releasing a lock a vanished Host left behind.
-- A Stage commits only to the branch already checked out in the worktree it was started in. It creates no branch and switches to none.
-
-## What a Stage does not do
-
-- A Stage opens no pull request and closes no issue. The pipeline opens the pull request when the Stage finishes, waits for CI, merges it, and lets the merge close the Ticket.
 
 ## What a Ticket needs
 
