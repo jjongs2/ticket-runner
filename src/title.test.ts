@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CODE_STAGE_NOTES_LIST_SCHEMA } from "./note-schema.js";
-import { CODE_STAGE_JSON_SCHEMA, parseTitle, pullRequestTitle } from "./title.js";
+import { CODE_STAGE_JSON_SCHEMA, SUBJECT_SHAPE, parseTitle, pullRequestTitle } from "./title.js";
 
 const TICKET_TITLE = "A pull request is titled after its first commit";
 
@@ -16,7 +16,8 @@ describe("CODE_STAGE_JSON_SCHEMA", () => {
     const { description } = CODE_STAGE_JSON_SCHEMA.properties.title;
 
     expect(description).toContain("the whole branch");
-    expect(description).toContain("`<type>(<scope>): <summary>`");
+    expect(description).toContain(`\`${SUBJECT_SHAPE}\``);
+    expect(SUBJECT_SHAPE).toBe("<type>(<scope>): <summary>");
     expect(description).toContain("without the `(#<n>)`");
   });
 });

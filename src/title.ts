@@ -19,7 +19,15 @@ import { CODE_STAGE_NOTES_LIST_SCHEMA } from "./note-schema.js";
 export const BRANCH_TITLE =
   "one line summarising the whole branch as it stands when you finish, the work of any Stage before you included";
 
-/** Any `<type>(<scope>): <summary>`; the repo's own types and scopes are CONTRIBUTING.md's business. */
+/**
+ * The shape a commit subject and a title take, as the prompts of the code
+ * Stages and the schema state it: one declaration, so they cannot drift apart.
+ * The conventions document a Target carries states it to the readers the
+ * pipeline does not brief.
+ */
+export const SUBJECT_SHAPE = "<type>(<scope>): <summary>";
+
+/** Any {@link SUBJECT_SHAPE}; the repo's own types and scopes are CONTRIBUTING.md's business. */
 const CONVENTIONAL_SUBJECT = /^[a-z]+(\([a-z0-9._-]+\))?: \S/;
 
 /** The `(#<n>)` a commit may carry, which the squash commit's `Closes #<n>` replaces. */
@@ -39,7 +47,7 @@ export const CODE_STAGE_JSON_SCHEMA = {
   properties: {
     title: {
       type: "string",
-      description: `Write ${BRANCH_TITLE}: \`<type>(<scope>): <summary>\`, without the \`(#<n>)\`. It titles the pull request and the squash commit that lands.`,
+      description: `Write ${BRANCH_TITLE}: \`${SUBJECT_SHAPE}\`, without the \`(#<n>)\`. It titles the pull request and the squash commit that lands.`,
     },
     notes: CODE_STAGE_NOTES_LIST_SCHEMA,
   },
