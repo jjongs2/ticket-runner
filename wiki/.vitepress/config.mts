@@ -64,7 +64,6 @@ export default withMermaid(
     base,
     cleanUrls: true,
     lastUpdated: true,
-    appearance: "dark",
     head: [
       ["link", { rel: "preconnect", href: "https://fonts.googleapis.com" }],
       ["link", { rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: "" }],
