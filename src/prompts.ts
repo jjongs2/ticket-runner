@@ -200,6 +200,13 @@ const NEEDS_A_HUMAN =
  * `unmet` with a human's decision as its evidence, rather than met on a
  * workaround: the fix Stage it buys is told to commit nothing for it, which is
  * what hands the question to a human.
+ *
+ * An `unmet` criterion's evidence states the failure and proposes no fix. The
+ * fix Stage reads that evidence first, and in #292 it implemented the patch a
+ * verify had proposed word for word and tested only that verify's
+ * counterexample; the next verify broke the patch with the next input, while a
+ * fix of the cause was open within the Ticket's limit all along. A limit the
+ * evidence quotes is still the fix Stage's to know, so it may stay.
  */
 const verifyInstructions = (checks: readonly string[]) => `You are the verify Stage of an unattended pipeline. Your job is adversarial: try to prove each Acceptance Criterion is NOT met.
 
@@ -209,6 +216,7 @@ const verifyInstructions = (checks: readonly string[]) => `You are the verify St
 - Judge the code as it is. Do not fix anything, and never commit, stage or push. Scratch files are fine; the pipeline discards them.
 - Mark a criterion \`unverifiable\` only when no evidence can be gathered, never as a substitute for looking.
 - When a criterion ${NEEDS_A_HUMAN}, mark it \`unmet\` and say in its evidence that a human decision is needed, naming what it collides with. A workaround that sidesteps the collision does not meet it.
+- An \`unmet\` criterion's evidence states the failure: where it sits, what you ran or read, what you expected, what came back, and the counterexample. It proposes no fix and no direction for one, and neither does what you say about whether a human decision is needed. It may quote a limit the Ticket, a documented decision or another criterion sets, naming where it comes from. A fix written there is what the fix Stage behind you would implement in place of finding the cause. This holds for a criterion's evidence only: a Note's \`next\` still carries the fix.
 - End by emitting the verdict: one entry per criterion with its status and the evidence you actually gathered.`;
 
 /** The Checks as the verify Stage is told about them: passed, and not its to run. */
@@ -222,6 +230,12 @@ function verifyChecksLine(checks: readonly string[]): string {
  * one of them needs a human decision: commit nothing, which hands the Ticket to
  * a human with the criteria and their evidence. Left to itself it worked around
  * every such criterion it met, and the verify behind it passed the workaround.
+ *
+ * It is also told to fix the cause the evidence points at, not the patch the
+ * evidence may still propose, and to test that fix the way the next verify will
+ * attack it. In #292 it implemented a verify's proposed patch word for word and
+ * tested only the counterexample it was handed, and the next verify broke the
+ * patch with the next input.
  */
 const fixInstructions = (
   base: string,
@@ -231,11 +245,16 @@ const fixInstructions = (
 
 - Commit your fix on the branch you are on, in this worktree. ${NO_OTHER_BRANCH} Do not open pull requests, and do not close the Ticket.
 - Start from the evidence: reproduce the failure, find what actually causes it, and fix that rather than the symptom.
-- Where the failure is an unmet Acceptance Criterion, add the regression test that would have caught it and commit it with the fix.${kind === "unmet-criteria" ? HUMAN_DECISION_LINE : ""}
+- Where the failure is an unmet Acceptance Criterion, add the regression test that would have caught it and commit it with the fix.${kind === "unmet-criteria" ? `${UNMET_CAUSE_LINES}${HUMAN_DECISION_LINE}` : ""}
 - Stay inside this Ticket's Acceptance Criteria and the defects this branch introduced. Anything else you find belongs to another Ticket, not to this session; record it as a Note rather than mending it.${codeChecksLine(checks, false)}
 ${FINISH_GUIDANCE}
 - Write commit subjects in the \`${SUBJECT_SHAPE}\` shape. The pipeline re-runs the Checks and the verify Stage as soon as you finish.
 ${titleGuidance(base)}`;
+
+/** How the fix Stage sent in for unmet criteria reaches and tests a fix of the cause. */
+const UNMET_CAUSE_LINES = `
+- Look for a fix of the cause you found within the scope this Ticket sets before you settle for a narrower one, such as a patch that answers only the counterexample.
+- Before you commit, test your fix with inputs built from the cause you found, of the kind a verify Stage trying to falsify the criterion would try, and not only with the counterexample you were given. Your regression test covers the cause, not only that counterexample.`;
 
 /** What the fix Stage sent in for unmet criteria does with one only a human can settle. */
 const HUMAN_DECISION_LINE = `
@@ -366,14 +385,22 @@ export function fixPrompt(
   ]);
 }
 
-/** The failure, its kind and its evidence, under a heading naming the kind. */
+/**
+ * The failure, its kind and its evidence, under a heading naming the kind. The
+ * unmet criteria's evidence is a verify Stage's prose rather than output, and
+ * may still propose a fix, so it is read as where to start looking.
+ */
 function failureSection({ kind, summary, evidence }: FixFailure, base: string): string {
   return outputSection(
     `## The failure: ${failureSentences(base)[kind]}`,
     evidence,
-    summary,
+    kind === "unmet-criteria" ? `${summary}\n\n${UNMET_EVIDENCE_LEAD}` : summary,
   );
 }
+
+/** How the fix Stage reads the unmet criteria's evidence, said beside it. */
+const UNMET_EVIDENCE_LEAD =
+  "This is the verify Stage's evidence for each unmet criterion. A fix this evidence proposes is a lead, not the answer: find the cause yourself, starting from the failure it states.";
 
 /** The unmet criteria a fix Stage was sent in for, and what meeting them now takes. */
 function unmetBeforeSection(evidence: string): string {

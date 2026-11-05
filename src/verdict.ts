@@ -49,7 +49,7 @@ export const VERDICT_JSON_SCHEMA = {
           status: { type: "string", enum: ["met", "unmet", "unverifiable"] },
           evidence: {
             type: "string",
-            description: "What you ran or read, and what it showed",
+            description: "What you ran or read, and what it showed. It proposes no fix",
           },
         },
         required: ["text", "status", "evidence"],
