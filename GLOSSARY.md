@@ -33,7 +33,7 @@ The machine a Run executes on: a workstation that outlives the Run, or a cloud V
 _Avoid_: cloud session (a session is a Stage), machine, environment, runner, checkout
 
 **Operator**:
-The Claude session a human opens on a cloud Host to start a Run, watch it and stop it from the Claude app. Never a Stage, and never the Run itself.
+The Claude session a human opens on a cloud Host to start a Run, watch it and stop it from the Claude app, and, while no Run holds the Target, to carry the human's decision on a handed-off Ticket to the board. Never a Stage, and never the Run itself.
 _Avoid_: cloud session, outer session, driver, supervisor, orchestrator
 
 **Run**:

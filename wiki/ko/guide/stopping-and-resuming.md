@@ -306,7 +306,7 @@ state branch와 달리 lock은 이력을 남기니, GitHub에서 누가 언제 T
 | 이 Host, 프로세스가 없음(또는 그 pid를 다른 프로그램이 다시 씀) | abandoned | 스스로 넘겨받음. Ctrl+C로 끝난 Run은 아무 비용도 남기지 않음 |
 | 다른 Host | elsewhere | 거절. 죽었다고 넘겨짚지 않음 |
 
-한 Host에서는 다른 Host의 프로세스를 볼 수 없으니, 다른 Host가 남긴 lock은 사람이 풀 때까지 그대로 있습니다. GitHub에 있는 lock의 마지막 commit이 잡은 쪽을 `Held by run <id> on <host>: …`처럼 밝힙니다. 그 Host를 확인하고, 그 Run이 사라진 뒤에만 lock을 푸세요. Operator에게 부탁하거나, GitHub에서 그 branch에 `{ "held": false }`인 `lock.json`을 commit하면 됩니다. 단, 돌고 있는 Run이 없을 때만 그렇게 하세요. Run 도중 클라우드 VM이 회수되면 딱 이 한 번의 해제가 필요합니다.
+한 Host에서는 다른 Host의 프로세스를 볼 수 없으니, 다른 Host가 남긴 lock은 사람이 풀 때까지 그대로 있습니다. GitHub에 있는 lock의 마지막 commit이 잡은 쪽을 `Held by run <id> on <host>: …`처럼 밝힙니다. 그 Host를 확인하고, 그 Run이 사라진 뒤에만 lock을 푸세요. Operator에게 부탁하거나, GitHub에서 그 branch에 `{ "held": false }`인 `lock.json`을 commit하면 됩니다. 단, 돌고 있는 Run이 없을 때만 그렇게 하세요. 클라우드 Host에서 Run이 시간 제한이나 VM 회수로 죽었을 때 이런 해제가 필요한 건 다음 Run을 다른 세션에서 시작할 때뿐입니다. 같은 세션에서 다시 시작한 Run은 같은 Host이니 lock을 알아서 넘겨받습니다.
 
 클라우드 Host는 세션 id로 구별합니다. 세션을 알려 주지 않는 클라우드 Host는 무작위 id를 받으니, 그 Host의 다음 Run조차 그 lock을 남의 것으로 봅니다. 끝날 때 lock을 풀지 못한 Run은 그렇다고 알리되, 자기 종료 코드는 그대로 지킵니다.
 

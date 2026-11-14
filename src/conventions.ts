@@ -94,7 +94,7 @@ Besides names such as GitHub and Claude Code, a capitalised word below is one of
 ## Branches
 
 - \`agent/<n>-<slug>\` belongs to the pipeline. A Run creates one per Ticket, works in a worktree of it, and pushes it after every Stage that commits. The repository deletes it when the pull request merges, a setting \`ticket-runner init\` switches on. Nothing else branches there.
-- \`ticket-runner/lock\` and \`ticket-runner/state\` belong to the pipeline too. The first says which Run holds this repository, and the second keeps the state file of every Ticket a Run can resume, and the transcripts of the Stages of a handed-off Ticket where the \`keepTranscripts\` setting keeps them there, which it does by default only on a private repository. A Hand-off gives a Ticket to a human rather than merging it, and leaves its work where they can carry on from it. Nothing else commits to either, except a human, or an Operator a human asked, the Claude session a human opens on a cloud Host from the Claude app to start a Run, watch it and stop it, releasing a lock a vanished Host left behind.
+- \`ticket-runner/lock\` and \`ticket-runner/state\` belong to the pipeline too. The first says which Run holds this repository, and the second keeps the state file of every Ticket a Run can resume, and the transcripts of the Stages of a handed-off Ticket where the \`keepTranscripts\` setting keeps them there, which it does by default only on a private repository. A Hand-off gives a Ticket to a human rather than merging it, and leaves its work where they can carry on from it. Nothing else commits to either, except a human, or an Operator a human asked, the Claude session a human opens on a cloud Host from the Claude app to start a Run, watch it and stop it, and, while no Run holds this repository, to carry the human's decision on a handed-off Ticket to the board, releasing a lock a vanished Host left behind.
 
 ## What a Ticket needs
 
@@ -111,7 +111,7 @@ A Ticket is one issue the pipeline can implement in a single session. It is refu
 
 ## The Operator's skill
 
-- \`.claude/skills/ticket-runner/\` belongs to the pipeline. It tells an Operator how to start a Run, report on it and pass on a Stop, a human's request that the Run finish the Tickets its Lanes hold and take no more. \`ticket-runner init\` writes it and rewrites it like this file, so an edit made there does not survive the next \`init\` either.
+- \`.claude/skills/ticket-runner/\` belongs to the pipeline. It tells an Operator how to start a Run, report on it and pass on a Stop, a human's request that the Run finish the Tickets its Lanes hold and take no more. It also says what an Operator may write on the board, only at a human's explicit request and only while no Run holds this repository: swap a handed-off Ticket's \`ready-for-human\` label for \`ready-for-agent\`, post the human's decision as a comment with each new criterion as its own \`- [ ]\` checkbox, and turn a criterion the human names as replaced into \`- (superseded)\` followed by its words. It rewrites no criterion and no body otherwise. \`ticket-runner init\` writes it and rewrites it like this file, so an edit made there does not survive the next \`init\` either.
 
 ## Local directories
 

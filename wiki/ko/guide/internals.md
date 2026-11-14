@@ -281,9 +281,9 @@ Run과 `init`은 파이프라인 자신의 저장소에서 공개된 가장 높�
 
 ### [ADR-0008: A cloud Host is a Claude Code cloud session, and the Run lock lives on GitHub](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md) {#adr-0008}
 
-- **결정**: 클라우드 Host는 Operator가 있는 Claude Code 클라우드 세션이고, Run lock은 GitHub에 둡니다.
+- **결정**: 클라우드 Host는 Operator가 있는 Claude Code 클라우드 세션이고, Run lock은 GitHub에 둡니다. Operator는 Run을 자기 셸에서 떼어 시작하고, Target을 잡은 Run이 없을 때는 사람이 요청하면 Hand-off된 Ticket의 label을 바꾸고, 사람의 결정을 코멘트로 남기고, 대체된 기준을 표시할 수 있습니다.
 - **이유**: Actions 시간 비용이 없고, 앱에서 Run을 조종할 수 있습니다. 모든 Host가 lock을 봐야 합니다. 갱신하지 않으면 만료되는 lease 방식은 채택하지 않았습니다. 살아 있는 Run이 heartbeat 한 번 놓쳤다고 Target을 빼앗기게 되니까요.
-- **비용**: REST만 씁니다. remote에 둔 어떤 것도 ref 삭제에 기대면 안 됩니다. 사라진 Host의 lock은 사람이 풀어야 합니다.
+- **비용**: REST만 씁니다. remote에 둔 어떤 것도 ref 삭제에 기대면 안 됩니다. 사라진 Host의 lock은 다음 Run을 같은 세션에서 시작하지 않는 한 사람이 풀어야 합니다.
 
 ## 파이프라인 자체를 고치려면 {#working-on-the-pipeline-itself}
 

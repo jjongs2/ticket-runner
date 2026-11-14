@@ -281,9 +281,9 @@ The full records are in [`docs/adr/`](https://github.com/jjongs2/ticket-runner/t
 
 ### [ADR-0008: A cloud Host is a Claude Code cloud session, and the Run lock lives on GitHub](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md) {#adr-0008}
 
-- **Decision**: A cloud Host is a Claude Code cloud session with an Operator; the Run lock lives on GitHub.
+- **Decision**: A cloud Host is a Claude Code cloud session with an Operator; the Run lock lives on GitHub. The Operator starts the Run detached, and while no Run holds the Target it may relabel a handed-off Ticket, post the human's decision and mark a replaced criterion, when the human asks.
 - **Why**: No Actions minutes, and a Run steered from the app. Every Host must see the lock. A lease that expires unless renewed was rejected: a live Run would lose its Target to one missed heartbeat.
-- **Cost**: REST only. Nothing on the remote may depend on deleting a ref. A lock from a vanished Host needs a human to release it.
+- **Cost**: REST only. Nothing on the remote may depend on deleting a ref. A lock from a vanished Host needs a human to release it, unless the next Run starts from the same session.
 
 ## Working on the pipeline itself
 
