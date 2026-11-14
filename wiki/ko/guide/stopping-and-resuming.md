@@ -43,7 +43,7 @@ stateDiagram-v2
 
 Hand-off가 남기는 것:
 
-- push할 작업이 있으면, branch의 작업을 담은 draft pull request. 이미 열려 있던 pull request는 draft로 되돌아갑니다.
+- push할 작업이 있으면, branch의 작업을 담은 draft pull request. 이미 열려 있던 pull request는 draft로 되돌아갑니다. [실패한 것이 없을 때](#when-nothing-failed)는 예외입니다.
 - 아래의 hand-off 코멘트. Ticket이 어디서, 왜 실패했는지 알려 줍니다.
 - `in-progress` 대신 `ready-for-human`, 그리고 담당자 없음
 - 각 Stage의 명령줄과 transcript. [`keepTranscripts`](./configuration.md#keeptranscripts)에 따라 `ticket-runner/state` branch나 Host에 남습니다([무엇이 어디에 남나](#what-stays-where)).
@@ -151,7 +151,7 @@ Hand-off된 Ticket은 네 가지 중 하나로 끝내면 됩니다.
 | Ticket이나 기준, 설정을 바꾸고 돌려주기 | 다음 Run이 그때 이슈에 적힌 대로 판정함 |
 | remote의 branch에 commit을 push하고 돌려주기 | 다음 Run이 자기 사본을 그 tip까지 끌어올림. 이력을 다시 쓰면 그 대신 사본이 갈라짐 |
 | 직접 마무리하기: pull request를 merge. draft의 본문은 변경이 아닌 Hand-off를 설명하니 먼저 고쳐 쓰고 ready로 바꾸기. [실패한 것 없이 넘겨진](#when-nothing-failed) pull request는 Run이 게시한 본문 그대로 이미 ready 상태 | 이슈가 닫힘. `ready-for-human`은 직접 떼고, worktree와 로컬 branch는 그것을 만든 Host에서 지우기 |
-| 버리기: 이슈를 닫음 | draft pull request와 branch는 직접 닫고 지울 때까지 남음 |
+| 버리기: 이슈를 닫음 | pull request와 branch는 직접 닫고 지울 때까지 남음 |
 
 ```bash
 gh issue edit 8 --remove-label ready-for-human --add-label ready-for-agent   # 돌려주기

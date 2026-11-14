@@ -58,6 +58,7 @@ import {
   guardComment,
   handoffComment,
   hasGuardWarning,
+  LEFT_TO_HUMAN,
   mergeByHandComment,
   pullRequestBody,
   squashCommit,
@@ -232,9 +233,6 @@ class TicketFailure extends Error {
     super(summary);
   }
 }
-
-/** What a Ticket handed off over a Target that merges by hand is handed off for. */
-export const LEFT_TO_HUMAN = "left to a human, as this Target merges by hand";
 
 /**
  * A Ticket that passed every gate on a Target that merges by hand (`merge`
@@ -2362,7 +2360,7 @@ async function handOff(
   // One it only converted still says what its Run said, which is not this.
   let drafted = false;
   if (byHand !== undefined) {
-    // Ready for review, its title and body as the pr step wrote them.
+    // Nothing to do: ready for review, its title and body as the pr step wrote them.
   } else if (pullRequest !== undefined) {
     await tracker.convertPullRequestToDraft(pullRequest);
   } else if (worktree?.pushable === true) {
@@ -2436,17 +2434,17 @@ async function handOff(
           verdict: byHand.verdict,
         })
       : handoffComment({
-      stage: failure.point,
-      failure: failure.summary,
-      branch,
-      onRemote,
-      ...(worktree === undefined ? {} : { worktree: worktree.path }),
-      ...(transcripts === undefined ? {} : { transcripts }),
-      evidence: failure.evidence,
-      ...(failure.reason === undefined ? {} : { reason: failure.reason }),
-      fixUsed,
-      ...(pullRequest === undefined ? {} : { pullRequest }),
-    }),
+          stage: failure.point,
+          failure: failure.summary,
+          branch,
+          onRemote,
+          ...(worktree === undefined ? {} : { worktree: worktree.path }),
+          ...(transcripts === undefined ? {} : { transcripts }),
+          evidence: failure.evidence,
+          ...(failure.reason === undefined ? {} : { reason: failure.reason }),
+          fixUsed,
+          ...(pullRequest === undefined ? {} : { pullRequest }),
+        }),
   );
   await tracker.removeLabel(ticket, config.labels.inProgress);
   await tracker.addLabel(ticket, config.labels.readyForHuman);

@@ -301,14 +301,19 @@ export function squashCommit({
 
 /** The unverifiable criteria with their evidence on one line each, under a heading; nothing when there are none. */
 function unverifiedLines(verdict: Verdict): string[] {
-  const unverifiable = verdict.criteria.filter((criterion) => criterion.status === "unverifiable");
-  if (unverifiable.length === 0) return [];
-  return [
-    "Unverified:",
-    ...unverifiable.map(
-      (criterion) => `- ${oneLine(criterion.text)} — ${oneLine(criterion.evidence)}`,
-    ),
-  ];
+  const unverifiable = unverifiableLines(verdict);
+  return unverifiable.length === 0 ? [] : ["Unverified:", ...unverifiable];
+}
+
+/**
+ * One `- <criterion> — <evidence>` line per unverifiable criterion, each joined
+ * into one line: what the squash commit carries, and what a hand-off on a
+ * Target that merges by hand says in its place.
+ */
+function unverifiableLines(verdict: Verdict): string[] {
+  return verdict.criteria
+    .filter((criterion) => criterion.status === "unverifiable")
+    .map((criterion) => `- ${oneLine(criterion.text)} — ${oneLine(criterion.evidence)}`);
 }
 
 /** Text with its line breaks, and the space around them, joined into single spaces. */
@@ -451,6 +456,9 @@ function whereTheWorkIs(
   ].join(" · ");
 }
 
+/** Why a Ticket handed off on a Target that merges by hand was handed off, in the words its row and log line give. */
+export const LEFT_TO_HUMAN = "left to a human, as this Target merges by hand";
+
 export interface MergeByHandComment extends Pick<HandoffComment, "branch" | "onRemote" | "worktree"> {
   /** The pull request a human is to merge, published ready for review. */
   pullRequest: number;
@@ -470,9 +478,7 @@ export interface MergeByHandComment extends Pick<HandoffComment, "branch" | "onR
  * Criteria, so a line that could read as a checkbox is defused.
  */
 export function mergeByHandComment(handoff: MergeByHandComment): string {
-  const unverifiable = handoff.verdict.criteria.filter(
-    (criterion) => criterion.status === "unverifiable",
-  );
+  const unverifiable = unverifiableLines(handoff.verdict);
   return [
     HANDOFF_MARKER,
     `**Handed off.** PR #${handoff.pullRequest} passed every gate and waits for a human to merge it: this Target merges by hand.`,
@@ -484,9 +490,7 @@ export function mergeByHandComment(handoff: MergeByHandComment): string {
           "",
           "**Unverifiable criteria:**",
           "",
-          ...unverifiable.map((criterion) =>
-            escapeCheckboxes(`- ${oneLine(criterion.text)} — ${oneLine(criterion.evidence)}`),
-          ),
+          ...unverifiable.map(escapeCheckboxes),
         ]),
   ].join("\n");
 }

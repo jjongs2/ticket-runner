@@ -43,7 +43,7 @@ A [Hand-off](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) giv
 
 A Hand-off leaves you:
 
-- a draft pull request of the branch's work, where there is work to push; a pull request already open goes back into draft
+- a draft pull request of the branch's work, where there is work to push; a pull request already open goes back into draft, except [when nothing failed](#when-nothing-failed)
 - the hand-off comment below, saying where the Ticket failed and why
 - `ready-for-human` in place of `in-progress`, and no assignee
 - each Stage's command line and transcript, kept on the `ticket-runner/state` branch or on the Host, as [`keepTranscripts`](./configuration.md#keeptranscripts) decides ([What stays where](#what-stays-where))
@@ -151,7 +151,7 @@ A handed-off Ticket is yours to end one of four ways:
 | Change the Ticket, its criteria or the config, and hand it back | The next Run grades it against what the issue says then |
 | Push commits to its branch on the remote, and hand it back | The next Run brings its copy up to that tip. A rewritten history parts the copies instead |
 | Finish it yourself: merge its pull request. A draft's body describes the Hand-off rather than the change, so rewrite it and mark it ready first; one [handed off with nothing failed](#when-nothing-failed) is ready already, with the body the Run published | The issue closes. Take `ready-for-human` off yourself, and delete the worktree and local branch on the Host that made them |
-| Drop it: close the issue | The draft pull request and the branch stay until you close and delete them |
+| Drop it: close the issue | The pull request and the branch stay until you close and delete them |
 
 ```bash
 gh issue edit 8 --remove-label ready-for-human --add-label ready-for-agent   # hand it back

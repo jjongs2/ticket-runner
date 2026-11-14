@@ -5,10 +5,10 @@ import { throwOnFailure } from "./adapters/exec.js";
 import { MAX_TAIL_CHARS } from "./log-tail.js";
 import { type Billing, emptyBilling } from "./credential.js";
 import type { RunStop } from "./run.js";
-import { LEFT_TO_HUMAN } from "./orchestrator.js";
 import {
   HANDOFF_MARKER,
   HANDOFF_TAKEN_LINE,
+  LEFT_TO_HUMAN,
   NOTES_ISSUE_MARKER,
   NOTES_ISSUE_TITLE,
   NOTE_MARKER,
