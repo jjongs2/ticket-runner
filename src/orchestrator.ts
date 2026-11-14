@@ -426,15 +426,7 @@ async function takeTicket(
   // wearing the claim it never gave up — re-writing what is already there would
   // only risk the Ticket on three tracker calls that change nothing.
   //
-  // In an order that leaves the Ticket free or stranded wherever a write
-  // fails, as one GitHub keeps failing does: `in-progress` with no assignee is
-  // still on the Frontier, and an assignee wearing `in-progress` is the claim.
-  // An assignee alone would be neither, and no Run would take it up again.
-  if (!stranded) {
-    await tracker.addLabel(ticket, config.labels.inProgress);
-    await tracker.assign(ticket, user);
-    await tracker.removeLabel(ticket, config.labels.readyForAgent);
-  }
+  if (!stranded) await writeClaim(pipeline, ticket, user);
   log(`#${ticket} ${howItWasTaken(resume, stranded)} · ${branch}`);
 
   // Whatever hand-off left this Ticket to a human is no longer the last word on
@@ -2091,31 +2083,55 @@ async function release(
 }
 
 /**
+ * Claim a Ticket on the board.
+ *
+ * In an order that leaves the Ticket free or stranded wherever a write fails,
+ * as one GitHub keeps failing does: `in-progress` with no assignee is still on
+ * the Frontier, and an assignee wearing `in-progress` is the claim. An
+ * assignee alone would be neither, and no Run would take it up again.
+ */
+async function writeClaim(pipeline: Pipeline, ticket: number, user: string): Promise<void> {
+  const { tracker, config } = pipeline;
+  await tracker.addLabel(ticket, config.labels.inProgress);
+  await tracker.assign(ticket, user);
+  await tracker.removeLabel(ticket, config.labels.readyForAgent);
+}
+
+/**
  * Take the claim off a released Ticket, or leave it on whole.
  *
- * A write that fails stops the rest, and one that fails once `in-progress` has
- * come off puts it back: a Ticket left assigned without it would be neither
- * free for the Frontier nor stranded for the sweep, where one still claimed is
- * resumed by the next Run. Logged and nothing more, since the Release stands
+ * In an order that leaves the Ticket claimed or free wherever a write fails:
+ * the assignee comes off before `in-progress`, since a Ticket left assigned
+ * without it would be neither free for the Frontier nor stranded for the
+ * sweep, and no Run would take it up again. One that stays claimed is resumed
+ * by the next Run as a Stranded Ticket, and one left wearing only
+ * `ready-for-agent` and `in-progress` is taken from the Frontier and resumed
+ * from its state, as any released Ticket is.
+ *
+ * A write that fails stops the rest, and the claim is written back whole, in
+ * the claim's own order, so the Ticket stays claimed as the Release asks
+ * wherever GitHub lets it. Logged and nothing more, since the Release stands
  * either way.
  */
 async function undoClaim(pipeline: Pipeline, ticket: number, user: string): Promise<void> {
   const { tracker, config } = pipeline;
-  let labelOff = false;
+  let touched = false;
   try {
     await tracker.addLabel(ticket, config.labels.readyForAgent);
-    await tracker.removeLabel(ticket, config.labels.inProgress);
-    labelOff = true;
+    touched = true;
     await tracker.unassign(ticket, user);
+    await tracker.removeLabel(ticket, config.labels.inProgress);
   } catch (error) {
     pipeline.log?.(
       `#${ticket} stays claimed for the next Run to resume, as the claim could not come off: ${(error as Error).message}`,
     );
-    if (!labelOff) return;
+    if (!touched) return;
     try {
-      await tracker.addLabel(ticket, config.labels.inProgress);
+      await writeClaim(pipeline, ticket, user);
     } catch (again) {
-      pipeline.log?.(`#${ticket} could not put ${config.labels.inProgress} back: ${(again as Error).message}`);
+      pipeline.log?.(
+        `#${ticket} could not be claimed whole again, and is resumed from where the claim stopped: ${(again as Error).message}`,
+      );
     }
   }
 }

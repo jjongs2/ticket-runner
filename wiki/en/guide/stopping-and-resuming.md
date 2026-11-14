@@ -196,7 +196,7 @@ A GitHub read, a write that sets a state (a label, an edited comment) and openin
 - the row is written at the step the Ticket was on, `setup`, `rebase` and `pr` included, and the Run's last line names the command and the first line it printed
 - the state and the fix budget stay as they were, and the next Run resumes from there, with no rebase owed
 - a pull request the failed attempt opened all the same is found on the branch and used, not opened twice
-- if GitHub will not take the claim off either, the Ticket stays claimed, and the next Run resumes it as a [Stranded Ticket](#stranded-tickets-and-the-sweep)
+- if GitHub will not take the claim off either, the Ticket stays claimed, and the next Run resumes it as a [Stranded Ticket](#stranded-tickets-and-the-sweep). One whose assignee came off but whose `in-progress` would not is back on the Frontier, and resumes from there as any released Ticket
 
 Everything else is handed off as before: a GitHub 4xx, and a git failure that will not pass with time, such as a pull refused over uncommitted changes in the main checkout or a base branch that really diverged. Released, those would come back every Run without a word.
 

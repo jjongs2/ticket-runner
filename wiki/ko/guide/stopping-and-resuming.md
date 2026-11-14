@@ -196,7 +196,7 @@ GitHub 읽기, 상태를 정하는 쓰기(라벨, 코멘트 수정), pull reques
 - 줄은 Ticket이 있던 단계에 남깁니다. `setup`, `rebase`, `pr`도 포함합니다. Run의 마지막 줄은 그 명령과 출력의 첫 줄을 밝힙니다.
 - state와 fix 기회는 그대로이고, 다음 Run은 거기서 이어 갑니다. 먼저 rebase할 필요는 없습니다.
 - 실패한 시도가 실제로는 열어 둔 pull request는 branch에서 찾아 그대로 쓰고, 두 번 열지 않습니다.
-- GitHub가 claim을 떼는 쓰기마저 받아 주지 않으면 Ticket은 claim된 채로 남고, 다음 Run이 [Stranded Ticket](#stranded-tickets-and-the-sweep)으로 이어 갑니다.
+- GitHub가 claim을 떼는 쓰기마저 받아 주지 않으면 Ticket은 claim된 채로 남고, 다음 Run이 [Stranded Ticket](#stranded-tickets-and-the-sweep)으로 이어 갑니다. 담당자는 떼었는데 `in-progress`가 남았다면 Frontier로 돌아가, 여느 Release된 Ticket처럼 거기서 이어 갑니다.
 
 그 밖의 실패는 전처럼 Hand-off합니다. GitHub의 4xx, 그리고 시간이 지나도 풀리지 않는 git 실패가 그렇습니다. main checkout에 commit하지 않은 변경이 있어 pull이 거부되거나 base branch가 정말로 갈라진 경우 같은 것들이죠. 이런 걸 Release하면 아무 말 없이 매 Run마다 되돌아옵니다.
 

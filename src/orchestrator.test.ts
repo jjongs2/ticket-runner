@@ -2399,15 +2399,19 @@ describe("releasing a rate-limited Ticket", () => {
     expect(tracker.issue(TICKET).assignees).toEqual([]);
   });
 
-  it("takes the assignee off last, so no other Run sees an unclaimed Ticket first", async () => {
+  // The Run lock keeps every other Run off the board meanwhile (ADR-0008), so
+  // the order only decides where a write that fails leaves the Ticket: the
+  // assignee comes off before in-progress, as an assignee without it would be
+  // neither claimed nor free.
+  it("takes the assignee off before in-progress, so no cut leaves an assignee alone", async () => {
     runner.queue("implement", { ok: false, failure: "rate-limited" });
 
     await run();
 
     expect(tracker.calls.slice(-3)).toEqual([
       `addLabel:${TICKET}:ready-for-agent`,
-      `removeLabel:${TICKET}:in-progress`,
       `unassign:${TICKET}:pipeline-user`,
+      `removeLabel:${TICKET}:in-progress`,
     ]);
   });
 
@@ -4202,15 +4206,107 @@ describe("releasing a Ticket GitHub or the remote failed on its own side", () =>
     expect(state()).toMatchObject({ state: "implemented" });
   });
 
-  it("puts in-progress back when the assignee will not come off, so the Ticket stays claimed", async () => {
+  it("takes ready-for-agent back off when the assignee will not come off, so the Ticket stays claimed", async () => {
     workspace.pullBaseFailure = unreachable();
     tracker.unassign = async () => {
       throw badGateway(["api", "--method", "DELETE", "assignees"]);
     };
 
     expect(await run()).toMatchObject({ outcome: "released", cause: "remote" });
-    expect(tracker.issue(TICKET).labels).toContain("in-progress");
+    expect(tracker.issue(TICKET).labels).toEqual(["in-progress"]);
     expect(tracker.issue(TICKET).assignees).toEqual(["pipeline-user"]);
+  });
+
+  describe("a GitHub outage that starts during the Release's own board writes", () => {
+    /** The Release's writes, in turn, after the claim's three. */
+    const UNDO = ["addLabel:ready-for-agent", "unassign", "removeLabel:in-progress"];
+    const CLAIM_WRITES = 3;
+
+    /**
+     * Board writes from the `from`-th of the Release on fail with a 502, for
+     * `count` writes or for as long as the Release lasts.
+     */
+    function failBoardWrites(from: number, count = Infinity): string[] {
+      const written: string[] = [];
+      let failed = 0;
+      const wrap = <A extends unknown[]>(name: string, write: (...args: A) => Promise<void>) =>
+        async (...args: A) => {
+          const label = typeof args[1] === "string" && name.endsWith("Label") ? `:${args[1]}` : "";
+          written.push(`${name}${label}`);
+          if (written.length > CLAIM_WRITES + from && failed < count) {
+            failed++;
+            throw badGateway(["api", "--method", "POST", name]);
+          }
+          await write(...args);
+        };
+      tracker.addLabel = wrap("addLabel", tracker.addLabel.bind(tracker));
+      tracker.removeLabel = wrap("removeLabel", tracker.removeLabel.bind(tracker));
+      tracker.assign = wrap("assign", tracker.assign.bind(tracker));
+      tracker.unassign = wrap("unassign", tracker.unassign.bind(tracker));
+      return written;
+    }
+
+    const claimed = () =>
+      tracker.issue(TICKET).assignees.includes("pipeline-user") &&
+      tracker.issue(TICKET).labels.includes("in-progress");
+
+    it.each(UNDO.map((write, at) => [write, at]))(
+      "writes the claim back whole when %s fails once",
+      async (write, at) => {
+        workspace.pullBaseFailure = unreachable();
+        const written = failBoardWrites(at as number, 1);
+
+        expect(await run()).toMatchObject({ outcome: "released", stage: "rebase", cause: "remote" });
+        expect(written.slice(CLAIM_WRITES, CLAIM_WRITES + (at as number) + 1)).toEqual(
+          UNDO.slice(0, (at as number) + 1),
+        );
+        expect(written[CLAIM_WRITES + (at as number)]).toBe(write);
+        expect(tracker.issue(TICKET).labels).toEqual(["in-progress"]);
+        expect(tracker.issue(TICKET).assignees).toEqual(["pipeline-user"]);
+      },
+    );
+
+    it.each([
+      ["ready-for-agent goes on", 0],
+      ["the assignee comes off", 1],
+    ])("leaves the Ticket claimed when it starts as %s and outlasts the Release", async (_, at) => {
+      workspace.pullBaseFailure = unreachable();
+      failBoardWrites(at);
+
+      expect(await run()).toMatchObject({ outcome: "released", stage: "rebase", cause: "remote" });
+      expect(claimed()).toBe(true);
+    });
+
+    it("leaves the Ticket free with its state when only in-progress is left to come off", async () => {
+      workspace.pullBaseFailure = unreachable();
+      failBoardWrites(2);
+
+      expect(await run()).toMatchObject({ outcome: "released", stage: "rebase", cause: "remote" });
+      expect(tracker.issue(TICKET).assignees).toEqual([]);
+      expect(tracker.issue(TICKET).labels).toContain("ready-for-agent");
+      expect(state()).toMatchObject({ state: "implemented", fixUsed: false });
+    });
+
+    it.each(UNDO.map((write, at) => [write, at]))(
+      "is resumed by the next Run past the Stages it passed when it starts at %s",
+      async (_, at) => {
+        workspace.pullBaseFailure = unreachable();
+        const original = {
+          addLabel: tracker.addLabel,
+          removeLabel: tracker.removeLabel,
+          assign: tracker.assign,
+          unassign: tracker.unassign,
+        };
+        failBoardWrites(at as number);
+
+        expect(await run()).toMatchObject({ outcome: "released", stage: "rebase" });
+        Object.assign(tracker, original);
+        workspace.pullBaseFailure = undefined;
+
+        expect(await run()).toMatchObject({ outcome: "merged" });
+        expect(runner.stages()).toEqual(["implement", "verify", "verify"]);
+      },
+    );
   });
 
   it("is resumed by a later Run from the state it recorded, its fix budget as it was", async () => {

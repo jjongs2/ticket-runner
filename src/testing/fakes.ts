@@ -267,7 +267,9 @@ export class FakeTracker implements Tracker {
 
   async assign(number: number, user: string): Promise<void> {
     this.calls.push(`assign:${number}:${user}`);
-    this.issue(number).assignees.push(user);
+    // GitHub adds an assignee once, however often it is asked.
+    const issue = this.issue(number);
+    if (!issue.assignees.includes(user)) issue.assignees.push(user);
   }
 
   async unassign(number: number, user: string): Promise<void> {
