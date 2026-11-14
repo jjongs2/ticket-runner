@@ -79,10 +79,15 @@ Ticket for a later Run to resume.
 | implement | `✅ committed`, `❌ no commits`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
 | fix | `✅ committed`, `❌ no commits`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
 | checks | `✅ passed`, `⚠️ no checks`, `❌ uncommitted work`, ``❌ `<command>` failed``, ``❌ `<command>` timed out``, ``⏸ `<command>` fails on the base branch`` |
-| verify | `✅ <k> met · <u> unverifiable`, `❌ <k> unmet`, `❌ no evidence`, `❌ no verdict`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
+| verify | `✅ <k> met · <u> unverifiable`, `❌ <k> unmet`, `❌ <d> defects`, `❌ <k> unmet · <d> defects`, `❌ misnumbered`, `❌ no evidence`, `❌ no verdict`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
 | conflict | `✅ rebased`, `❌ unresolved`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ unknown` |
 | ci | `✅ passed`, `❌ failed`, `❌ conflicting`, `❌ no checks`, `⚠️ no checks`, `❌ timed out`, ``⏸ `<command>` fails on the base branch`` |
 | merge | `✅ #<pr>` |
+
+`<d> defects` counts the defects the verify Stage found this branch made, and
+reads `1 defect` for one; they fail the verdict as unmet criteria do.
+`❌ misnumbered` is a verdict that left out a criterion the pipeline listed, or
+answered one it did not list, so it graded nothing to merge on.
 
 A `checks` row tells a command that exited non-zero from one the wall-clock
 limit killed: both are the same failure to the fix budget, but a hang is not a

@@ -19,7 +19,7 @@ A GitHub issue sized for one implement Stage, produced by to-tickets or triage. 
 _Avoid_: task, job, issue (when a Ticket is meant), brief
 
 **Acceptance Criteria**:
-The unticked task list items in a Ticket's body or comments, and the only thing the verify Stage grades. A promise written as prose is not one.
+The unticked task list items in a Ticket's body or comments, which the verify Stage grades one by one. A promise written as prose is not one.
 _Avoid_: requirements, definition of done
 
 ### Running
@@ -61,7 +61,7 @@ The stretch of a Ticket's way from bringing the base branch up to date and rebas
 _Avoid_: merge queue, tail, critical section, merge lane
 
 **Note**:
-A defect met while working a Ticket and recorded where a human will find it instead of being fixed there: one that belongs to another Ticket or to none yet, or one the verify Stage, which fixes nothing, found beside the criteria. Never a preference or a refactor.
+A defect met while working a Ticket that belongs to another Ticket or to none yet, recorded where a human will find it instead of being fixed there. Never a defect the branch itself made, what the Ticket's own deliverable records, a preference or a refactor.
 _Avoid_: handoff, finding, TODO, side note
 
 ### When work stops

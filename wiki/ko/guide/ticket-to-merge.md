@@ -15,7 +15,7 @@ Run은 아무도 지켜보지 않으니, 세션 하나의 말만 믿고 merge할
 | worktree | `.worktrees/ticket-<n>`에 `agent/<n>-<slug>` | git |
 | implement Stage | worktree에서 `/mattpocock-skills:implement` 실행 | 에이전트 |
 | Check | commit 안 된 변경이 없는지 본 뒤 Check 명령을 하나씩 실행 | 종료 코드 |
-| verify Stage | Acceptance Criteria를 적대적으로 판정 | 판정을 읽은 파이프라인 |
+| verify Stage | Acceptance Criteria와 branch가 만든 결함을 적대적으로 판정 | 판정을 읽은 파이프라인 |
 | fix Stage | 실패 내용을 받은 새 세션, Ticket당 한 번 | fix 기회 |
 | Landing | rebase, conflict Stage, pull request, CI, squash merge | 한 번에 Lane 하나 |
 | merge 이후 | 충족된 기준에 체크, 정리 | 파이프라인 |
@@ -80,7 +80,7 @@ claim은 Ticket에 '가져감' 표시를 해서 다른 Run이 가져가지 않�
 | Stage | 프롬프트 첫머리 | 구조화된 답변 |
 |---|---|---|
 | implement | `/mattpocock-skills:implement <issue URL>` | 선택 항목 `title`, `body`, `problem`, `solution`, [`notes`](#notes), `noCommitReason` |
-| verify | `Ticket: <issue URL>`, 스킬 없음 | 판정, 선택 항목 `notes` |
+| verify | `Ticket: <issue URL>`과 번호를 매긴 기준, 스킬 없음 | 판정, 선택 항목 `notes` |
 | fix | `Ticket: <issue URL>`, `/mattpocock-skills:pr` 말고는 스킬 없음 | 선택 항목 `title`, `body`, `problem`, `solution`, `notes`, `noCommitReason` |
 | conflict | `Ticket: <issue URL>`, 스킬 없음 | 없음 |
 
@@ -149,22 +149,26 @@ Release는 상설 Notes 이슈에 파이프라인 자신의 Note를 올리고, �
 
 ## verify Stage와 판정 {#the-verify-stage-and-its-verdict}
 
-merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 그 코드가 제대로 도는지 물어보기에 가장 믿기 어려운 상대입니다. 그래서 플러그인 스킬 없이 새로 띄운 세션이 각 Acceptance Criterion이 충족되지 **않았음**을 증명하려고 합니다. 이 세션은 본문과 코멘트에서 기준을 읽고, 코드를 돌려 보고, 버릴 테스트를 써도 되지만 commit은 하면 안 됩니다. 문서로 남은 결정이나 다른 기준을 뒤집지 않고는 충족할 수 없는 기준은 `unmet`으로 두고, 근거에 사람의 결정이 필요하다고 적습니다. `unmet` 기준의 근거에는 실패가 어디에 있는지, 무엇을 돌리거나 읽었는지, 무엇을 기대했고 무엇이 나왔는지, 그리고 반례를 적습니다. 고칠 방법은 제안하지 않습니다. 다만 Ticket, 문서로 남은 결정, 다른 기준이 정한 한계는 출처를 밝혀 인용할 수 있습니다. 임시 파일은 끝난 뒤 버리므로 pull request에 섞이지 않습니다. 판정에는 기준마다 칸이 하나씩 있을 뿐 다른 것을 적을 칸이 없으므로, 기준 밖에서 찾은 것은 [Note](#notes)로 세션을 나갑니다.
+merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 그 코드가 제대로 도는지 물어보기에 가장 믿기 어려운 상대입니다. 그래서 플러그인 스킬 없이 새로 띄운 세션이 각 Acceptance Criterion이 충족되지 **않았음**을 증명하려고 합니다. 파이프라인은 Ticket의 체크되지 않은 기준에 번호를 매겨, 박스 아래 들여 쓴 줄과 함께 넘깁니다([작업 계획하기](./planning.md#acceptance-criteria)). 세션은 코드를 돌려 보고, 버릴 테스트를 써도 되지만 commit은 하면 안 됩니다. 문서로 남은 결정이나 다른 기준을 뒤집지 않고는 충족할 수 없는 기준은 `unmet`으로 두고, 근거에 사람의 결정이 필요하다고 적습니다. `unmet` 기준의 근거에는 실패가 어디에 있는지, 무엇을 돌리거나 읽었는지, 무엇을 기대했고 무엇이 나왔는지, 그리고 반례를 적습니다. 고칠 방법은 제안하지 않습니다. 다만 Ticket, 문서로 남은 결정, 다른 기준이 정한 한계는 출처를 밝혀 인용할 수 있습니다. 임시 파일은 끝난 뒤 버리므로 pull request에 섞이지 않습니다.
 
-**판정**은 기준마다 `met`, `unmet`, `unverifiable` 중 하나를 근거와 함께 매깁니다. 에이전트 자신의 통과 여부 판단은 참고일 뿐이고, 파이프라인이 직접 판단합니다. 통과 조건은 **`unmet`이 하나도 없고 `met`이 하나 이상**인 것입니다.
+이 세션은 branch 자체도 판정합니다. branch가 들여온 결함이나 branch가 더한 코드 안의 결함을 `unmet` 기준에 필요한 만큼의 근거로 보이면, Note가 아니라 판정의 `defects`에 적습니다. Ticket이 범위 밖으로 둔 것이거나 문서로 남은 결정이 받아들인 것은 예외입니다. 세션은 이 Run에서 이 Ticket의 implement와 fix Stage가 쓴 Note도 받으므로, 그 가운데 branch의 결함이 있으면 그것도 판정합니다. 그 밖에 찾은 것은 [Note](#notes)로 세션을 나갑니다.
+
+**판정**은 기준마다 번호로 `met`, `unmet`, `unverifiable` 중 하나를 근거와 함께 매기고, branch의 결함을 적습니다. 에이전트 자신의 통과 여부 판단은 참고일 뿐이고, 파이프라인이 직접 판단합니다. 통과 조건은 **`unmet`이 하나도 없고, branch의 결함이 없고, `met`이 하나 이상**인 것입니다. 그 뒤로 기준을 보여 주는 곳(fix와 재판정 verify의 프롬프트, hand-off, squash commit)은 모두 판정이 옮겨 적은 문구가 아니라 Ticket의 체크박스 줄을 그대로 씁니다.
 
 | 판정 | 진행 상황 칸 | 결과 |
 |---|---|---|
 | 통과 | `✅ <k> met · <v> unverifiable` | Landing으로 |
 | `unmet`이 있음 | `❌ <u> unmet` | fix 기회를 씀. fix Stage는 충족되지 않은 기준과 그 근거를 받음 |
+| branch가 만든 결함 | `❌ <d> defects` 또는 `❌ <u> unmet · <d> defects` | `unmet`과 같음. fix 기회를 쓰고, fix Stage는 결함마다 그 근거를 받음 |
+| 받은 번호를 빠뜨리거나 받지 않은 번호에 답함 | `❌ misnumbered` | Hand-off. Ticket을 판정하지 않은 것 |
 | 전부 `unverifiable` | `❌ no evidence` | Hand-off. merge할 근거가 없음 |
 | 없거나 형식이 틀림 | `❌ no verdict` | Hand-off |
 
-`unmet` 기준 때문에 fix를 거친 뒤의 verify는 첫 판정의 `unmet` 기준과 그 근거를 받습니다. 그 반례가 사라지고 기준 전체가 성립해야만 충족이라는 말도 함께 듣습니다.
+`unmet` 기준이나 결함 때문에 fix를 거친 뒤의 verify는 첫 판정의 `unmet` 기준과 결함을 그 근거와 함께 받습니다. 그 반례가 사라지고 기준 전체가 성립해야만 충족이라는 말도 함께 듣습니다. 이 verify가 fix의 코드에서 찾은 결함은 다른 두 번째 실패처럼 Hand-off이므로, 이 게이트가 되풀이되지는 않습니다.
 
 ## fix Stage와 fix 기회 {#the-fix-stage-and-the-fix-budget}
 
-fix 기회는 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사람에게 넘어갑니다. fix Stage는 같은 branch에서 `/mattpocock-skills:pr` 말고는 플러그인 스킬 없이 새로 띄운 세션이고, 실패와 그 근거를 받아 그 결함 하나를 고칩니다. branch에 대해 마지막으로 답한 `body`, `problem`, `solution`도 함께 받습니다. 수정으로 내용이 달라지는 답변은 branch 전체에 맞게 고쳐 다시 답하고, 그대로 맞는 답변은 비워 답해 앞의 것을 남깁니다. `unmet` 기준 때문에 불려 왔는데 그중 하나라도 문서로 남은 결정이나 다른 기준을 뒤집어야만 충족된다면, 아무것도 commit하지 말고 `noCommitReason`에 이유를 밝히라고 합니다. 그러면 Ticket이 사람에게 넘어갑니다. 그렇지 않다면 근거에 적힌 수정안은 답이 아니라 실마리로만 봅니다. 원인은 직접 찾고, 더 좁은 수정에 만족하기 전에 Ticket의 범위 안에서 그 원인을 고칠 방법을 찾습니다. commit하기 전에는 받은 반례만이 아니라 그 원인에서 만든 입력으로도 수정을 시험합니다.
+fix 기회는 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사람에게 넘어갑니다. fix Stage는 같은 branch에서 `/mattpocock-skills:pr` 말고는 플러그인 스킬 없이 새로 띄운 세션이고, 실패와 그 근거를 받아 그 결함 하나를 고칩니다. branch에 대해 마지막으로 답한 `body`, `problem`, `solution`도 함께 받습니다. 수정으로 내용이 달라지는 답변은 branch 전체에 맞게 고쳐 다시 답하고, 그대로 맞는 답변은 비워 답해 앞의 것을 남깁니다. `unmet` 기준이나 branch의 결함 때문에 불려 왔는데 그중 하나라도 문서로 남은 결정이나 다른 기준을 뒤집어야만 충족되거나 고쳐진다면, 아무것도 commit하지 말고 `noCommitReason`에 이유를 밝히라고 합니다. 그러면 Ticket이 사람에게 넘어갑니다. 그렇지 않다면 근거에 적힌 수정안은 답이 아니라 실마리로만 봅니다. 원인은 직접 찾고, 더 좁은 수정에 만족하기 전에 Ticket의 범위 안에서 그 원인을 고칠 방법을 찾습니다. commit하기 전에는 받은 반례만이 아니라 그 원인에서 만든 입력으로도 수정을 시험합니다.
 
 새 세션이 고칠 수 있는 결함만 fix 기회를 씁니다.
 
@@ -174,12 +178,14 @@ fix 기회는 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사�
 | Check가 실패하거나 시간 초과 | checks | 예 |
 | 실패한 Check가 merge-base에서도 실패 | checks | 아니요, Release |
 | `unmet` 기준 | verify | 예 |
+| branch가 만든 결함 | verify | 예 |
 | conflict Stage가 rebase를 끝내지 못함 | rebase | 예 |
 | pull request check 실패 | ci | 예 |
 | pull request check 실패, merge-base도 Check에 실패 | ci | 아니요, Release |
 | 끝까지 가지 못한 Stage(시간 초과, 턴 한도, 0이 아닌 종료 코드, 잘못된 결과) | 해당 Stage | 아니요, Hand-off |
 | implement가 commit을 남기지 않음 | implement | 아니요, Hand-off |
 | 근거가 없는 판정, 또는 판정 없음 | verify | 아니요, Hand-off |
+| 받은 번호를 빠뜨리거나 받지 않은 번호를 더한 판정 | verify | 아니요, Hand-off |
 | conflict Stage를 띄우지 못했거나 git에 상태를 물을 수 없음 | rebase | 아니요, Hand-off |
 | base branch를 pull하지 못함 | rebase | 아니요, Hand-off |
 | push나 pull request 열기가 실패 | pr | 아니요, Hand-off |
@@ -321,11 +327,11 @@ Ticket은 이미 merge됐으니 여기서부터는 Hand-off될 수 없습니다.
 
 행에는 몇 단어만 적습니다. 사람이 행동해야 하는 것은 알림을 받을 가치가 있으니 따로 코멘트로 올립니다. Hand-off, guard 경고, Note가 그렇습니다.
 
-**충족된 기준에 체크.** merge 뒤에는 판정이 `met`으로 판정한 기준마다, 그것이 적힌 곳이 본문이든 코멘트든(예: triage가 브리프를 올린 코멘트) 찾아서 체크합니다(`- [ ]` → `- [x]`). 공백과 대소문자 차이는 봐줍니다. 그래도 체크박스와, 체크된 것이든 아니든, 하나도 맞지 않는 기준에는 기회를 한 번 더 줍니다. 끝에 붙은 괄호 하나를 떼어 내고(예: 내용이 아래 블록에 있는 기준 끝에 verify Stage가 덧붙이는 `(table)`), `...`나 `…`는 어떤 글자들이든 대신하는 것으로 읽습니다. 이 느슨한 비교는 첫 비교에서 체크되지 않고 남은 줄을 본문과 모든 코멘트에 걸쳐 한꺼번에 놓고 하며, 맞는 줄이 정확히 하나일 때만 그 줄을 체크합니다. 맞는 줄이 없거나 둘 이상이면 그 기준은 체크하지 않습니다. `unverifiable` 기준은 아무도 근거를 모으지 않았으니 체크하지 않습니다. Stage가 문구를 크게 바꿔 맞출 수 없는 기준도 그대로 두고, 몇 개를 맞추지 못했는지 Run 로그에 남깁니다.
+**충족된 기준에 체크.** merge 뒤에는 판정이 `met`으로 판정한 기준마다 그 번호로, 그것이 적힌 곳이 본문이든 코멘트든(예: triage가 브리프를 올린 코멘트) 찾아서 체크합니다(`- [ ]` → `- [x]`). 체크하는 박스는 본문과 모든 코멘트를 통틀어, verify가 목록을 받을 때 그 번호가 가리키던 줄과 지금도 똑같이 읽히는 체크되지 않은 줄입니다. 그사이 Ticket이 고쳐져서 그런 줄이 없거나 둘 이상이면 아무것도 체크하지 않고, Run 로그에 그 기준을 남깁니다. 엉뚱한 박스에 체크하는 것보다 비워 두는 편이 안전하기 때문입니다. `unverifiable` 기준은 아무도 근거를 모으지 않았으니 체크하지 않습니다.
 
 ## Note {#notes}
 
-Stage는 자기 Ticket과 상관없는 결함을 자주 만납니다. 고치면 verify가 판정하는 범위를 넘어 Ticket이 넓어지고, 무시하면 transcript 속에 묻혀 버립니다. 그래서 implement, verify, fix Stage는 [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 목록을 남기며 끝나고, 파이프라인은 각 Note를 사람이 볼 만한 곳에 올립니다. Note는 잘못 동작하거나 망가지는 Ticket 밖의 결함입니다. 취향이나 리팩터링, 있으면 좋을 테스트는 Note가 아니고, 그 Ticket 안에서는 손대지 않습니다. branch 스스로 만든 결함, 즉 base branch에서는 제대로 돌고 branch에서는 잘못 도는 결함이나 branch가 더한 코드 안의 결함은 그 Ticket의 몫입니다. implement와 fix Stage는 Note로 남기지 않고 고치고, 아무것도 고치지 않는 verify만 기준 밖에서 증명한 것을 Note로 남깁니다. Note는 Stage 자체의 결과를 판정하기 전에 보내므로, 턴이 바닥난 Stage도 알아챈 것은 전합니다.
+Stage는 자기 Ticket과 상관없는 결함을 자주 만납니다. 고치면 verify가 판정하는 범위를 넘어 Ticket이 넓어지고, 무시하면 transcript 속에 묻혀 버립니다. 그래서 implement, verify, fix Stage는 [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 목록을 남기며 끝나고, 파이프라인은 각 Note를 사람이 볼 만한 곳에 올립니다. Note는 잘못 동작하거나 망가지는 Ticket 밖의 결함입니다. 취향이나 리팩터링, 있으면 좋을 테스트는 Note가 아니고, 그 Ticket 안에서는 손대지 않습니다. Ticket이 요구한 보고 섹션처럼 Ticket의 결과물이 이미 기록하는 것도 Note가 아닙니다. branch 스스로 만든 결함, 즉 base branch에서는 제대로 돌고 branch에서는 잘못 도는 결함이나 branch가 더한 코드 안의 결함은 그 Ticket의 몫입니다. implement와 fix Stage는 Note로 남기지 않고 고치고, 아무것도 고치지 않는 verify는 판정에 적어 [그 판정을 실패시킵니다](#the-verify-stage-and-its-verdict). Note는 Stage 자체의 결과를 판정하기 전에 보내므로, 턴이 바닥난 Stage도 알아챈 것은 전합니다.
 
 | Note가 가리키는 곳 | 가는 곳 |
 |---|---|

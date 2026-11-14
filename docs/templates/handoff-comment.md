@@ -10,7 +10,7 @@
 <details><summary>Evidence</summary>
 
 ```
-<failing Check output, unmet criteria with evidence, or CI log excerpt>
+<failing Check output, unmet criteria and defects of the branch with evidence, or CI log excerpt>
 ```
 
 </details>
@@ -67,6 +67,11 @@ rest everything the command printed. The `Failure:` line gives the first line
 only, and the output goes in the Evidence block, whole: no line of it is picked
 as the reason, since a rule that picks one would name the wrong cause on an
 output nobody has seen yet.
+
+A verdict's evidence gives each unmet criterion as `- <number>. <criterion> —
+<evidence>`, the criterion as its checkbox line on the Ticket reads after the
+box, never as the verify Stage wrote it, and each defect of the branch as
+`- Defect: <summary> — <evidence>`.
 
 The pull request clause is dropped when no pull request could be opened. The whole
 `<details>` block is dropped when there is no evidence to show. Evidence is

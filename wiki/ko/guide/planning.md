@@ -11,7 +11,7 @@ description: GitHub 이슈가 파이프라인이 가져가는 Ticket이 되는 �
 |---|---|
 | `ready-for-agent` 라벨 | Run이 Ticket을 찾는 방법 |
 | 담당자 없음 | 누군가 지정되어 있으면 이미 claim한 것 |
-| Acceptance Criteria: 본문이나 코멘트의 `- [ ]` 줄 | verify Stage가 판정하는 유일한 대상 |
+| Acceptance Criteria: 본문이나 코멘트의 `- [ ]` 줄 | verify Stage가 하나씩 판정함. branch가 만든 결함도 함께 판정 |
 | 네이티브 `blocked by` 연결로 적은 blocker, 모두 닫힘 | 어떤 Ticket을 어떤 순서로 돌릴지 정함 |
 | 네이티브 sub-issue 없음 | sub-issue가 있는 이슈는 Ticket이 아니라 Spec |
 
@@ -54,7 +54,7 @@ The command must refuse bad input.              ← 아님: 산문
 1. [ ] a numbered item                          ← 아님: 불릿이 없음
 ```
 
-verify Stage는 기준마다 `met`, `unmet`, `unverifiable` 중 하나로 판정합니다([Ticket 하나가 merge되기까지](./ticket-to-merge.md#the-verify-stage-and-its-verdict)).
+파이프라인이 체크되지 않은 박스에 본문부터, 이어서 코멘트 순서대로 번호를 매기고, verify Stage는 그 번호로 기준마다 `met`, `unmet`, `unverifiable` 중 하나로 판정합니다([Ticket 하나가 merge되기까지](./ticket-to-merge.md#the-verify-stage-and-its-verdict)). 박스 아래 들여 쓴 줄 가운데 박스가 아닌 줄은 그 기준에 딸리므로, 하위 목록이나 코드 블록으로 그 줄의 뜻을 풀어 쓸 수 있습니다. 안쪽에 들여 쓴 박스는 따로 번호를 받는 기준입니다. verify는 기준과 함께 branch 스스로 만든 결함도 판정합니다.
 
 기준은 세션이 코드를 돌려 보거나 읽어서 확인할 수 있게 쓰세요. 사람의 눈이 필요한 기준(스크린샷, 느낌)은 `unverifiable`로 돌아옵니다.
 
@@ -117,7 +117,7 @@ flowchart TD
 | 이유 | 후보의 상태 | 파이프라인이 하는 일 |
 |---|---|---|
 | `spec` | 네이티브 sub-issue가 있으니 Spec | 건너뛰고 `ready-for-agent`를 뗌. 하위 Ticket은 하나씩 가져감 |
-| `no-criteria` | 본문과 코멘트에 `- [ ]` 줄이 없어 verify가 판정할 게 없음 | 건너뛰고 라벨은 둠. 코멘트로 기준을 더할 수 있으니까 |
+| `no-criteria` | 본문과 코멘트에 `- [ ]` 줄이 없어 verify가 판정할 게 없음 | 건너뛰고 라벨은 둠. 코멘트로 기준을 더할 수 있으니까. 체크된 박스만 있고 체크되지 않은 박스가 없으면, 경고에 체크된 개수를 적고 아직 끝나지 않은 것의 체크를 풀라고 함 |
 | `body-only-blockers` | `Blocked by` 섹션이 네이티브 연결 없는 이슈를 적음 | 건너뛰고 라벨은 둠. 본문의 줄은 blocker로 읽지 않음 |
 
 건너뛸 때는 무엇을 고치면 되는지 적은 경고 코멘트를 남기되, 같은 이유로는 한 번만 답니다. Run 요약에는 `skipped  #<n> <reason>`으로 남습니다. 이슈를 고치면 다음 Run이 가져갑니다.

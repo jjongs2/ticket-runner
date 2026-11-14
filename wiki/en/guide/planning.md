@@ -11,7 +11,7 @@ The pipeline does not plan. Planning stays with humans, and the pipeline only ta
 |---|---|
 | The `ready-for-agent` label | It is how a Run finds the Ticket |
 | No assignee | Anyone assigned has claimed it |
-| Acceptance Criteria: `- [ ]` lines in the body or any comment | They are the only thing the verify Stage grades |
+| Acceptance Criteria: `- [ ]` lines in the body or any comment | The verify Stage grades them one by one, beside any defect the branch made |
 | Blockers as native `blocked by` links, all closed | They decide which Tickets may run, and in what order |
 | No native sub-issues | An issue with sub-issues is a Spec, not a Ticket |
 
@@ -54,7 +54,7 @@ The command must refuse bad input.              ← not: prose
 1. [ ] a numbered item                          ← not: no bullet
 ```
 
-The verify Stage grades each one as `met`, `unmet` or `unverifiable` ([From Ticket to merge](./ticket-to-merge.md#the-verify-stage-and-its-verdict)).
+The pipeline numbers the unticked boxes, the body's first and then each comment's, and the verify Stage grades each one by its number as `met`, `unmet` or `unverifiable` ([From Ticket to merge](./ticket-to-merge.md#the-verify-stage-and-its-verdict)). The indented lines under a box that are not boxes themselves belong to it, so a sub-list or a code block can say what the line means; a nested box is a criterion of its own. Beside the criteria, verify also grades any defect the branch itself made.
 
 Write criteria that a session can check by running or reading code. A criterion that needs a human's eyes (a screenshot, a feel) comes back `unverifiable`.
 
@@ -117,7 +117,7 @@ flowchart TD
 | Reason | What the candidate did | What the pipeline does |
 |---|---|---|
 | `spec` | It has native sub-issues, so it is a Spec | Skips it and removes `ready-for-agent`: its Tickets are picked up one by one |
-| `no-criteria` | No `- [ ]` line in its body or comments, so verify has nothing to grade | Skips it and keeps the label, since a comment can still add criteria |
+| `no-criteria` | No `- [ ]` line in its body or comments, so verify has nothing to grade | Skips it and keeps the label, since a comment can still add criteria. When it has ticked boxes and no unticked one, the warning says how many are ticked and asks to untick those not yet done |
 | `body-only-blockers` | Its `Blocked by` section names an issue with no native link | Skips it and keeps the label; the body line is never read as a blocker |
 
 Each skip posts one warning comment saying what to fix, at most once per reason, and appears in the Run summary as `skipped  #<n> <reason>`. Fix the issue and the next Run takes it.
