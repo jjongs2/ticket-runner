@@ -76,13 +76,16 @@ Ticket for a later Run to resume.
 
 | Stage | Outcome |
 |---|---|
+| setup | `⏸ remote unreachable` |
 | implement | `✅ committed`, `❌ no commits`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
 | fix | `✅ committed`, `❌ no commits`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
-| checks | `✅ passed`, `⚠️ no checks`, `❌ uncommitted work`, ``❌ `<command>` failed``, ``❌ `<command>` timed out``, ``⏸ `<command>` fails on the base branch`` |
+| checks | `✅ passed`, `⚠️ no checks`, `❌ uncommitted work`, ``❌ `<command>` failed``, ``❌ `<command>` timed out``, ``⏸ `<command>` fails on the base branch``, `⏸ remote unreachable` |
 | verify | `✅ <k> met · <u> unverifiable`, `❌ <k> unmet`, `❌ <d> defects`, `❌ <k> unmet · <d> defects`, `❌ misnumbered`, `❌ no evidence`, `❌ no verdict`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
 | conflict | `✅ rebased`, `❌ unresolved`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ unknown` |
-| ci | `✅ passed`, `❌ failed`, `❌ conflicting`, `❌ no checks`, `⚠️ no checks`, `❌ timed out`, ``⏸ `<command>` fails on the base branch`` |
-| merge | `✅ #<pr>` |
+| rebase | `⏸ remote unreachable` |
+| pr | `⏸ GitHub failure`, `⏸ remote unreachable` |
+| ci | `✅ passed`, `❌ failed`, `❌ conflicting`, `❌ no checks`, `⚠️ no checks`, `❌ timed out`, ``⏸ `<command>` fails on the base branch``, `⏸ GitHub failure`, `⏸ remote unreachable` |
+| merge | `✅ #<pr>`, `⏸ GitHub failure` |
 
 `<d> defects` counts the defects the verify Stage found this branch made, and
 reads `1 defect` for one; they fail the verdict as unmet criteria do.
@@ -115,6 +118,18 @@ about the Ticket is wrong, so the Ticket is released with its fix budget as it
 was, and this is the last row of its Run's table, like the rate limit's. It
 names the command rather than the limit, because what a human does about it is
 mend the base branch, which the Note on the standing Notes issue says.
+
+`⏸ GitHub failure` and `⏸ remote unreachable` are GitHub or the git remote
+failing on its own side wherever the Ticket was: a 5xx or an answer that is not
+complete JSON that about a minute of tries did not mend, or git unable to
+connect to or authenticate with the remote. Nothing about the Ticket is wrong,
+so it is released with its fix budget as it was, and this is the last row of
+its Run's table. Its Stage is the step it was on, which is why `setup`,
+`rebase` and `pr` have rows at all: no other outcome is written for those
+steps. The row says which fault it was, and the Run's last line names the
+command and what it printed. A write GitHub refused here may be missing from
+the table, which is why the comment is written once more when the Ticket
+ends, if its last write failed.
 
 `❌ uncommitted work` is the `checks` row no command wrote: the worktree held
 changes no commit carries, so no Check ran. What lands is the branch, and a

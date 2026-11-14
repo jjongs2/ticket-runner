@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { OutsideFault, faultSide, firstLine } from "../outside-fault.js";
 import { type Mark, killTree } from "./process-tree.js";
 
 export interface Execution {
@@ -203,10 +204,22 @@ export function throwOnFailure(
   result: Execution,
 ): Execution {
   if (result.exitCode !== 0) {
-    const shown = [command, ...args.map(firstLineOf)].join(" ");
-    throw new Error(`\`${shown}\` exited ${result.exitCode}\n${result.output.trim()}`);
+    const shown = shownCommand(command, args);
+    const message = `\`${shown}\` exited ${result.exitCode}\n${result.output.trim()}`;
+    // The same message either way: what differs is whether the caller can
+    // tell GitHub or the remote failed, rather than the Ticket's own work.
+    const side = faultSide(command, result.output);
+    // stderr first, where both commands say why they failed: `gh api` prints
+    // the body of a 5xx, often a page of HTML, on stdout before it.
+    const line = firstLine(result.stderr) || firstLine(result.output);
+    throw side === undefined ? new Error(message) : new OutsideFault(side, shown, line, message);
   }
   return result;
+}
+
+/** A command as a failure names it: on one line, each argument by its first. */
+export function shownCommand(command: string, args: string[]): string {
+  return [command, ...args.map(firstLineOf)].join(" ");
 }
 
 /** An argument as a failed command's message shows it: on one line. */

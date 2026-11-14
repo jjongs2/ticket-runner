@@ -58,6 +58,7 @@ flowchart TD
 ```
 <!-- Sources: src/run.ts, src/start.ts, src/stranded.ts, src/frontier.ts -->
 
+- **shallow clone은 먼저 온전하게 만듭니다.** Target의 clone이 shallow인 Run은 무엇이든 claim하기 전에 전체 history를 fetch하고, 그렇게 했다고 한 줄 남깁니다. shallow clone은 base branch를 앞으로 옮길 수 없어서 rebase마다 거부되기 때문입니다.
 - **실패한 Ticket은 Hand-off되고** 그 Lane은 다음 Ticket을 가져갑니다. 나쁜 Ticket 하나 때문에 밤 전체를 잃지는 않습니다.
 - **다른 Lane이 바쁜 동안 빈 Lane은 Frontier를 다시 봅니다.** Run이 마지막으로 조회한 지 5분이 지나면 봅니다. Run 도중 `ready-for-agent`를 붙이거나 마지막 blocker를 닫은 Ticket은 바쁜 Lane이 끝나기를 기다리지 않고 들어갑니다. Lane이 하나인 Run은 이렇게 하지 않습니다.
 - **[Release](./stopping-and-resuming.md#release-on-a-rate-limit)가 일어나면 채우기를 멈춥니다.** 바쁜 Lane은 마저 끝내고, 다음 Run은 사람이나 Operator가 시작합니다.
@@ -166,7 +167,7 @@ Frontier blocked.
 |---|---|
 | `merged` | merge됨. pull request 번호가 붙음 |
 | `handed` | 사람에게 Hand-off됨. 멈춘 Stage와 이유가 붙음 |
-| `released` | 해당 Stage에서 `rate limit`(`--api-key` Run이면 `API rate limit`), `API failure`, `out of API budget`으로, 또는 `checks`나 `ci`에서 `failing base branch`로 Release됨. 그 Ticket을 두고 사람이 할 일은 없음 |
+| `released` | 해당 Stage에서 `rate limit`(`--api-key` Run이면 `API rate limit`), `API failure`, `out of API budget`으로, `checks`나 `ci`에서 `failing base branch`로, 또는 어느 단계에서든 `GitHub failure`나 `remote unreachable`로 Release됨. 그 Ticket을 두고 사람이 할 일은 없음 |
 | `skipped` | 이유와 함께 넘어감([guard](./planning.md#guards), 또는 위의 표) |
 | `billed` | 위 Ticket의 Stage가 `apiKeySource`로 알린 과금처가 머리 줄과 다름. 예를 들어 Host 설정의 `apiKeyHelper`가 준 키인데, 이것은 환경 변수로 뺄 수 없음. 그 Stage가 금액을 알렸으면 `· $4.15`처럼 끝에 붙고, 머리 줄의 금액에는 들어가지 않음 |
 | `noted` | 바로 윗줄이 남긴 [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)와 간 곳. base branch 실패에 대한 파이프라인 자신의 Note면 `from #<n> pipeline`. 이미 있는 이슈(열려 있던 Notes 이슈 포함)면 `comment`, Notes 이슈를 새로 연 Note 하나만 `new` |
@@ -179,6 +180,7 @@ Frontier blocked.
 | `API failure.` | 일시적인 API 장애로 Release되어 멈췄고, 그 뒤 rate limit으로 Release된 Ticket이 없음. 마지막 줄에서는 rate limit이 API 장애보다 앞섬 |
 | `Out of API budget.` | 키의 크레딧이나 지출 한도로 Release되어 멈춤. 사람이 손써야 하는 것은 이것뿐이라 rate limit과 API 장애보다 앞섬. Console을 확인하세요. |
 | ``Base branch `main` fails `npm test` at 1a2b3c4.`` | base branch 실패로 Release되어 멈춤. 실패한 Check와 merge-base를 알려 줌. base branch에서 고치면 되고, 출력은 상설 Notes 이슈의 Note에 있음 |
+| ``Remote unreachable · `git pull --ff-only origin main` · git@github.com: Permission denied (publickey).`` | [GitHub나 remote 장애](./stopping-and-resuming.md#release-over-a-github-or-remote-failure)로 Release되어 멈춤. 실패한 명령과 그 출력의 첫 줄을 알려 줌. GitHub라면 `GitHub failure · …`. 로그인이나 키 문제라면 먼저 손봐야 함 |
 | `Stopped at 22:07 · finishing #4 #9.` | 그 시각(UTC)에 Stop이 왔고, 그때 그 Ticket들이 Lane에 있었음 |
 
 Stop이나 Release로 끝난 Run은 Frontier 끝까지 가 보지 못했으니 `blocked` 줄을 출력하지 않습니다.

@@ -6,6 +6,7 @@ import { BaseBranchChecks } from "./failing-base.js";
 import { Landing } from "./landing.js";
 import { StandingNotes } from "./notes.js";
 import type { Pipeline } from "./orchestrator.js";
+import { OutsideFault } from "./outside-fault.js";
 import type { TicketState } from "./ports/workspace.js";
 import { type RunResult, processRun } from "./run.js";
 import { StopSignal } from "./stop.js";
@@ -1987,4 +1988,113 @@ describe("a Run narrowed to the Tickets it was given", () => {
       stop: { reason: "stopped", at: "2026-09-20T22:07:13.000Z", busy: [4] },
     });
   });
+});
+
+describe("a Ticket GitHub or the remote failed on its own side", () => {
+  const PUBLICKEY = "git@github.com: Permission denied (publickey).";
+  const unreachable = () =>
+    new OutsideFault("remote", "git pull --ff-only origin main", PUBLICKEY, `\`git pull --ff-only origin main\` exited 128\n${PUBLICKEY}`);
+
+  it("ends the Run's claiming, naming the command and the first line it printed", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    workspace.pullBaseFailure = unreachable();
+
+    const result = await processRun(pipeline());
+
+    expect(processed()).toEqual([4]);
+    expect(result.outcomes).toMatchObject([{ outcome: "released", ticket: 4, cause: "remote", stage: "rebase" }]);
+    expect(result.stop).toEqual({
+      reason: "remote",
+      command: "git pull --ff-only origin main",
+      line: PUBLICKEY,
+    });
+    expect(logged).toContain("#4 stopped the Run · remote unreachable");
+  });
+
+  it("ends it over a fault met before the claim too, leaving the Ticket as it was", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    const getIssue = tracker.getIssue.bind(tracker);
+    tracker.getIssue = async (number) => {
+      if (number === 4) {
+        throw new OutsideFault("github", "gh api repos/{owner}/{repo}/issues/4", "gh: Bad Gateway (HTTP 502)", "x");
+      }
+      return await getIssue(number);
+    };
+
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes).toMatchObject([{ outcome: "released", ticket: 4, cause: "github", stage: "setup" }]);
+    expect(result.stop).toMatchObject({ reason: "github", line: "gh: Bad Gateway (HTTP 502)" });
+    expect(tracker.issue(5).assignees).toEqual([]);
+    expect(tracker.issue(4).labels).toEqual(["ready-for-agent"]);
+  });
+
+  it("leaves a Ticket whose claim GitHub cut short for the next Run to take up", async () => {
+    tracker.addIssue({ number: 4 });
+    const assign = tracker.assign.bind(tracker);
+    let failing = true;
+    tracker.assign = async (number, user) => {
+      if (failing) {
+        throw new OutsideFault("github", "gh api --method POST assignees", "gh: Bad Gateway (HTTP 502)", "x");
+      }
+      await assign(number, user);
+    };
+
+    expect((await processRun(pipeline())).outcomes).toMatchObject([
+      { outcome: "released", ticket: 4, stage: "setup", cause: "github" },
+    ]);
+    failing = false;
+
+    expect((await processRun(pipeline())).outcomes).toMatchObject([{ outcome: "merged", ticket: 4 }]);
+  });
+
+  it("is resumed by the next Run as any released Ticket is", async () => {
+    tracker.addIssue({ number: 4 });
+    workspace.pullBaseFailure = unreachable();
+    await processRun(pipeline());
+    workspace.pullBaseFailure = undefined;
+
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes).toMatchObject([{ outcome: "merged", ticket: 4 }]);
+    expect(runner.stages()).toEqual(["implement", "verify", "verify"]);
+  });
+
+  // An outage that starts at the Release's first, second or third board write
+  // and outlasts it, whether it leaves the claim on or only in-progress.
+  it.each([0, 1, 2])(
+    "is resumed by the next Run when GitHub fails from the Release's board write %i on",
+    async (from) => {
+      tracker.addIssue({ number: 4 });
+      workspace.pullBaseFailure = unreachable();
+      const original = {
+        addLabel: tracker.addLabel,
+        removeLabel: tracker.removeLabel,
+        assign: tracker.assign,
+        unassign: tracker.unassign,
+      };
+      let writes = 0;
+      const failingFrom = (write: (number: number, value: string) => Promise<void>) =>
+        async (number: number, value: string) => {
+          // The claim's three writes go through; the Release's fail from `from` on.
+          if (writes++ >= 3 + from) {
+            throw new OutsideFault("github", "gh api --method POST labels", "gh: Bad Gateway (HTTP 502)", "x");
+          }
+          await write(number, value);
+        };
+      tracker.addLabel = failingFrom(original.addLabel.bind(tracker));
+      tracker.removeLabel = failingFrom(original.removeLabel.bind(tracker));
+      tracker.assign = failingFrom(original.assign.bind(tracker));
+      tracker.unassign = failingFrom(original.unassign.bind(tracker));
+
+      expect((await processRun(pipeline())).outcomes).toMatchObject([
+        { outcome: "released", ticket: 4, stage: "rebase", cause: "remote" },
+      ]);
+      Object.assign(tracker, original);
+      workspace.pullBaseFailure = undefined;
+
+      expect((await processRun(pipeline())).outcomes).toMatchObject([{ outcome: "merged", ticket: 4 }]);
+      expect(runner.stages()).toEqual(["implement", "verify", "verify"]);
+    },
+  );
 });

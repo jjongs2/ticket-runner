@@ -882,6 +882,35 @@ describe("runSummary", () => {
     );
   });
 
+  it.each([
+    [
+      "github",
+      "GitHub failure",
+      "gh api --method POST repos/{owner}/{repo}/pulls",
+      "gh: Bad Gateway (HTTP 502)",
+      "GitHub failure · `gh api --method POST repos/{owner}/{repo}/pulls` · gh: Bad Gateway (HTTP 502)",
+    ],
+    [
+      "remote",
+      "remote unreachable",
+      "git pull --ff-only origin main",
+      "git@github.com: Permission denied (publickey).",
+      "Remote unreachable · `git pull --ff-only origin main` · git@github.com: Permission denied (publickey).",
+    ],
+  ] as const)("says a %s fault released a Ticket, and names the command and what it printed last", (cause, words, command, line, last) => {
+    const summary = runSummary({
+      credential: "subscription",
+      version: VERSION,
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [{ ...released, stage: "pr", cause, fault: { command, line } }],
+      stop: { reason: cause, command, line },
+    });
+
+    expect(summary).toContain(`  released #6 Rebase conflict resolution · ${words} at pr`);
+    expect(summary.trimEnd().split("\n").at(-1)).toBe(last);
+  });
+
   it("names the guard that passed a candidate over", () => {
     const summary = runSummary({
       credential: "subscription",

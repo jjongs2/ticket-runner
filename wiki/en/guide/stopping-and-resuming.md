@@ -13,7 +13,7 @@ Nobody watches a Run, so it has to end well when something goes wrong: a Ticket 
 |---|---|---|
 | Merge | a green pass through every gate | a closed issue; branch and state file gone |
 | [Hand-off](#hand-off) | a failure the fix budget cannot cover | `ready-for-human`, a comment, a draft pull request; work and state kept |
-| [Release](#release-on-a-rate-limit) | the subscription or API rate limit, a transient API failure, an [API key out of budget](#release-out-of-api-budget), or a [failing base branch](#release-over-a-failing-base-branch) | `ready-for-agent`, no comment on the Ticket; work and state kept |
+| [Release](#release-on-a-rate-limit) | the subscription or API rate limit, a transient API failure, an [API key out of budget](#release-out-of-api-budget), a [failing base branch](#release-over-a-failing-base-branch), or [GitHub or the git remote failing](#release-over-a-github-or-remote-failure) | `ready-for-agent`, no comment on the Ticket; work and state kept |
 | [Stop](#stop-and-kill) | `ticket-runner stop` (SIGTERM) | nothing new |
 | [Kill](#stop-and-kill) | Ctrl+C, SIGKILL, a vanished Host | the claim; work as last pushed, and state |
 
@@ -182,6 +182,26 @@ Read the branch's part of the Note before mending anything: the merge-base and t
 
 Mend the Check on the base branch, then start a Run. Each released Ticket is rebased onto the mended base branch before its Checks; a rebase that conflicts goes to the conflict Stage, and one it cannot resolve spends the fix budget, as at the Landing. A Run started before the base branch is mended releases the Ticket again.
 
+## Release over a GitHub or remote failure {#release-over-a-github-or-remote-failure}
+
+GitHub failing on its own side, or git unable to reach the remote, is no more the Ticket's doing than a rate limit, and every Ticket after it would meet the same failure. The pipeline reads which it is from what `gh` and git print:
+
+| Fault | What counts | Progress row |
+|---|---|---|
+| GitHub | a 5xx status, or an answer that is not complete JSON | `⏸ GitHub failure` |
+| The remote | git unable to connect or log in: `Permission denied (publickey)`, `Could not resolve host`, `Authentication failed`, a refused or timed-out connection, a 5xx from the remote | `⏸ remote unreachable` |
+
+A GitHub read, a write that sets a state (a label, an edited comment) and opening a pull request are first tried again, with backoff, for about a minute. Posting a comment or opening an issue is not, since a second try could post it twice. Only a failure that outlasts the tries releases the Ticket, as over a failing base branch:
+
+- the row is written at the step the Ticket was on, `setup`, `rebase` and `pr` included, and the Run's last line names the command and the first line it printed
+- the state and the fix budget stay as they were, and the next Run resumes from there, with no rebase owed
+- a pull request the failed attempt opened all the same is found on the branch and used, not opened twice
+- if GitHub will not take the claim off either, the Ticket stays claimed, and the next Run resumes it as a [Stranded Ticket](#stranded-tickets-and-the-sweep). One whose assignee came off but whose `in-progress` would not is back on the Frontier, and resumes from there as any released Ticket
+
+Everything else is handed off as before: a GitHub 4xx, and a git failure that will not pass with time, such as a pull refused over uncommitted changes in the main checkout or a base branch that really diverged. Released, those would come back every Run without a word.
+
+Read the last line before starting the next Run. A gateway that was down for a while needs nothing; an authentication failure needs a key or a login on the Host first.
+
 ## Stop and kill
 
 A Run can end early in two ways, and they leave opposite things behind ([ADR-0006](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md)).
@@ -323,8 +343,10 @@ flowchart TD
 
 ## References
 
-- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `takeTicket`, `resumable`, `ResumeRecord`, `rebaseFirst`, `release`, `noteFailingBase`, `handOff`
+- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `takeTicket`, `resumable`, `ResumeRecord`, `rebaseFirst`, `release`, `undoClaim`, `noteFailingBase`, `handOff`
 - [`src/failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts): `BaseBranchChecks`
+- [`src/outside-fault.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/outside-fault.ts): `OutsideFault`, `faultSide`
+- [`src/adapters/gh-tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts): `GITHUB_RETRY_DELAYS_MS`
 - [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts): `processRun`
 - [`src/stranded.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stranded.ts): `strandedTickets`, `holdsClaim`
 - [`src/resume.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/resume.ts): `readStateFile`, `STATE_BRANCH`, `localStateTickets`

@@ -697,16 +697,19 @@ export interface RunSummary {
 }
 
 /**
- * What a Release is put down to, in the words the Run summary and the log
- * share: the rate limit, a transient API failure, an API key out of credit or
- * past its spend limit, or a base branch that fails the Check the Ticket's
- * branch failed.
+ * What a Release is put down to, in the words the Run summary, the log and
+ * the progress comment share: the rate limit, a transient API failure, an API
+ * key out of credit or past its spend limit, a base branch that fails the
+ * Check the Ticket's branch failed, or GitHub or the git remote failing on its
+ * own side.
  */
 export const RELEASE_WORDS: Record<ReleaseCause, string> = {
   "rate-limited": "rate limit",
   "api-error": "API failure",
   "out-of-budget": "out of API budget",
   "failing-base": "failing base branch",
+  github: "GitHub failure",
+  remote: "remote unreachable",
 };
 
 /**
@@ -809,11 +812,21 @@ function lastLine(stop: RunStop, credential: Credential): string {
       return "Out of API budget.";
     case "failing-base":
       return `Base branch \`${stop.baseBranch}\` fails \`${stop.command}\` at ${stop.commit.slice(0, 7)}.`;
+    // What failed and what it said, because the human may have to act: an
+    // authentication failure mends only with a key or a login.
+    case "github":
+    case "remote":
+      return `${capitalised(RELEASE_WORDS[stop.reason])} · \`${stop.command}\` · ${stop.line}`;
     case "stopped":
       return `Stopped at ${clockTime(stop.at)} · ${holding(stop.busy)}.`;
     case "frontier":
       return stop.blocked.length === 0 ? "Frontier empty." : "Frontier blocked.";
   }
+}
+
+/** `words` opening a line. */
+function capitalised(words: string): string {
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
 }
 
 /**

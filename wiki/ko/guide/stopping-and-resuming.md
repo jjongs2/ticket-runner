@@ -13,7 +13,7 @@ Run은 아무도 지켜보지 않는 사이에 돌아가니, 일이 틀어졌을
 |---|---|---|
 | merge | 모든 게이트를 초록으로 통과 | 닫힌 이슈. branch와 state file은 사라짐 |
 | [Hand-off](#hand-off) | fix 기회로 감당할 수 없는 실패 | `ready-for-human`, 코멘트, draft pull request. 작업과 state 유지 |
-| [Release](#release-on-a-rate-limit) | 요금제나 API의 rate limit, 일시적인 API 장애, [API 키의 예산 소진](#release-out-of-api-budget), 또는 [base branch 실패](#release-over-a-failing-base-branch) | `ready-for-agent`, Ticket에 코멘트 없음. 작업과 state 유지 |
+| [Release](#release-on-a-rate-limit) | 요금제나 API의 rate limit, 일시적인 API 장애, [API 키의 예산 소진](#release-out-of-api-budget), [base branch 실패](#release-over-a-failing-base-branch), 또는 [GitHub나 git remote 장애](#release-over-a-github-or-remote-failure) | `ready-for-agent`, Ticket에 코멘트 없음. 작업과 state 유지 |
 | [Stop](#stop-and-kill) | `ticket-runner stop`(SIGTERM) | 새로 남는 것 없음 |
 | [kill](#stop-and-kill) | Ctrl+C, SIGKILL, 사라진 Host | claim, 마지막 push 시점의 작업, state |
 
@@ -182,6 +182,26 @@ fix 기회는 썼든 안 썼든 그대로입니다. fix 기회를 이미 쓴 Tic
 
 base branch에서 Check를 고친 뒤 Run을 시작하세요. Release된 Ticket은 Check 전에 고친 base branch 위로 rebase됩니다. rebase가 충돌하면 conflict Stage로 가고, 해결하지 못하면 Landing에서처럼 fix 기회를 씁니다. base branch를 고치기 전에 Run을 시작하면 Ticket은 다시 Release됩니다.
 
+## GitHub나 remote 장애로 인한 Release {#release-over-a-github-or-remote-failure}
+
+GitHub가 자기 쪽 문제로 실패하거나 git이 remote에 닿지 못하는 것도 rate limit처럼 Ticket 탓이 아니고, 뒤따르는 Ticket도 모두 같은 실패를 만납니다. 어느 쪽인지는 `gh`와 git이 출력한 내용으로 가립니다.
+
+| 장애 | 해당하는 것 | 진행 상황 줄 |
+|---|---|---|
+| GitHub | 5xx 상태, 또는 완전한 JSON이 아닌 응답 | `⏸ GitHub failure` |
+| remote | git이 연결하거나 로그인하지 못함: `Permission denied (publickey)`, `Could not resolve host`, `Authentication failed`, 거부되거나 시간이 초과된 연결, remote의 5xx | `⏸ remote unreachable` |
+
+GitHub 읽기, 상태를 정하는 쓰기(라벨, 코멘트 수정), pull request 열기는 먼저 1분가량 간격을 늘려 가며 다시 시도합니다. 코멘트 달기나 이슈 열기는 다시 시도하지 않습니다. 두 번 올라갈 수 있기 때문입니다. 시도가 다 끝나도 실패할 때만 base branch 실패 때처럼 Ticket을 Release합니다.
+
+- 줄은 Ticket이 있던 단계에 남깁니다. `setup`, `rebase`, `pr`도 포함합니다. Run의 마지막 줄은 그 명령과 출력의 첫 줄을 밝힙니다.
+- state와 fix 기회는 그대로이고, 다음 Run은 거기서 이어 갑니다. 먼저 rebase할 필요는 없습니다.
+- 실패한 시도가 실제로는 열어 둔 pull request는 branch에서 찾아 그대로 쓰고, 두 번 열지 않습니다.
+- GitHub가 claim을 떼는 쓰기마저 받아 주지 않으면 Ticket은 claim된 채로 남고, 다음 Run이 [Stranded Ticket](#stranded-tickets-and-the-sweep)으로 이어 갑니다. 담당자는 떼었는데 `in-progress`가 남았다면 Frontier로 돌아가, 여느 Release된 Ticket처럼 거기서 이어 갑니다.
+
+그 밖의 실패는 전처럼 Hand-off합니다. GitHub의 4xx, 그리고 시간이 지나도 풀리지 않는 git 실패가 그렇습니다. main checkout에 commit하지 않은 변경이 있어 pull이 거부되거나 base branch가 정말로 갈라진 경우 같은 것들이죠. 이런 걸 Release하면 아무 말 없이 매 Run마다 되돌아옵니다.
+
+다음 Run을 시작하기 전에 마지막 줄을 읽으세요. 잠시 내려갔던 게이트웨이라면 할 일이 없지만, 인증 실패라면 먼저 Host에 키를 넣거나 로그인해야 합니다.
+
 ## Stop과 kill {#stop-and-kill}
 
 Run을 일찍 끝내는 방법은 두 가지이고, 남기는 것은 정반대입니다([ADR-0006](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md)).
@@ -323,8 +343,10 @@ flowchart TD
 
 ## 참고 자료 {#references}
 
-- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `takeTicket`, `resumable`, `ResumeRecord`, `rebaseFirst`, `release`, `noteFailingBase`, `handOff`
+- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `takeTicket`, `resumable`, `ResumeRecord`, `rebaseFirst`, `release`, `undoClaim`, `noteFailingBase`, `handOff`
 - [`src/failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts): `BaseBranchChecks`
+- [`src/outside-fault.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/outside-fault.ts): `OutsideFault`, `faultSide`
+- [`src/adapters/gh-tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts): `GITHUB_RETRY_DELAYS_MS`
 - [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts): `processRun`
 - [`src/stranded.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stranded.ts): `strandedTickets`, `holdsClaim`
 - [`src/resume.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/resume.ts): `readStateFile`, `STATE_BRANCH`, `localStateTickets`

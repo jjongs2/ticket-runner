@@ -58,6 +58,7 @@ flowchart TD
 ```
 <!-- Sources: src/run.ts, src/start.ts, src/stranded.ts, src/frontier.ts -->
 
+- **A shallow clone is made whole first.** Before it claims anything, a Run whose clone of the Target is shallow fetches its full history and logs one line saying so. A shallow clone cannot move its base branch forward, so every rebase would be refused.
 - **A Ticket that fails is handed off** and its Lane takes the next one; one bad Ticket does not cost the rest of the night.
 - **A free Lane looks at the Frontier again while another Lane is busy**, five minutes after the Run last listed it. A Ticket you label `ready-for-agent`, or whose last blocker you close, mid-Run is taken without waiting for a busy Lane to end. A Run with one Lane never does this.
 - **A [Release](./stopping-and-resuming.md#release-on-a-rate-limit) stops the filling**: the busy Lanes finish, and the next Run is yours or an Operator's to start.
@@ -166,7 +167,7 @@ The header ends with what the Stages were billed to: `subscription`, or `API key
 |---|---|
 | `merged` | Merged; the pull request is named |
 | `handed` | Handed off to a human: the Stage it stopped at, and why |
-| `released` | Released at the named Stage by the `rate limit` (`API rate limit` on an `--api-key` Run), an `API failure`, or `out of API budget`, or at `checks` or `ci` by a `failing base branch`. Nobody has to do anything about the Ticket |
+| `released` | Released at the named Stage by the `rate limit` (`API rate limit` on an `--api-key` Run), an `API failure`, or `out of API budget`, at `checks` or `ci` by a `failing base branch`, or at any step by a `GitHub failure` or the `remote unreachable`. Nobody has to do anything about the Ticket |
 | `skipped` | Passed over, with the reason ([guards](./planning.md#guards), or the table above) |
 | `billed` | A Stage of the Ticket above that said, in its `apiKeySource`, it was billed to something other than what the header names: an `apiKeyHelper` in the Host's settings, say, which no environment variable removes. It ends with that Stage's own amount, `· $4.15`, where it gave one, which the header's leaves out |
 | `noted` | A [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) the row above made, `from #<n> pipeline` when it is the pipeline's own about a failing base branch, and where it went: `comment` on an issue already there, the Notes issue included, or `new` for the one Note that opened the Notes issue |
@@ -179,6 +180,7 @@ The header ends with what the Stages were billed to: `subscription`, or `API key
 | `API failure.` | A Release by a transient API failure stopped it, and the rate limit released no Ticket after it: the rate limit outranks an API failure on the last line |
 | `Out of API budget.` | A Release by the key's credit or spend limit stopped it. It outranks the rate limit and an API failure, since only it needs you: look at the Console |
 | ``Base branch `main` fails `npm test` at 1a2b3c4.`` | A Release over a failing base branch stopped it: the Check, and the merge-base it failed at. Mend it on the base branch; the Note on the standing Notes issue has its output |
+| ``Remote unreachable · `git pull --ff-only origin main` · git@github.com: Permission denied (publickey).`` | A Release over [GitHub or the remote failing](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) stopped it: the command, and the first line it printed. `GitHub failure · …` for GitHub. A login or key it names needs you first |
 | `Stopped at 22:07 · finishing #4 #9.` | A Stop arrived at that time (UTC), while those Tickets were in its Lanes |
 
 A Run a Stop or a Release ended prints no `blocked` rows, since it never reached the end of the Frontier.

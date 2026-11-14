@@ -267,7 +267,9 @@ export class FakeTracker implements Tracker {
 
   async assign(number: number, user: string): Promise<void> {
     this.calls.push(`assign:${number}:${user}`);
-    this.issue(number).assignees.push(user);
+    // GitHub adds an assignee once, however often it is asked.
+    const issue = this.issue(number);
+    if (!issue.assignees.includes(user)) issue.assignees.push(user);
   }
 
   async unassign(number: number, user: string): Promise<void> {
@@ -875,6 +877,16 @@ export class FakeWorkspace implements Workspace {
     }
     if (branch === LOCK_BRANCH) this.remoteLock = { branch: false };
     this.remoteBranches.delete(branch);
+  }
+
+  /** Whether the clone is shallow, which {@link unshallow} undoes. */
+  shallow = false;
+
+  // Not in `calls`: asked once per Run, before anything a test follows.
+  async unshallow(): Promise<boolean> {
+    const was = this.shallow;
+    this.shallow = false;
+    return was;
   }
 
   async pullBase(base: string): Promise<void> {

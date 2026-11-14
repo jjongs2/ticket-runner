@@ -2,7 +2,8 @@ import { branchName } from "./branch.js";
 import { selectFrontier } from "./frontier.js";
 import { type Refusal, isGuardReason, skipReason } from "./guards.js";
 import type { RoutedNote } from "./notes.js";
-import { type Pipeline, type TicketOutcome, processTicket } from "./orchestrator.js";
+import { type Pipeline, type TicketOutcome, faultOutcome, processTicket } from "./orchestrator.js";
+import { type FaultSide, OutsideFault } from "./outside-fault.js";
 import { StopSignal, stopLine } from "./stop.js";
 import { holdsClaim, strandedTickets } from "./stranded.js";
 import { releaseWords } from "./templates.js";
@@ -34,7 +35,8 @@ export interface RunResult {
  * A Run that drained the Frontier carries what was left held back; one a
  * Release stopped carries no candidates, because it ended before it could say
  * one was held back all Run, and the rate limit carries when it resets, where a
- * Stage was told, and a failing base branch the Check it fails and where; one
+ * Stage was told, a failing base branch the Check it fails and where, and a
+ * fault of GitHub's or the remote's the command and what it printed; one
  * a human stopped carries the moment it was asked and what it still had in
  * hand. That is why this is a choice rather than a flag beside
  * the list: the stops do not report the same things.
@@ -62,6 +64,14 @@ export type RunStop =
       commit: string;
       /** The Check command it failed. */
       command: string;
+    }
+  | {
+      /** GitHub, or the git remote, failing on its own side. */
+      reason: FaultSide;
+      /** The command that failed, on one line. */
+      command: string;
+      /** The first line it printed. */
+      line: string;
     }
   | {
       reason: "stopped";
@@ -319,7 +329,7 @@ function pollFailure(error: unknown): string {
 
 /**
  * The stop a Release puts on the Run: what released it, when a limit resets,
- * and which Check the base branch fails.
+ * which Check the base branch fails, and what GitHub or the remote failed.
  */
 function releaseStop(
   outcome: Extract<TicketOutcome, { outcome: "released" }>,
@@ -327,6 +337,9 @@ function releaseStop(
 ): RunStop {
   if (outcome.cause === "api-error") return { reason: "api-error" };
   if (outcome.cause === "out-of-budget") return { reason: "out-of-budget" };
+  if ((outcome.cause === "github" || outcome.cause === "remote") && outcome.fault !== undefined) {
+    return { reason: outcome.cause, ...outcome.fault };
+  }
   if (outcome.failingBase !== undefined) {
     return { reason: "failing-base", baseBranch, ...outcome.failingBase };
   }
@@ -344,7 +357,8 @@ function releaseStop(
  * rate limit outranks an API failure, which says nothing of when the next Run
  * can start, and a limit nobody was told the end of is outranked by one a
  * Stage was told. A failing base branch and a Stop stay whatever comes after
- * them, and so does an API budget, and a limit already told when it resets.
+ * them, and so does an API budget, a limit already told when it resets, and a
+ * fault of GitHub's or the remote's.
  */
 function outranks(
   outcome: Extract<TicketOutcome, { outcome: "released" }>,
@@ -425,6 +439,10 @@ async function nobodysToTake(pipeline: Pipeline, ticket: number): Promise<Skippe
  * hand-off writes are outside that net: a tracker that goes down mid-Ticket
  * would otherwise take the whole Run with it. The Ticket is reported as handed
  * off — which, without the label, is what a human will find on the board.
+ *
+ * Unless GitHub or the remote failed on its own side, before the claim or in
+ * it: that is a fault outside the Ticket, reported released so the Run claims
+ * no more, and the Ticket is left as far as the claim got, for the next Run.
  */
 async function take(pipeline: Pipeline, ticket: Taken): Promise<TicketOutcome> {
   // Handed to the Ticket rather than read off its outcome, because there is no
@@ -434,6 +452,16 @@ async function take(pipeline: Pipeline, ticket: Taken): Promise<TicketOutcome> {
   try {
     return await processTicket(pipeline, ticket.number, notes);
   } catch (error) {
+    if (error instanceof OutsideFault) {
+      pipeline.log?.(`#${ticket.number} stopped at setup · ${error.message}`);
+      return faultOutcome(
+        { number: ticket.number, title: ticket.title },
+        ticket.branch,
+        "setup",
+        error,
+        notes,
+      );
+    }
     const failure = (error as Error).message;
     pipeline.log?.(`#${ticket.number} failed outside the hand-off path: ${failure}`);
     return {
