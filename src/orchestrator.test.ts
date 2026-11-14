@@ -33,6 +33,7 @@ function config(overrides: Partial<Config> = {}): Config {
   return {
     lanes: 1,
     checks: ["npm test", "npm run typecheck"],
+    merge: true,
     gates: { checks: true, ci: true },
     stages: {
       implement: {
@@ -4981,6 +4982,153 @@ describe("a hand-off the Ticket was already carrying", () => {
     expect(logged).toContainEqual(
       `#${TICKET} could not mark a hand-off comment as history: comment is locked`,
     );
+  });
+});
+
+describe("a Target that merges by hand", () => {
+  const MIXED_BODY = "- [ ] it works\n- [ ] the docs say so\n";
+  const BY_HAND = { merge: false };
+
+  beforeEach(() => {
+    tracker.issue(TICKET).body = MIXED_BODY;
+    runner.queue("verify", stageResult({ result: MIXED_VERDICT }));
+    runner.queue(
+      "implement",
+      described({ body: "## Summary\n\nDoes the thing.", problem: "P.", solution: "S." }),
+    );
+  });
+
+  it("hands a green Ticket off at the merge instead of merging it", async () => {
+    const outcome = await run(BY_HAND);
+
+    expect(outcome).toEqual({
+      outcome: "handed-off",
+      ticket: TICKET,
+      title: "Skeleton: one Ticket end to end",
+      branch: BRANCH,
+      stage: "merge",
+      failure: "left to a human, as this Target merges by hand",
+      pullRequest: 100,
+      notes: [],
+    });
+    expect(tracker.pullRequest(100).merged).toBe(false);
+    expect(tracker.calls).not.toContain("squashMerge:100");
+    expect(tracker.issue(TICKET).labels).toEqual(["ready-for-human"]);
+    expect(tracker.issue(TICKET).assignees).toEqual([]);
+  });
+
+  it("leaves the pull request as the pr step published it", async () => {
+    await run(BY_HAND);
+    const pr = tracker.pullRequest(100);
+
+    expect(pr.draft).toBe(false);
+    expect(pr.title).toBe("feat(cli): do the whole thing");
+    expect(pr.body).toBe(`Closes #${TICKET}\n\n## Summary\n\nDoes the thing.\n`);
+    expect(tracker.calls).not.toContain("convertPullRequestToDraft:100");
+    expect(tracker.calls.filter((call) => call.startsWith("updatePullRequest"))).toEqual([]);
+  });
+
+  it("says the pull request passed every gate and lists the unverifiable criteria", async () => {
+    await run(BY_HAND);
+    const comment = handoffBody();
+
+    expect(comment).toContain(
+      "**Handed off.** PR #100 passed every gate and waits for a human to merge it: this Target merges by hand.",
+    );
+    expect(comment).toContain(`- Branch \`${BRANCH}\` on the remote · worktree \`${worktree}\` · PR #100`);
+    expect(comment).toContain("- the docs say so — the docs are not readable from here");
+    expect(comment).not.toContain("Failure:");
+    expect(comment).not.toContain("<details>");
+  });
+
+  it("says in the progress comment that the merge is left to a human", async () => {
+    await run(BY_HAND);
+
+    expect(progressTable()).toContain("| ci | ✅ passed |");
+    expect(progressTable()).toContain("| merge | 👤 left to a human | – | – |");
+  });
+
+  it("leaves the Landing without pulling, keeps the state file and no transcripts, and ticks nothing", async () => {
+    await run(BY_HAND);
+
+    // The one pull at the Landing's door, before the rebase, and none after.
+    expect(workspace.pulledBase).toEqual(["main"]);
+    expect(workspace.state(TICKET)).toMatchObject({
+      state: "implemented",
+      branch: BRANCH,
+      pullRequest: 100,
+      fixUsed: false,
+    });
+    expect(workspace.transcripts.has(TICKET)).toBe(false);
+    expect(tracker.issue(TICKET).body).toBe(MIXED_BODY);
+    expect(workspace.worktrees.get(worktree)).toBe(BRANCH);
+    expect(workspace.calls).not.toContain(`deleteRemoteBranch:${BRANCH}`);
+  });
+
+  it("lets the next Ticket of the Run through the Landing", async () => {
+    const SECOND = 3;
+    tracker.addIssue({ number: SECOND, title: "The second Ticket", body: MIXED_BODY });
+    runner.queue("verify", stageResult({ result: MIXED_VERDICT }));
+    const settings = config(BY_HAND);
+    const shared: Pipeline = {
+      tracker,
+      runner,
+      workspace,
+      config: settings,
+      repoRoot,
+      runId: "run-1",
+      version: VERSION,
+      credential: "subscription",
+      billing,
+      baseBranch: await resolveBaseBranch(tracker, settings),
+      landing: new Landing(),
+      standingNotes: new StandingNotes(),
+      baseChecks: new BaseBranchChecks(),
+      selfHosted: false,
+      transcriptHome,
+    };
+    // The first Ticket's hand-off comment waits on GitHub, inside nothing.
+    const comment = tracker.comment.bind(tracker);
+    let answer!: () => void;
+    const held = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    tracker.comment = async (number, body) => {
+      if (number === TICKET && body.startsWith(HANDOFF_MARKER)) await held;
+      return comment(number, body);
+    };
+
+    const first = processTicket(shared, TICKET);
+    const second = processTicket(shared, SECOND);
+    await settle();
+
+    // The second Ticket reached CI while the first was still handing off.
+    expect(tracker.calls).toContain("waitForCi:101");
+    answer();
+    expect(await first).toMatchObject({ outcome: "handed-off", stage: "merge" });
+    expect(await second).toMatchObject({ outcome: "handed-off", stage: "merge" });
+  });
+
+  it("changes nothing for a Target that leaves the setting unset or true", async () => {
+    expect(await run({ merge: true })).toMatchObject({ outcome: "merged", pullRequest: 100 });
+    expect(tracker.pullRequest(100).merged).toBe(true);
+  });
+
+  it("resumes like any handed-off Ticket once a human relabels it", async () => {
+    await run(BY_HAND);
+    tracker.issue(TICKET).labels = ["ready-for-agent"];
+    runner.queue("verify", stageResult({ result: MIXED_VERDICT }));
+
+    expect(await run()).toMatchObject({ outcome: "merged", pullRequest: 100 });
+    // No second implement Stage, and the one pull request.
+    expect(runner.stages()).toEqual(["implement", "verify", "verify"]);
+    expect(tracker.pullRequests).toHaveLength(1);
+    expect(workspace.states.has(TICKET)).toBe(false);
+    const handoffs = tracker
+      .issue(TICKET)
+      .comments.filter(({ body }) => body.startsWith(HANDOFF_MARKER));
+    expect(handoffs).toHaveLength(1);
+    expect(handoffs[0]?.body).toContain(HANDOFF_TAKEN_LINE);
   });
 });
 

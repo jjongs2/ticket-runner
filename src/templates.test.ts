@@ -5,6 +5,7 @@ import { throwOnFailure } from "./adapters/exec.js";
 import { MAX_TAIL_CHARS } from "./log-tail.js";
 import { type Billing, emptyBilling } from "./credential.js";
 import type { RunStop } from "./run.js";
+import { LEFT_TO_HUMAN } from "./orchestrator.js";
 import {
   HANDOFF_MARKER,
   HANDOFF_TAKEN_LINE,
@@ -21,6 +22,7 @@ import {
   handoffComment,
   handoffTakenComment,
   isNotesIssue,
+  mergeByHandComment,
   noteComment,
   notesIssue,
   columns,
@@ -610,6 +612,89 @@ describe("handoffComment", () => {
   });
 });
 
+describe("mergeByHandComment", () => {
+  const verdict = graded([
+    { text: "it works", status: "met", evidence: "npm test is green" },
+    {
+      text: "the docs say so",
+      status: "unverifiable",
+      evidence: "the docs are not\nreadable from here",
+    },
+    { text: "the wiki builds", status: "unverifiable", evidence: "no wiki build here" },
+  ]);
+  const base = {
+    branch: "agent/2-skeleton",
+    onRemote: true,
+    worktree: "/repo/.worktrees/ticket-2",
+    pullRequest: 12,
+    verdict,
+  };
+
+  it("is a hand-off comment, so a later claim marks it as history", () => {
+    const comment = mergeByHandComment(base);
+
+    expect(comment.split("\n")[0]).toBe(HANDOFF_MARKER);
+    expect(handoffTakenComment(comment)).toContain(HANDOFF_TAKEN_LINE);
+  });
+
+  it("says the pull request passed every gate and waits for a human to merge it", () => {
+    expect(mergeByHandComment(base)).toContain(
+      "**Handed off.** PR #12 passed every gate and waits for a human to merge it: this Target merges by hand.",
+    );
+  });
+
+  it("names the branch, the worktree and the pull request, which is no draft", () => {
+    const comment = mergeByHandComment(base);
+
+    expect(comment).toContain(
+      "- Branch `agent/2-skeleton` on the remote · worktree `/repo/.worktrees/ticket-2` · PR #12\n",
+    );
+    expect(comment).not.toContain("draft");
+  });
+
+  it("has no failure line, no evidence block and no transcripts", () => {
+    const comment = mergeByHandComment(base);
+
+    expect(comment).not.toContain("Failure:");
+    expect(comment).not.toContain("Failed at");
+    expect(comment).not.toContain("<details>");
+    expect(comment).not.toContain("Transcripts");
+  });
+
+  it("lists each unverifiable criterion with its evidence, one line each", () => {
+    const comment = mergeByHandComment(base);
+
+    expect(comment).toContain(
+      [
+        "**Unverifiable criteria:**",
+        "",
+        "- the docs say so — the docs are not readable from here",
+        "- the wiki builds — no wiki build here",
+      ].join("\n"),
+    );
+    expect(comment).not.toContain("it works");
+  });
+
+  it("drops the list when every criterion was met", () => {
+    const met = graded([{ text: "it works", status: "met", evidence: "npm test is green" }]);
+
+    expect(mergeByHandComment({ ...base, verdict: met })).not.toContain("Unverifiable");
+  });
+
+  it("adds no criterion to the Ticket, however the evidence is written", () => {
+    const body = "- [ ] it reads the feed";
+    const boxed = graded(
+      [{ text: "it reads the feed", status: "unverifiable", evidence: "- [ ] not here\n- [ ] nor here" }],
+      body,
+    );
+
+    const comment = mergeByHandComment({ ...base, verdict: boxed });
+
+    expect(new RegExp(UNCHECKED_BOX, "m").test(comment)).toBe(false);
+    expect(listCriteria([body, comment]).map(({ text }) => text)).toEqual(["it reads the feed"]);
+  });
+});
+
 describe("findMarkedComments", () => {
   it("gives every comment wearing the marker, oldest first", () => {
     const comments = [
@@ -819,6 +904,21 @@ describe("runSummary", () => {
     expect(summary).toContain("  merged   #3 Run: drain the Frontier (PR #12)");
     expect(summary).toContain("  handed   #5 Fix Stage with a single retry · verify · 1 unmet");
     expect(summary).toContain("  skipped  #9 blocked");
+  });
+
+  it("says a green Ticket on a Target that merges by hand is left to a human", () => {
+    const summary = runSummary({
+      credential: "subscription",
+      version: VERSION,
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [{ ...handed, stage: "merge", failure: LEFT_TO_HUMAN, pullRequest: 12 }],
+      stop: { reason: "frontier", blocked: [] },
+    });
+
+    expect(summary).toContain(
+      "  handed   #5 Fix Stage with a single retry · merge · left to a human, as this Target merges by hand\n",
+    );
   });
 
   it("gives an unexpected failure the command and how it exited, on one line", () => {

@@ -414,11 +414,10 @@ export interface HandoffComment {
 }
 
 export function handoffComment(handoff: HandoffComment): string {
-  const location = [
-    `Branch \`${handoff.branch}\`${handoff.onRemote === true ? " on the remote" : ""}`,
-    ...(handoff.worktree === undefined ? [] : [`worktree \`${handoff.worktree}\``]),
-    ...(handoff.pullRequest === undefined ? [] : [`PR #${handoff.pullRequest} (draft)`]),
-  ].join(" · ");
+  const location = whereTheWorkIs(
+    handoff,
+    handoff.pullRequest === undefined ? undefined : `PR #${handoff.pullRequest} (draft)`,
+  );
 
   // The budget clause is the difference between one bad Stage and a Ticket the
   // pipeline already had a second go at, which is what a human needs to know.
@@ -437,6 +436,58 @@ export function handoffComment(handoff: HandoffComment): string {
     "",
     ...stageSaid(handoff.stage, handoff.reason),
     ...evidenceBlock(shown.evidence),
+  ].join("\n");
+}
+
+/** The branch, the worktree and the pull request, as one line of a hand-off comment says them. */
+function whereTheWorkIs(
+  { branch, onRemote, worktree }: Pick<HandoffComment, "branch" | "onRemote" | "worktree">,
+  pullRequest: string | undefined,
+): string {
+  return [
+    `Branch \`${branch}\`${onRemote === true ? " on the remote" : ""}`,
+    ...(worktree === undefined ? [] : [`worktree \`${worktree}\``]),
+    ...(pullRequest === undefined ? [] : [pullRequest]),
+  ].join(" · ");
+}
+
+export interface MergeByHandComment extends Pick<HandoffComment, "branch" | "onRemote" | "worktree"> {
+  /** The pull request a human is to merge, published ready for review. */
+  pullRequest: number;
+  /** The verdict the Ticket passed on, whose unverifiable criteria the comment lists. */
+  verdict: Verdict;
+}
+
+/**
+ * The hand-off of a Ticket that passed every gate on a Target that merges by
+ * hand: nothing failed, so there is no failure line and no evidence block, and
+ * the pull request is no draft.
+ *
+ * The unverifiable criteria and their evidence are what the squash commit
+ * would have carried, had the pipeline merged. A human merging by hand gets
+ * GitHub's own message instead, so they are said here, where that human reads
+ * them. They are posted on the Ticket, whose comments are read for Acceptance
+ * Criteria, so a line that could read as a checkbox is defused.
+ */
+export function mergeByHandComment(handoff: MergeByHandComment): string {
+  const unverifiable = handoff.verdict.criteria.filter(
+    (criterion) => criterion.status === "unverifiable",
+  );
+  return [
+    HANDOFF_MARKER,
+    `**Handed off.** PR #${handoff.pullRequest} passed every gate and waits for a human to merge it: this Target merges by hand.`,
+    "",
+    `- ${whereTheWorkIs(handoff, `PR #${handoff.pullRequest}`)}`,
+    ...(unverifiable.length === 0
+      ? []
+      : [
+          "",
+          "**Unverifiable criteria:**",
+          "",
+          ...unverifiable.map((criterion) =>
+            escapeCheckboxes(`- ${oneLine(criterion.text)} — ${oneLine(criterion.evidence)}`),
+          ),
+        ]),
   ].join("\n");
 }
 

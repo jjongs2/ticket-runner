@@ -58,6 +58,7 @@ import {
   guardComment,
   handoffComment,
   hasGuardWarning,
+  mergeByHandComment,
   pullRequestBody,
   squashCommit,
   type TranscriptsPlace,
@@ -229,6 +230,21 @@ class TicketFailure extends Error {
     readonly reason?: string,
   ) {
     super(summary);
+  }
+}
+
+/** What a Ticket handed off over a Target that merges by hand is handed off for. */
+export const LEFT_TO_HUMAN = "left to a human, as this Target merges by hand";
+
+/**
+ * A Ticket that passed every gate on a Target that merges by hand (`merge`
+ * off). Nothing failed: it ends in a hand-off only because a human merges here,
+ * so the hand-off leaves its pull request as published and keeps no
+ * transcripts, and its comment lists what the squash commit would have carried.
+ */
+class LeftToHuman extends TicketFailure {
+  constructor(readonly verdict: Verdict) {
+    super("merge", LEFT_TO_HUMAN);
   }
 }
 
@@ -642,6 +658,13 @@ async function takeTicket(
     }
 
     point = "merge";
+    if (!config.merge) {
+      // A Target that merges by hand. The Ticket leaves the Landing below
+      // without the pull, since nothing was merged: the next Ticket rebases
+      // onto a base branch without this one, as a human may merge in any order.
+      await progress.record({ point: "merge", outcome: "👤 left to a human" });
+      throw new LeftToHuman(verdict);
+    }
     await tracker.squashMerge(
       pullRequest,
       squashCommit({
@@ -2309,6 +2332,10 @@ async function handOff(
   const { tracker, workspace, config } = pipeline;
   const ticket = issue.number;
   await progress.settle();
+  // A green Ticket on a Target that merges by hand: its pull request is the
+  // one a human reviews and merges, so it stays as published, and nothing
+  // failed, so no transcripts are kept.
+  const byHand = failure instanceof LeftToHuman ? failure : undefined;
 
   // Nothing of this Run's is on the branch, so nothing may leave the Ticket
   // looking resumable: the next Run must not implement over what a human holds.
@@ -2334,7 +2361,9 @@ async function handOff(
   // Whether the draft's body is one this hand-off wrote, naming no transcripts.
   // One it only converted still says what its Run said, which is not this.
   let drafted = false;
-  if (pullRequest !== undefined) {
+  if (byHand !== undefined) {
+    // Ready for review, its title and body as the pr step wrote them.
+  } else if (pullRequest !== undefined) {
     await tracker.convertPullRequestToDraft(pullRequest);
   } else if (worktree?.pushable === true) {
     // A draft pull request is worth trying for, but never worth losing the
@@ -2375,10 +2404,11 @@ async function handOff(
   // Only beside a state that stays, because on the remote they go when it
   // does, and after it, so the state they sit beside is the one a resuming Run
   // reads. A hand-off that leaves no state ran no Stage, so it has none anyway.
-  const transcripts = keepsState ? await keepTranscripts(pipeline, ticket) : undefined;
+  const transcripts =
+    keepsState && byHand === undefined ? await keepTranscripts(pipeline, ticket) : undefined;
   // A draft this hand-off opened went up before anything was kept, and one it
   // converted still carries an earlier body, so either learns where only now.
-  if (pullRequest !== undefined && !(drafted && transcripts === undefined)) {
+  if (byHand === undefined && pullRequest !== undefined && !(drafted && transcripts === undefined)) {
     try {
       await tracker.updatePullRequestBody(
         pullRequest,
@@ -2397,7 +2427,15 @@ async function handOff(
 
   await tracker.comment(
     ticket,
-    handoffComment({
+    byHand !== undefined && pullRequest !== undefined
+      ? mergeByHandComment({
+          branch,
+          onRemote,
+          ...(worktree === undefined ? {} : { worktree: worktree.path }),
+          pullRequest,
+          verdict: byHand.verdict,
+        })
+      : handoffComment({
       stage: failure.point,
       failure: failure.summary,
       branch,

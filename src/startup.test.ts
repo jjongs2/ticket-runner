@@ -6,6 +6,7 @@ function config(overrides: Partial<Config>): Config {
   return {
     lanes: 1,
     checks: ["npm test"],
+    merge: true,
     gates: { checks: true, ci: true },
     stages: {
       implement: {
