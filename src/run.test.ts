@@ -6,6 +6,7 @@ import { BaseBranchChecks } from "./failing-base.js";
 import { Landing } from "./landing.js";
 import { StandingNotes } from "./notes.js";
 import type { Pipeline } from "./orchestrator.js";
+import { OutsideFault } from "./outside-fault.js";
 import type { TicketState } from "./ports/workspace.js";
 import { type RunResult, processRun } from "./run.js";
 import { StopSignal } from "./stop.js";
@@ -1986,5 +1987,57 @@ describe("a Run narrowed to the Tickets it was given", () => {
       outcomes: [expect.objectContaining({ outcome: "merged", ticket: 4 })],
       stop: { reason: "stopped", at: "2026-09-20T22:07:13.000Z", busy: [4] },
     });
+  });
+});
+
+describe("a Ticket GitHub or the remote failed on its own side", () => {
+  const PUBLICKEY = "git@github.com: Permission denied (publickey).";
+  const unreachable = () =>
+    new OutsideFault("remote", "git pull --ff-only origin main", PUBLICKEY, `\`git pull --ff-only origin main\` exited 128\n${PUBLICKEY}`);
+
+  it("ends the Run's claiming, naming the command and the first line it printed", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    workspace.pullBaseFailure = unreachable();
+
+    const result = await processRun(pipeline());
+
+    expect(processed()).toEqual([4]);
+    expect(result.outcomes).toMatchObject([{ outcome: "released", ticket: 4, cause: "remote", stage: "rebase" }]);
+    expect(result.stop).toEqual({
+      reason: "remote",
+      command: "git pull --ff-only origin main",
+      line: PUBLICKEY,
+    });
+    expect(logged).toContain("#4 stopped the Run · remote unreachable");
+  });
+
+  it("ends it over a fault met before the claim too, leaving the Ticket as it was", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    const getIssue = tracker.getIssue.bind(tracker);
+    tracker.getIssue = async (number) => {
+      if (number === 4) {
+        throw new OutsideFault("github", "gh api repos/{owner}/{repo}/issues/4", "gh: Bad Gateway (HTTP 502)", "x");
+      }
+      return await getIssue(number);
+    };
+
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes).toMatchObject([{ outcome: "released", ticket: 4, cause: "github", stage: "setup" }]);
+    expect(result.stop).toMatchObject({ reason: "github", line: "gh: Bad Gateway (HTTP 502)" });
+    expect(tracker.issue(5).assignees).toEqual([]);
+    expect(tracker.issue(4).labels).toEqual(["ready-for-agent"]);
+  });
+
+  it("is resumed by the next Run as any released Ticket is", async () => {
+    tracker.addIssue({ number: 4 });
+    workspace.pullBaseFailure = unreachable();
+    await processRun(pipeline());
+    workspace.pullBaseFailure = undefined;
+
+    const result = await processRun(pipeline());
+
+    expect(result.outcomes).toMatchObject([{ outcome: "merged", ticket: 4 }]);
+    expect(runner.stages()).toEqual(["implement", "verify", "verify"]);
   });
 });

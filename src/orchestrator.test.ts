@@ -9,6 +9,8 @@ import { BaseBranchChecks } from "./failing-base.js";
 import { Landing } from "./landing.js";
 import { StandingNotes } from "./notes.js";
 import { processTicket } from "./orchestrator.js";
+import { OutsideFault } from "./outside-fault.js";
+import { failedExecution } from "./testing/executions.js";
 import { PROGRESS_MARKER, progressComment } from "./progress.js";
 import { HANDOFF_MARKER, HANDOFF_TAKEN_LINE, handoffComment } from "./templates.js";
 import type { Pipeline, TicketOutcome } from "./orchestrator.js";
@@ -1081,7 +1083,7 @@ describe("rebase", () => {
     // The `gh api` call a squash merge makes, failing: the commit message is an
     // argument with newlines in it, one of them ending as a failed command's
     // line does.
-    const output = "HTTP 502: Bad Gateway (https://api.github.com/repos/o/r/pulls/100/merge)";
+    const output = "HTTP 405: Pull Request is not mergeable (https://api.github.com/repos/o/r/pulls/100/merge)";
     const args = [
       "api",
       "--method",
@@ -4006,6 +4008,325 @@ describe("a Ticket released and then resumed", () => {
     // first Run reported is not history the second one keeps.
     expect(progressTable()).not.toContain("⏸");
     expect(progressTable()).toContain("| merge | ✅ #100 |");
+  });
+});
+
+/** The error a failed command throws, as the adapters throw it. */
+function failure(command: string, args: string[], output: string): Error {
+  try {
+    throwOnFailure(command, args, failedExecution(output));
+  } catch (error) {
+    return error as Error;
+  }
+  throw new Error("throwOnFailure did not throw");
+}
+
+const PUBLICKEY =
+  "git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.";
+const PULL = ["pull", "--ff-only", "origin", "main"];
+/** git refusing the pull of the base branch because it cannot authenticate with the remote. */
+const unreachable = () => failure("git", PULL, PUBLICKEY);
+/** GitHub failing on its own side, as a call that kept failing after every try throws it. */
+const badGateway = (args = ["api", "--method", "POST", "repos/{owner}/{repo}/pulls"]) =>
+  failure("gh", args, "gh: Bad Gateway (HTTP 502)\n{}");
+
+describe("releasing a Ticket GitHub or the remote failed on its own side", () => {
+  const state = () => workspace.state(TICKET);
+
+  it("releases a Ticket whose pull of the base branch cannot authenticate with the remote", async () => {
+    workspace.pullBaseFailure = unreachable();
+
+    const outcome = await run();
+
+    expect(outcome).toEqual({
+      outcome: "released",
+      ticket: TICKET,
+      title: "Skeleton: one Ticket end to end",
+      branch: BRANCH,
+      stage: "rebase",
+      cause: "remote",
+      fault: {
+        command: "git pull --ff-only origin main",
+        line: "git@github.com: Permission denied (publickey).",
+      },
+      notes: [],
+    });
+    expect(tracker.issue(TICKET).labels).toEqual(["ready-for-agent"]);
+    expect(tracker.issue(TICKET).assignees).toEqual([]);
+    expect(notices()).toEqual([]);
+    expect(tracker.pullRequests).toEqual([]);
+    expect(state()).toMatchObject({ state: "implemented", fixUsed: false });
+    expect(state()?.rebaseFirst).toBeUndefined();
+    expect(progressTable()).toContain("| rebase | ⏸ remote unreachable | – | – |");
+  });
+
+  it("releases a Ticket whose pull request GitHub kept failing to open", async () => {
+    tracker.createPullRequest = async () => {
+      throw badGateway();
+    };
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({
+      outcome: "released",
+      stage: "pr",
+      cause: "github",
+      fault: {
+        command: "gh api --method POST repos/{owner}/{repo}/pulls",
+        line: "gh: Bad Gateway (HTTP 502)",
+      },
+    });
+    expect(notices()).toEqual([]);
+    expect(progressTable()).toContain("| pr | ⏸ GitHub failure |");
+  });
+
+  it("releases a Ticket whose answer from GitHub was not complete JSON", async () => {
+    tracker.waitForCi = async () => {
+      throw new OutsideFault("github", "gh api repos/{owner}/{repo}/pulls/100", "Unexpected end of JSON input", "x");
+    };
+
+    expect(await run()).toMatchObject({ outcome: "released", stage: "ci", cause: "github" });
+  });
+
+  it("spends no fix budget, and keeps one the Ticket's own failure spent", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    workspace.pullBaseFailure = unreachable();
+
+    expect(await run()).toMatchObject({ outcome: "released", stage: "rebase" });
+    expect(state()).toMatchObject({ fixUsed: true });
+  });
+
+  it("gives back the budget of a fix Stage the fault stopped before it ran", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.listCandidates = async () => {
+      throw badGateway(["api", "repos/{owner}/{repo}/issues"]);
+    };
+    const standing = new StandingNotes();
+    standing.current = async () => {
+      throw badGateway(["api", "repos/{owner}/{repo}/issues"]);
+    };
+
+    const outcome = await processTicket(
+      {
+        tracker,
+        runner,
+        workspace,
+        config: config(),
+        repoRoot,
+        runId: "run-1",
+        version: VERSION,
+        credential: "subscription",
+        billing,
+        baseBranch: "main",
+        landing: new Landing(),
+        standingNotes: standing,
+        baseChecks: new BaseBranchChecks(),
+        selfHosted: false,
+        log: (line) => logged.push(line),
+      },
+      TICKET,
+    );
+
+    expect(outcome).toMatchObject({ outcome: "released", cause: "github" });
+    expect(state()).toMatchObject({ fixUsed: false });
+  });
+
+  it("releases a Ticket whose worktree the remote could not be reached for", async () => {
+    workspace.createWorktree = async () => {
+      throw failure(
+        "git",
+        ["fetch", "origin"],
+        "fatal: unable to access 'https://github.com/acme/repo/': Could not resolve host: github.com",
+      );
+    };
+
+    expect(await run()).toMatchObject({ outcome: "released", stage: "setup", cause: "remote" });
+    expect(state()).toMatchObject({ state: "claimed" });
+  });
+
+  it("releases a Ticket whose merge-base the remote could not be reached for, rather than charging it", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    workspace.mergeBase = async () => {
+      throw failure("git", ["fetch", "origin", "main"], PUBLICKEY);
+    };
+
+    expect(await run()).toMatchObject({ outcome: "released", stage: "checks", cause: "remote" });
+    expect(runner.stages()).toEqual(["implement"]);
+    expect(state()).toMatchObject({ fixUsed: false });
+  });
+
+  it("still hands off a pull of the base branch that fails for any other reason", async () => {
+    workspace.pullBaseFailure = failure("git", PULL, "fatal: Not possible to fast-forward, aborting.");
+
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "rebase" });
+    expect(tracker.issue(TICKET).labels).toContain("ready-for-human");
+  });
+
+  it("still hands off a pull over uncommitted changes in the main checkout", async () => {
+    workspace.pullBaseFailure = failure(
+      "git",
+      PULL,
+      "error: Your local changes to the following files would be overwritten by merge:\n\tREADME.md",
+    );
+
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "rebase" });
+  });
+
+  it("still hands off a GitHub 4xx", async () => {
+    tracker.createPullRequest = async () => {
+      throw failure("gh", ["api", "--method", "POST", "repos/{owner}/{repo}/pulls"], "gh: Validation Failed (HTTP 422)");
+    };
+
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "pr" });
+  });
+
+  it("still hands off a git failure that is not the remote's", async () => {
+    workspace.createWorktree = async () => {
+      throw failure("git", ["worktree", "add"], "fatal: invalid reference: main");
+    };
+
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "setup" });
+  });
+
+  it("leaves the Ticket claimed when its own label writes fail too", async () => {
+    workspace.pullBaseFailure = unreachable();
+    const addLabel = tracker.addLabel.bind(tracker);
+    tracker.addLabel = async (number, label) => {
+      if (label === "ready-for-agent") throw badGateway(["api", "--method", "POST", "labels"]);
+      await addLabel(number, label);
+    };
+
+    expect(await run()).toMatchObject({ outcome: "released", cause: "remote" });
+    expect(tracker.issue(TICKET).labels).toEqual(["in-progress"]);
+    expect(tracker.issue(TICKET).assignees).toEqual(["pipeline-user"]);
+    expect(state()).toMatchObject({ state: "implemented" });
+  });
+
+  it("puts in-progress back when the assignee will not come off, so the Ticket stays claimed", async () => {
+    workspace.pullBaseFailure = unreachable();
+    tracker.unassign = async () => {
+      throw badGateway(["api", "--method", "DELETE", "assignees"]);
+    };
+
+    expect(await run()).toMatchObject({ outcome: "released", cause: "remote" });
+    expect(tracker.issue(TICKET).labels).toContain("in-progress");
+    expect(tracker.issue(TICKET).assignees).toEqual(["pipeline-user"]);
+  });
+
+  it("is resumed by a later Run from the state it recorded, its fix budget as it was", async () => {
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    workspace.pullBaseFailure = unreachable();
+
+    expect(await run()).toMatchObject({ outcome: "released", stage: "rebase" });
+    workspace.pullBaseFailure = undefined;
+    workspace.failCheck("npm test", "FAIL src/b.test.ts");
+
+    // The budget the first Run's own failure spent is still spent, so the
+    // second failure is a hand-off rather than a second fix Stage.
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "checks" });
+    expect(runner.stages()).toEqual(["implement", "fix", "verify"]);
+  });
+
+  it("is resumed past the Stages it already passed", async () => {
+    workspace.pullBaseFailure = unreachable();
+
+    expect(await run()).toMatchObject({ outcome: "released", stage: "rebase" });
+    workspace.pullBaseFailure = undefined;
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).toEqual(["implement", "verify", "verify"]);
+  });
+
+  it("is reported released when its hand-off's own writes meet the fault", async () => {
+    runner.queue("implement", { ok: false, failure: "nonzero-exit" });
+    tracker.comment = async () => {
+      throw badGateway(["api", "--method", "POST", "comments"]);
+    };
+
+    expect(await run()).toMatchObject({ outcome: "released", stage: "implement", cause: "github" });
+    expect(tracker.issue(TICKET).labels).toContain("in-progress");
+  });
+});
+
+describe("a pull request already open on the Ticket's branch", () => {
+  it("is used rather than opening a second one", async () => {
+    tracker.pullRequests.push({
+      number: 100,
+      base: "main",
+      head: BRANCH,
+      title: "feat: x",
+      body: "Closes #2",
+      draft: false,
+      merged: false,
+    });
+
+    expect(await run()).toMatchObject({ outcome: "merged", pullRequest: 100 });
+    expect(tracker.pullRequests).toHaveLength(1);
+    expect(tracker.calls).not.toContain("createPullRequest:101:ready");
+    expect(tracker.calls).toContain("updatePullRequestTitle:100");
+    expect(workspace.state(TICKET)).toBeUndefined();
+  });
+
+  it("is used by the Run resuming a Ticket released over a pull request GitHub opened all the same", async () => {
+    const create = tracker.createPullRequest.bind(tracker);
+    tracker.createPullRequest = async (pr) => {
+      await create(pr);
+      throw badGateway();
+    };
+
+    expect(await run()).toMatchObject({ outcome: "released", stage: "pr" });
+    tracker.createPullRequest = create;
+
+    expect(await run()).toMatchObject({ outcome: "merged", pullRequest: 100 });
+    expect(tracker.pullRequests).toHaveLength(1);
+  });
+});
+
+describe("a progress write that failed", () => {
+  /** Fail the first write of a comment body carrying `row`, and no other. */
+  function failWrites(row: string): void {
+    const update = tracker.updateComment.bind(tracker);
+    let failed = false;
+    tracker.updateComment = async (id, body) => {
+      if (!failed && body.includes(row)) {
+        failed = true;
+        throw badGateway(["api", "--method", "PATCH", "comments"]);
+      }
+      await update(id, body);
+    };
+  }
+
+  it("is written once more when the Ticket merges", async () => {
+    failWrites("| merge |");
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(progressTable()).toContain("| merge | ✅ #100 |");
+  });
+
+  it("is written once more when the Ticket is handed off", async () => {
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
+    failWrites("| verify | ❌ 1 unmet | 7 | 0m |\n| fix |");
+    runner.leaves("fix", () => workspace.commits.push("fix(cli): x (#2)"));
+
+    expect(await run()).toMatchObject({ outcome: "handed-off" });
+    expect(progressTable()).toMatch(/\| fix \| ✅ committed \|[^\n]*\n[^\n]*\n\| verify \| ❌ 1 unmet/);
+  });
+
+  it("is written once more when the Ticket is released", async () => {
+    runner.queue("verify", { ok: false, failure: "rate-limited" });
+    failWrites("| verify | ⏸");
+
+    expect(await run()).toMatchObject({ outcome: "released" });
+    expect(progressTable()).toContain("| verify | ⏸ rate limited |");
+  });
+
+  it("is not written again when the last write landed", async () => {
+    await run();
+
+    const writes = tracker.updatedComments.length + tracker.comments.filter(({ body }) => body.startsWith(PROGRESS_MARKER)).length;
+    // implement, checks, verify, ci, merge: one write each, the first a post.
+    expect(writes).toBe(5);
   });
 });
 

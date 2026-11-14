@@ -877,6 +877,16 @@ export class FakeWorkspace implements Workspace {
     this.remoteBranches.delete(branch);
   }
 
+  /** Whether the clone is shallow, which {@link unshallow} undoes. */
+  shallow = false;
+
+  // Not in `calls`: asked once per Run, before anything a test follows.
+  async unshallow(): Promise<boolean> {
+    const was = this.shallow;
+    this.shallow = false;
+    return was;
+  }
+
   async pullBase(base: string): Promise<void> {
     this.calls.push("pullBase");
     if (this.pullBaseFailure !== undefined) throw this.pullBaseFailure;

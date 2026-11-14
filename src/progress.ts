@@ -26,14 +26,19 @@ export const PROGRESS_MARKER = "<!-- ticket-runner:progress -->";
 /**
  * What a row is about. Named after the lifecycle step rather than the Stage, for
  * the reason `FailurePoint` in `lifecycle.ts` is: the Checks, CI and the merge
- * each earn a row, and none of them is an agent session.
+ * each earn a row, and none of them is an agent session. `setup`, `rebase` and
+ * `pr` earn one only where GitHub or the remote failing on its own side
+ * released the Ticket there.
  */
 export type ProgressPoint =
+  | "setup"
   | "implement"
   | "checks"
   | "verify"
   | "fix"
   | "conflict"
+  | "rebase"
+  | "pr"
   | "ci"
   | "merge";
 
@@ -181,6 +186,8 @@ export class Progress {
   private readonly earlier: string;
   /** Set when reporting again could only mean a second comment, never an edit. */
   private stopped = false;
+  /** Set while the comment on the Ticket lacks a row the last write failed to carry. */
+  private behind = false;
 
   constructor(private readonly options: ProgressOptions) {
     // A Ticket taken back from a human keeps the comment that human read: a
@@ -198,6 +205,20 @@ export class Progress {
   /** Append a row, and show it on the Ticket. */
   async record(row: ProgressRow): Promise<void> {
     this.rows.push(row);
+    await this.write();
+  }
+
+  /**
+   * Write the comment once more if its last write failed, so a row GitHub
+   * refused mid-Ticket is on the Ticket by the time it ends. Called once the
+   * Ticket merges, is handed off or is released: no later write of the Run
+   * would carry it otherwise.
+   */
+  async settle(): Promise<void> {
+    if (this.behind) await this.write();
+  }
+
+  private async write(): Promise<void> {
     if (this.stopped) return;
 
     const { tracker, ticket, version, runId, branch } = this.options;
@@ -213,9 +234,11 @@ export class Progress {
       const id = this.comment?.id;
       if (id !== undefined) {
         await tracker.updateComment(id, body);
+        this.behind = false;
         return;
       }
       this.comment = await tracker.comment(ticket, body);
+      this.behind = false;
       if (this.comment.id === undefined) {
         // A comment nothing can edit is a comment per Stage, which is the noise
         // this whole table exists to avoid. One row is better than a dozen.
@@ -223,6 +246,7 @@ export class Progress {
         this.options.log?.(`#${ticket} posted a progress comment it cannot edit again`);
       }
     } catch (error) {
+      this.behind = true;
       this.options.log?.(
         `#${ticket} could not write the progress comment: ${(error as Error).message}`,
       );

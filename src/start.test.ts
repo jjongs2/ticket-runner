@@ -539,6 +539,28 @@ describe("a Target init has set up", () => {
     expect(out).toContain("merged   #5");
   });
 
+  it("fetches the full history of a shallow clone before it claims anything, and says so", async () => {
+    tracker.addIssue({ number: 4 });
+    workspace.shallow = true;
+    let shallowAtClaim: boolean | undefined;
+    const assign = tracker.assign.bind(tracker);
+    tracker.assign = async (number, user) => {
+      shallowAtClaim ??= workspace.shallow;
+      await assign(number, user);
+    };
+
+    const { lines } = await start();
+
+    expect(shallowAtClaim).toBe(false);
+    expect(lines).toContain("the clone was shallow, so its full history was fetched");
+  });
+
+  it("says nothing of a clone that is not shallow", async () => {
+    const { out } = await start();
+
+    expect(out).not.toContain("shallow");
+  });
+
   it("releases the Run lock it took", async () => {
     tracker.addIssue({ number: 4 });
 

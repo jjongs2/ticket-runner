@@ -1677,3 +1677,42 @@ describe("the Run lock", () => {
     expect(messages.filter((message) => /#\d/.test(message))).toEqual([]);
   });
 });
+
+describe("a shallow clone", () => {
+  /**
+   * A clone of the remote one commit deep, whose base branch is then left
+   * where it was while the remote moves on and the clone is fetched shallow
+   * again: what a cloud Host's cached setup leaves behind.
+   */
+  function shallowClone(): string {
+    const clone = mkdtempSync(join(tmpdir(), "ticket-runner-shallow-"));
+    created.push(clone);
+    git(clone, "clone", "--depth", "1", `file://${remote}`, ".");
+    for (const n of [2, 3, 4]) commit(repo, `${n}.txt`, `${n}\n`, `feat: ${n} (#${n})`);
+    git(repo, "push", "origin", "main");
+    git(clone, "checkout", "-b", "claude/session");
+    git(clone, "fetch", "--depth", "1", "origin", "main");
+    return clone;
+  }
+
+  it("is refused a move of its base branch while it is shallow", async () => {
+    const clone = shallowClone();
+
+    await expect(new GitWorkspace(clone).pullBase("main")).rejects.toThrow(/non-fast-forward/);
+  });
+
+  it("fetches the full history, after which the base branch moves to the remote's", async () => {
+    const clone = shallowClone();
+    const shallow = new GitWorkspace(clone);
+
+    expect(await shallow.unshallow()).toBe(true);
+    await shallow.pullBase("main");
+
+    expect(git(clone, "rev-parse", "--is-shallow-repository")).toBe("false");
+    expect(git(clone, "rev-parse", "main")).toBe(git(remote, "rev-parse", "main"));
+  });
+
+  it("fetches nothing for a clone that is not shallow", async () => {
+    expect(await workspace.unshallow()).toBe(false);
+  });
+});

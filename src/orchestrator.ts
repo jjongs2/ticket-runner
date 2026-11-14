@@ -47,6 +47,7 @@ import {
   verifyPrompt,
 } from "./prompts.js";
 import { retryLogDir, stageLogDir } from "./run-log.js";
+import { type FaultSide, OutsideFault } from "./outside-fault.js";
 import { holdsClaim } from "./stranded.js";
 import {
   type BranchFailure,
@@ -123,6 +124,11 @@ export type TicketOutcome =
       limitResetsAt?: string;
       /** The Check the base branch fails, and where, for a Release over it. */
       failingBase?: { commit: string; command: string };
+      /**
+       * The command GitHub or the remote failed, and the first line it
+       * printed, for a Release over a fault outside the Ticket.
+       */
+      fault?: OutsideFaultSeen;
       notes: RoutedNote[];
     }
   | {
@@ -223,10 +229,17 @@ class TicketFailure extends Error {
  * What stops a Ticket that says nothing about it: the rate limit, a transient
  * API failure — the API overloaded, broken or silent on its own side after the
  * CLI had already retried it — the API key of an `--api-key` Run out of credit
- * or past its workspace's spend limit, and a base branch that fails the Check
- * the Ticket's branch failed.
+ * or past its workspace's spend limit, a base branch that fails the Check the
+ * Ticket's branch failed, and GitHub or the git remote failing on its own side
+ * ({@link OutsideFault}).
  */
-export type ReleaseCause = StageReleaseCause | "failing-base";
+export type ReleaseCause = StageReleaseCause | "failing-base" | FaultSide;
+
+/** A fault outside the Ticket as a Release reports it: the command, and the first line it printed. */
+export interface OutsideFaultSeen {
+  command: string;
+  line: string;
+}
 
 /** The Stage failures among them. */
 type StageReleaseCause = Extract<StageFailure, "rate-limited" | "api-error" | "out-of-budget">;
@@ -257,9 +270,29 @@ class Releasing extends Error {
     readonly limitResetsAt?: string,
     /** The Check the base branch fails too, for a Release over it. */
     readonly failingBase?: InheritedFailure,
+    /** What GitHub or the remote failed, for a Release over a fault outside the Ticket. */
+    readonly fault?: OutsideFaultSeen,
   ) {
     super(`the ${point} Stage was stopped · ${RELEASE_WORDS[reason]}`);
   }
+}
+
+/**
+ * The Release a fault outside the Ticket earns at `point`, with the row that
+ * says so: the Ticket is left at the state it had reached, as over a failing
+ * base branch, and nothing it did is charged for it.
+ */
+async function faultRelease(
+  fault: OutsideFault,
+  point: FailurePoint,
+  record: ResumeRecord,
+  progress: Progress,
+): Promise<Releasing> {
+  await progress.record({ point, outcome: `⏸ ${RELEASE_WORDS[fault.side]}` });
+  return new Releasing(point, record.state, fault.side, undefined, undefined, {
+    command: fault.command,
+    line: fault.line,
+  });
 }
 
 /**
@@ -290,7 +323,8 @@ function asTicketFailure(error: unknown, point: FailurePoint): TicketFailure {
  * A Stage the subscription rate limit or a transient API failure stopped ends
  * none of that: the Ticket is released, and a Run started once the limit has
  * reset, or the API recovered, resumes it from the state it had reached rather
- * than from the top. A hand-off keeps that state too, so a
+ * than from the top. So is a Ticket GitHub or the git remote failed on its own
+ * side, wherever it was ({@link OutsideFault}). A hand-off keeps that state too, so a
  * human who relabels the Ticket `ready-for-agent` hands it back and the next Run
  * carries on from what it reached rather than paying for the implement Stage a
  * second time.
@@ -571,9 +605,10 @@ async function takeTicket(
         await requireGreenCi(pipeline, worktree, pullRequest, progress, landing);
         break;
       } catch (error) {
-        // A rate limit or an API failure is nobody's defect, so the fix budget
-        // does not answer for it: the Ticket is released, whole, further up.
-        if (error instanceof Releasing) throw error;
+        // A rate limit, an API failure or a fault of GitHub's or the remote's
+        // is nobody's defect, so the fix budget does not answer for it: the
+        // Ticket is released, whole, further up.
+        if (error instanceof Releasing || error instanceof OutsideFault) throw error;
         const failure = asTicketFailure(error, point);
         if (fixUsed || failure.kind === undefined) throw failure;
         fixUsed = true;
@@ -616,38 +651,55 @@ async function takeTicket(
       }),
     );
     await progress.record({ point: "merge", outcome: `✅ #${pullRequest}` });
+    await progress.settle();
   } catch (error) {
     // Out of the Landing before either ending is written: a hand-off's draft
     // pull request and a Release's labels are nothing for the next Ticket to
     // wait behind, and a Ticket that never reached the rebase gives up nothing.
     landing.leave();
-    if (error instanceof Releasing) {
+    const stopped =
+      error instanceof OutsideFault
+        ? await faultRelease(error, point, record, progress)
+        : error;
+    if (stopped instanceof Releasing) {
       return release(pipeline, {
         issue,
         user,
         branch,
-        stopped: error,
+        stopped,
         record,
         // A fix Stage stopped before it ran spends nothing: the budget is
         // still there for the Run that resumes the Ticket.
-        fixUsed: fixUsed && error.point !== "fix",
+        fixUsed: fixUsed && stopped.point !== "fix",
+        progress,
         notes,
       });
     }
-    return handOff(pipeline, {
-      issue,
-      user,
-      branch,
-      ...(worktreeOnDisk === undefined ? {} : { worktree: worktreeOnDisk }),
-      // A resume refused at setup keeps it too: the work is the pipeline's,
-      // and whichever side a human keeps is one a later Run resumes from.
-      keepsState: found?.refusal !== undefined || worktreeOnDisk?.pushable === true,
-      pullRequest,
-      failure: asTicketFailure(error, point),
-      fixUsed,
-      record,
-      notes,
-    });
+    const failure = asTicketFailure(error, point);
+    try {
+      return await handOff(pipeline, {
+        issue,
+        user,
+        branch,
+        ...(worktreeOnDisk === undefined ? {} : { worktree: worktreeOnDisk }),
+        // A resume refused at setup keeps it too: the work is the pipeline's,
+        // and whichever side a human keeps is one a later Run resumes from.
+        keepsState: found?.refusal !== undefined || worktreeOnDisk?.pushable === true,
+        pullRequest,
+        failure,
+        fixUsed,
+        record,
+        progress,
+        notes,
+      });
+    } catch (handing) {
+      if (!(handing instanceof OutsideFault)) throw handing;
+      // The hand-off's own writes met the fault, so whatever of it landed
+      // stays, and the claim with it: the next Run resumes the Ticket as
+      // stranded, and this one claims no more, as over any fault of the kind.
+      log(`#${ticket} could not be handed off at ${failure.point} · ${handing.message}`);
+      return faultOutcome(issue, branch, failure.point, handing, notes);
+    }
   }
 
   // The Ticket is merged from here on, so nothing below may hand it off, and
@@ -762,6 +814,9 @@ async function resumable(
     found = await pipeline.workspace.worktreeFromRemote(ref);
     checkedOut = found === "parted" && (await pipeline.workspace.hasWorktree(ref));
   } catch (error) {
+    // Nothing is claimed yet, so a remote that cannot be reached leaves the
+    // Ticket as it was for the next Run, rather than handing it off.
+    if (error instanceof OutsideFault) throw error;
     return {
       state,
       refusal: `the worktree of ${state.branch} could not be made ready to resume in: ${(error as Error).message}`,
@@ -878,6 +933,11 @@ class ResumeRecord {
     const record = new ResumeRecord(pipeline, reached);
     await pipeline.workspace.writeState(record.file());
     return record;
+  }
+
+  /** The state the Ticket has reached, which is where a later Run picks it up. */
+  get state(): ReachedState {
+    return this.reached.state;
   }
 
   /** The latest title a Stage answered for the branch, in this Run or an earlier one. */
@@ -1414,6 +1474,9 @@ async function inheritedFailure(
       commands,
     );
   } catch (error) {
+    // A remote that cannot be reached is a fault of its own, which releases
+    // the Ticket rather than charging it for a failure nobody could grade.
+    if (error instanceof OutsideFault) throw error;
     pipeline.log?.(
       `could not run the Checks at the merge-base with ${pipeline.baseBranch}: ${(error as Error).message}`,
     );
@@ -1828,7 +1891,12 @@ interface PullRequestSubject {
  *
  * One that already exists is also taken out of draft, because a Ticket resumed
  * after a hand-off comes back to the pull request the hand-off drafted and a
- * draft cannot be merged. Here rather than at the merge: a draft pull request
+ * draft cannot be merged.
+ *
+ * One the Ticket has not recorded may still be open on its branch: an attempt
+ * GitHub failed to answer may have opened it all the same, in this Run or the
+ * one released over the failure. It is the Ticket's, and used as one it had
+ * recorded, rather than refused a second beside it. Here rather than at the merge: a draft pull request
  * often runs no workflows at all, so the wait for CI below would read it as
  * "no checks" and end the Ticket before the merge was ever asked for.
  */
@@ -1843,6 +1911,7 @@ async function publishPullRequest(
     ...(answered === undefined ? {} : { body: answered }),
   });
 
+  existing ??= await openPullRequestOn(pipeline, branch);
   if (existing !== undefined) {
     // Retitled as well, so a title a fix Stage answered after the pull request
     // opened is the one it shows, as it is the subject that lands.
@@ -1860,6 +1929,12 @@ async function publishPullRequest(
     draft: false,
   });
   return pr.number;
+}
+
+/** The open pull request from `branch`, if there is one. */
+async function openPullRequestOn(pipeline: Pipeline, branch: string): Promise<number | undefined> {
+  const open = await pipeline.tracker.openPullRequests();
+  return open.find((pull) => pull.head === branch)?.number;
 }
 
 /**
@@ -1943,6 +2018,8 @@ interface Release {
   record: ResumeRecord;
   /** Whether the fix budget was spent by a failure of the Ticket's own. */
   fixUsed: boolean;
+  /** The progress comment, written once more if its last write failed. */
+  progress: Progress;
   notes: RoutedNote[];
 }
 
@@ -1954,10 +2031,14 @@ interface Release {
  * keeping — so the branch and the worktree stay, no comment is posted, no draft
  * pull request is opened, and the Ticket goes back on the Frontier for a Run
  * started after the limit has reset.
+ *
+ * Never thrown out of: a Release is what stops the Run claiming, and a claim
+ * GitHub would not take off — over the very fault that released the Ticket,
+ * say — leaves the Ticket claimed, which a later Run resumes as stranded.
  */
 async function release(
   pipeline: Pipeline,
-  { issue, user, branch, stopped, record, fixUsed, notes }: Release,
+  { issue, user, branch, stopped, record, fixUsed, progress, notes }: Release,
 ): Promise<TicketOutcome> {
   const { tracker, config } = pipeline;
   const ticket = issue.number;
@@ -1975,11 +2056,11 @@ async function release(
     await noteFailingBase(pipeline, { issue, branch, failing: stopped.failingBase, notes });
   }
 
+  await progress.settle();
+
   // The claim, undone in the order it was made, so the assignee — which is what
   // another Run reads to tell a taken Ticket from a free one — comes off last.
-  await tracker.addLabel(ticket, config.labels.readyForAgent);
-  await tracker.removeLabel(ticket, config.labels.inProgress);
-  await tracker.unassign(ticket, user);
+  await unclaim(pipeline, ticket, user);
   pipeline.log?.(
     `#${ticket} released at ${stopped.point} · ${releaseWords(stopped.reason, pipeline.credential)} · ${branch}`,
   );
@@ -1997,6 +2078,62 @@ async function release(
       : {
           failingBase: { commit: stopped.failingBase.commit, command: stopped.failingBase.command },
         }),
+    ...(stopped.fault === undefined ? {} : { fault: stopped.fault }),
+    notes,
+  };
+}
+
+/**
+ * Take the claim off a released Ticket, or leave it on whole.
+ *
+ * A write that fails stops the rest, and one that fails once `in-progress` has
+ * come off puts it back: a Ticket left assigned without it would be neither
+ * free for the Frontier nor stranded for the sweep, where one still claimed is
+ * resumed by the next Run. Logged and nothing more, since the Release stands
+ * either way.
+ */
+async function unclaim(pipeline: Pipeline, ticket: number, user: string): Promise<void> {
+  const { tracker, config } = pipeline;
+  let labelOff = false;
+  try {
+    await tracker.addLabel(ticket, config.labels.readyForAgent);
+    await tracker.removeLabel(ticket, config.labels.inProgress);
+    labelOff = true;
+    await tracker.unassign(ticket, user);
+  } catch (error) {
+    pipeline.log?.(
+      `#${ticket} stays claimed for the next Run to resume, as the claim could not come off: ${(error as Error).message}`,
+    );
+    if (!labelOff) return;
+    try {
+      await tracker.addLabel(ticket, config.labels.inProgress);
+    } catch (again) {
+      pipeline.log?.(`#${ticket} could not put ${config.labels.inProgress} back: ${(again as Error).message}`);
+    }
+  }
+}
+
+/**
+ * The outcome of a Ticket a fault outside it stopped where nothing more could
+ * be written about it: still claimed, which a later Run resumes it from as a
+ * Stranded Ticket. The Run reports it released all the same, since what the
+ * Run does next is what a Release asks of it: claim nothing more.
+ */
+export function faultOutcome(
+  issue: { number: number; title: string },
+  branch: string,
+  stage: FailurePoint,
+  fault: OutsideFault,
+  notes: RoutedNote[],
+): TicketOutcome {
+  return {
+    outcome: "released",
+    ticket: issue.number,
+    title: issue.title,
+    branch,
+    stage,
+    cause: fault.side,
+    fault: { command: fault.command, line: fault.line },
     notes,
   };
 }
@@ -2085,6 +2222,8 @@ interface HandOff {
   fixUsed: boolean;
   /** The Ticket's state file, which the hand-off either leaves current or removes. */
   record: ResumeRecord;
+  /** The progress comment, written once more if its last write failed. */
+  progress: Progress;
   notes: RoutedNote[];
 }
 
@@ -2132,11 +2271,13 @@ async function handOff(
     failure,
     fixUsed,
     record,
+    progress,
     notes,
   }: HandOff,
 ): Promise<TicketOutcome> {
   const { tracker, workspace, config } = pipeline;
   const ticket = issue.number;
+  await progress.settle();
 
   // Nothing of this Run's is on the branch, so nothing may leave the Ticket
   // looking resumable: the next Run must not implement over what a human holds.

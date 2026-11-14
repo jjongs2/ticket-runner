@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { execution, failedExecution } from "../testing/executions.js";
 import type { HostKind } from "../host.js";
 import { failingBaseNote } from "../templates.js";
-import { GhTracker, type GhTrackerOptions } from "./gh-tracker.js";
+import { OutsideFault } from "../outside-fault.js";
+import { GITHUB_RETRY_DELAYS_MS, GhTracker, type GhTrackerOptions } from "./gh-tracker.js";
 import type { ExecOptions, Execution, RunProcess } from "./exec.js";
 
 let calls: string[][];
@@ -1002,6 +1003,8 @@ describe("waiting for CI", () => {
 
   /** GitHub would not answer for the commit's checks. */
   const UNANSWERED = "unanswered" as const;
+  /** How it would not: a refusal, which is not GitHub failing on its own side. */
+  const REFUSED = "gh: Resource not accessible by integration (HTTP 403)";
 
   const log = (count: number) =>
     Array.from({ length: count }, (_, i) => `step line ${i + 1}`).join("\n");
@@ -1030,11 +1033,11 @@ describe("waiting for CI", () => {
         return ok(JSON.stringify({ number: 12, draft: false, head: { sha: HEAD }, ...mergeability }));
       }
       if (path.endsWith("/check-runs")) {
-        return current === UNANSWERED ? failedExecution("HTTP 502") : ok(lines(current.runs ?? []));
+        return current === UNANSWERED ? failedExecution(REFUSED) : ok(lines(current.runs ?? []));
       }
       if (path.endsWith("/status")) {
         return current === UNANSWERED
-          ? failedExecution("HTTP 502")
+          ? failedExecution(REFUSED)
           : ok(lines(current.statuses ?? []));
       }
       const job = /actions\/jobs\/(\d+)\/logs$/.exec(path)?.[1];
@@ -1121,7 +1124,7 @@ describe("waiting for CI", () => {
   });
 
   it("reads a head commit GitHub would not report as no checks, not as a failed wait", async () => {
-    const gh = trackerWith({}, failedExecution("HTTP 502"));
+    const gh = trackerWith({}, failedExecution("gh: Not Found (HTTP 404)"));
 
     expect(await gh.waitForCi(12, 60_000)).toEqual({ state: "none" });
   });
@@ -1345,15 +1348,43 @@ describe("waiting for CI", () => {
     expect(await ci({}, [UNANSWERED]).waitForCi(12, 60_000)).toEqual({ state: "none" });
   });
 
-  it("refuses check output it cannot read", async () => {
+  it("reads checks again that came back unreadable once", async () => {
     const gh = trackerWith(
       {},
       ok(JSON.stringify({ number: 12, head: { sha: HEAD } })),
       ok("not json"),
+      ok(lines([run("pass")])),
       ok(""),
     );
 
-    await expect(gh.waitForCi(12, 60_000)).rejects.toThrow("could not read the check_runs");
+    expect(await gh.waitForCi(12, 60_000)).toEqual({ state: "passed" });
+  });
+
+  it("refuses check output that stays unreadable as GitHub's fault", async () => {
+    const gh = trackerWith(
+      {},
+      ok(JSON.stringify({ number: 12, head: { sha: HEAD } })),
+      ...Array.from({ length: GITHUB_RETRY_DELAYS_MS.length + 1 }, () => ok("not json")),
+    );
+
+    const waiting = gh.waitForCi(12, 60_000);
+
+    await expect(waiting).rejects.toBeInstanceOf(OutsideFault);
+    await expect(waiting).rejects.toThrow("not complete JSON");
+  });
+
+  it("refuses a head commit GitHub keeps failing to report as GitHub's fault, not as no checks", async () => {
+    const gh = trackerWith(
+      {},
+      ...Array.from({ length: GITHUB_RETRY_DELAYS_MS.length + 1 }, () =>
+        failedExecution("gh: Bad Gateway (HTTP 502)"),
+      ),
+    );
+
+    await expect(gh.waitForCi(12, 60_000)).rejects.toMatchObject({
+      side: "github",
+      line: "gh: Bad Gateway (HTTP 502)",
+    });
   });
 
   /** A clock that advances by `stepMs` every time it is read. */
@@ -1491,5 +1522,174 @@ describe("waiting for CI", () => {
 
     expect(outcome).toEqual({ state: "timed-out" });
     expect(readingsTaken()).toBe(1);
+  });
+});
+
+describe("GitHub failing on its own side", () => {
+  const BAD_GATEWAY = "gh: Bad Gateway (HTTP 502)";
+  /** Every try a call gets: the first, and one after each wait. */
+  const TRIES = GITHUB_RETRY_DELAYS_MS.length + 1;
+  const failing = (output: string, count = TRIES) =>
+    Array.from({ length: count }, () => failedExecution(output));
+
+  let waits: number[];
+  /** A tracker that records how long it was told to wait between tries. */
+  const timed = (...queued: Execution[]) => trackerWith({ sleep: async (ms) => void waits.push(ms) }, ...queued);
+
+  beforeEach(() => {
+    waits = [];
+  });
+
+  it("tries a read again after a 5xx, with backoff, and answers with what came back", async () => {
+    const gh = timed(failedExecution(BAD_GATEWAY), failedExecution("gh: Server Error (HTTP 500)"), ok("octocat\n"));
+
+    expect(await gh.currentUser()).toBe("octocat");
+    expect(calls).toHaveLength(3);
+    expect(waits).toEqual(GITHUB_RETRY_DELAYS_MS.slice(0, 2));
+  });
+
+  it("waits about a minute in all before a read counts as failed", () => {
+    const total = GITHUB_RETRY_DELAYS_MS.reduce((sum, ms) => sum + ms, 0);
+
+    expect(total).toBeGreaterThanOrEqual(50_000);
+    expect(total).toBeLessThanOrEqual(70_000);
+  });
+
+  it("throws a read that fails every try as GitHub's fault, naming the command and the first line", async () => {
+    const gh = timed(...failing(`${BAD_GATEWAY}\nsecond line`));
+
+    const reading = gh.currentUser();
+
+    await expect(reading).rejects.toBeInstanceOf(OutsideFault);
+    await expect(reading).rejects.toMatchObject({
+      side: "github",
+      command: "gh api user --jq .login",
+      line: BAD_GATEWAY,
+    });
+    expect(calls).toHaveLength(TRIES);
+    expect(waits).toEqual(GITHUB_RETRY_DELAYS_MS);
+  });
+
+  it("tries a read again whose answer is not complete JSON", async () => {
+    const gh = timed(
+      ok('{"number": 2, "title": "Skel'),
+      ok(JSON.stringify(restIssue())),
+      ok("[]"),
+      ok("[]"),
+    );
+
+    expect((await gh.getIssue(2)).title).toBe("Skeleton");
+    expect(waits).toHaveLength(1);
+  });
+
+  it("throws an answer that is never complete JSON as GitHub's fault", async () => {
+    const gh = timed(...Array.from({ length: TRIES }, () => ok('{"number": 2')));
+
+    await expect(gh.getIssue(2)).rejects.toMatchObject({ side: "github" });
+    expect(calls).toHaveLength(TRIES);
+  });
+
+  it("tries a read again that gh could not parse itself", async () => {
+    const gh = timed(failedExecution("unexpected end of JSON input"), ok("main\n"));
+
+    expect(await gh.defaultBranch()).toBe("main");
+  });
+
+  it("does not try a 4xx again, and throws it as no fault of GitHub's", async () => {
+    const gh = timed(failedExecution("gh: Not Found (HTTP 404)"));
+
+    const reading = gh.currentUser();
+
+    await expect(reading).rejects.toThrow(/HTTP 404/);
+    await expect(reading).rejects.not.toBeInstanceOf(OutsideFault);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("tries a write that sets a state again", async () => {
+    const gh = timed(failedExecution(BAD_GATEWAY), ok(""));
+
+    await gh.addLabel(2, "in-progress");
+
+    expect(calls).toHaveLength(2);
+  });
+
+  it("tries an edited comment again", async () => {
+    const gh = timed(failedExecution(BAD_GATEWAY), ok(""));
+
+    await gh.updateComment("7", "body");
+
+    expect(calls).toHaveLength(2);
+  });
+
+  it("posts a comment once, since a second try could post it twice", async () => {
+    const gh = timed(failedExecution(BAD_GATEWAY));
+
+    await expect(gh.comment(2, "body")).rejects.toBeInstanceOf(OutsideFault);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("opens a pull request again after a 5xx when none is open on the branch", async () => {
+    const gh = timed(
+      failedExecution(BAD_GATEWAY),
+      ok("[]"),
+      ok(JSON.stringify({ number: 41, html_url: "https://github.com/acme/repo/pull/41" })),
+    );
+
+    const pr = await gh.createPullRequest({
+      base: "main",
+      head: "agent/2-x",
+      title: "feat: x",
+      body: "Closes #2",
+      draft: false,
+    });
+
+    expect(pr).toEqual({ number: 41, url: "https://github.com/acme/repo/pull/41" });
+    expect(calls.filter((args) => args.includes("POST"))).toHaveLength(2);
+  });
+
+  it("uses the pull request a failed try opened all the same rather than opening a second", async () => {
+    const gh = timed(
+      failedExecution("unexpected end of JSON input"),
+      ok(
+        JSON.stringify([
+          { number: 9, html_url: "https://github.com/acme/repo/pull/9", head: { ref: "agent/9-y" } },
+          { number: 40, html_url: "https://github.com/acme/repo/pull/40", head: { ref: "agent/2-x" } },
+        ]),
+      ),
+    );
+
+    const pr = await gh.createPullRequest({
+      base: "main",
+      head: "agent/2-x",
+      title: "feat: x",
+      body: "Closes #2",
+      draft: false,
+    });
+
+    expect(pr).toEqual({ number: 40, url: "https://github.com/acme/repo/pull/40" });
+    expect(calls.filter((args) => args.includes("POST"))).toHaveLength(1);
+  });
+
+  it("does not merge again a pull request the failed try merged", async () => {
+    const gh = timed(
+      failedExecution(BAD_GATEWAY),
+      ok(JSON.stringify({ number: 12, draft: false, merged: true, head: { sha: "abc" } })),
+    );
+
+    await gh.squashMerge(12, { subject: "feat: x (#12)", body: "Closes #2" });
+
+    expect(calls.filter((args) => args.includes("PUT"))).toHaveLength(1);
+  });
+
+  it("merges again after a 5xx when the pull request has not merged", async () => {
+    const gh = timed(
+      failedExecution(BAD_GATEWAY),
+      ok(JSON.stringify({ number: 12, draft: false, merged: false, head: { sha: "abc" } })),
+      ok(""),
+    );
+
+    await gh.squashMerge(12, { subject: "feat: x (#12)", body: "Closes #2" });
+
+    expect(calls.filter((args) => args.includes("PUT"))).toHaveLength(2);
   });
 });

@@ -18,7 +18,8 @@ import { DEFAULT_CI_GRACE_MINUTES } from "../config.js";
 import { type HostKind, hostKind } from "../host.js";
 import { MAX_TAIL_LINES, logTail } from "../log-tail.js";
 import { highestVersion } from "../version-number.js";
-import { type Execution, type RunProcess, exec, throwOnFailure } from "./exec.js";
+import { OutsideFault, firstLine, isGitHubFault } from "../outside-fault.js";
+import { type Execution, type RunProcess, exec, shownCommand, throwOnFailure } from "./exec.js";
 
 export interface GhTrackerOptions {
   run?: RunProcess;
@@ -36,6 +37,38 @@ export interface GhTrackerOptions {
    * environment says unless a test says otherwise.
    */
   host?: HostKind;
+}
+
+/**
+ * How long each try again of a `gh` call GitHub failed on its own side waits,
+ * in turn: doubling, and about a minute in all. A gateway down for seconds
+ * costs seconds, and one still down after the last is a fault of GitHub's,
+ * which the caller is told as an {@link OutsideFault}.
+ */
+export const GITHUB_RETRY_DELAYS_MS: readonly number[] = [2_000, 4_000, 8_000, 16_000, 30_000];
+
+/** What a call's stdout has to parse as: one JSON document, or one per line as `--jq` prints them. */
+type Json = "document" | "lines";
+
+/** How one `gh` call is run, and what of its failure the caller takes as an answer. */
+interface GhOptions {
+  /** A failure comes back rather than throwing, once GitHub's own faults have had their tries. */
+  allowFailure?: boolean;
+  /** The one failure a caller takes as an answer: it comes back instead of throwing. */
+  tolerate?: RegExp;
+  /** What stdout must parse as. A response that does not is GitHub's fault, and tried again. */
+  json?: Json;
+  /**
+   * Tried once whatever fails: a write that creates something, which a second
+   * try after a failure that had in fact landed would create twice.
+   */
+  once?: boolean;
+  /**
+   * Asked after each wait, before trying again: whether what the call does has
+   * already happened, as a pull request a 502 opened all the same has. Yes
+   * ends the tries, and the call answers with the failure it last met.
+   */
+  landed?: () => Promise<boolean>;
 }
 
 /**
@@ -82,6 +115,8 @@ interface RawPullRequest {
   /** The GraphQL id, which a workstation's draft and ready mutations take. */
   node_id: string;
   draft: boolean;
+  /** Whether it has merged, which a merge GitHub failed to answer may have. */
+  merged?: boolean;
   head: { sha: string };
   /**
    * Whether GitHub can merge the pull request into its base: `false` when the
@@ -249,7 +284,7 @@ export class GhTracker implements Tracker {
     try {
       const { exitCode, stdout } = await this.gh(
         ["api", "--method", "GET", `repos/${repository}/releases`, "-F", "per_page=100"],
-        { allowFailure: true },
+        { allowFailure: true, json: "document" },
       );
       if (exitCode !== 0) return undefined;
       const releases = JSON.parse(stdout) as RawRelease[];
@@ -327,7 +362,9 @@ export class GhTracker implements Tracker {
    * its blockers, only a count of each.
    */
   async getIssue(number: number): Promise<Issue> {
-    const { stdout } = await this.gh(["api", `repos/{owner}/{repo}/issues/${number}`]);
+    const { stdout } = await this.gh(["api", `repos/{owner}/{repo}/issues/${number}`], {
+      json: "document",
+    });
     const raw = JSON.parse(stdout) as RawIssue;
     const comments = await this.list<RawComment>(`repos/{owner}/{repo}/issues/${number}/comments`);
     const blockers = await this.blockers(number);
@@ -365,11 +402,18 @@ export class GhTracker implements Tracker {
    * issue, so a missing label is `init`'s to catch, not this call's.
    */
   async createIssue(issue: CreateIssue): Promise<IssueRef> {
-    const { stdout } = await this.rest("POST", "repos/{owner}/{repo}/issues", [
-      `title=${issue.title}`,
-      `body=${issue.body}`,
-      ...issue.labels.map((label) => `labels[]=${label}`),
-    ]);
+    // Once: a 502 can follow an issue GitHub did open, and a second try would
+    // open a second.
+    const { stdout } = await this.rest(
+      "POST",
+      "repos/{owner}/{repo}/issues",
+      [
+        `title=${issue.title}`,
+        `body=${issue.body}`,
+        ...issue.labels.map((label) => `labels[]=${label}`),
+      ],
+      { once: true, json: "document" },
+    );
     const created = JSON.parse(stdout) as Partial<RawIssue>;
     if (typeof created.number !== "number" || typeof created.html_url !== "string") {
       throw new Error(`could not read an issue number from gh output: ${stdout}`);
@@ -419,6 +463,7 @@ export class GhTracker implements Tracker {
       "POST",
       `repos/{owner}/{repo}/issues/${number}/assignees`,
       [`assignees[]=${user}`],
+      { json: "document" },
     );
     const assignees = (JSON.parse(stdout) as Partial<RawIssue>).assignees ?? [];
     if (!assignees.some((assignee) => assignee.login.toLowerCase() === user.toLowerCase())) {
@@ -450,11 +495,18 @@ export class GhTracker implements Tracker {
     await this.rest("DELETE", path, [], { tolerate: /Label does not exist/ });
   }
 
-  /** REST answers with the new comment, whose id is what it is edited by later. */
+  /**
+   * REST answers with the new comment, whose id is what it is edited by later.
+   * Posted once, as an issue is opened once: a second try after a 502 that had
+   * posted it would post it twice, and notify twice.
+   */
   async comment(number: number, body: string): Promise<IssueComment> {
-    const { stdout } = await this.rest("POST", `repos/{owner}/{repo}/issues/${number}/comments`, [
-      `body=${body}`,
-    ]);
+    const { stdout } = await this.rest(
+      "POST",
+      `repos/{owner}/{repo}/issues/${number}/comments`,
+      [`body=${body}`],
+      { once: true, json: "document" },
+    );
     return { ...withCommentId(JSON.parse(stdout) as RawComment), body };
   }
 
@@ -470,14 +522,27 @@ export class GhTracker implements Tracker {
   /**
    * Open a pull request through REST, and read its number back out of the
    * answer rather than off anything printed.
+   *
+   * Tried again after a fault of GitHub's like any write, but only once no
+   * pull request is open on the branch: one the failed try opened all the
+   * same is the answer, where a second try would be refused over it.
    */
   async createPullRequest(pr: CreatePullRequest): Promise<PullRequestRef> {
+    let opened: PullRequestRef | undefined;
     const { stdout } = await this.rest(
       "POST",
       "repos/{owner}/{repo}/pulls",
       [`base=${pr.base}`, `head=${pr.head}`, `title=${pr.title}`, `body=${pr.body}`],
-      { typed: [`draft=${pr.draft}`] },
+      {
+        typed: [`draft=${pr.draft}`],
+        json: "document",
+        landed: async () => {
+          opened = await this.openPullRequestOn(pr.head);
+          return opened !== undefined;
+        },
+      },
     );
+    if (opened !== undefined) return opened;
     const created = JSON.parse(stdout) as Partial<RawPullRequest>;
     if (typeof created.number !== "number" || typeof created.html_url !== "string") {
       throw new Error(`could not read a pull request number from gh output: ${stdout}`);
@@ -491,6 +556,25 @@ export class GhTracker implements Tracker {
       ["-f", "state=open"],
     );
     return pulls.map((pull) => ({ number: pull.number, head: pull.head.ref }));
+  }
+
+  /**
+   * The open pull request from `head`, asked once between the tries of a
+   * create, or nothing where there is none or GitHub would not say: the next
+   * try then asks GitHub to open one, as it would have anyway.
+   */
+  private async openPullRequestOn(head: string): Promise<PullRequestRef | undefined> {
+    try {
+      const pulls = await this.list<{ number: number; html_url: string; head: { ref: string } }>(
+        "repos/{owner}/{repo}/pulls",
+        ["-f", "state=open"],
+        { once: true },
+      );
+      const pull = pulls.find((candidate) => candidate.head.ref === head);
+      return pull === undefined ? undefined : { number: pull.number, url: pull.html_url };
+    } catch {
+      return undefined;
+    }
   }
 
   async convertPullRequestToDraft(number: number): Promise<void> {
@@ -621,18 +705,34 @@ export class GhTracker implements Tracker {
   /**
    * Squash-merge through REST, with the subject and body the pipeline composed
    * as the commit's title and message.
+   *
+   * Tried again after a fault of GitHub's, but only while the pull request has
+   * not merged: a merge the failed try made is done, and a second would be
+   * refused as one GitHub cannot make.
    */
   async squashMerge(number: number, commit: SquashCommit): Promise<void> {
-    await this.rest("PUT", `repos/{owner}/{repo}/pulls/${number}/merge`, [
-      "merge_method=squash",
-      `commit_title=${commit.subject}`,
-      `commit_message=${commit.body}`,
-    ]);
+    await this.rest(
+      "PUT",
+      `repos/{owner}/{repo}/pulls/${number}/merge`,
+      ["merge_method=squash", `commit_title=${commit.subject}`, `commit_message=${commit.body}`],
+      {
+        landed: async () => {
+          try {
+            return (await this.pullRequest(number, { once: true })).merged === true;
+          } catch {
+            return false;
+          }
+        },
+      },
+    );
   }
 
   /** One pull request, read through REST. */
-  private async pullRequest(number: number): Promise<RawPullRequest> {
-    const { stdout } = await this.gh(["api", `repos/{owner}/{repo}/pulls/${number}`]);
+  private async pullRequest(number: number, options: GhOptions = {}): Promise<RawPullRequest> {
+    const { stdout } = await this.gh(["api", `repos/{owner}/{repo}/pulls/${number}`], {
+      ...options,
+      json: "document",
+    });
     return JSON.parse(stdout) as RawPullRequest;
   }
 
@@ -677,10 +777,14 @@ export class GhTracker implements Tracker {
    * counts as its re-run, as `gh pr checks` counted it.
    */
   private async ciSnapshot(number: number): Promise<CiSnapshot> {
-    const pr = await this.gh(["api", `repos/{owner}/{repo}/pulls/${number}`], {
-      allowFailure: true,
-    });
-    if (pr.exitCode !== 0) return { checks: undefined, conflicting: false };
+    const args = ["api", `repos/{owner}/{repo}/pulls/${number}`];
+    const pr = await this.gh(args, { allowFailure: true, json: "document" });
+    if (pr.exitCode !== 0) {
+      // GitHub failing on its own side after every try is no reading at all,
+      // where any other refusal reads as no checks, as it always has.
+      if (isGitHubFault(pr.output)) throwOnFailure("gh", args, pr);
+      return { checks: undefined, conflicting: false };
+    }
     const { head, mergeable } = JSON.parse(pr.stdout) as RawPullRequest;
     // `null` is GitHub still working it out, which is no conflict yet.
     const conflicting = mergeable === false;
@@ -709,10 +813,12 @@ export class GhTracker implements Tracker {
    * joins arrays, not the objects around them.
    */
   private async wrappedList(path: string, key: string): Promise<unknown[] | undefined> {
-    const result = await this.gh([...pagedGet(path), "--jq", `.${key}[]`], {
-      allowFailure: true,
-    });
-    if (result.exitCode !== 0) return undefined;
+    const args = [...pagedGet(path), "--jq", `.${key}[]`];
+    const result = await this.gh(args, { allowFailure: true, json: "lines" });
+    if (result.exitCode !== 0) {
+      if (isGitHubFault(result.output)) throwOnFailure("gh", args, result);
+      return undefined;
+    }
     try {
       return result.stdout
         .split("\n")
@@ -755,39 +861,98 @@ export class GhTracker implements Tracker {
     method: "POST" | "PATCH" | "PUT" | "DELETE",
     path: string,
     fields: string[],
-    options: { allowFailure?: boolean; typed?: string[]; tolerate?: RegExp } = {},
+    options: GhOptions & { typed?: string[] } = {},
   ): Promise<Execution> {
+    const { typed = [], ...rest } = options;
     const args = [
       "api",
       "--method",
       method,
       path,
       ...fields.flatMap((field) => ["-f", field]),
-      ...(options.typed ?? []).flatMap((field) => ["-F", field]),
+      ...typed.flatMap((field) => ["-F", field]),
     ];
-    const result = await this.gh(args, { allowFailure: true });
-    if (options.allowFailure || options.tolerate?.test(result.output)) return result;
-    return throwOnFailure("gh", args, result);
+    return await this.gh(args, rest);
   }
 
   /**
    * Every page of a REST list, as one array: `gh --paginate` joins the pages.
    * `--method GET` is spelled out because fields would otherwise make it a POST.
    */
-  private async list<T>(path: string, fields: string[] = []): Promise<T[]> {
-    const { stdout } = await this.gh([...pagedGet(path), ...fields]);
+  private async list<T>(path: string, fields: string[] = [], options: GhOptions = {}): Promise<T[]> {
+    const { stdout } = await this.gh([...pagedGet(path), ...fields], { ...options, json: "document" });
     return JSON.parse(stdout) as T[];
   }
 
-  private async gh(
-    args: string[],
-    options: { allowFailure?: boolean } = {},
-  ): Promise<Execution> {
-    const result = await this.runProcess("gh", args, {
-      ...(this.cwd === undefined ? {} : { cwd: this.cwd }),
-    });
-    return options.allowFailure ? result : throwOnFailure("gh", args, result);
+  /**
+   * One `gh` call, tried again while GitHub fails on its own side.
+   *
+   * A 5xx, or an answer that is not the complete JSON the caller reads, is
+   * GitHub's: the call waits and tries again, {@link GITHUB_RETRY_DELAYS_MS}
+   * apart, and one that still fails after the last is an {@link OutsideFault}
+   * — or, for a caller that takes failures as answers, the failure it met.
+   * Every other failure is the caller's at once, as it always was.
+   */
+  private async gh(args: string[], options: GhOptions = {}): Promise<Execution> {
+    for (let tried = 0; ; tried++) {
+      const result = await this.runProcess("gh", args, {
+        ...(this.cwd === undefined ? {} : { cwd: this.cwd }),
+      });
+      const fault = githubFaultIn(result, options);
+      const delay = options.once === true ? undefined : GITHUB_RETRY_DELAYS_MS[tried];
+      if (fault === undefined || delay === undefined) return settled(args, result, fault, options);
+      await this.sleep(delay);
+      if (await options.landed?.()) return result;
+    }
   }
+}
+
+/**
+ * The fault of GitHub's a call met, in the one line the Run's last line quotes,
+ * or nothing where it met none: a 5xx or an unreadable answer `gh` reported,
+ * or an answer that is not the JSON the caller asked for. A failure the caller
+ * tolerates is its answer, whatever it says.
+ */
+function githubFaultIn(result: Execution, options: GhOptions): string | undefined {
+  if (result.exitCode !== 0) {
+    if (options.tolerate?.test(result.output)) return undefined;
+    return isGitHubFault(result.output) ? firstLine(result.output) : undefined;
+  }
+  return options.json === undefined ? undefined : incompleteJson(result.stdout, options.json);
+}
+
+/** Why `stdout` is not the JSON a caller reads, or nothing when it is. */
+function incompleteJson(stdout: string, json: Json): string | undefined {
+  try {
+    if (json === "document") JSON.parse(stdout);
+    else for (const line of stdout.split("\n")) if (line.trim() !== "") JSON.parse(line);
+    return undefined;
+  } catch (error) {
+    return (error as Error).message;
+  }
+}
+
+/** A call's last answer, as its caller takes it: the result, or the error it is. */
+function settled(
+  args: string[],
+  result: Execution,
+  fault: string | undefined,
+  options: GhOptions,
+): Execution {
+  if (result.exitCode !== 0) {
+    if (options.allowFailure || options.tolerate?.test(result.output)) return result;
+    return throwOnFailure("gh", args, result);
+  }
+  if (fault !== undefined) {
+    const shown = shownCommand("gh", args);
+    throw new OutsideFault(
+      "github",
+      shown,
+      fault,
+      `\`${shown}\` answered with a response that is not complete JSON\n${fault}`,
+    );
+  }
+  return result;
 }
 
 /**

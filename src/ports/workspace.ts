@@ -406,6 +406,15 @@ export interface Workspace {
    */
   deleteRemoteBranch(branch: string): Promise<void>;
   /**
+   * Fetch the whole history of a clone that is shallow, and say whether it was.
+   *
+   * Asked once before a Run claims anything. A shallow clone cannot show that
+   * the remote's base branch is a fast-forward of a local one left on an
+   * older commit, so every {@link pullBase} on it is refused, and every Ticket
+   * handed off at the rebase.
+   */
+  unshallow(): Promise<boolean>;
+  /**
    * Fast-forward the main checkout's `base` to the remote: at the door of the
    * Landing, so the rebase is onto what the merge will land on, and after a
    * merge.

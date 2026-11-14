@@ -597,6 +597,13 @@ export class GitWorkspace implements Workspace {
     throwOnFailure("git", args, result);
   }
 
+  async unshallow(): Promise<boolean> {
+    const { stdout } = await this.git(["rev-parse", "--is-shallow-repository"]);
+    if (stdout.trim() !== "true") return false;
+    await this.git(["fetch", "--unshallow", this.remote]);
+    return true;
+  }
+
   async pullBase(base: string): Promise<void> {
     const { stdout } = await this.git(["rev-parse", "--abbrev-ref", "HEAD"]);
     if (stdout.trim() === base) {

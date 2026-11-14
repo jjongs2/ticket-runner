@@ -255,6 +255,9 @@ async function execute(
   const startedAt = Date.now();
   log(opening(runId, work, config.lanes));
   if (newer !== undefined) log(newer);
+  // Before the first claim, on any Host: a shallow clone refuses every move of
+  // its base branch a rebase needs, and would hand off each Ticket there.
+  if (await workspace.unshallow()) log("the clone was shallow, so its full history was fetched");
   const summary = (outcomes: TicketOutcome[], stop: RunStop) =>
     runSummary({
       version,
