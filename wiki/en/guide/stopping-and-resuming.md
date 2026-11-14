@@ -46,7 +46,7 @@ A Hand-off leaves you:
 - a draft pull request of the branch's work, where there is work to push; a pull request already open goes back into draft
 - the hand-off comment below, saying where the Ticket failed and why
 - `ready-for-human` in place of `in-progress`, and no assignee
-- each Stage's command line and transcript, kept under `ticket-<n>/<runId>/` on the `ticket-runner/state` branch
+- each Stage's command line and transcript, kept on the `ticket-runner/state` branch or on the Host, as [`keepTranscripts`](./configuration.md#keeptranscripts) decides ([What stays where](#what-stays-where))
 
 Its state file is kept, so a relabel resumes the Ticket ([Handing a Ticket back](#handing-a-ticket-back)), except where no Stage of this Run could have left work (below).
 
@@ -64,6 +64,8 @@ The comment follows [`docs/templates/handoff-comment.md`](https://github.com/jjo
 …
 </details>
 ```
+
+The Transcripts line names where they are. On a Target that keeps them off its remote, it reads `` `.ticket-runner/runs/<runId>/<n>/` on the Host, kept off the remote `` on a workstation, and says they go with the VM on a cloud Host.
 
 The Failure line says what stopped the Ticket. What it asks of you:
 
@@ -98,17 +100,18 @@ The comment names a worktree wherever there is one: this Run's, or the one the b
 
 ### What stays where
 
-The Host a Ticket was worked on may be gone by the time a human looks, for example a cloud Host's VM. So everything a human or a later Run needs is on the Target's remote.
+The Host a Ticket was worked on may be gone by the time a human looks, for example a cloud Host's VM. So everything a later Run needs is on the Target's remote, and so are a handed-off Ticket's transcripts where [`keepTranscripts`](./configuration.md#keeptranscripts) keeps them there, which it does by default on a private Target only.
 
 | What | Where | Lasts until |
 |---|---|---|
 | The Ticket's commits | branch `agent/<n>-<slug>` on the remote | the merge deletes it |
 | State file | `ticket-<n>.json` on `ticket-runner/state` | the work merges or leaves the pipeline ([below](#the-state-file)) |
-| Handed-off Stages' transcripts | `ticket-<n>/<runId>/` on `ticket-runner/state` | the state file goes |
+| Handed-off Stages' transcripts, kept on the remote | `ticket-<n>/<runId>/` on `ticket-runner/state` | the state file goes |
+| Handed-off Stages' transcripts, kept off it | `.ticket-runner/runs/<runId>/<n>/` on that Host | a human deletes it, or the cloud Host's VM goes |
 | Worktree | `.worktrees/ticket-<n>` on that Host | the merge, or a human deletes it |
 | Every Stage's full log (stdout, stderr too) | `.ticket-runner/runs/<runId>/<n>/` on that Host | a human deletes it |
 
-The state branch is rewritten on every change, so read it from a fetch rather than a local branch:
+The state branch is rewritten on every change, so read transcripts kept there from a fetch rather than a local branch:
 
 ```bash
 git fetch origin ticket-runner/state
@@ -116,7 +119,7 @@ git ls-tree -r --name-only FETCH_HEAD ticket-8/
 git show FETCH_HEAD:ticket-8/2026-09-17T09-00-00-000/verify.transcript.jsonl
 ```
 
-Every Stage that commits pushes the branch. `.worktrees/` and `.ticket-runner/` are safe to delete whenever no Run is running: everything a Run needs is on the remote, and the next Run remakes a worktree from it.
+Every Stage that commits pushes the branch. `.worktrees/` and `.ticket-runner/` are safe to delete whenever no Run is running: everything a Run needs is on the remote, and the next Run remakes a worktree from it. Transcripts kept off the remote go with `.ticket-runner/`.
 
 ## Handing a Ticket back
 

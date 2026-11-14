@@ -76,7 +76,7 @@ claude --print <prompt> --output-format stream-json --verbose \
   | `CLAUDE_CODE_SHELL` | `/bin/bash`, 있을 때만 | zsh는 아무것도 맞지 않는 glob 하나에 명령 전체를 멈춤 |
   `ANTHROPIC_AUTH_TOKEN`을 비롯한 다른 변수는 그대로 물려받습니다.
 - Stage가 띄우는 프로세스는 모두 두 표시를 물려받습니다. Stage 표시는 실수를 막는 장치일 뿐 sandbox가 아닙니다. 변수를 지운 세션은 그대로 통과하고, 한 Target에 Run 둘이 붙지 못하게 하는 것은 Run lock의 몫입니다. session 표시를 따로 두는 것은 같은 Stage에 있는 두 Lane이 Stage 표시를 같이 쓰기 때문입니다.
-- Stage가 시작되는 순간부터 [Stage의 파일](./running.md#logs-and-transcripts)을 쓰고, 거기에 키 값은 절대 적지 않습니다. 명령 파일은 Hand-off 때 Target의 remote로 가기 때문입니다.
+- Stage가 시작되는 순간부터 [Stage의 파일](./running.md#logs-and-transcripts)을 쓰고, 거기에 키 값은 절대 적지 않습니다. 명령 파일은 Hand-off 때 Target의 remote로 갈 수 있기 때문입니다([`keepTranscripts`](./configuration.md#keeptranscripts)).
 - 세션의 `system/init` 이벤트에서 `apiKeySource`를 읽고, orchestrator가 이를 Run의 Stage가 과금되는 곳과 맞춰 봅니다.
 - `maxMinutes`가 지나면 자식과 자식이 띄운 프로세스를 모두 죽이고, 실패를 `rate-limited`, `api-error`, `out-of-budget`, `timed-out`, `turn-capped`, `nonzero-exit`, `invalid-result`로 분류합니다. 성공한 세션은 앞의 셋 중 어느 것도 아니고, 셋은 실패한 세션에서 이렇게 읽습니다.
 
@@ -169,6 +169,7 @@ sequenceDiagram
 | [`templates.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts) | GitHub에 쓰는 모든 모양과 Run 요약. 원본은 `docs/templates/` |
 | [`log-tail.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/log-tail.ts) | CI 발췌와 실패한 base branch의 Note가 함께 인용하는 로그 끝부분. 40줄, 4,000자 이내 |
 | [`run-log.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run-log.ts) | `.ticket-runner/runs/<runId>/`와, Hand-off가 그중 무엇을 남기는지 |
+| [`transcript-home.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/transcript-home.ts) | Run마다 한 번, Hand-off된 Ticket의 transcript를 remote에 올릴지 Host에 둘지 정함 |
 
 **Target 준비**
 
@@ -256,9 +257,9 @@ Run과 `init`은 파이프라인 자신의 저장소에서 공개된 가장 높�
 
 ### [ADR-0004: Resume state lives on the Target's remote, not in a tracker comment](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md) {#adr-0004}
 
-- **결정**: 이어받기 상태는 보드 밖의 state file로 두고, 지금은 Target의 remote에 있습니다. Hand-off도 이를 남깁니다.
-- **이유**: 보드는 사람을 위한 곳입니다. 클라우드 Host는 버려지니 상태가 Host보다 오래 살아야 합니다. 라벨 한 번 바꿔서 이어받을 수 있어야 합니다.
-- **비용**: 예전 로컬 state는 옮겨 주지 않습니다. state branch는 `Workspace`를 거칩니다.
+- **결정**: 이어받기 상태는 보드 밖의 state file로 두고, 지금은 Target의 remote에 있습니다. Hand-off도 이를 남기고, transcript도 그 옆에 남깁니다. 다만 [`keepTranscripts`](./configuration.md#keeptranscripts)가 Host에 두게 하면 그러지 않고, 공개 Target은 기본이 그렇습니다.
+- **이유**: 보드는 사람을 위한 곳입니다. 클라우드 Host는 버려지니 상태가 Host보다 오래 살아야 합니다. 라벨 한 번 바꿔서 이어받을 수 있어야 합니다. 공개 Target에 push한 transcript는 되돌릴 수 없고, 이는 Host가 사라질 수 있다는 점보다 무겁습니다.
+- **비용**: 예전 로컬 state는 옮겨 주지 않습니다. state branch는 `Workspace`를 거칩니다. 공개 Target의 클라우드 Host Hand-off는 Operator 말고는 transcript를 남기지 않습니다.
 
 ### [ADR-0005: Landing is a serialized section, not a merge queue](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md) {#adr-0005}
 

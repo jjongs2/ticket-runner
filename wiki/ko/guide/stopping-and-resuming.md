@@ -46,7 +46,7 @@ Hand-off가 남기는 것:
 - push할 작업이 있으면, branch의 작업을 담은 draft pull request. 이미 열려 있던 pull request는 draft로 되돌아갑니다.
 - 아래의 hand-off 코멘트. Ticket이 어디서, 왜 실패했는지 알려 줍니다.
 - `in-progress` 대신 `ready-for-human`, 그리고 담당자 없음
-- 각 Stage의 명령줄과 transcript. `ticket-runner/state` branch의 `ticket-<n>/<runId>/` 아래에 남습니다.
+- 각 Stage의 명령줄과 transcript. [`keepTranscripts`](./configuration.md#keeptranscripts)에 따라 `ticket-runner/state` branch나 Host에 남습니다([무엇이 어디에 남나](#what-stays-where)).
 
 state file은 남겨 두니, 라벨만 바꾸면 Ticket을 이어 갑니다([Ticket 돌려주기](#handing-a-ticket-back)). 이 Run의 Stage가 작업을 남겼을 리 없는 경우는 예외입니다(아래 참고).
 
@@ -64,6 +64,8 @@ state file은 남겨 두니, 라벨만 바꾸면 Ticket을 이어 갑니다([Tic
 …
 </details>
 ```
+
+Transcripts 줄은 transcript가 있는 곳을 알려 줍니다. remote에 남기지 않는 Target이라면 워크스테이션에서는 `` `.ticket-runner/runs/<runId>/<n>/` on the Host, kept off the remote ``로 적히고, 클라우드 Host에서는 VM과 함께 사라진다고 적힙니다.
 
 Failure 줄은 무엇이 Ticket을 멈췄는지 말합니다. 그에 따라 할 일은 이렇습니다.
 
@@ -98,17 +100,18 @@ Failure 줄은 무엇이 Ticket을 멈췄는지 말합니다. 그에 따라 할 
 
 ### 무엇이 어디에 남나 {#what-stays-where}
 
-사람이 들여다볼 즈음에는 작업하던 Host가 이미 없을 수도 있습니다. 클라우드 Host의 VM이 그렇습니다. 그래서 사람이나 다음 Run에 필요한 것은 모두 Target의 remote에 둡니다.
+사람이 들여다볼 즈음에는 작업하던 Host가 이미 없을 수도 있습니다. 클라우드 Host의 VM이 그렇습니다. 그래서 다음 Run에 필요한 것은 모두 Target의 remote에 둡니다. Hand-off된 Ticket의 transcript도 [`keepTranscripts`](./configuration.md#keeptranscripts)가 remote에 남기게 할 때는 거기 둡니다. 기본으로는 비공개 Target만 그렇습니다.
 
 | 무엇 | 어디 | 언제까지 |
 |---|---|---|
 | Ticket의 commit | remote의 `agent/<n>-<slug>` branch | merge되며 삭제될 때까지 |
 | state file | `ticket-runner/state`의 `ticket-<n>.json` | 작업이 merge되거나 파이프라인의 몫이 아니게 될 때까지([아래](#the-state-file)) |
-| Hand-off된 Stage의 transcript | `ticket-runner/state`의 `ticket-<n>/<runId>/` | state file이 사라질 때까지 |
+| Hand-off된 Stage의 transcript, remote에 남길 때 | `ticket-runner/state`의 `ticket-<n>/<runId>/` | state file이 사라질 때까지 |
+| Hand-off된 Stage의 transcript, remote에 남기지 않을 때 | 그 Host의 `.ticket-runner/runs/<runId>/<n>/` | 사람이 지우거나, 클라우드 Host의 VM이 사라질 때까지 |
 | worktree | 그 Host의 `.worktrees/ticket-<n>` | merge되거나 사람이 지울 때까지 |
 | 모든 Stage의 전체 로그(stdout, stderr 포함) | 그 Host의 `.ticket-runner/runs/<runId>/<n>/` | 사람이 지울 때까지 |
 
-state branch는 바뀔 때마다 다시 쓰이니, 로컬 branch가 아니라 fetch한 것에서 읽으세요.
+state branch는 바뀔 때마다 다시 쓰이니, 거기 남긴 transcript는 로컬 branch가 아니라 fetch한 것에서 읽으세요.
 
 ```bash
 git fetch origin ticket-runner/state
@@ -116,7 +119,7 @@ git ls-tree -r --name-only FETCH_HEAD ticket-8/
 git show FETCH_HEAD:ticket-8/2026-09-17T09-00-00-000/verify.transcript.jsonl
 ```
 
-commit하는 Stage는 매번 branch를 push합니다. 그래서 Run이 돌고 있지 않을 때는 `.worktrees/`와 `.ticket-runner/`를 언제 지워도 괜찮습니다. Run에 필요한 것은 모두 remote에 있고, 다음 Run이 거기서 worktree를 다시 만듭니다.
+commit하는 Stage는 매번 branch를 push합니다. 그래서 Run이 돌고 있지 않을 때는 `.worktrees/`와 `.ticket-runner/`를 언제 지워도 괜찮습니다. Run에 필요한 것은 모두 remote에 있고, 다음 Run이 거기서 worktree를 다시 만듭니다. remote에 남기지 않은 transcript는 `.ticket-runner/`와 함께 지워집니다.
 
 ## Ticket 돌려주기 {#handing-a-ticket-back}
 

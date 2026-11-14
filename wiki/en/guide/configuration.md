@@ -21,6 +21,7 @@ The file is `ticket-runner.json` at the Target's root. It is plain JSON, so it c
 | [`permissionMode`](#permissionmode) | `"auto"` | What every Stage session may do without asking |
 | [`ciTimeoutMinutes`](#ci) | `30` | How long a Run waits for a pull request's CI |
 | [`ciGraceMinutes`](#ci) | `5` | How long "no checks registered yet" still counts as pending |
+| [`keepTranscripts`](#keeptranscripts) | `true` on a private Target, `false` on a public one | Whether a handed-off Ticket's transcripts are kept on the Target's remote |
 | [`labels`](#labels) | the six default names | The label names the pipeline reads and writes |
 
 A file that sets several of them:
@@ -129,6 +130,23 @@ After the Landing opens a pull request, the Run waits up to `ciTimeoutMinutes` f
 
 `ciGraceMinutes` covers the gap before GitHub registers a check run, which has taken over three minutes. Until it passes, a pull request with no checks yet counts as pending rather than as having none. It never outlasts `ciTimeoutMinutes`. Raise it on a Target whose Actions queue slowly. A Target with no CI at all sets it to `0`, so the wait answers at its first reading; left at the default, it waits the grace out once per merge, and since only one Lane is in the Landing at a time, that wait holds the other Lanes' merges too. A Target with CI keeps a grace: GitHub's answer cannot tell no CI from CI not registered yet, so under `0` a slow check run reads as none.
 
+## `keepTranscripts`
+
+- `keepTranscripts`: boolean
+
+Whether a handed-off Ticket's transcripts are kept on the Target's remote, on the `ticket-runner/state` branch, where a human can still read them once the Host is gone ([What stays where](./stopping-and-resuming.md#what-stays-where)). A transcript holds what the Stage read and what its tools printed, word for word, so it can carry anything the Host could see, such as a file kept out of the repository on purpose or a token a command printed.
+
+| Setting | Transcripts of a handed-off Ticket |
+|---|---|
+| unset, on a private Target | kept on the remote |
+| unset, on a public Target | kept on the Host |
+| `true` | kept on the remote, public Target too |
+| `false` | kept on the Host, private Target too |
+
+Unset, the Target's visibility is read once when a Run starts. A Target whose visibility cannot be read counts as public, and the Run says so in one line. Kept on the Host, they stay in `.ticket-runner/runs/<runId>/<n>/` on a workstation, and go with the VM on a cloud Host.
+
+On a public Target, a pushed commit stays reachable by its SHA after the branch has moved on, and GitHub's public events feed names the SHA of every push. So the state branch, and commits it no longer points at, may hold transcripts kept before the Target was made public. Nothing removes them.
+
 ## `labels`
 
 - `labels`: object of strings
@@ -155,6 +173,6 @@ Rename the triage vocabulary when the Target already uses other label strings. O
 
 ## References
 
-- [`src/config.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts), [`src/ports/agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/ports/agent-runner.ts), [`src/startup.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts), [`src/base-branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/base-branch.ts)
+- [`src/config.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts), [`src/transcript-home.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/transcript-home.ts), [`src/ports/agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/ports/agent-runner.ts), [`src/startup.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts), [`src/base-branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/base-branch.ts)
 - [`src/orchestrator.ts` · `runChecks`, `requireGreenCi`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts), [`src/prompts.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/prompts.ts), [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts), [`src/adapters/gh-tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts), [`src/adapters/git-workspace.ts` · `runCheck`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts)
-- [ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md), [ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md), [ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)
+- [ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md), [ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md), [ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md), [ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)
