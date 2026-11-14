@@ -4502,6 +4502,18 @@ describe("releasing a Ticket GitHub or the remote failed on its own side", () =>
       tracker.ci = { state: "failed", summary: "checks/build failed", excerpt: "" };
     });
 
+    it("is reported released when the draft pull request it opens meets the fault", async () => {
+      runner.queue("implement", { ok: false, failure: "nonzero-exit" });
+      tracker.createPullRequest = async () => {
+        throw badGateway();
+      };
+
+      expect(await run()).toMatchObject({ outcome: "released", stage: "implement", cause: "github" });
+      expect(tracker.issue(TICKET).labels).toContain("in-progress");
+      expect(tracker.issue(TICKET).assignees).toEqual(["pipeline-user"]);
+      expect(tracker.comments.some((comment) => comment.body.includes("ticket-runner:handoff"))).toBe(false);
+    });
+
     it.each(["the draft pull request", "the comment", "taking in-progress off"])(
       "is reported released at %s, still claimed, for the next Run to resume as stranded",
       async (write) => {

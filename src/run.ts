@@ -202,8 +202,9 @@ export async function processRun(
    * Put a Ticket in a Lane, and record what came back when it ends.
    *
    * The line about the Run stopping is logged by the Release that stopped it,
-   * or by the hand-off a fault outside the Ticket cut short, and by no other, even where a later Release outranks it on the last line. The
-   * Ticket's own release is already logged where it happened; this says the Run
+   * or by the hand-off a fault outside the Ticket cut short, and by no other,
+   * even where a later Release outranks it on the last line. The Ticket's own
+   * release is already logged where it happened; this says the Run
    * goes no further, so a transcript shows the Frontier was left alone rather
    * than found empty, and a Release into a Run that an earlier Release or a
    * Stop had stopped already claims to have stopped nothing. It leads with the

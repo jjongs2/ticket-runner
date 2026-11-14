@@ -2393,7 +2393,8 @@ async function handOff(
       await tracker.convertPullRequestToDraft(pullRequest);
     } else if (worktree?.pushable === true) {
       // A draft pull request is worth trying for, but never worth losing the
-      // relabel over.
+      // relabel over, unless GitHub or the remote is failing on its own side:
+      // then the relabel would meet the same fault, so the hand-off stops here.
       try {
         await workspace.push(worktree.path, branch);
         const pr = await tracker.createPullRequest({
@@ -2410,6 +2411,7 @@ async function handOff(
         pullRequest = pr.number;
         drafted = true;
       } catch (error) {
+        if (error instanceof OutsideFault) throw error;
         pipeline.log?.(`#${ticket} could not open a draft pull request: ${(error as Error).message}`);
       }
     }

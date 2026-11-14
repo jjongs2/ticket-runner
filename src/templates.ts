@@ -963,7 +963,7 @@ function noteRow({ origin, stage, issue, opened, summary }: RoutedNote): string 
 }
 
 /** What a `handed` row says of a hand-off a fault outside the Ticket cut short. */
-export const CUT_SHORT = "hand-off cut short";
+const CUT_SHORT = "hand-off cut short";
 
 /** One Ticket's line in a summary: what happened to it, and where to look. */
 function ticketRow(outcome: TicketOutcome, credential: Credential): string {
