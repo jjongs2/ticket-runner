@@ -40,7 +40,7 @@ It fits a repository where:
   run itself
 - the machine running it has Node 22 or newer, `git`, an authenticated
   [`gh`](https://cli.github.com/), and `claude` with the
-  [`mattpocock-skills`](https://github.com/mattpocock/skills) plugin, version 1.2.3 or later
+  [`mattpocock-skills`](https://github.com/mattpocock/skills) plugin, version 1.3.0 or later
 
 It merges to your base branch without asking. It is for repositories where that is what you want.
 

@@ -79,12 +79,21 @@ Every Stage runs in the Ticket's worktree with `--permission-prompts none`, the 
 
 | Stage | Prompt opens with | Structured answer |
 |---|---|---|
-| implement | `/mattpocock-skills:implement <issue URL>` | optional `title`, [`notes`](#notes) and `noCommitReason` |
+| implement | `/mattpocock-skills:implement <issue URL>` | optional `title`, `body`, `problem`, `solution`, [`notes`](#notes) and `noCommitReason` |
 | verify | `Ticket: <issue URL>`, no skill | the verdict, optional `notes` |
-| fix | `Ticket: <issue URL>`, no skill | optional `title`, `notes` and `noCommitReason` |
+| fix | `Ticket: <issue URL>`, no skill but `/mattpocock-skills:pr` | optional `title`, `body`, `problem`, `solution`, `notes` and `noCommitReason` |
 | conflict | `Ticket: <issue URL>`, no skill | none |
 
 The prompt ends with the Stage's [`extraPrompt`](./configuration.md#stages).
+
+**What a Stage writes, and in what language.** `body` is the [pull request body](#pull-request) below `Closes #<n>`; `problem` and `solution` open the [squash commit](#squash-merge-and-its-commit). A Target's own shapes come first:
+
+| Answer | Shape |
+|---|---|
+| `body` | What the Target's contributing guide or `.github/PULL_REQUEST_TEMPLATE.md` sets beyond the `Closes` line; where neither does, `/mattpocock-skills:pr`'s Summary, Evidence and Merge Danger |
+| `problem`, `solution` | What the contributing guide sets for a commit body; where it sets none, the state before the change and its effect, and what the change does and why, each in at most two sentences, readable without the Ticket |
+
+None of them carries a title, a closing keyword before an issue reference, a screenshot or a local path. Every Stage that answers writes its Notes, its verdict's evidence and these answers in the language the Target's contributing guide sets for issues and commits, or else in the language the Ticket is written in; a criterion's text stays as the Ticket writes it. The lines the pipeline writes itself, such as the progress table, stay in English.
 
 **What a Stage is billed to.** A Stage runs on the Claude login, with the Host's `ANTHROPIC_API_KEY` taken out of its environment, unless the Run was started with [`--api-key`](./running.md#api-key), when it runs on that key. When the session's `apiKeySource` says otherwise, the Run's log and summary name the Stage.
 
@@ -104,7 +113,7 @@ What each Stage leaves on disk is on [Logs and transcripts](./running.md#logs-an
 
 ## The implement Stage
 
-The implement skill reads the Ticket, builds it and reviews it. When the session ends, the pipeline routes its [Notes](#notes), records its `title`, and pushes the branch if it has commits, so a Run on another Host can resume from it. Then:
+The implement skill reads the Ticket, builds it and reviews it. Once the review's fixes are committed, the Stage answers `title`, `body`, `problem` and `solution` for the whole branch. When the session ends, the pipeline routes its [Notes](#notes), records each answer that is not blank in the state file, and pushes the branch if it has commits, so a Run on another Host can resume from it. Then:
 
 - A Stage that did not finish is a Hand-off at `implement`.
 - A branch with no commits beyond the base branch is a Hand-off: an agent that gave up silently leaves nothing to grade. The hand-off comment quotes the reason the Stage gave in `noCommitReason`, when it gave one.
@@ -155,7 +164,7 @@ A verify after a fix for unmet criteria gets the first verdict's unmet criteria 
 
 ## The fix Stage and the fix budget
 
-The fix budget is one fix Stage per Ticket, and whatever still fails after it goes to a human. The fix Stage is a fresh session on the same branch, with no plugin skill, given the failure and its evidence to mend that one defect. Sent in for unmet criteria, it commits nothing and says why in `noCommitReason` when one cannot be met without overturning a documented decision or another criterion, which hands the Ticket to a human. Otherwise it takes a fix the evidence proposes as a lead, not the answer: it finds the cause itself, looks for a fix of that cause within the Ticket's scope before settling for a narrower one, and before committing tests its fix with inputs built from that cause, not only with the counterexample it was given.
+The fix budget is one fix Stage per Ticket, and whatever still fails after it goes to a human. The fix Stage is a fresh session on the same branch, with no plugin skill but `/mattpocock-skills:pr`, given the failure and its evidence to mend that one defect. It is also given the latest `body`, `problem` and `solution` answered for the branch: one its fix changes it answers again, revised for the whole branch, and one it leaves true it answers blank, which keeps the earlier one. Sent in for unmet criteria, it commits nothing and says why in `noCommitReason` when one cannot be met without overturning a documented decision or another criterion, which hands the Ticket to a human. Otherwise it takes a fix the evidence proposes as a lead, not the answer: it finds the cause itself, looks for a fix of that cause within the Ticket's scope before settling for a narrower one, and before committing tests its fix with inputs built from that cause, not only with the counterexample it was given.
 
 Only a defect a fresh session could mend spends the budget:
 
@@ -241,7 +250,7 @@ The branch is pushed with `--force-with-lease`, since the rebase rewrote it. The
 2. The branch's first commit subject.
 3. The Ticket title, as it is.
 
-**The body** is `Closes #<n>`, the verdict counts, the criteria in a folded list (evidence shown for any not `met`), and a line naming the Run. On a workstation that line also points at `.ticket-runner/runs/<runId>/<n>/`; a cloud Host's run directory does not outlive its session, so there it names the Run alone.
+**The body** is `Closes #<n>`, a blank line, and the latest `body` the implement or fix Stage answered, in this Run or recorded in the state file by an earlier one; with none, `Closes #<n>` alone. The pipeline adds nothing else: the verify row of the progress comment carries the verdict, and the merge ticks the met criteria. A draft pull request a [Hand-off](./stopping-and-resuming.md#hand-off) leaves keeps its own body until a Run publishes it again.
 
 ### CI wait and grace period
 
@@ -270,15 +279,17 @@ The pipeline squash-merges through GitHub's REST API with a commit message it co
 
 Closes #<n>
 
-Verdict: <k> met · <u> unmet · <v> unverifiable
+<problem>
 
-- <branch commit subject>
-- <branch commit subject>
+<solution>
+
+Unverified:
+- <criterion> — <evidence>
 
 Co-authored-by: <name> <email>
 ```
 
-The subject is the pull request title. Commit subjects and `Co-authored-by` trailers are read after the rebase, since those are the commits that land. The per-criterion evidence stays in the pull request body.
+The subject is the pull request title. `<problem>` and `<solution>` are the latest the Stages answered, each line wider than 72 columns broken at its spaces, a wide character such as Hangul counting as two; the lines the Stage wrote stay, so a list stays a list. With no solution answered, the branch's commit subjects stand in for it as `- <subject>` lines, after the problem when there is one; nothing is made up for a missing answer. `Unverified:` appears only when a criterion was `unverifiable`, one line each with its evidence joined into one line, since nowhere else keeps that reason. Commit subjects and `Co-authored-by` trailers are read after the rebase, since those are the commits that land.
 
 ### After the merge
 

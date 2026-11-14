@@ -323,8 +323,8 @@ export interface Workspace {
    * Subjects of the commits on `branch` that `base` does not have, oldest first.
    *
    * The order is the port's promise, not an accident of git's default: the
-   * first subject names the whole Ticket, and the squash commit lists the rest
-   * in the order they were written.
+   * first subject names the whole Ticket, and a squash commit with no solution
+   * answered lists them in the order they were written.
    */
   commitSubjects(branch: string, base: string): Promise<string[]>;
   /**

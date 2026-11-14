@@ -1,34 +1,21 @@
 Closes #<n>
 
-**Verdict:** <k> met · <u> unmet · <v> unverifiable
+<body>
 
-<details><summary>Criteria</summary>
+`<body>` is the latest body a code Stage answered for the whole branch: in the
+shape the Target's contributing guide or `.github/PULL_REQUEST_TEMPLATE.md`
+sets, when either sets a body's sections or content beyond the `Closes` line,
+and otherwise the `pr` skill's Summary, Evidence and Merge Danger. The pipeline
+adds nothing of its own: the verify Stage's progress row carries the verdict,
+and the merge ticks the met criteria on the Ticket.
 
-- ✅ <criterion>
-- ❓ <criterion> — <evidence>
+A Ticket that was handed off and merges later has its body rewritten in this
+shape when that Run publishes the pull request, so it never keeps the
+state-branch pointer its draft body carried: the merge removes what that
+pointer names.
 
-</details>
-
-Run `<runId>` · transcripts in `.ticket-runner/runs/<runId>/<n>/`
-
-The last line names the Run, and the directory on the Host that ran it where
-its Stages' transcripts are. That is the shape on a workstation, whose run
-directory outlives the Run.
-
-A Ticket that was handed off and merges later has its body rewritten at the
-merge, in this shape or the cloud one below, so it never keeps the state-branch
-pointer its draft body carried: the merge removes what that pointer names.
-
-## On a cloud Host
+## When no Stage answered a body
 
 ```
-...
-</details>
-
-Run `<runId>`
+Closes #<n>
 ```
-
-The transcripts clause is dropped on a cloud Host, and the Run is named alone.
-A merged Ticket keeps no transcripts on the remote, since they go with its
-state, and a cloud Host's VM does not outlive its session, so nothing is left
-for the clause to point at.

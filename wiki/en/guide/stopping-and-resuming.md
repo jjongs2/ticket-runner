@@ -126,7 +126,7 @@ A handed-off Ticket is yours to end one of four ways:
 |---|---|
 | Change the Ticket, its criteria or the config, and hand it back | The next Run grades it against what the issue says then |
 | Push commits to its branch on the remote, and hand it back | The next Run brings its copy up to that tip. A rewritten history parts the copies instead |
-| Finish it yourself: mark the draft ready and merge it | The issue closes. Take `ready-for-human` off yourself, and delete the worktree and local branch on the Host that made them |
+| Finish it yourself: rewrite the draft's body, which describes the Hand-off rather than the change, mark it ready and merge it | The issue closes. Take `ready-for-human` off yourself, and delete the worktree and local branch on the Host that made them |
 | Drop it: close the issue | The draft pull request and the branch stay until you close and delete them |
 
 ```bash
@@ -236,6 +236,9 @@ The file is JSON a human can read without the pipeline:
   "fixUsed": false,
   "pullRequest": 31,
   "title": "feat: release a rate-limited Ticket",
+  "body": "## Summary\n\n...",
+  "problem": "A rate-limited Stage handed its Ticket to a human.",
+  "solution": "The Ticket is released and resumed from its state file.",
   "rebaseFirst": true,
   "runId": "2026-09-17T09-00-00-000",
   "version": "0.5.2",
@@ -251,6 +254,8 @@ The file is JSON a human can read without the pipeline:
 | `fixUsed` | whether the fix budget is spent. Resuming buys no second chance, except after a Hand-off. |
 | `pullRequest` | the pull request already open, so a resumed Run does not open a second one |
 | `title` | the latest title the implement or fix Stage gave for the whole branch, which names the pull request |
+| `body` | the latest pull request body they gave, written below `Closes #<n>` |
+| `problem`, `solution` | the latest problem and solution they gave, which open the squash commit |
 | `rebaseFirst` | present only after a Release over a failing base branch: rebase onto the base branch before the Checks |
 | `runId`, `version`, `updatedAt` | which Run and which [version](./internals.md#versions) wrote it, and when |
 

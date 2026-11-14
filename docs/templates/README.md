@@ -4,7 +4,7 @@ The exact shapes written to GitHub and the terminal: the pipeline's own, which t
 
 Humans read all of these, so each stays short: one line of status, details folded away. A Stage's reason for committing nothing is the one detail `handoff-comment.md` leaves unfolded, since it is what the human acts on.
 
-`squash-commit.txt` is the exception to the folding: `git log` renders no HTML, so it is plain text and carries counts rather than per-criterion evidence. Its first line is the pull request title, and the rest is the merge body. `notes-issue.md` is written the same way: its first line is the issue title.
+`pr-body.md` and `squash-commit.txt` carry what a code Stage answered rather than what the pipeline found. The pull request body is `Closes #<n>` and the body the Stage answered. The squash commit's first line is the pull request title, and the rest is the merge body: `Closes #<n>`, the problem and the solution the Stage answered, each line of them wider than 72 columns broken at its spaces (a wide character such as Hangul counts as two), and an `Unverified:` paragraph only when a criterion was unverifiable, its evidence joined into one line. `git log` renders no HTML, so nothing in it is folded. Where no Stage answered a solution, the branch's commit subjects stand in for it as `- <subject>` lines, after the problem when there is one; nothing is made up for a missing answer. `notes-issue.md` is written the same way: its first line is the issue title.
 
 | Template | Written when | Marker |
 |---|---|---|
@@ -13,7 +13,7 @@ Humans read all of these, so each stays short: one line of status, details folde
 | `guard-comment.md` | a candidate is skipped by a guard | `<!-- ticket-runner:guard:<reason> -->` |
 | `note-comment.md` | a Stage makes a Note, wherever it is routed, or a Ticket is released over a failing base branch | `<!-- ticket-runner:note -->` |
 | `notes-issue.md` | a Note cannot reach a Ticket and no standing Notes issue is open | `<!-- ticket-runner:notes-issue -->` (issue body) |
-| `pr-body.md` | the pull request is opened | none (PR body) |
+| `pr-body.md` | the pull request is opened, and rewritten each time it is updated | none (PR body) |
 | `draft-pr-body.md` | a hand-off opens the pull request as a draft, or makes an open one a draft; written again once the transcripts are kept | none (PR body) |
 | `squash-commit.txt` | the pull request is squash-merged | none (commit message) |
 | `run-summary.txt` | a Run ends (terminal) | none |

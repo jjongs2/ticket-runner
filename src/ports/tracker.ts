@@ -318,9 +318,9 @@ export interface Tracker {
   /**
    * Replace the body of an open pull request.
    *
-   * A Ticket that spends its fix budget is graded twice, and the body carries
-   * the verdict a human reads; without this it would keep the verdict that
-   * failed while the squash commit carried the one that passed.
+   * A Ticket that spends its fix budget comes back to its pull request, and
+   * the body is written from the latest body a Stage answered; without this it
+   * would keep describing the branch before the fix Stage changed it.
    */
   updatePullRequestBody(number: number, body: string): Promise<void>;
   /**
