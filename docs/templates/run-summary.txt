@@ -149,8 +149,26 @@ GitHub failure · `gh api --method POST repos/{owner}/{repo}/pulls -f base=main 
 One met before the claim, or while the claim was being made, reads `at setup`
 and leaves the Ticket as the claim left it: free for the next Run, or claimed,
 which the next Run resumes as a Stranded Ticket. One met while the Ticket was
-being released leaves it claimed in the same way, and one met while it was
-being handed off leaves it as far as the hand-off got.
+being released leaves it claimed in the same way, unless its assignee had
+already come off and GitHub would not put it back: then it is back on the
+Frontier, and the Run that takes it resumes it from its state.
+
+One met while the Ticket was being handed off is reported `released` only
+where the hand-off kept the state file and the Ticket still wears its claim,
+`in-progress` and its assignee: a fault at the draft pull request, at the
+comment or at taking `in-progress` off, after which the next Run resumes it as
+a Stranded Ticket. Anywhere else nothing sweeps the Ticket up: a hand-off that
+keeps no state, such as one at `setup` over a branch already present, removed
+the state file before its first write, and one that keeps it has already taken
+`in-progress` off by the time it puts `ready-for-human` on and takes its
+assignee off. Its row is `handed`, with the point and the failure as any
+`handed` row gives them, then that the hand-off was cut short and the fault. It
+counts toward exit code `1`, as any hand-off does, and stops the Run as a
+Release over the same fault would, with the same last line:
+
+  handed   #5 Fix Stage with a single retry · verify · 1 unmet · hand-off cut short · GitHub failure
+
+GitHub failure · `gh api --method POST repos/{owner}/{repo}/issues/5/labels -f labels[]=ready-for-human` · gh: Bad Gateway (HTTP 502)
 
 A Ticket a Run resumed has no row of its own, released or stranded: it merges,
 is handed off, or is released again like any other, and the header already names
@@ -217,8 +235,8 @@ The last line says why the Run stopped: `Frontier empty.` when nothing is left,
 one, `API failure.`, `Out of API budget.`,
 ``Base branch `<base>` fails `<command>` at <commit>.``, or
 ``GitHub failure · `<command>` · <first line>`` or
-``Remote unreachable · `<command>` · <first line>`` when a Release ended the
-Run, and `Stopped at <hh:mm> · ...`
+``Remote unreachable · `<command>` · <first line>`` when a Release, or a
+hand-off the same fault cut short, ended the Run, and `Stopped at <hh:mm> · ...`
 when a human stopped it. Where Releases differ, the first one's last line
 stands, except that out of API budget outranks the rate limit and an API
 failure, and the rate limit outranks an API failure.
@@ -235,8 +253,9 @@ and that amount is not in the header's:
   merged   #3 Run: drain the Frontier (PR #12)
   billed   #3 implement · apiKeySource apiKeyHelper · $4.15
 
-A Run a Release stopped prints no `skipped  #<n> blocked` rows and no rows for
-the Frontier Tickets it never reached: it stopped before it could say a
+A Run a Release stopped, or a hand-off a fault cut short, prints no
+`skipped  #<n> blocked` rows and no rows for the Frontier Tickets it never
+reached: it stopped before it could say a
 candidate was held back all Run. The rows its Lanes earned and the last line are
 the whole report.
 

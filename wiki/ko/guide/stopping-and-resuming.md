@@ -17,7 +17,7 @@ Run은 아무도 지켜보지 않는 사이에 돌아가니, 일이 틀어졌을
 | [Stop](#stop-and-kill) | `ticket-runner stop`(SIGTERM) | 새로 남는 것 없음 |
 | [kill](#stop-and-kill) | Ctrl+C, SIGKILL, 사라진 Host | claim, 마지막 push 시점의 작업, state |
 
-merge나 Hand-off 뒤에는 Run이 그 Lane을 다시 채우고, 다른 Lane이 바쁜 동안에는 빈 Lane도 틈틈이 Frontier를 다시 봅니다([실행하기](./running.md#run)). Release나 Stop 뒤에는 더 claim하지 않고, 바쁜 Lane만 맡은 일을 마칩니다. kill이면 그 자리에서 끝납니다.
+merge나 Hand-off 뒤에는 Run이 그 Lane을 다시 채우고, 다른 Lane이 바쁜 동안에는 빈 Lane도 틈틈이 Frontier를 다시 봅니다([실행하기](./running.md#run)). Release나 Stop, 또는 [GitHub나 remote 장애로 중간에 끊긴](#release-over-a-github-or-remote-failure) Hand-off 뒤에는 더 claim하지 않고, 바쁜 Lane만 맡은 일을 마칩니다. kill이면 그 자리에서 끝납니다.
 
 아직 끝나지 않은 Ticket은 저마다 한 갈래 길로 돌아옵니다. 어느 길인지는 보드가 정합니다.
 
@@ -57,7 +57,7 @@ state file은 남겨 두니, 라벨만 바꾸면 Ticket을 이어 갑니다([Tic
 **Handed off.** Failed at **verify**, after the fix budget was used.
 
 - Failure: 1 of 6 criteria unmet
-- Branch `agent/8-rate-limit-release` on the remote · worktree `/home/me/acme/.worktrees/ticket-8` · PR #31 (draft)
+- Branch `agent/8-rate-limit-release` on the remote · worktree `.worktrees/ticket-8` · PR #31 (draft)
 - Transcripts: `ticket-8/2026-09-17T09-00-00-000/` on the `ticket-runner/state` branch
 
 <details><summary>Evidence</summary>
@@ -110,7 +110,7 @@ Failure 줄은 무엇이 Ticket을 멈췄는지 말합니다. 그에 따라 할 
 <!-- ticket-runner:handoff -->
 **Handed off.** PR #31 passed every gate and waits for a human to merge it: this Target merges by hand.
 
-- Branch `agent/8-rate-limit-release` on the remote · worktree `/home/me/acme/.worktrees/ticket-8` · PR #31
+- Branch `agent/8-rate-limit-release` on the remote · worktree `.worktrees/ticket-8` · PR #31
 
 **Unverifiable criteria:**
 
@@ -221,6 +221,13 @@ GitHub 읽기, 상태를 정하는 쓰기(라벨, 코멘트 수정), pull reques
 - state와 fix 기회는 그대로이고, 다음 Run은 거기서 이어 갑니다. 먼저 rebase할 필요는 없습니다.
 - 실패한 시도가 실제로는 열어 둔 pull request는 branch에서 찾아 그대로 쓰고, 두 번 열지 않습니다.
 - GitHub가 claim을 떼는 쓰기마저 받아 주지 않으면 Ticket은 claim된 채로 남고, 다음 Run이 [Stranded Ticket](#stranded-tickets-and-the-sweep)으로 이어 갑니다. 담당자는 떼었는데 `in-progress`가 남았다면 Frontier로 돌아가, 여느 Release된 Ticket처럼 거기서 이어 갑니다.
+
+같은 장애가 Hand-off의 쓰기에서 날 수도 있습니다. draft pull request, 코멘트, `in-progress` 떼기, `ready-for-human` 붙이기, 담당자 떼기가 그 쓰기입니다. 이때도 Run은 같은 방식으로, 같은 마지막 줄로 멈춥니다. Hand-off가 state file을 남기고 Ticket이 아직 `in-progress`와 담당자를 달고 있다면, 즉 앞의 세 쓰기에서 장애가 났다면, Ticket은 `released`로 보고되고 다음 Run이 Stranded Ticket으로 이어 갑니다. 그 밖의 경우에는 아무것도 저절로 다시 집어 가지 않으므로 `handed` 줄로 보고됩니다. 줄 끝에 `hand-off cut short · GitHub failure`(또는 `remote unreachable`)가 붙고, 종료 코드 `1`에 들어갑니다. 남을 수 있는 것과 손으로 마무리할 일은 다음과 같습니다.
+
+| 끊긴 곳 | 남을 수 있는 것 | 손으로 마무리할 일 |
+|---|---|---|
+| state를 남기지 않는 Hand-off의 어느 쓰기든. 이미 있는 branch 때문에 `setup`에서 Hand-off된 경우 등 | claim(`in-progress`와 담당자). state file은 없음. 코멘트가 실패했다면 코멘트도 없음 | `handed` 줄에서 실패 이유를 읽거나, 코멘트가 없으면 Run 로그에서 읽기. `in-progress`를 `ready-for-human`으로 바꾸고 담당자 떼기 |
+| state를 남기는 Hand-off의 `ready-for-human` 붙이기나 담당자 떼기 | 코멘트, draft pull request, state file. `in-progress`는 없고 담당자는 그대로. `ready-for-human`이 실패했다면 그것도 없음 | `ready-for-human`을 붙이고 담당자 떼기 |
 
 그 밖의 실패는 전처럼 Hand-off합니다. GitHub의 4xx, 그리고 시간이 지나도 풀리지 않는 git 실패가 그렇습니다. main checkout에 commit하지 않은 변경이 있어 pull이 거부되거나 base branch가 정말로 갈라진 경우 같은 것들이죠. 이런 걸 Release하면 아무 말 없이 매 Run마다 되돌아옵니다.
 
@@ -367,7 +374,7 @@ flowchart TD
 
 ## 참고 자료 {#references}
 
-- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `takeTicket`, `resumable`, `ResumeRecord`, `rebaseFirst`, `release`, `undoClaim`, `noteFailingBase`, `handOff`
+- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `takeTicket`, `resumable`, `ResumeRecord`, `rebaseFirst`, `release`, `undoClaim`, `noteFailingBase`, `handOff`, `cutShort`
 - [`src/failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts): `BaseBranchChecks`
 - [`src/outside-fault.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/outside-fault.ts): `OutsideFault`, `faultSide`
 - [`src/adapters/gh-tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts): `GITHUB_RETRY_DELAYS_MS`

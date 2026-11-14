@@ -17,7 +17,7 @@ Nobody watches a Run, so it has to end well when something goes wrong: a Ticket 
 | [Stop](#stop-and-kill) | `ticket-runner stop` (SIGTERM) | nothing new |
 | [Kill](#stop-and-kill) | Ctrl+C, SIGKILL, a vanished Host | the claim; work as last pushed, and state |
 
-After a merge or a Hand-off the Run refills the Lane, and while another Lane is busy a free Lane also looks at the Frontier again at intervals ([Running](./running.md#run)). After a Release or a Stop it claims nothing more, and the busy Lanes finish what they hold. A kill ends it on the spot.
+After a merge or a Hand-off the Run refills the Lane, and while another Lane is busy a free Lane also looks at the Frontier again at intervals ([Running](./running.md#run)). After a Release, a Stop or a Hand-off [GitHub or the remote cut short](#release-over-a-github-or-remote-failure) it claims nothing more, and the busy Lanes finish what they hold. A kill ends it on the spot.
 
 Each Ticket that is still unfinished then comes back by one road. The board decides which:
 
@@ -57,7 +57,7 @@ The comment follows [`docs/templates/handoff-comment.md`](https://github.com/jjo
 **Handed off.** Failed at **verify**, after the fix budget was used.
 
 - Failure: 1 of 6 criteria unmet
-- Branch `agent/8-rate-limit-release` on the remote · worktree `/home/me/acme/.worktrees/ticket-8` · PR #31 (draft)
+- Branch `agent/8-rate-limit-release` on the remote · worktree `.worktrees/ticket-8` · PR #31 (draft)
 - Transcripts: `ticket-8/2026-09-17T09-00-00-000/` on the `ticket-runner/state` branch
 
 <details><summary>Evidence</summary>
@@ -110,7 +110,7 @@ On a Target that sets [`merge`](./configuration.md#merge) to `false`, a Ticket w
 <!-- ticket-runner:handoff -->
 **Handed off.** PR #31 passed every gate and waits for a human to merge it: this Target merges by hand.
 
-- Branch `agent/8-rate-limit-release` on the remote · worktree `/home/me/acme/.worktrees/ticket-8` · PR #31
+- Branch `agent/8-rate-limit-release` on the remote · worktree `.worktrees/ticket-8` · PR #31
 
 **Unverifiable criteria:**
 
@@ -221,6 +221,13 @@ A GitHub read, a write that sets a state (a label, an edited comment) and openin
 - the state and the fix budget stay as they were, and the next Run resumes from there, with no rebase owed
 - a pull request the failed attempt opened all the same is found on the branch and used, not opened twice
 - if GitHub will not take the claim off either, the Ticket stays claimed, and the next Run resumes it as a [Stranded Ticket](#stranded-tickets-and-the-sweep). One whose assignee came off but whose `in-progress` would not is back on the Frontier, and resumes from there as any released Ticket
+
+The same fault can meet a Hand-off's own writes: the draft pull request, the comment, `in-progress` off, `ready-for-human` on, the assignee off. It stops the Run the same way, with the same last line. Where the Hand-off kept the state file and the Ticket still wears `in-progress` and its assignee, which is a fault at one of the first three writes, the Ticket is reported `released` and the next Run resumes it as a Stranded Ticket. Anywhere else nothing picks it up by itself, so its row is `handed`, ending `hand-off cut short · GitHub failure` (or `remote unreachable`), and it counts toward exit code `1`. What it can leave, and what you finish by hand:
+
+| Cut short | What it can leave | Finish by hand |
+|---|---|---|
+| At any write of a Hand-off that keeps no state, such as one at `setup` over a branch already present | the claim, `in-progress` and the assignee; no state file; no comment if the comment failed | Read the failure in the `handed` row, or in the Run's log where no comment was posted. Swap `in-progress` for `ready-for-human` and take the assignee off |
+| At `ready-for-human` or the assignee, in a Hand-off that keeps state | the comment, the draft pull request and the state file; no `in-progress`, still assigned, and no `ready-for-human` if that failed | Put `ready-for-human` on and take the assignee off |
 
 Everything else is handed off as before: a GitHub 4xx, and a git failure that will not pass with time, such as a pull refused over uncommitted changes in the main checkout or a base branch that really diverged. Released, those would come back every Run without a word.
 
@@ -367,7 +374,7 @@ flowchart TD
 
 ## References
 
-- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `takeTicket`, `resumable`, `ResumeRecord`, `rebaseFirst`, `release`, `undoClaim`, `noteFailingBase`, `handOff`
+- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `takeTicket`, `resumable`, `ResumeRecord`, `rebaseFirst`, `release`, `undoClaim`, `noteFailingBase`, `handOff`, `cutShort`
 - [`src/failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts): `BaseBranchChecks`
 - [`src/outside-fault.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/outside-fault.ts): `OutsideFault`, `faultSide`
 - [`src/adapters/gh-tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts): `GITHUB_RETRY_DELAYS_MS`

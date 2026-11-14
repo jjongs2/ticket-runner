@@ -2,7 +2,7 @@
 **Handed off.** Failed at **<stage>**<, after the fix budget was used>.
 
 - Failure: <one line>
-- Branch `<branch>` on the remote · worktree `<path>` · PR #<pr> (draft)
+- Branch `<branch>` on the remote · worktree `.worktrees/ticket-<n>` · PR #<pr> (draft)
 - Transcripts: `ticket-<n>/<runId>/` on the `ticket-runner/state` branch
 
 **The <stage> Stage said:** <the Stage's noCommitReason>
@@ -61,7 +61,11 @@ Ticket, whose comments are read for Acceptance Criteria, so a `- [ ]` at the
 head of any of its lines is escaped to `- \[ \]`, as a Note's is. The draft
 pull request body does not carry it; it points at this comment.
 
-The worktree clause is dropped when there is no worktree to name: a Ticket that
+The worktree is named relative to the Target's checkout, on every Target
+whatever its visibility, so a public comment does not publish the Host's home
+path; so are the worktrees in a refusal's failure line and in the commands it
+gives, which work from the root of the checkout. The worktree clause is dropped
+when there is no worktree to name: a Ticket that
 failed before its worktree was created never had one, and a path that is not on
 disk sends the human to a directory they will not find. No draft pull request is
 opened for such a Ticket either, because there is nothing to push out of, so
@@ -104,7 +108,7 @@ something has to say that a kill is why.
 <!-- ticket-runner:handoff -->
 **Handed off.** PR #<pr> passed every gate and waits for a human to merge it: this Target merges by hand.
 
-- Branch `<branch>` on the remote · worktree `<path>` · PR #<pr>
+- Branch `<branch>` on the remote · worktree `.worktrees/ticket-<n>` · PR #<pr>
 
 **Unverifiable criteria:**
 

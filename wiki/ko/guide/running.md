@@ -166,7 +166,7 @@ Frontier blocked.
 | 줄 | 뜻 |
 |---|---|
 | `merged` | merge됨. pull request 번호가 붙음 |
-| `handed` | 사람에게 Hand-off됨. 멈춘 Stage와 이유가 붙음. `merge · left to a human, as this Target merges by hand`는 [사람이 직접 merge하는](./configuration.md#merge) Target에서 CI가 초록인 Ticket |
+| `handed` | 사람에게 Hand-off됨. 멈춘 Stage와 이유가 붙음. `merge · left to a human, as this Target merges by hand`는 [사람이 직접 merge하는](./configuration.md#merge) Target에서 CI가 초록인 Ticket. 줄 끝이 `hand-off cut short · GitHub failure`(또는 `remote unreachable`)라면 [그 장애로 중간에 끊긴](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) Hand-off이니 손으로 마무리해야 함 |
 | `released` | 해당 Stage에서 `rate limit`(`--api-key` Run이면 `API rate limit`), `API failure`, `out of API budget`으로, `checks`나 `ci`에서 `failing base branch`로, 또는 어느 단계에서든 `GitHub failure`나 `remote unreachable`로 Release됨. 그 Ticket을 두고 사람이 할 일은 없음 |
 | `skipped` | 이유와 함께 넘어감([guard](./planning.md#guards), 또는 위의 표) |
 | `billed` | 위 Ticket의 Stage가 `apiKeySource`로 알린 과금처가 머리 줄과 다름. 예를 들어 Host 설정의 `apiKeyHelper`가 준 키인데, 이것은 환경 변수로 뺄 수 없음. 그 Stage가 금액을 알렸으면 `· $4.15`처럼 끝에 붙고, 머리 줄의 금액에는 들어가지 않음 |
@@ -180,10 +180,10 @@ Frontier blocked.
 | `API failure.` | 일시적인 API 장애로 Release되어 멈췄고, 그 뒤 rate limit으로 Release된 Ticket이 없음. 마지막 줄에서는 rate limit이 API 장애보다 앞섬 |
 | `Out of API budget.` | 키의 크레딧이나 지출 한도로 Release되어 멈춤. 사람이 손써야 하는 것은 이것뿐이라 rate limit과 API 장애보다 앞섬. Console을 확인하세요. |
 | ``Base branch `main` fails `npm test` at 1a2b3c4.`` | base branch 실패로 Release되어 멈춤. 실패한 Check와 merge-base를 알려 줌. base branch에서 고치면 되고, 출력은 상설 Notes 이슈의 Note에 있음 |
-| ``Remote unreachable · `git pull --ff-only origin main` · git@github.com: Permission denied (publickey).`` | [GitHub나 remote 장애](./stopping-and-resuming.md#release-over-a-github-or-remote-failure)로 Release되어 멈춤. 실패한 명령과 그 출력의 첫 줄을 알려 줌. GitHub라면 `GitHub failure · …`. 로그인이나 키 문제라면 먼저 손봐야 함 |
+| ``Remote unreachable · `git pull --ff-only origin main` · git@github.com: Permission denied (publickey).`` | [GitHub나 remote 장애](./stopping-and-resuming.md#release-over-a-github-or-remote-failure)로 Release되거나, 같은 장애로 Hand-off가 중간에 끊겨 멈춤. 실패한 명령과 그 출력의 첫 줄을 알려 줌. GitHub라면 `GitHub failure · …`. 로그인이나 키 문제라면 먼저 손봐야 함 |
 | `Stopped at 22:07 · finishing #4 #9.` | 그 시각(UTC)에 Stop이 왔고, 그때 그 Ticket들이 Lane에 있었음 |
 
-Stop이나 Release로 끝난 Run은 Frontier 끝까지 가 보지 못했으니 `blocked` 줄을 출력하지 않습니다.
+Stop이나 Release, 또는 장애로 끊긴 Hand-off로 끝난 Run은 Frontier 끝까지 가 보지 못했으니 `blocked` 줄을 출력하지 않습니다.
 
 ## 종료 코드 {#exit-codes}
 

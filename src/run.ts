@@ -110,7 +110,9 @@ export type RunStop =
  * worktree and a doomed Stage to learn what the first one already said. The Lanes still busy finish
  * what they hold, and the Run reports what stopped it once the last of them
  * comes back. It does not wait for the limit to reset: a human or an Operator
- * starts the next Run, and the summary says when the limit resets.
+ * starts the next Run, and the summary says when the limit resets. A hand-off
+ * that GitHub or the remote cut short stops it the same way, for the same
+ * reason, though its Ticket is reported handed off.
  *
  * A Stop is the same shape with a different reason: a human asked for no more
  * Tickets rather than the subscription, so the Lanes busy at that moment finish
@@ -199,9 +201,10 @@ export async function processRun(
   /**
    * Put a Ticket in a Lane, and record what came back when it ends.
    *
-   * The line about the Run stopping is logged by the Release that stopped it and
-   * by no other, even where a later Release outranks it on the last line. The
-   * Ticket's own release is already logged where it happened; this says the Run
+   * The line about the Run stopping is logged by the Release that stopped it,
+   * or by the hand-off a fault outside the Ticket cut short, and by no other,
+   * even where a later Release outranks it on the last line. The Ticket's own
+   * release is already logged where it happened; this says the Run
    * goes no further, so a transcript shows the Frontier was left alone rather
    * than found empty, and a Release into a Run that an earlier Release or a
    * Stop had stopped already claims to have stopped nothing. It leads with the
@@ -216,6 +219,17 @@ export async function processRun(
         busy.delete(ticket.number);
         ended += 1;
         outcomes.push(outcome);
+        if (outcome.outcome === "handed-off" && outcome.fault !== undefined) {
+          // A hand-off the fault cut short stops the Run as a Release over it
+          // would, and outranks nothing that stopped it first.
+          if (runStop !== undefined) return;
+          const { side, command, line } = outcome.fault;
+          runStop = { reason: side, command, line };
+          pipeline.log?.(
+            `#${outcome.ticket} stopped the Run · ${releaseWords(side, pipeline.credential)}`,
+          );
+          return;
+        }
         if (outcome.outcome !== "released") return;
         if (runStop === undefined) {
           runStop = releaseStop(outcome, pipeline.baseBranch);

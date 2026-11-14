@@ -2062,6 +2062,71 @@ describe("a Ticket GitHub or the remote failed on its own side", () => {
     expect(runner.stages()).toEqual(["implement", "verify", "verify"]);
   });
 
+  const BAD_GATEWAY = "gh: Bad Gateway (HTTP 502)";
+  const commentFault = () =>
+    new OutsideFault("github", "gh api --method POST comments", BAD_GATEWAY, `\`gh api --method POST comments\` exited 1\n${BAD_GATEWAY}`);
+
+  it("ends it over a hand-off the fault cut short, reporting the Ticket handed off", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    // A branch a human holds, so the hand-off keeps no state, and its comment fails.
+    workspace.branches.add("agent/4-ticket-4");
+    tracker.comment = async () => {
+      throw commentFault();
+    };
+
+    const result = await processRun(pipeline());
+
+    expect(processed()).toEqual([4]);
+    expect(result.outcomes).toMatchObject([
+      { outcome: "handed-off", ticket: 4, stage: "setup", fault: { side: "github" } },
+    ]);
+    expect(result.stop).toEqual({
+      reason: "github",
+      command: "gh api --method POST comments",
+      line: BAD_GATEWAY,
+    });
+    expect(logged).toContain("#4 stopped the Run · GitHub failure");
+    expect(tracker.issue(5).assignees).toEqual([]);
+  });
+
+  it("keeps the stop of whichever came first, a cut-short hand-off or a Release", async () => {
+    for (const number of [4, 5]) tracker.addIssue({ number });
+    // #5 is handed off at setup, its comment failing, while #4 is still in its
+    // implement Stage; #4 is then released over the remote.
+    workspace.pullBaseFailure = unreachable();
+    workspace.branches.add("agent/5-ticket-5");
+    tracker.comment = async () => {
+      throw commentFault();
+    };
+
+    const result = await processRun(pipeline(2));
+
+    expect(result.outcomes).toMatchObject([
+      { outcome: "handed-off", ticket: 5, fault: { side: "github" } },
+      { outcome: "released", ticket: 4, cause: "remote" },
+    ]);
+    expect(result.stop).toMatchObject({ reason: "github", command: "gh api --method POST comments" });
+    expect(logged).toContain("#5 stopped the Run · GitHub failure");
+    expect(logged).not.toContain("#4 stopped the Run · remote unreachable");
+  });
+
+  it("is resumed by the next Run as stranded when the hand-off kept its state and claim", async () => {
+    tracker.addIssue({ number: 4 });
+    runner.queue("implement", { ok: false, failure: "nonzero-exit" });
+    const comment = tracker.comment.bind(tracker);
+    tracker.comment = async (number, body) => {
+      if (body.includes("ticket-runner:handoff")) throw commentFault();
+      return await comment(number, body);
+    };
+
+    expect((await processRun(pipeline())).outcomes).toMatchObject([
+      { outcome: "released", ticket: 4, stage: "implement", cause: "github" },
+    ]);
+    tracker.comment = comment;
+
+    expect((await processRun(pipeline())).outcomes).toMatchObject([{ outcome: "merged", ticket: 4 }]);
+  });
+
   // An outage that starts at the Release's first, second or third board write
   // and outlasts it, whether it leaves the claim on or only in-progress.
   it.each([0, 1, 2])(

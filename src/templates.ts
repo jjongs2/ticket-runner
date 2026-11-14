@@ -962,6 +962,9 @@ function noteRow({ origin, stage, issue, opened, summary }: RoutedNote): string 
   );
 }
 
+/** What a `handed` row says of a hand-off a fault outside the Ticket cut short. */
+const CUT_SHORT = "hand-off cut short";
+
 /** One Ticket's line in a summary: what happened to it, and where to look. */
 function ticketRow(outcome: TicketOutcome, credential: Credential): string {
   switch (outcome.outcome) {
@@ -972,7 +975,11 @@ function ticketRow(outcome: TicketOutcome, credential: Credential): string {
         "handed",
         outcome.ticket,
         // The one line of an unexpected error; its output is the hand-off's.
-        `${outcome.title} · ${outcome.stage} · ${splitMessage(outcome.failure).line}`,
+        `${outcome.title} · ${outcome.stage} · ${splitMessage(outcome.failure).line}` +
+          // A hand-off the fault cut short says so, since a human finishes it.
+          (outcome.fault === undefined
+            ? ""
+            : ` · ${CUT_SHORT} · ${releaseWords(outcome.fault.side, credential)}`),
       );
     case "released":
       // Nothing for a human to do, so the row says only what stopped the Stage

@@ -921,6 +921,37 @@ describe("runSummary", () => {
     );
   });
 
+  it("says a hand-off a fault cut short did not finish, and names the fault", () => {
+    const summary = runSummary({
+      credential: "subscription",
+      version: VERSION,
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [
+        {
+          ...handed,
+          fault: {
+            side: "github",
+            command: "gh api --method POST repos/{owner}/{repo}/issues/5/labels",
+            line: "gh: Bad Gateway (HTTP 502)",
+          },
+        },
+      ],
+      stop: {
+        reason: "github",
+        command: "gh api --method POST repos/{owner}/{repo}/issues/5/labels",
+        line: "gh: Bad Gateway (HTTP 502)",
+      },
+    });
+
+    expect(summary).toContain(
+      "  handed   #5 Fix Stage with a single retry · verify · 1 unmet · hand-off cut short · GitHub failure\n",
+    );
+    expect(summary).toContain(
+      "GitHub failure · `gh api --method POST repos/{owner}/{repo}/issues/5/labels` · gh: Bad Gateway (HTTP 502)",
+    );
+  });
+
   it("gives an unexpected failure the command and how it exited, on one line", () => {
     const summary = runSummary({
       credential: "subscription",

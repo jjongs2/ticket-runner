@@ -1,3 +1,4 @@
+import { relative } from "node:path";
 import { type ListedCriterion, listCriteria } from "./acceptance-criteria.js";
 import { branchName, worktreePath } from "./branch.js";
 import type { Config } from "./config.js";
@@ -109,6 +110,13 @@ export type TicketOutcome =
       stage: FailurePoint;
       failure: string;
       pullRequest?: number;
+      /**
+       * The fault outside the Ticket that cut the hand-off short, where one
+       * did and left the Ticket no longer claimed: whose side it was on, the
+       * command, and the first line it printed. The Run claims no more after
+       * it, as after a Release over the same fault.
+       */
+      fault?: OutsideFaultSeen & { side: FaultSide };
       notes: RoutedNote[];
     }
   | {
@@ -524,7 +532,11 @@ async function takeTicket(
           checkedOutAt === undefined ? undefined : { path: checkedOutAt, pushable: false };
         throw new TicketFailure(
           "setup",
-          describeBranchInTheWay(branch, checkedOutAt, config.labels.readyForAgent),
+          describeBranchInTheWay(
+            branch,
+            checkedOutAt === undefined ? undefined : inCheckout(repoRoot, checkedOutAt),
+            config.labels.readyForAgent,
+          ),
         );
       }
       await workspace.createWorktree({ path: worktree, branch }, baseBranch);
@@ -701,32 +713,21 @@ async function takeTicket(
       });
     }
     const failure = asTicketFailure(error, point);
-    try {
-      return await handOff(pipeline, {
-        issue,
-        user,
-        branch,
-        ...(worktreeOnDisk === undefined ? {} : { worktree: worktreeOnDisk }),
-        // A resume refused at setup keeps it too: the work is the pipeline's,
-        // and whichever side a human keeps is one a later Run resumes from.
-        keepsState: found?.refusal !== undefined || worktreeOnDisk?.pushable === true,
-        pullRequest,
-        failure,
-        fixUsed,
-        record,
-        progress,
-        notes,
-      });
-    } catch (handing) {
-      if (!(handing instanceof OutsideFault)) throw handing;
-      // The hand-off's own writes met the fault, so the Ticket is left as far
-      // as the hand-off got, and this Run claims no more, as over any fault of
-      // the kind. A Ticket still wearing its claim is resumed by the next Run
-      // as stranded; one the hand-off had already taken further waits for a
-      // human, as a hand-off would have it.
-      log(`#${ticket} could not be handed off at ${failure.point} · ${handing.message}`);
-      return faultOutcome(issue, branch, failure.point, handing, notes);
-    }
+    return await handOff(pipeline, {
+      issue,
+      user,
+      branch,
+      ...(worktreeOnDisk === undefined ? {} : { worktree: worktreeOnDisk }),
+      // A resume refused at setup keeps it too: the work is the pipeline's,
+      // and whichever side a human keeps is one a later Run resumes from.
+      keepsState: found?.refusal !== undefined || worktreeOnDisk?.pushable === true,
+      pullRequest,
+      failure,
+      fixUsed,
+      record,
+      progress,
+      notes,
+    });
   }
 
   // The Ticket is merged from here on, so nothing below may hand it off, and
@@ -772,9 +773,10 @@ async function takeTicket(
  * Run log each carry. It names the branch twice on purpose: once as the thing
  * that is in the way, and once inside the command that clears it.
  *
- * `checkedOutAt` is the worktree the branch is in, when it is in one: a branch
- * git will not let go of is not one `git branch -D` can delete, so being told
- * to run that would send the human round a second failure.
+ * `checkedOutAt` is the worktree the branch is in, when it is in one, relative
+ * to the Target's checkout ({@link inCheckout}): a branch git will not let go
+ * of is not one `git branch -D` can delete, so being told to run that would
+ * send the human round a second failure.
  */
 function describeBranchInTheWay(
   branch: string,
@@ -854,7 +856,11 @@ async function resumable(
     const checkedOutAt = checkedOut ? worktree : undefined;
     return {
       state,
-      refusal: describeParted(state.branch, checkedOutAt, pipeline.config.labels.readyForAgent),
+      refusal: describeParted(
+        state.branch,
+        checkedOutAt === undefined ? undefined : inCheckout(pipeline.repoRoot, checkedOutAt),
+        pipeline.config.labels.readyForAgent,
+      ),
       ...(checkedOutAt === undefined ? {} : { checkedOutAt }),
     };
   }
@@ -877,7 +883,8 @@ async function resumable(
  * one on the remote: which two copies, and the two ways to make them one.
  *
  * One line, as for {@link describeBranchInTheWay}. `checkedOutAt` is the
- * worktree the branch is in, when it is in one.
+ * worktree the branch is in, when it is in one, relative to the Target's
+ * checkout.
  */
 function describeParted(
   branch: string,
@@ -897,6 +904,16 @@ function describeParted(
     `the other lacks; keep the remote's by throwing this Host's away with ${discard}, ` +
     `or force-push this Host's over it by hand, then relabel the Ticket ${readyForAgent}`
   );
+}
+
+/**
+ * A worktree as a hand-off names it: relative to the Target's checkout, such
+ * as `.worktrees/ticket-<n>`, on every Target whatever its visibility. A
+ * comment on a public Target would otherwise publish the Host's home path, and
+ * the commands a refusal gives work from the checkout's root as they stand.
+ */
+function inCheckout(repoRoot: string, path: string): string {
+  return relative(repoRoot, path);
 }
 
 /**
@@ -2166,9 +2183,11 @@ async function undoClaim(pipeline: Pipeline, ticket: number, user: string): Prom
 
 /**
  * The outcome of a Ticket a fault outside it stopped where nothing more could
- * be written about it: still claimed, which a later Run resumes it from as a
- * Stranded Ticket. The Run reports it released all the same, since what the
- * Run does next is what a Release asks of it: claim nothing more.
+ * be written about it: before the claim or in it, or in a hand-off that kept
+ * the state file and the claim. Free, or still claimed, which a later Run
+ * resumes it from as a Stranded Ticket. The Run reports it released all the
+ * same, since what the Run does next is what a Release asks of it: claim
+ * nothing more.
  */
 export function faultOutcome(
   issue: { number: number; title: string },
@@ -2310,6 +2329,11 @@ interface HandOff {
  * prevent. The one worktree this Run may not push out of whose state stays is
  * one parted from the remote branch: both copies are the pipeline's, and
  * pushing either over the other is the choice the human is handed.
+ *
+ * A fault outside the Ticket that meets one of the hand-off's writes cuts it
+ * short where it stands, and the Run claims no more, as over any fault of the
+ * kind ({@link cutShort}). Never thrown out of: the Ticket's ending is what
+ * the summary reports, whichever it turns out to be.
  */
 async function handOff(
   pipeline: Pipeline,
@@ -2359,96 +2383,117 @@ async function handOff(
   // Whether the draft's body is one this hand-off wrote, naming no transcripts.
   // One it only converted still says what its Run said, which is not this.
   let drafted = false;
-  if (byHand !== undefined) {
-    // Nothing to do: ready for review, its title and body as the pr step wrote them.
-  } else if (pullRequest !== undefined) {
-    await tracker.convertPullRequestToDraft(pullRequest);
-  } else if (worktree?.pushable === true) {
-    // A draft pull request is worth trying for, but never worth losing the
-    // relabel over.
-    try {
-      await workspace.push(worktree.path, branch);
-      const pr = await tracker.createPullRequest({
-        base: pipeline.baseBranch,
-        head: branch,
-        // A human can still merge the draft, and its squash commit takes this
-        // title, so it is the one a Stage answered for the branch where there is
-        // one. Without it, the Ticket title rather than a commit subject: the
-        // pipeline merges nothing here, so it derives nothing for a merge.
-        title: record.title ?? issue.title,
-        body: draftPullRequestBody(draftBody),
-        draft: true,
-      });
-      pullRequest = pr.number;
-      drafted = true;
-    } catch (error) {
-      pipeline.log?.(`#${ticket} could not open a draft pull request: ${(error as Error).message}`);
+  // Whether the Ticket still wears its claim, `in-progress` and its assignee,
+  // which is what decides how a fault met below is reported.
+  let claimed = true;
+  try {
+    if (byHand !== undefined) {
+      // Nothing to do: ready for review, its title and body as the pr step wrote them.
+    } else if (pullRequest !== undefined) {
+      await tracker.convertPullRequestToDraft(pullRequest);
+    } else if (worktree?.pushable === true) {
+      // A draft pull request is worth trying for, but never worth losing the
+      // relabel over, unless GitHub or the remote is failing on its own side:
+      // then the relabel would meet the same fault, so the hand-off stops here.
+      try {
+        await workspace.push(worktree.path, branch);
+        const pr = await tracker.createPullRequest({
+          base: pipeline.baseBranch,
+          head: branch,
+          // A human can still merge the draft, and its squash commit takes this
+          // title, so it is the one a Stage answered for the branch where there is
+          // one. Without it, the Ticket title rather than a commit subject: the
+          // pipeline merges nothing here, so it derives nothing for a merge.
+          title: record.title ?? issue.title,
+          body: draftPullRequestBody(draftBody),
+          draft: true,
+        });
+        pullRequest = pr.number;
+        drafted = true;
+      } catch (error) {
+        if (error instanceof OutsideFault) throw error;
+        pipeline.log?.(`#${ticket} could not open a draft pull request: ${(error as Error).message}`);
+      }
     }
-  }
 
-  if (keepsState) {
-    // Written after the draft pull request, because that pull request is part of
-    // what a resuming Run must not open a second one beside.
-    //
-    // The fix budget goes back unspent: the Ticket only comes back through a
-    // human's hands, and whatever they did to it is what the fresh budget is
-    // for. Nothing is lost by it — the hand-off comment says the budget was
-    // spent, and the claim only marks that comment as history.
-    await record.advance({
-      fixUsed: false,
-      ...(pullRequest === undefined ? {} : { pullRequest }),
+    if (keepsState) {
+      // Written after the draft pull request, because that pull request is part of
+      // what a resuming Run must not open a second one beside.
+      //
+      // The fix budget goes back unspent: the Ticket only comes back through a
+      // human's hands, and whatever they did to it is what the fresh budget is
+      // for. Nothing is lost by it — the hand-off comment says the budget was
+      // spent, and the claim only marks that comment as history.
+      await record.advance({
+        fixUsed: false,
+        ...(pullRequest === undefined ? {} : { pullRequest }),
+      });
+    }
+    // Only beside a state that stays, because on the remote they go when it
+    // does, and after it, so the state they sit beside is the one a resuming Run
+    // reads. A hand-off that leaves no state ran no Stage, so it has none anyway.
+    const transcripts =
+      keepsState && byHand === undefined ? await keepTranscripts(pipeline, ticket) : undefined;
+    // A draft this hand-off opened went up before anything was kept, and one it
+    // converted still carries an earlier body, so either learns where only now.
+    if (byHand === undefined && pullRequest !== undefined && !(drafted && transcripts === undefined)) {
+      try {
+        await tracker.updatePullRequestBody(
+          pullRequest,
+          draftPullRequestBody({
+            ...draftBody,
+            ...(transcripts === undefined ? {} : { transcripts }),
+          }),
+        );
+      } catch (error) {
+        pipeline.log?.(
+          `#${ticket} could not rewrite the body of PR #${pullRequest}: ${(error as Error).message}`,
+        );
+      }
+    }
+    const onRemote = await branchOnRemote(pipeline, ticket, branch);
+    const shownWorktree =
+      worktree === undefined ? undefined : inCheckout(pipeline.repoRoot, worktree.path);
+
+    await tracker.comment(
+      ticket,
+      byHand !== undefined && pullRequest !== undefined
+        ? mergeByHandComment({
+            branch,
+            onRemote,
+            ...(shownWorktree === undefined ? {} : { worktree: shownWorktree }),
+            pullRequest,
+            verdict: byHand.verdict,
+          })
+        : handoffComment({
+            stage: failure.point,
+            failure: failure.summary,
+            branch,
+            onRemote,
+            ...(shownWorktree === undefined ? {} : { worktree: shownWorktree }),
+            ...(transcripts === undefined ? {} : { transcripts }),
+            evidence: failure.evidence,
+            ...(failure.reason === undefined ? {} : { reason: failure.reason }),
+            fixUsed,
+            ...(pullRequest === undefined ? {} : { pullRequest }),
+          }),
+    );
+    await tracker.removeLabel(ticket, config.labels.inProgress);
+    claimed = false;
+    await tracker.addLabel(ticket, config.labels.readyForHuman);
+    await tracker.unassign(ticket, user);
+  } catch (error) {
+    if (!(error instanceof OutsideFault)) throw error;
+    return cutShort(pipeline, {
+      issue,
+      branch,
+      failure,
+      pullRequest,
+      notes,
+      fault: error,
+      resumable: keepsState && claimed,
     });
   }
-  // Only beside a state that stays, because on the remote they go when it
-  // does, and after it, so the state they sit beside is the one a resuming Run
-  // reads. A hand-off that leaves no state ran no Stage, so it has none anyway.
-  const transcripts =
-    keepsState && byHand === undefined ? await keepTranscripts(pipeline, ticket) : undefined;
-  // A draft this hand-off opened went up before anything was kept, and one it
-  // converted still carries an earlier body, so either learns where only now.
-  if (byHand === undefined && pullRequest !== undefined && !(drafted && transcripts === undefined)) {
-    try {
-      await tracker.updatePullRequestBody(
-        pullRequest,
-        draftPullRequestBody({
-          ...draftBody,
-          ...(transcripts === undefined ? {} : { transcripts }),
-        }),
-      );
-    } catch (error) {
-      pipeline.log?.(
-        `#${ticket} could not rewrite the body of PR #${pullRequest}: ${(error as Error).message}`,
-      );
-    }
-  }
-  const onRemote = await branchOnRemote(pipeline, ticket, branch);
-
-  await tracker.comment(
-    ticket,
-    byHand !== undefined && pullRequest !== undefined
-      ? mergeByHandComment({
-          branch,
-          onRemote,
-          ...(worktree === undefined ? {} : { worktree: worktree.path }),
-          pullRequest,
-          verdict: byHand.verdict,
-        })
-      : handoffComment({
-          stage: failure.point,
-          failure: failure.summary,
-          branch,
-          onRemote,
-          ...(worktree === undefined ? {} : { worktree: worktree.path }),
-          ...(transcripts === undefined ? {} : { transcripts }),
-          evidence: failure.evidence,
-          ...(failure.reason === undefined ? {} : { reason: failure.reason }),
-          fixUsed,
-          ...(pullRequest === undefined ? {} : { pullRequest }),
-        }),
-  );
-  await tracker.removeLabel(ticket, config.labels.inProgress);
-  await tracker.addLabel(ticket, config.labels.readyForHuman);
-  await tracker.unassign(ticket, user);
   pipeline.log?.(`#${ticket} handed off at ${failure.point} · ${failure.summary}`);
 
   return {
@@ -2460,6 +2505,58 @@ async function handOff(
     failure: failure.summary,
     notes,
     ...(pullRequest === undefined ? {} : { pullRequest }),
+  };
+}
+
+/**
+ * The ending of a hand-off a fault outside the Ticket cut short.
+ *
+ * Reported released only where the next Run picks the Ticket up by itself: the
+ * hand-off kept the state file and the Ticket still wears its claim, so it is
+ * resumed as a Stranded Ticket. Anywhere else nothing sweeps it: one whose
+ * state file went before the writes, or one left assigned once `in-progress`
+ * came off, waits for a human, so it is reported handed off, with the fault
+ * beside the failure it was being handed off for. Either way the Run claims
+ * no more, as over any fault of the kind.
+ */
+function cutShort(
+  pipeline: Pipeline,
+  {
+    issue,
+    branch,
+    failure,
+    pullRequest,
+    notes,
+    fault,
+    resumable,
+  }: {
+    issue: Issue;
+    branch: string;
+    failure: TicketFailure;
+    pullRequest: number | undefined;
+    notes: RoutedNote[];
+    fault: OutsideFault;
+    resumable: boolean;
+  },
+): TicketOutcome {
+  const ticket = issue.number;
+  if (resumable) {
+    pipeline.log?.(`#${ticket} could not be handed off at ${failure.point} · ${fault.message}`);
+    return faultOutcome(issue, branch, failure.point, fault, notes);
+  }
+  pipeline.log?.(
+    `#${ticket} handed off at ${failure.point}, but the hand-off was cut short · ${fault.message}`,
+  );
+  return {
+    outcome: "handed-off",
+    ticket,
+    title: issue.title,
+    branch,
+    stage: failure.point,
+    failure: failure.summary,
+    ...(pullRequest === undefined ? {} : { pullRequest }),
+    fault: { side: fault.side, command: fault.command, line: fault.line },
+    notes,
   };
 }
 
