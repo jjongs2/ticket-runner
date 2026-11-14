@@ -168,6 +168,11 @@ its one line and says so, since one cause tends to fail several steps in turn:
 
 #5 could not push agent/5-fix-stage: `git push -u origin agent/5-fix-stage` exited 128 · the same output as above
 
+A Ticket whose CI is green on a Target whose config sets `merge` to `false`
+is handed off rather than merged, with nothing failed, and its row says so:
+
+  handed   #5 Fix Stage with a single retry · merge · left to a human, as this Target merges by hand
+
 `skipped` names why a candidate was passed over: `blocked` for one an open
 blocker held back all Run, and otherwise the guard reason that kept it from
 being claimed — `spec`, `no-criteria` or `body-only-blockers` for Planning a

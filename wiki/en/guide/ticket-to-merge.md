@@ -5,7 +5,7 @@ description: The path one Ticket takes through a Run, from the claim through the
 
 # From Ticket to merge
 
-Nobody watches a Run, so nothing may merge on a single session's word. Every [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) goes through the same gates in the same order: deterministic Checks, a second session that tries to prove the work wrong, and CI. A failure a fresh session could mend buys exactly one fix Stage; anything else goes to a human. The Tickets of a Run are implemented side by side, but they land one at a time, so what CI graded is what reaches the base branch.
+Nobody watches a Run, so nothing may merge on a single session's word. Every [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) goes through the same gates in the same order: deterministic Checks, a second session that tries to prove the work wrong, and CI. A failure a fresh session could mend buys exactly one fix Stage; anything else goes to a human. The Tickets of a Run are implemented side by side, but they land one at a time, so what CI graded is what reaches the base branch. A Target that [merges by hand](./configuration.md#merge) has each green Ticket handed off instead, and a human merges it.
 
 This page follows one Ticket from its claim to its merge. What happens when it stops short, whether by a Hand-off, a Release, a Stop or a Run that never came back, is on [Hand-offs, stopping and resuming](./stopping-and-resuming.md).
 
@@ -35,6 +35,7 @@ flowchart TD
     K2 --> P
     P --> CI["Wait for CI"]
     CI -->|green| M["Squash merge"]
+    CI -->|"green, merge off"| H
     K -->|"fixable, budget unspent"| F["fix Stage"]
     V -->|"fixable, budget unspent"| F
     X -->|"still conflicted, budget unspent"| F
@@ -47,7 +48,7 @@ flowchart TD
 
 Every edge to the fix Stage is taken at most once per Ticket. A second failure of any kind, or any failure the fix Stage cannot act on, is a Hand-off. A Stage stopped by the rate limit, an API failure or the API budget, a failure the base branch shares ([below](#a-failure-the-base-branch-shares)), and [GitHub or the git remote failing](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) at any step, leave this diagram entirely: they [release](./stopping-and-resuming.md#release-on-a-rate-limit) the Ticket.
 
-A [Hand-off](./stopping-and-resuming.md#hand-off) undoes the claim, puts `ready-for-human` on, comments the failure and where the work is, and puts an open pull request back into draft. The branch and the state file stay on the Target's remote, since the Host the work was done on may be gone by the time a human looks. The handed-off Stages' transcripts are kept beside them or on the Host, as [`keepTranscripts`](./configuration.md#keeptranscripts) decides, and the hand-off comment says where. A human who relabels the Ticket `ready-for-agent` hands it back, and it carries on from what it reached rather than paying for the implement Stage again. A [Hand-off at setup](./stopping-and-resuming.md#when-a-hand-off-does-less) that leaves no work of the pipeline's removes the state file: the Ticket started fresh and either failed before its worktree existed, or found a branch in the way that the Run would not branch over. No Stage of this Run worked there, so nothing is the pipeline's to resume.
+A [Hand-off](./stopping-and-resuming.md#hand-off) undoes the claim, puts `ready-for-human` on, comments the failure and where the work is, and puts an open pull request back into draft. The branch and the state file stay on the Target's remote, since the Host the work was done on may be gone by the time a human looks. The handed-off Stages' transcripts are kept beside them or on the Host, as [`keepTranscripts`](./configuration.md#keeptranscripts) decides, and the hand-off comment says where. A human who relabels the Ticket `ready-for-agent` hands it back, and it carries on from what it reached rather than paying for the implement Stage again. On a Target that [merges by hand](./configuration.md#merge), a Ticket whose CI is green is [handed off at `merge`](./stopping-and-resuming.md#when-nothing-failed) with nothing failed: its pull request stays ready for review, and no transcripts are kept. A [Hand-off at setup](./stopping-and-resuming.md#when-a-hand-off-does-less) that leaves no work of the pipeline's removes the state file: the Ticket started fresh and either failed before its worktree existed, or found a branch in the way that the Run would not branch over. No Stage of this Run worked there, so nothing is the pipeline's to resume.
 
 ## The claim
 
@@ -204,7 +205,7 @@ A Run holds one Ticket per [Lane](https://github.com/jjongs2/ticket-runner/blob/
 
 ## The Landing
 
-The [Landing](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), from the pull of the base branch before the rebase to the pull after the merge, holds one Ticket at a time, in arrival order, so the base branch cannot move between a Ticket's rebase and its merge, and what CI graded is what lands ([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)). implement and verify, where the time goes, stay parallel. The cost is that one Lane's conflict Stage or slow CI holds the others' Landing.
+The [Landing](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), from the pull of the base branch before the rebase to the pull after the merge, holds one Ticket at a time, in arrival order, so the base branch cannot move between a Ticket's rebase and its merge, and what CI graded is what lands ([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)). implement and verify, where the time goes, stay parallel. The cost is that one Lane's conflict Stage or slow CI holds the others' Landing. A Target that [merges by hand](./configuration.md#merge) leaves the Landing without a merge, so there the guarantee holds only as far as its configuration page says.
 
 ```mermaid
 sequenceDiagram
@@ -265,7 +266,7 @@ The pipeline polls the head commit's check runs and commit statuses until they s
 
 | What GitHub shows | Progress cell | Result |
 |---|---|---|
-| Every check passed or skipped | `✅ passed` | Merge |
+| Every check passed or skipped | `✅ passed` | Merge, or on a Target that [merges by hand](./configuration.md#merge) a Hand-off whose `merge` row reads `👤 left to a human` |
 | A check failed, was cancelled, timed out, needs action or could not start | `❌ failed` | Spends the fix budget |
 | The same, and the merge-base fails a Check command | ``⏸ `<command>` fails on the base branch`` | A Release ([above](#a-failure-the-base-branch-shares)) |
 | GitHub still failing on its own side after a minute of tries | `⏸ GitHub failure` | A [Release](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) |
@@ -297,7 +298,7 @@ Unverified:
 Co-authored-by: <name> <email>
 ```
 
-The subject is the pull request title. `<problem>` and `<solution>` are the latest the Stages answered, each line wider than 72 columns broken at its spaces, a wide character such as Hangul counting as two; the lines the Stage wrote stay, so a list stays a list. With no solution answered, the branch's commit subjects stand in for it as `- <subject>` lines, after the problem when there is one; nothing is made up for a missing answer. `Unverified:` appears only when a criterion was `unverifiable`, one line each with its evidence joined into one line, since nowhere else keeps that reason. Commit subjects and `Co-authored-by` trailers are read after the rebase, since those are the commits that land.
+The subject is the pull request title. `<problem>` and `<solution>` are the latest the Stages answered, each line wider than 72 columns broken at its spaces, a wide character such as Hangul counting as two; the lines the Stage wrote stay, so a list stays a list. With no solution answered, the branch's commit subjects stand in for it as `- <subject>` lines, after the problem when there is one; nothing is made up for a missing answer. `Unverified:` appears only when a criterion was `unverifiable`, one line each with its evidence joined into one line, since nowhere else keeps that reason. Commit subjects and `Co-authored-by` trailers are read after the rebase, since those are the commits that land. On a Target that [merges by hand](./configuration.md#merge) none of this is composed: the human merging gets the Target's own default message.
 
 ### After the merge
 

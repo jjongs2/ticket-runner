@@ -98,6 +98,32 @@ Markdown. A Check the wall-clock limit killed is the one evidence the pipeline
 adds a line of its own to, inside the fence: the output stops mid-run, so
 something has to say that a kill is why.
 
+## When the Target merges by hand
+
+```
+<!-- ticket-runner:handoff -->
+**Handed off.** PR #<pr> passed every gate and waits for a human to merge it: this Target merges by hand.
+
+- Branch `<branch>` on the remote · worktree `<path>` · PR #<pr>
+
+**Unverifiable criteria:**
+
+- <criterion> — <evidence>
+```
+
+A Target whose config sets `merge` to `false` has its green Tickets handed off
+at `merge` instead of merged. Nothing failed, so there is no `Failure:` line, no
+`said` paragraph and no Evidence block, and no transcripts are kept. The pull
+request is the one the `pr` step published, ready for review and not a draft,
+its title and body unchanged, since that body is what the human reads and what
+GitHub's default squash commit becomes.
+
+The unverifiable criteria are what the pipeline's own squash commit would have
+carried, one line each, the criterion as its checkbox line on the Ticket reads
+after the box and its evidence joined into one line. A human merging by hand
+gets GitHub's default message instead, so they are said here. The list and its
+heading are dropped when every criterion was met.
+
 ## Once the Ticket has been taken again
 
 ```

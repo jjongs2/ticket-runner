@@ -14,7 +14,7 @@ Humans read all of these, so each stays short: one line of status, details folde
 | `note-comment.md` | a Stage makes a Note, wherever it is routed, or a Ticket is released over a failing base branch | `<!-- ticket-runner:note -->` |
 | `notes-issue.md` | a Note cannot reach a Ticket and no standing Notes issue is open | `<!-- ticket-runner:notes-issue -->` (issue body) |
 | `pr-body.md` | the pull request is opened, and rewritten each time it is updated | none (PR body) |
-| `draft-pr-body.md` | a hand-off opens the pull request as a draft, or makes an open one a draft; written again once the transcripts are kept | none (PR body) |
+| `draft-pr-body.md` | a hand-off opens the pull request as a draft, or makes an open one a draft; written again once the transcripts are kept. Never on a Target that merges by hand, whose green Ticket's pull request keeps the body `pr-body.md` gave it | none (PR body) |
 | `squash-commit.txt` | the pull request is squash-merged | none (commit message) |
 | `run-summary.txt` | a Run ends (terminal) | none |
 | `init-report.txt` | `ticket-runner init` finishes (terminal) | none |

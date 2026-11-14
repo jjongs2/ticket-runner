@@ -266,6 +266,7 @@ The full records are in [`docs/adr/`](https://github.com/jjongs2/ticket-runner/t
 - **Decision**: The Landing is a section one Lane is in at a time, not a merge queue.
 - **Why**: What CI graded is exactly what lands, without paying for CI twice. GitHub's merge queue would have made a repository setting part of Target readiness.
 - **Cost**: One slow CI or conflict Stage holds every other Lane's Landing.
+- **Amendment**: A Target that [merges by hand](./configuration.md#merge) leaves the Landing without a merge, since holding it until a human merges would stop every Lane for hours. There, what lands is what CI graded only when the Target requires a branch to be up to date before merging.
 
 ### [ADR-0006: Stop is a signal, and Ctrl+C stays a kill](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md) {#adr-0006}
 

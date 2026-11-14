@@ -12,7 +12,7 @@ Nobody watches a Run, so it has to end well when something goes wrong: a Ticket 
 | Ending | Caused by | Leaves behind |
 |---|---|---|
 | Merge | a green pass through every gate | a closed issue; branch and state file gone |
-| [Hand-off](#hand-off) | a failure the fix budget cannot cover | `ready-for-human`, a comment, a draft pull request; work and state kept |
+| [Hand-off](#hand-off) | a failure the fix budget cannot cover, or a green pass on a Target that [merges by hand](./configuration.md#merge) | `ready-for-human`, a comment, a draft pull request (ready for review when nothing failed); work and state kept |
 | [Release](#release-on-a-rate-limit) | the subscription or API rate limit, a transient API failure, an [API key out of budget](#release-out-of-api-budget), a [failing base branch](#release-over-a-failing-base-branch), or [GitHub or the git remote failing](#release-over-a-github-or-remote-failure) | `ready-for-agent`, no comment on the Ticket; work and state kept |
 | [Stop](#stop-and-kill) | `ticket-runner stop` (SIGTERM) | nothing new |
 | [Kill](#stop-and-kill) | Ctrl+C, SIGKILL, a vanished Host | the claim; work as last pushed, and state |
@@ -39,7 +39,7 @@ stateDiagram-v2
 
 ## Hand-off
 
-A [Hand-off](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) gives a Ticket to a human. It is how every ending goes that is neither a merge nor a Release: a second failure after the fix budget is spent, a Stage that timed out, CI that never finished, a branch in the way at setup.
+A [Hand-off](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) gives a Ticket to a human. It is how every ending goes that is neither a merge nor a Release: a second failure after the fix budget is spent, a Stage that timed out, CI that never finished, a branch in the way at setup. On a Target that [merges by hand](./configuration.md#merge) it is also how a green Ticket ends ([When nothing failed](#when-nothing-failed)).
 
 A Hand-off leaves you:
 
@@ -98,6 +98,27 @@ A Hand-off at `setup` pushes nothing: there is either nothing to push, or what i
 
 The comment names a worktree wherever there is one: this Run's, or the one the branch in the way is checked out in. The failure line says what to do, for example `delete it with git branch -D <branch> if the work on it is abandoned, or finish it by hand, then relabel the Ticket ready-for-agent`.
 
+### When nothing failed
+
+On a Target that sets [`merge`](./configuration.md#merge) to `false`, a Ticket whose CI is green is handed off at `merge` rather than merged. Nothing failed, so this Hand-off:
+
+- leaves the pull request as the Run published it: ready for review, its title and body unchanged
+- comments that the pull request passed every gate and waits for you to merge it, with no Failure line or evidence, and lists each unverifiable criterion with its evidence
+- keeps the state file but no transcripts, and ticks no criteria
+
+```md
+<!-- ticket-runner:handoff -->
+**Handed off.** PR #31 passed every gate and waits for a human to merge it: this Target merges by hand.
+
+- Branch `agent/8-rate-limit-release` on the remote · worktree `/home/me/acme/.worktrees/ticket-8` · PR #31
+
+**Unverifiable criteria:**
+
+- The guide shows the new table — no wiki build runs on this Host
+```
+
+Its progress comment's `merge` row reads `👤 left to a human`. Tickets it blocks wait until it merges. End it as any handed-off Ticket ([Handing a Ticket back](#handing-a-ticket-back)).
+
 ### What stays where
 
 The Host a Ticket was worked on may be gone by the time a human looks, for example a cloud Host's VM. So everything a later Run needs is on the Target's remote, and so are a handed-off Ticket's transcripts where [`keepTranscripts`](./configuration.md#keeptranscripts) keeps them there.
@@ -129,7 +150,7 @@ A handed-off Ticket is yours to end one of four ways:
 |---|---|
 | Change the Ticket, its criteria or the config, and hand it back | The next Run grades it against what the issue says then |
 | Push commits to its branch on the remote, and hand it back | The next Run brings its copy up to that tip. A rewritten history parts the copies instead |
-| Finish it yourself: rewrite the draft's body, which describes the Hand-off rather than the change, mark it ready and merge it | The issue closes. Take `ready-for-human` off yourself, and delete the worktree and local branch on the Host that made them |
+| Finish it yourself: merge its pull request. A draft's body describes the Hand-off rather than the change, so rewrite it and mark it ready first; one [handed off with nothing failed](#when-nothing-failed) is ready already, with the body the Run published | The issue closes. Take `ready-for-human` off yourself, and delete the worktree and local branch on the Host that made them |
 | Drop it: close the issue | The draft pull request and the branch stay until you close and delete them |
 
 ```bash
