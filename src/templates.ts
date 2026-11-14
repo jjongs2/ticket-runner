@@ -232,31 +232,20 @@ export type TranscriptsPlace =
 function runLine(runId: string, transcripts: TranscriptsPlace | undefined): string {
   const run = `Run \`${runId}\``;
   if (transcripts === undefined) return run;
-  const where = placeOf(transcripts);
-  return where.directory
-    ? `${run} · transcripts in ${where.phrase}`
-    : `${run} · transcripts ${where.phrase}`;
+  // A directory is led into with `in`; the cloud Host's phrase names none.
+  const lead = transcripts.on === "cloud" ? "transcripts" : "transcripts in";
+  return `${run} · ${lead} ${placeOf(transcripts)}`;
 }
 
-/**
- * Where the transcripts are, as every shape that names it spells it, and
- * whether the phrase opens on a directory, which a sentence leads into with
- * `in`.
- */
-function placeOf(transcripts: TranscriptsPlace): { phrase: string; directory: boolean } {
+/** Where the transcripts are, as every shape that names it spells it. */
+function placeOf(transcripts: TranscriptsPlace): string {
   switch (transcripts.on) {
     case "remote":
-      return {
-        phrase: `\`${transcripts.path}\` on the \`${transcripts.branch}\` branch`,
-        directory: true,
-      };
+      return `\`${transcripts.path}\` on the \`${transcripts.branch}\` branch`;
     case "workstation":
-      return { phrase: `\`${transcripts.path}\` on the Host, kept off the remote`, directory: true };
+      return `\`${transcripts.path}\` on the Host, kept off the remote`;
     case "cloud":
-      return {
-        phrase: "kept off the remote, on the cloud Host, so they go with its VM",
-        directory: false,
-      };
+      return "kept off the remote, on the cloud Host, so they go with its VM";
   }
 }
 
@@ -444,7 +433,7 @@ export function handoffComment(handoff: HandoffComment): string {
     `- ${location}`,
     ...(handoff.transcripts === undefined
       ? []
-      : [`- Transcripts: ${placeOf(handoff.transcripts).phrase}`]),
+      : [`- Transcripts: ${placeOf(handoff.transcripts)}`]),
     "",
     ...stageSaid(handoff.stage, handoff.reason),
     ...evidenceBlock(shown.evidence),

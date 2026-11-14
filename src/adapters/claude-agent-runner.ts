@@ -597,7 +597,7 @@ function structuredOutputOf(result: ResultEvent): unknown {
  * How the environment differed from the Host's leads it: a subscription Stage
  * ran without the Host's key, which `env -u` removes again, and an API-key
  * Stage ran on it, which is named and left for the shell to fill in. Its value
- * is never written: command files reach the Target's remote with a hand-off.
+ * is never written: a hand-off may keep command files on the Target's remote.
  */
 function quoteCommand(
   credential: Credential,

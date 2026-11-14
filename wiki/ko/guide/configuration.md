@@ -143,7 +143,7 @@ Hand-off된 Ticket의 transcript를 Target의 remote, 곧 `ticket-runner/state` 
 | `true` | 공개 Target이어도 remote에 남김 |
 | `false` | 비공개 Target이어도 Host에 남김 |
 
-지정하지 않으면 Run이 시작할 때 Target의 공개 여부를 한 번 읽습니다. 공개 여부를 읽지 못한 Target은 공개로 보고, Run이 그렇다고 한 줄로 알립니다. Host에 남길 때 워크스테이션에서는 `.ticket-runner/runs/<runId>/<n>/`에 남고, 클라우드 Host에서는 VM과 함께 사라집니다.
+지정하지 않으면 Run이 시작할 때 Target의 공개 여부를 한 번 읽고, `internal` 저장소는 비공개로 봅니다. 공개 여부를 읽지 못한 Target은 공개로 보고, Run이 그렇다고 한 줄로 알립니다. Host에 남길 때 워크스테이션에서는 `.ticket-runner/runs/<runId>/<n>/`에 남고, 클라우드 Host에서는 VM과 함께 사라집니다.
 
 공개 Target에서는 push한 commit이 branch가 옮겨 간 뒤에도 SHA로 닿을 수 있고, GitHub의 공개 이벤트 피드는 push마다 그 SHA를 보여 줍니다. 그래서 state branch와, state branch가 더는 가리키지 않는 commit에는 Target이 공개되기 전에 남긴 transcript가 있을 수 있습니다. 이를 지워 주는 것은 없습니다.
 

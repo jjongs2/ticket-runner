@@ -100,7 +100,7 @@ Failure 줄은 무엇이 Ticket을 멈췄는지 말합니다. 그에 따라 할 
 
 ### 무엇이 어디에 남나 {#what-stays-where}
 
-사람이 들여다볼 즈음에는 작업하던 Host가 이미 없을 수도 있습니다. 클라우드 Host의 VM이 그렇습니다. 그래서 다음 Run에 필요한 것은 모두 Target의 remote에 둡니다. Hand-off된 Ticket의 transcript도 [`keepTranscripts`](./configuration.md#keeptranscripts)가 remote에 남기게 할 때는 거기 둡니다. 기본으로는 비공개 Target만 그렇습니다.
+사람이 들여다볼 즈음에는 작업하던 Host가 이미 없을 수도 있습니다. 클라우드 Host의 VM이 그렇습니다. 그래서 다음 Run에 필요한 것은 모두 Target의 remote에 둡니다. Hand-off된 Ticket의 transcript도 [`keepTranscripts`](./configuration.md#keeptranscripts)가 remote에 남기게 할 때는 거기 둡니다.
 
 | 무엇 | 어디 | 언제까지 |
 |---|---|---|

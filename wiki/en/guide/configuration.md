@@ -143,7 +143,7 @@ Whether a handed-off Ticket's transcripts are kept on the Target's remote, on th
 | `true` | kept on the remote, public Target too |
 | `false` | kept on the Host, private Target too |
 
-Unset, the Target's visibility is read once when a Run starts. A Target whose visibility cannot be read counts as public, and the Run says so in one line. Kept on the Host, they stay in `.ticket-runner/runs/<runId>/<n>/` on a workstation, and go with the VM on a cloud Host.
+Unset, the Target's visibility is read once when a Run starts, and an `internal` repository counts as private. A Target whose visibility cannot be read counts as public, and the Run says so in one line. Kept on the Host, they stay in `.ticket-runner/runs/<runId>/<n>/` on a workstation, and go with the VM on a cloud Host.
 
 On a public Target, a pushed commit stays reachable by its SHA after the branch has moved on, and GitHub's public events feed names the SHA of every push. So the state branch, and commits it no longer points at, may hold transcripts kept before the Target was made public. Nothing removes them.
 

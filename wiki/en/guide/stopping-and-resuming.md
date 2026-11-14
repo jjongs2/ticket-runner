@@ -100,7 +100,7 @@ The comment names a worktree wherever there is one: this Run's, or the one the b
 
 ### What stays where
 
-The Host a Ticket was worked on may be gone by the time a human looks, for example a cloud Host's VM. So everything a later Run needs is on the Target's remote, and so are a handed-off Ticket's transcripts where [`keepTranscripts`](./configuration.md#keeptranscripts) keeps them there, which it does by default on a private Target only.
+The Host a Ticket was worked on may be gone by the time a human looks, for example a cloud Host's VM. So everything a later Run needs is on the Target's remote, and so are a handed-off Ticket's transcripts where [`keepTranscripts`](./configuration.md#keeptranscripts) keeps them there.
 
 | What | Where | Lasts until |
 |---|---|---|

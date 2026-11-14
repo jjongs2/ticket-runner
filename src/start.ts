@@ -233,7 +233,7 @@ async function execute(
   const selfHosted = await isPipelineRepository(tracker, options.repository);
   // Once per Run as well: whether the Target is public is read here and no
   // later, so every hand-off of the Run keeps its transcripts in one place.
-  const transcripts = await resolveTranscriptHome({ config, tracker, host });
+  const transcriptHome = await resolveTranscriptHome({ config, tracker, host });
 
   const pipeline: Pipeline = {
     tracker,
@@ -257,14 +257,14 @@ async function execute(
     // branch run it at their merge-base once between them.
     baseChecks: new BaseBranchChecks(),
     selfHosted,
-    transcriptHome: transcripts.home,
+    transcriptHome: transcriptHome.home,
     log,
   };
 
   const startedAt = Date.now();
   log(opening(runId, work, config.lanes));
   if (newer !== undefined) log(newer);
-  if (transcripts.said !== undefined) log(transcripts.said);
+  if (transcriptHome.said !== undefined) log(transcriptHome.said);
   // Before the first claim, on any Host: a shallow clone refuses every move of
   // its base branch a rebase needs, and would hand off each Ticket there.
   if (await workspace.unshallow()) log("the clone was shallow, so its full history was fetched");

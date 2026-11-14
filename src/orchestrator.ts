@@ -2375,7 +2375,7 @@ async function handOff(
   // Only beside a state that stays, because on the remote they go when it
   // does, and after it, so the state they sit beside is the one a resuming Run
   // reads. A hand-off that leaves no state ran no Stage, so it has none anyway.
-  const transcripts = keepsState ? await transcriptsPlace(pipeline, ticket) : undefined;
+  const transcripts = keepsState ? await keepTranscripts(pipeline, ticket) : undefined;
   // A draft this hand-off opened went up before anything was kept, and one it
   // converted still carries an earlier body, so either learns where only now.
   if (pullRequest !== undefined && !(drafted && transcripts === undefined)) {
@@ -2437,7 +2437,7 @@ async function handOff(
  * them fails, the failure logged: the hand-off is what a human is waiting for,
  * and the transcripts are still on this Host for as long as it lasts.
  */
-async function transcriptsPlace(
+async function keepTranscripts(
   pipeline: Pipeline,
   ticket: number,
 ): Promise<TranscriptsPlace | undefined> {
