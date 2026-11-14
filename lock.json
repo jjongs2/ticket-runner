@@ -1,1 +1,13 @@
-{ "held": false }
+{
+  "held": true,
+  "host": {
+    "kind": "workstation",
+    "id": "2b25f97eabbf4f0092ed9cd2ccf9d0c5",
+    "name": "jjongs2"
+  },
+  "pid": 233497,
+  "command": "ticket-runner run --lanes 3 --api-key",
+  "runId": "2026-11-14T10-22-46-592",
+  "startedAt": "2026-11-14T10:23:03.383Z",
+  "processStartedAt": "563027"
+}
