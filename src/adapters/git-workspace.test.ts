@@ -1419,6 +1419,12 @@ describe("the state a Ticket keeps", () => {
       expect(tip()).toBe("Forget ticket 4");
     });
 
+    it("are named on the Host relative to the checkout, pushing nothing, when kept off the remote", async () => {
+      expect(await workspace.transcriptsOnHost(4, "run-1")).toBe(".ticket-runner/runs/run-1/4/");
+      expect(await workspace.transcriptsOnHost(5, "run-1")).toBeUndefined();
+      expect(git(remote, "branch", "--list", STATE_BRANCH)).toBe("");
+    });
+
     it("are read by nothing that reads the state", async () => {
       await workspace.writeState(state);
       await workspace.keepTranscripts(4, "run-1");

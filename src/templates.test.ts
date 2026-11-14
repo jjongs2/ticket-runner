@@ -164,13 +164,32 @@ describe("draftPullRequestBody", () => {
   it("names where the hand-off kept the transcripts on the remote", () => {
     const body = draftPullRequestBody({
       ...base,
-      transcripts: { branch: "ticket-runner/state", path: "ticket-2/r1/" },
+      transcripts: { on: "remote", branch: "ticket-runner/state", path: "ticket-2/r1/" },
     });
 
     expect(body).toContain(
       "Run `r1` · transcripts in `ticket-2/r1/` on the `ticket-runner/state` branch",
     );
     expect(body).not.toContain(".ticket-runner/runs/");
+  });
+
+  it("names the checkout's run directory when the transcripts stay on a workstation", () => {
+    const body = draftPullRequestBody({
+      ...base,
+      transcripts: { on: "workstation", path: ".ticket-runner/runs/r1/2/" },
+    });
+
+    expect(body).toContain(
+      "Run `r1` · transcripts in `.ticket-runner/runs/r1/2/` on the Host, kept off the remote",
+    );
+  });
+
+  it("says the transcripts go with the VM when they stay on a cloud Host", () => {
+    const body = draftPullRequestBody({ ...base, transcripts: { on: "cloud" } });
+
+    expect(body).toContain(
+      "Run `r1` · transcripts kept off the remote, on the cloud Host, so they go with its VM",
+    );
   });
 
   it("names the Run alone when the hand-off kept no transcripts", () => {
@@ -438,13 +457,32 @@ describe("handoffComment", () => {
   it("names where the Stages' transcripts were kept, on its own line", () => {
     const comment = handoffComment({
       ...base,
-      transcripts: { branch: "ticket-runner/state", path: "ticket-2/run-1/" },
+      transcripts: { on: "remote", branch: "ticket-runner/state", path: "ticket-2/run-1/" },
     });
 
     expect(comment).toContain(
       "- Transcripts: `ticket-2/run-1/` on the `ticket-runner/state` branch",
     );
     expect(handoffComment(base)).not.toContain("Transcripts");
+  });
+
+  it("names the checkout's run directory when the transcripts stay on a workstation", () => {
+    const comment = handoffComment({
+      ...base,
+      transcripts: { on: "workstation", path: ".ticket-runner/runs/run-1/2/" },
+    });
+
+    expect(comment).toContain(
+      "- Transcripts: `.ticket-runner/runs/run-1/2/` on the Host, kept off the remote\n",
+    );
+  });
+
+  it("says the transcripts go with the VM when they stay on a cloud Host", () => {
+    const comment = handoffComment({ ...base, transcripts: { on: "cloud" } });
+
+    expect(comment).toContain(
+      "- Transcripts: kept off the remote, on the cloud Host, so they go with its VM\n",
+    );
   });
 
   it("omits the pull request clause when no pull request exists", () => {

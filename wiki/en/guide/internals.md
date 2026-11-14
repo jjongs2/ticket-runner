@@ -76,7 +76,7 @@ claude --print <prompt> --output-format stream-json --verbose \
   | `CLAUDE_CODE_SHELL` | `/bin/bash`, only where it exists | a zsh shell aborts a command on a glob that matches nothing |
   `ANTHROPIC_AUTH_TOKEN` and every other variable are inherited as they are.
 - Every process a Stage starts inherits both marks. The Stage mark is a tripwire against an honest mistake, not a sandbox: a session that unsets it gets through, and keeping two Runs off one Target is the Run lock's job. The session mark is kept apart from it because two Lanes in the same Stage share the Stage mark.
-- It writes the [Stage's files](./running.md#logs-and-transcripts) from the moment the Stage starts, never with the key's value in them: command files reach the Target's remote with a Hand-off.
+- It writes the [Stage's files](./running.md#logs-and-transcripts) from the moment the Stage starts, never with the key's value in them: command files can reach the Target's remote with a Hand-off ([`keepTranscripts`](./configuration.md#keeptranscripts)).
 - It reads the `apiKeySource` of the session's `system/init` event, which the orchestrator sets against what the Run's Stages are billed to.
 - It kills the child at `maxMinutes`, with everything it started, and classifies a failure as `rate-limited`, `api-error`, `out-of-budget`, `timed-out`, `turn-capped`, `nonzero-exit` or `invalid-result`. A session that succeeds is never any of the first three, and they are read off a failed one like this:
 
@@ -169,6 +169,7 @@ Tests sit beside each module as `*.test.ts`.
 | [`templates.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts) | every shape written to GitHub, and the Run summary; `docs/templates/` is the source of truth |
 | [`log-tail.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/log-tail.ts) | the end of a log, under 40 lines and 4,000 characters, that a CI excerpt and a failing base branch's Note both quote |
 | [`run-log.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run-log.ts) | `.ticket-runner/runs/<runId>/` and what a Hand-off keeps of it |
+| [`transcript-home.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/transcript-home.ts) | once per Run, whether a handed-off Ticket's transcripts go to the remote or stay on the Host |
 
 **Target setup**
 
@@ -256,9 +257,9 @@ The full records are in [`docs/adr/`](https://github.com/jjongs2/ticket-runner/t
 
 ### [ADR-0004: Resume state lives on the Target's remote, not in a tracker comment](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md) {#adr-0004}
 
-- **Decision**: Resume state is a state file kept off the board, now on the Target's remote. A Hand-off keeps it too.
-- **Why**: The board is for humans. A cloud Host is discarded, so the state must outlive it. A relabel should resume a Ticket.
-- **Cost**: No migration of old local state; the state branch goes through `Workspace`.
+- **Decision**: Resume state is a state file kept off the board, now on the Target's remote. A Hand-off keeps it too, with its transcripts beside it unless [`keepTranscripts`](./configuration.md#keeptranscripts) keeps them on the Host, which is the default on a public Target.
+- **Why**: The board is for humans. A cloud Host is discarded, so the state must outlive it. A relabel should resume a Ticket. A transcript pushed to a public Target cannot be taken back, which outweighs a Host that may be gone.
+- **Cost**: No migration of old local state; the state branch goes through `Workspace`. A public Target's Hand-offs on a cloud Host keep no transcripts beyond the Operator.
 
 ### [ADR-0005: Landing is a serialized section, not a merge queue](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md) {#adr-0005}
 

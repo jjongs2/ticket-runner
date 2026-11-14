@@ -1188,6 +1188,108 @@ describe("what a Run tells its Stages about the checkout they stand in", () => {
   });
 });
 
+/**
+ * A transcript holds whatever the Host could see, so a Run keeps a handed-off
+ * Ticket's off a public Target's remote unless the config says otherwise.
+ */
+describe("where a Run keeps a handed-off Ticket's transcripts", () => {
+  const ON_REMOTE = "- Transcripts: `ticket-4/run-1/` on the `ticket-runner/state` branch";
+  const ON_WORKSTATION =
+    "- Transcripts: `.ticket-runner/runs/run-1/4/` on the Host, kept off the remote";
+
+  function handOff(numbers: number[] = [4]): void {
+    for (const number of numbers) tracker.addIssue({ number });
+    workspace.failCheck("npm test", "1 test failed");
+  }
+
+  function handoffComments(): string[] {
+    return tracker.comments
+      .map((comment) => comment.body)
+      .filter((body) => body.includes("Handed off"));
+  }
+
+  it("keeps them on a private Target's remote, as before, when the config says nothing", async () => {
+    tracker.targetVisibility = "private";
+    handOff();
+
+    await start();
+
+    expect(workspace.transcripts.get(4)).toEqual(["run-1"]);
+    expect(handoffComments()[0]).toContain(ON_REMOTE);
+  });
+
+  it("keeps them off a public Target's remote, asking once however many Tickets it hands off", async () => {
+    tracker.targetVisibility = "public";
+    handOff([4, 5]);
+
+    await start();
+
+    expect(workspace.transcripts.size).toBe(0);
+    expect(handoffComments()).toHaveLength(2);
+    expect(handoffComments()[0]).toContain(ON_WORKSTATION);
+    expect(tracker.pullRequest(100).body).toContain(
+      "Run `run-1` · transcripts in `.ticket-runner/runs/run-1/4/` on the Host, kept off the remote",
+    );
+    expect(tracker.visibilityLookups).toBe(1);
+  });
+
+  it("says they go with the VM on a cloud Host", async () => {
+    tracker.targetVisibility = "public";
+    handOff();
+
+    await start({ command: "run" }, undefined, undefined, { CLAUDE_CODE_REMOTE: "true" });
+
+    expect(workspace.transcripts.size).toBe(0);
+    expect(handoffComments()[0]).toContain(
+      "- Transcripts: kept off the remote, on the cloud Host, so they go with its VM",
+    );
+  });
+
+  it("counts a Target whose visibility cannot be read as public, and says so in one line", async () => {
+    tracker.targetVisibility = undefined;
+    handOff();
+
+    const { lines } = await start();
+
+    expect(workspace.transcripts.size).toBe(0);
+    expect(lines.filter((line) => line.includes("counts as public"))).toHaveLength(1);
+  });
+
+  it("keeps them on a public Target's remote when the config says true", async () => {
+    write(CONFIG_FILENAME, JSON.stringify({ keepTranscripts: true }));
+    tracker.targetVisibility = "public";
+    handOff();
+
+    await start();
+
+    expect(workspace.transcripts.get(4)).toEqual(["run-1"]);
+    expect(handoffComments()[0]).toContain(ON_REMOTE);
+    expect(tracker.visibilityLookups).toBe(0);
+  });
+
+  it("keeps them off a private Target's remote when the config says false", async () => {
+    write(CONFIG_FILENAME, JSON.stringify({ keepTranscripts: false }));
+    tracker.targetVisibility = "private";
+    handOff();
+
+    await start();
+
+    expect(workspace.transcripts.size).toBe(0);
+    expect(handoffComments()[0]).toContain(ON_WORKSTATION);
+  });
+
+  it("drops the line from a hand-off whose Run wrote no transcripts", async () => {
+    tracker.targetVisibility = "public";
+    workspace.noTranscriptsOnHost = true;
+    handOff();
+
+    await start();
+
+    expect(handoffComments()[0]).not.toContain("Transcripts");
+    expect(tracker.pullRequest(100).body).not.toContain("transcripts");
+  });
+});
+
 describe("what a Run says about the Target's conventions document", () => {
   it("says nothing about a document its own version wrote", async () => {
     tracker.addIssue({ number: 4 });

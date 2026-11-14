@@ -32,6 +32,7 @@ import type {
   PullRequestRef,
   SquashCommit,
   Tracker,
+  Visibility,
 } from "../ports/tracker.js";
 import type {
   CheckOutcome,
@@ -81,6 +82,10 @@ export class FakeTracker implements Tracker {
   repositoryName: string | undefined = "acme/repo";
   /** When set, the lookup throws, as a `gh` that is not installed at all does. */
   repositoryFails = false;
+  /** Whether the Target is public, as {@link visibility} answers; nothing is GitHub not answering. */
+  targetVisibility: Visibility | undefined = "private";
+  /** How many times the Target's visibility was asked for, which a Run does at most once. */
+  visibilityLookups = 0;
   /** How many times the Target's repository was asked for. */
   repositoryLookups = 0;
   /**
@@ -175,6 +180,12 @@ export class FakeTracker implements Tracker {
     this.repositoryLookups += 1;
     if (this.repositoryFails) throw new Error("gh: command not found");
     return this.repositoryName;
+  }
+
+  // Not in `calls`: a read, and one a Run makes before it touches a Ticket.
+  async visibility(): Promise<Visibility | undefined> {
+    this.visibilityLookups += 1;
+    return this.targetVisibility;
   }
 
   // Not in `calls`: a read, and one about the pipeline's own repository rather
@@ -585,6 +596,8 @@ export class FakeWorkspace implements Workspace {
    * take it, which takes transcripts no better.
    */
   stateWriteFailure: Error | undefined;
+  /** When set, {@link transcriptsOnHost} finds none, as for a Run that wrote nothing for the Ticket. */
+  noTranscriptsOnHost = false;
   /** What every pull of the base branch fails with, when set: a checkout git cannot fast-forward. */
   pullBaseFailure: Error | undefined;
   /**
@@ -925,6 +938,14 @@ export class FakeWorkspace implements Workspace {
     if (this.stateWriteFailure !== undefined) throw this.stateWriteFailure;
     this.transcripts.set(ticket, [...(this.transcripts.get(ticket) ?? []), runId]);
     return { branch: "ticket-runner/state", path: `ticket-${ticket}/${runId}/` };
+  }
+
+  /**
+   * Written whatever the Run ran, as {@link keepTranscripts} keeps them, unless
+   * a test says the Run wrote none.
+   */
+  async transcriptsOnHost(ticket: number, runId: string): Promise<string | undefined> {
+    return this.noTranscriptsOnHost ? undefined : `.ticket-runner/runs/${runId}/${ticket}/`;
   }
 
   async takeRunLock(claim: LockClaim): Promise<LockTake> {

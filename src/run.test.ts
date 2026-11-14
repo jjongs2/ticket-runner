@@ -106,6 +106,7 @@ function pipeline(lanes = 1, credential: Credential = "subscription"): Pipeline 
     standingNotes: new StandingNotes(),
     baseChecks: new BaseBranchChecks(),
     selfHosted: false,
+    transcriptHome: "remote",
     log: (line) => logged.push(line),
   };
 }

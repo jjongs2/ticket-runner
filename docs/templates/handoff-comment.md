@@ -15,21 +15,39 @@
 
 </details>
 
-The branch and the transcripts are named where they are on the remote, because
-the Host the work was done on may be gone by the time a human looks: a cloud
-Host's VM does not outlive its session. `on the remote` is said only when the
+The branch is named where it is on the remote, because the Host the work was
+done on may be gone by the time a human looks: a cloud Host's VM does not
+outlive its session. `on the remote` is said only when the
 remote has the branch: one the pipeline refused to branch over at `setup` is
 usually a human's and only on this Host, and a Ticket that never committed has
 pushed nothing.
 
 The transcripts line names where the hand-off kept the command line and
 transcript of each Stage this Run ran for the Ticket, with those of the fix
-Stage and the pass it bought under `retry/`, and the Run's `version.txt`. They
-sit on the state branch beside the Ticket's state file and go when it does, so
-a Ticket that merges leaves none behind. The line is dropped when nothing was
-kept: a hand-off that removes the state keeps no transcripts either, a Run that
-ran no Stage of the Ticket has none, and a remote that refused the write has
-none to point at.
+Stage and the pass it bought under `retry/`, and the Run's `version.txt`. Where
+depends on the Target's `keepTranscripts` setting, and on its visibility where
+the setting is unset, as the wiki's configuration page describes:
+
+- kept on the remote, they sit on the state branch beside the Ticket's state
+  file and go when it does, so a Ticket that merges leaves none behind. The
+  line is the one above.
+- kept off the remote on a workstation, they stay in the Run's directory of the
+  checkout, named relative to it so a public comment does not publish the
+  Host's home path:
+
+  ```
+  - Transcripts: `.ticket-runner/runs/<runId>/<n>/` on the Host, kept off the remote
+  ```
+
+- kept off the remote on a cloud Host, they stay on its VM and go with it:
+
+  ```
+  - Transcripts: kept off the remote, on the cloud Host, so they go with its VM
+  ```
+
+The line is dropped when there are none to name: a hand-off that removes the
+state keeps no transcripts either, a Run that ran no Stage of the Ticket has
+none, and a remote that refused the write has none to point at.
 
 The `said` paragraph quotes the reason an implement or fix Stage answered in
 `noCommitReason` when it finished and the hand-off is for its committing

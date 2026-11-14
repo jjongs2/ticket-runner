@@ -173,6 +173,9 @@ export type Authentication = "authenticated" | "unauthenticated" | "not-installe
  */
 export type NumberKind = "issue" | "pull-request" | "nothing";
 
+/** Whether anybody may read a repository, or only those it is shared with. */
+export type Visibility = "public" | "private";
+
 export interface Tracker {
   /**
    * Whether `gh` can speak to GitHub as somebody, and if not, whether it is
@@ -203,6 +206,16 @@ export interface Tracker {
    * an answer: a Target this cannot name is treated as any other Target.
    */
   repository(): Promise<string | undefined>;
+  /**
+   * Whether anybody may read the Target, or nothing where GitHub could not be
+   * asked. An `internal` repository, readable only inside its enterprise, is
+   * private here.
+   *
+   * Asked once at the start of a Run, and only where the config does not say
+   * whether a handed-off Ticket's transcripts are kept on the remote. Nothing
+   * is refused over the answer: no answer counts as public.
+   */
+  visibility(): Promise<Visibility | undefined>;
   /**
    * The tag of the highest version `repository` has published as a GitHub
    * Release, named `owner/name`, or nothing where GitHub could not be asked.

@@ -65,6 +65,26 @@ describe("loadConfig", () => {
     },
   );
 
+  it("leaves where hand-off transcripts are kept unset, for the Target's visibility to answer", () => {
+    expect(loadConfig(repoWith({}), VERSION)).not.toHaveProperty("keepTranscripts");
+  });
+
+  it.each([true, false])("takes keepTranscripts %o as given", (value) => {
+    const root = repoWith({ [CONFIG_FILENAME]: JSON.stringify({ keepTranscripts: value }) });
+
+    expect(loadConfig(root, VERSION).keepTranscripts).toBe(value);
+  });
+
+  it.each(["true", 1, null, "public"])(
+    "rejects %o as keepTranscripts with a message naming the field",
+    (value) => {
+      const root = repoWith({ [CONFIG_FILENAME]: JSON.stringify({ keepTranscripts: value }) });
+
+      expect(() => loadConfig(root, VERSION)).toThrowError(ConfigError);
+      expect(() => loadConfig(root, VERSION)).toThrowError(/keepTranscripts/);
+    },
+  );
+
   it("infers Checks from the package.json scripts", () => {
     const root = repoWith({
       "package.json": JSON.stringify({

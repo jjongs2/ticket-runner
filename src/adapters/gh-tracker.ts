@@ -13,6 +13,7 @@ import type {
   PullRequestRef,
   SquashCommit,
   Tracker,
+  Visibility,
 } from "../ports/tracker.js";
 import { DEFAULT_CI_GRACE_MINUTES } from "../config.js";
 import { type HostKind, hostKind } from "../host.js";
@@ -269,6 +270,26 @@ export class GhTracker implements Tracker {
       );
       const name = stdout.trim();
       return exitCode === 0 && name !== "" ? name : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Whether the Target is public, read through REST like {@link repository}.
+   * Every failure, and a visibility GitHub may add later, is no answer, which
+   * the caller counts as public.
+   */
+  async visibility(): Promise<Visibility | undefined> {
+    try {
+      const { exitCode, stdout } = await this.gh(
+        ["api", "repos/{owner}/{repo}", "--jq", ".visibility"],
+        { allowFailure: true },
+      );
+      if (exitCode !== 0) return undefined;
+      const said = stdout.trim();
+      if (said === "public") return "public";
+      return said === "private" || said === "internal" ? "private" : undefined;
     } catch {
       return undefined;
     }

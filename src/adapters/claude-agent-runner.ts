@@ -321,7 +321,7 @@ interface StageLog {
 /**
  * What stands in a Stage's files for the Host's API key, wherever the session
  * printed it: an `--api-key` Stage that runs `env` would otherwise put the key
- * in a transcript, which reaches the Target's remote with a hand-off.
+ * in a transcript, which a hand-off may keep on the Target's remote.
  */
 const REDACTED_KEY = `<${API_KEY_ENV_VAR}>`;
 
@@ -597,7 +597,7 @@ function structuredOutputOf(result: ResultEvent): unknown {
  * How the environment differed from the Host's leads it: a subscription Stage
  * ran without the Host's key, which `env -u` removes again, and an API-key
  * Stage ran on it, which is named and left for the shell to fill in. Its value
- * is never written: command files reach the Target's remote with a hand-off.
+ * is never written: a hand-off may keep command files on the Target's remote.
  */
 function quoteCommand(
   credential: Credential,

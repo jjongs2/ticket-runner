@@ -1,7 +1,7 @@
 import { resolveBaseBranch } from "./base-branch.js";
 import type { Config } from "./config.js";
 import { type Credential, credentialRefusal, emptyBilling } from "./credential.js";
-import { hostKind } from "./host.js";
+import { type HostKind, hostKind } from "./host.js";
 import { BaseBranchChecks } from "./failing-base.js";
 import { printEachOutputOnce } from "./failure-message.js";
 import { Landing } from "./landing.js";
@@ -20,6 +20,7 @@ import { conventionsWarning, newerVersionLine } from "./staleness.js";
 import { type StopSource, StopSignal, listenForStop } from "./stop.js";
 import { startupMessages } from "./startup.js";
 import { runSummary } from "./templates.js";
+import { resolveTranscriptHome } from "./transcript-home.js";
 
 /**
  * Everything between the arguments and the work: the two refusals a Run can
@@ -175,7 +176,7 @@ export async function startRun(given: StartOptions): Promise<number> {
   const stopping = new StopSignal();
   const deafen = listenForStop(stopping, options.signals);
   try {
-    return await execute(options, { credential, baseBranch }, log, stopping);
+    return await execute(options, { credential, baseBranch, host }, log, stopping);
   } finally {
     // The lock goes first: SIGTERM between the two is a kill again, and a kill
     // that leaves the lock behind costs the next Run a stale holder to reclaim,
@@ -194,7 +195,11 @@ export async function startRun(given: StartOptions): Promise<number> {
 
 async function execute(
   options: StartOptions,
-  { credential, baseBranch }: { credential: Credential; baseBranch: string },
+  {
+    credential,
+    baseBranch,
+    host,
+  }: { credential: Credential; baseBranch: string; host: HostKind },
   print: (line: string) => void,
   stopping: StopSignal,
 ): Promise<number> {
@@ -226,6 +231,9 @@ async function execute(
   // Once per Run: only a Target that is the pipeline's own repository
   // has a checkout that is the pipeline, and every Stage is told which it is in.
   const selfHosted = await isPipelineRepository(tracker, options.repository);
+  // Once per Run as well: whether the Target is public is read here and no
+  // later, so every hand-off of the Run keeps its transcripts in one place.
+  const transcriptHome = await resolveTranscriptHome({ config, tracker, host });
 
   const pipeline: Pipeline = {
     tracker,
@@ -249,12 +257,14 @@ async function execute(
     // branch run it at their merge-base once between them.
     baseChecks: new BaseBranchChecks(),
     selfHosted,
+    transcriptHome: transcriptHome.home,
     log,
   };
 
   const startedAt = Date.now();
   log(opening(runId, work, config.lanes));
   if (newer !== undefined) log(newer);
+  if (transcriptHome.said !== undefined) log(transcriptHome.said);
   // Before the first claim, on any Host: a shallow clone refuses every move of
   // its base branch a rebase needs, and would hand off each Ticket there.
   if (await workspace.unshallow()) log("the clone was shallow, so its full history was fetched");

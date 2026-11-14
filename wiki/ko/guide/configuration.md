@@ -21,6 +21,7 @@ Target은 설정 없이도 돌아가야 하므로 모든 필드는 선택이고,
 | [`permissionMode`](#permissionmode) | `"auto"` | 모든 Stage 세션이 묻지 않고 할 수 있는 일 |
 | [`ciTimeoutMinutes`](#ci) | `30` | pull request의 CI를 기다리는 시간 |
 | [`ciGraceMinutes`](#ci) | `5` | "아직 등록된 check 없음"을 대기 중으로 봐 주는 시간 |
+| [`keepTranscripts`](#keeptranscripts) | 비공개 Target은 `true`, 공개 Target은 `false` | Hand-off된 Ticket의 transcript를 Target의 remote에 남길지 |
 | [`labels`](#labels) | 기본 이름 여섯 개 | 파이프라인이 읽고 쓰는 라벨 이름 |
 
 여러 필드를 설정한 예:
@@ -129,6 +130,23 @@ Landing이 pull request를 연 뒤, Run은 최대 `ciTimeoutMinutes` 동안 chec
 
 `ciGraceMinutes`는 GitHub가 check run을 등록하기 전의 틈을 메웁니다. 이 틈이 3분을 넘긴 적도 있습니다. 이 시간이 지나기 전까지는 check가 아직 없는 pull request를 "없음"이 아니라 대기 중으로 봅니다. `ciTimeoutMinutes`보다 길어지지는 않습니다. Actions 대기열이 느린 Target이라면 늘리세요. CI가 아예 없는 Target은 `0`으로 두세요. 그러면 첫 확인에서 바로 답이 나옵니다. 기본값 그대로면 merge할 때마다 이 시간을 한 번씩 기다리고, Landing에는 한 번에 Lane 하나만 들어가니 그동안 다른 Lane의 merge도 함께 기다립니다. CI가 있는 Target은 유예 시간을 남겨 두세요. GitHub의 답으로는 CI가 없는 것과 아직 등록되지 않은 것을 구별할 수 없어서, `0`이면 늦게 뜨는 check run도 없는 것으로 읽힙니다.
 
+## `keepTranscripts` {#keeptranscripts}
+
+- `keepTranscripts`: boolean
+
+Hand-off된 Ticket의 transcript를 Target의 remote, 곧 `ticket-runner/state` branch에 남길지 정합니다. remote에 남기면 Host가 사라진 뒤에도 사람이 읽을 수 있습니다([무엇이 어디에 남나](./stopping-and-resuming.md#what-stays-where)). transcript에는 Stage가 읽은 것과 도구가 출력한 것이 글자 그대로 담기니, 일부러 저장소 밖에 둔 파일이나 명령이 출력한 토큰처럼 Host가 볼 수 있던 것은 무엇이든 들어갈 수 있습니다.
+
+| 설정 | Hand-off된 Ticket의 transcript |
+|---|---|
+| 지정 안 함, 비공개 Target | remote에 남김 |
+| 지정 안 함, 공개 Target | Host에 남김 |
+| `true` | 공개 Target이어도 remote에 남김 |
+| `false` | 비공개 Target이어도 Host에 남김 |
+
+지정하지 않으면 Run이 시작할 때 Target의 공개 여부를 한 번 읽고, `internal` 저장소는 비공개로 봅니다. 공개 여부를 읽지 못한 Target은 공개로 보고, Run이 그렇다고 한 줄로 알립니다. Host에 남길 때 워크스테이션에서는 `.ticket-runner/runs/<runId>/<n>/`에 남고, 클라우드 Host에서는 VM과 함께 사라집니다.
+
+공개 Target에서는 push한 commit이 branch가 옮겨 간 뒤에도 SHA로 닿을 수 있고, GitHub의 공개 이벤트 피드는 push마다 그 SHA를 보여 줍니다. 그래서 state branch와, state branch가 더는 가리키지 않는 commit에는 Target이 공개되기 전에 남긴 transcript가 있을 수 있습니다. 이를 지워 주는 것은 없습니다.
+
 ## `labels` {#labels}
 
 - `labels`: 문자열 객체
@@ -155,6 +173,6 @@ Target이 이미 다른 라벨 이름을 쓰고 있다면 triage 어휘의 이�
 
 ## 참고 자료 {#references}
 
-- [`src/config.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts), [`src/ports/agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/ports/agent-runner.ts), [`src/startup.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts), [`src/base-branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/base-branch.ts)
+- [`src/config.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts), [`src/transcript-home.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/transcript-home.ts), [`src/ports/agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/ports/agent-runner.ts), [`src/startup.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts), [`src/base-branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/base-branch.ts)
 - [`src/orchestrator.ts` · `runChecks`, `requireGreenCi`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts), [`src/prompts.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/prompts.ts), [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts), [`src/adapters/gh-tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts), [`src/adapters/git-workspace.ts` · `runCheck`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts)
-- [ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md), [ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md), [ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)
+- [ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md), [ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md), [ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md), [ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)
