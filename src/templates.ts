@@ -12,7 +12,6 @@ import {
   emptyBilling,
 } from "./credential.js";
 import type { GuardReason } from "./guards.js";
-import type { HostKind } from "./host.js";
 import { splitMessage } from "./failure-message.js";
 import type { FailurePoint } from "./lifecycle.js";
 import { logTail } from "./log-tail.js";
@@ -21,7 +20,8 @@ import type { ReleaseCause, TicketOutcome } from "./orchestrator.js";
 import type { IssueComment, SquashCommit } from "./ports/tracker.js";
 import type { KeptTranscripts } from "./ports/workspace.js";
 import type { RunStop } from "./run.js";
-import { type Criterion, type Verdict, countStatuses } from "./verdict.js";
+import type { BranchProse } from "./title.js";
+import type { Verdict } from "./verdict.js";
 
 /** How the pipeline finds its own hand-off comment again. */
 export const HANDOFF_MARKER = "<!-- ticket-runner:handoff -->";
@@ -117,51 +117,21 @@ export function guardComment(reason: GuardReason): string {
   ].join("\n");
 }
 
-/** The verdict summary both the pull request body and the squash commit carry. */
-function verdictCounts(verdict: Verdict): string {
-  const counts = countStatuses(verdict);
-  return `${counts.met} met · ${counts.unmet} unmet · ${counts.unverifiable} unverifiable`;
-}
-
-const STATUS_ICON: Record<Criterion["status"], string> = {
-  met: "✅",
-  unmet: "❌",
-  unverifiable: "❓",
-};
-
 export interface PullRequestBody {
   ticket: number;
-  verdict: Verdict;
-  runId: string;
-  /** The Host the Run is on, which decides whether its run directory is worth naming. */
-  host: HostKind;
+  /** The latest body a Stage answered for the branch, when one has. */
+  body?: string;
 }
 
-export function pullRequestBody({ ticket, verdict, runId, host }: PullRequestBody): string {
-  const criteria = verdict.criteria.map((criterion) => {
-    const line = `- ${STATUS_ICON[criterion.status]} ${criterion.text}`;
-    return criterion.status === "met" ? line : `${line} — ${criterion.evidence}`;
-  });
-
-  // A merged Ticket keeps no transcripts on the remote, so the run directory is
-  // the only place they are, and a cloud Host's goes with its session.
-  const where =
-    host === "workstation" ? `\`.ticket-runner/runs/${runId}/${ticket}/\`` : undefined;
-
-  return [
-    `Closes #${ticket}`,
-    "",
-    `**Verdict:** ${verdictCounts(verdict)}`,
-    "",
-    "<details><summary>Criteria</summary>",
-    "",
-    ...criteria,
-    "",
-    "</details>",
-    "",
-    runLine(runId, where),
-    "",
-  ].join("\n");
+/**
+ * The body of a pipeline pull request: the one `Closes` the pipeline writes,
+ * and below it the body a Stage answered in the Target's shape or the `pr`
+ * skill's. The pipeline adds nothing of its own: the verify Stage's progress
+ * row carries the verdict, and the merge ticks the met criteria on the Ticket.
+ */
+export function pullRequestBody({ ticket, body }: PullRequestBody): string {
+  const closes = `Closes #${ticket}`;
+  return body === undefined ? `${closes}\n` : `${closes}\n\n${body}\n`;
 }
 
 export interface DraftPullRequestBody {
@@ -229,7 +199,7 @@ function evidenceBlock(evidence: string): string[] {
 }
 
 /**
- * The line both pull request bodies end with: the Run, and where its
+ * The line a draft pull request's body ends with: the Run, and where its
  * transcripts are when there is somewhere that outlives the Host to point at.
  */
 function runLine(runId: string, where: string | undefined): string {
@@ -242,14 +212,15 @@ function keptPlace(transcripts: KeptTranscripts): string {
   return `\`${transcripts.path}\` on the \`${transcripts.branch}\` branch`;
 }
 
-export interface SquashCommitMessage {
+export interface SquashCommitMessage extends Pick<BranchProse, "problem" | "solution"> {
   ticket: number;
   /** The pull request number, appended to the subject as GitHub would. */
   pullRequest: number;
   /** The pull request title, which is the subject that lands on the base branch. */
   title: string;
+  /** The verdict the merge is made on, whose unverifiable criteria the body names. */
   verdict: Verdict;
-  /** The branch's commit subjects, oldest first. */
+  /** The branch's commit subjects, oldest first, which stand in for a solution no Stage answered. */
   commits: string[];
   /** Unique `Co-authored-by` values from the branch, carried as trailers. */
   coAuthors: string[];
@@ -258,32 +229,117 @@ export interface SquashCommitMessage {
 /**
  * The commit a merged Ticket leaves on the base branch.
  *
- * `git log` renders no HTML, so this is the one template with nothing folded
- * away: the verdict is counts only, and the per-criterion evidence stays in the
- * pull request body where a browser can collapse it.
+ * It opens with the problem and the solution a Stage answered, so `git log`
+ * says why without the Ticket. Where no Stage answered a solution, the
+ * branch's commit subjects say what changed in its place; nothing is made up
+ * for either.
+ *
+ * An unverifiable criterion's reason is kept nowhere on the Ticket, so it is
+ * carried here, one line per criterion. `git log` renders no HTML, so nothing
+ * is folded away.
  */
 export function squashCommit({
   ticket,
   pullRequest,
   title,
+  problem,
+  solution,
   verdict,
   commits,
   coAuthors,
 }: SquashCommitMessage): SquashCommit {
-  // What GitHub's default message would have carried, now carried by hand.
-  const trailers = coAuthors.map((author) => `Co-authored-by: ${author}`);
+  const paragraphs = [
+    [`Closes #${ticket}`],
+    ...(problem === undefined ? [] : [wrapLines(problem)]),
+    solution === undefined ? commits.map((subject) => `- ${subject}`) : wrapLines(solution),
+    unverifiedLines(verdict),
+    // What GitHub's default message would have carried, now carried by hand.
+    coAuthors.map((author) => `Co-authored-by: ${author}`),
+  ].filter((lines) => lines.length > 0);
   return {
     subject: `${title} (#${pullRequest})`,
-    body: [
-      `Closes #${ticket}`,
-      "",
-      `Verdict: ${verdictCounts(verdict)}`,
-      "",
-      ...commits.map((subject) => `- ${subject}`),
-      "",
-      ...(trailers.length === 0 ? [] : [...trailers, ""]),
-    ].join("\n"),
+    body: `${paragraphs.map((lines) => lines.join("\n")).join("\n\n")}\n`,
   };
+}
+
+/** The unverifiable criteria with their evidence on one line each, under a heading; nothing when there are none. */
+function unverifiedLines(verdict: Verdict): string[] {
+  const unverifiable = verdict.criteria.filter((criterion) => criterion.status === "unverifiable");
+  if (unverifiable.length === 0) return [];
+  return [
+    "Unverified:",
+    ...unverifiable.map(
+      (criterion) => `- ${oneLine(criterion.text)} — ${oneLine(criterion.evidence)}`,
+    ),
+  ];
+}
+
+/** Text with its line breaks, and the space around them, joined into single spaces. */
+function oneLine(text: string): string {
+  return text.trim().replace(/\s*\n\s*/g, " ");
+}
+
+/** How wide a commit body's line may run, as git's own convention has it. */
+const COMMIT_BODY_COLUMNS = 72;
+
+/**
+ * Prose for a commit body, each line wider than {@link COMMIT_BODY_COLUMNS}
+ * broken at its spaces. The lines the Stage wrote stay as they are, so a list
+ * stays a list, and a word wider than the limit is left whole.
+ */
+export function wrapLines(text: string): string[] {
+  return text.split("\n").flatMap((line) => wrapLine(line.trimEnd()));
+}
+
+function wrapLine(line: string): string[] {
+  if (columns(line) <= COMMIT_BODY_COLUMNS) return [line];
+  // A line's indent belongs to its first word, so the break never lands in it.
+  const indent = /^\s*/.exec(line)?.[0] ?? "";
+  const words = line.slice(indent.length).split(/ +/);
+  const lines: string[] = [];
+  let current = indent + (words.shift() ?? "");
+  for (const word of words) {
+    const joined = `${current} ${word}`;
+    if (columns(joined) <= COMMIT_BODY_COLUMNS) {
+      current = joined;
+    } else {
+      lines.push(current);
+      current = word;
+    }
+  }
+  lines.push(current);
+  return lines;
+}
+
+/** How many columns a terminal gives `text`: two for a wide character such as Hangul, one for any other. */
+export function columns(text: string): number {
+  let width = 0;
+  for (const character of text) width += isWide(character.codePointAt(0) ?? 0) ? 2 : 1;
+  return width;
+}
+
+/** East Asian Wide and Fullwidth code points, the ones a terminal draws two columns wide. */
+const WIDE_RANGES: readonly (readonly [number, number])[] = [
+  [0x1100, 0x115f], // Hangul Jamo initial consonants
+  [0x2e80, 0x303e], // CJK radicals, Kangxi, CJK symbols and punctuation
+  [0x3041, 0x33ff], // Hiragana, Katakana, Bopomofo, Hangul compatibility Jamo, CJK compatibility
+  [0x3400, 0x4dbf], // CJK unified ideographs extension A
+  [0x4e00, 0x9fff], // CJK unified ideographs
+  [0xa000, 0xa4cf], // Yi
+  [0xa960, 0xa97f], // Hangul Jamo extended A
+  [0xac00, 0xd7a3], // Hangul syllables
+  [0xf900, 0xfaff], // CJK compatibility ideographs
+  [0xfe30, 0xfe4f], // CJK compatibility forms
+  [0xff00, 0xff60], // Fullwidth forms
+  [0xffe0, 0xffe6], // Fullwidth signs
+  [0x1f300, 0x1f64f], // Pictographs and emoticons
+  [0x1f680, 0x1f6ff], // Transport and map symbols
+  [0x1f900, 0x1f9ff], // Supplemental pictographs
+  [0x20000, 0x3fffd], // CJK unified ideographs extensions B onwards
+];
+
+function isWide(codePoint: number): boolean {
+  return WIDE_RANGES.some(([low, high]) => codePoint >= low && codePoint <= high);
 }
 
 export interface HandoffComment {

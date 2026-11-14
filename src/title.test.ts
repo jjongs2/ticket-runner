@@ -4,6 +4,7 @@ import { parseNotes } from "./notes.js";
 import {
   CODE_STAGE_JSON_SCHEMA,
   SUBJECT_SHAPE,
+  parseBranchProse,
   parseNoCommitReason,
   parseTitle,
   pullRequestTitle,
@@ -12,9 +13,19 @@ import {
 const TICKET_TITLE = "A pull request is titled after its first commit";
 
 describe("CODE_STAGE_JSON_SCHEMA", () => {
-  it("requires a title, the Notes list and a reason for no new commit, and nothing else", () => {
-    expect(CODE_STAGE_JSON_SCHEMA.required).toEqual(["title", "notes", "noCommitReason"]);
+  it("requires a title, a body, a problem, a solution, the Notes list and a reason for no new commit, and nothing else", () => {
+    expect(CODE_STAGE_JSON_SCHEMA.required).toEqual([
+      "title",
+      "body",
+      "problem",
+      "solution",
+      "notes",
+      "noCommitReason",
+    ]);
     expect(CODE_STAGE_JSON_SCHEMA.properties.title.type).toBe("string");
+    expect(CODE_STAGE_JSON_SCHEMA.properties.body.type).toBe("string");
+    expect(CODE_STAGE_JSON_SCHEMA.properties.problem.type).toBe("string");
+    expect(CODE_STAGE_JSON_SCHEMA.properties.solution.type).toBe("string");
     expect(CODE_STAGE_JSON_SCHEMA.properties.noCommitReason.type).toBe("string");
     expect(CODE_STAGE_JSON_SCHEMA.properties.notes).toBe(CODE_STAGE_NOTES_LIST_SCHEMA);
     expect(CODE_STAGE_JSON_SCHEMA.additionalProperties).toBe(false);
@@ -37,6 +48,45 @@ describe("the noCommitReason field", () => {
     expect(description).toMatch(/no new commit/);
     expect(description).toContain("a few sentences");
     expect(description).toMatch(/otherwise.*empty string/i);
+  });
+});
+
+describe("the body, problem and solution fields", () => {
+  it("each say an empty string keeps the earlier answer, and the body leaves Closes to the pipeline", () => {
+    const { body, problem, solution } = CODE_STAGE_JSON_SCHEMA.properties;
+
+    for (const { description } of [body, problem, solution]) {
+      expect(description).toMatch(/empty string keeps/i);
+    }
+    expect(body.description).toContain("without a title and without the `Closes #<n>` line");
+  });
+});
+
+describe("parseBranchProse", () => {
+  it("reads each answer with something in it, trimmed, its lines kept", () => {
+    expect(
+      parseBranchProse({
+        title: "feat: x",
+        body: "  ## Summary\n\n- a\n- b\n",
+        problem: "There was no flag.",
+        solution: "It adds one.",
+      }),
+    ).toEqual({
+      body: "## Summary\n\n- a\n- b",
+      problem: "There was no flag.",
+      solution: "It adds one.",
+    });
+  });
+
+  it("drops a blank, missing or non-string answer, each on its own", () => {
+    expect(parseBranchProse({ body: " \n", problem: 7, solution: "It adds one." })).toEqual({
+      solution: "It adds one.",
+    });
+  });
+
+  it("reads nothing off output that is not an object", () => {
+    expect(parseBranchProse(undefined)).toEqual({});
+    expect(parseBranchProse("a body")).toEqual({});
   });
 });
 

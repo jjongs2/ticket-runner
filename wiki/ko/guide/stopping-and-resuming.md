@@ -126,7 +126,7 @@ Hand-off된 Ticket은 네 가지 중 하나로 끝내면 됩니다.
 |---|---|
 | Ticket이나 기준, 설정을 바꾸고 돌려주기 | 다음 Run이 그때 이슈에 적힌 대로 판정함 |
 | remote의 branch에 commit을 push하고 돌려주기 | 다음 Run이 자기 사본을 그 tip까지 끌어올림. 이력을 다시 쓰면 그 대신 사본이 갈라짐 |
-| 직접 마무리하기: draft를 ready로 바꾸고 merge | 이슈가 닫힘. `ready-for-human`은 직접 떼고, worktree와 로컬 branch는 그것을 만든 Host에서 지우기 |
+| 직접 마무리하기: 변경이 아닌 Hand-off를 설명하는 draft 본문을 고쳐 쓰고, ready로 바꾸고 merge | 이슈가 닫힘. `ready-for-human`은 직접 떼고, worktree와 로컬 branch는 그것을 만든 Host에서 지우기 |
 | 버리기: 이슈를 닫음 | draft pull request와 branch는 직접 닫고 지울 때까지 남음 |
 
 ```bash
@@ -236,6 +236,9 @@ Ticket이 어디까지 갔는지 기록이 없으면, Release되거나 stranded�
   "fixUsed": false,
   "pullRequest": 31,
   "title": "feat: release a rate-limited Ticket",
+  "body": "## Summary\n\n...",
+  "problem": "A rate-limited Stage handed its Ticket to a human.",
+  "solution": "The Ticket is released and resumed from its state file.",
   "rebaseFirst": true,
   "runId": "2026-09-17T09-00-00-000",
   "version": "0.5.2",
@@ -251,6 +254,8 @@ Ticket이 어디까지 갔는지 기록이 없으면, Release되거나 stranded�
 | `fixUsed` | fix 기회를 썼는지. 이어받는다고 기회가 한 번 더 생기지는 않음. 단, Hand-off 뒤는 예외 |
 | `pullRequest` | 이미 열린 pull request. 이어받은 Run이 하나를 더 열지 않도록 |
 | `title` | implement나 fix Stage가 branch 전체에 대해 마지막으로 준 제목. pull request 제목이 됨 |
+| `body` | 두 Stage가 마지막으로 준 pull request 본문. `Closes #<n>` 아래에 들어감 |
+| `problem`, `solution` | 두 Stage가 마지막으로 준 문제와 해결. squash commit 본문이 이것으로 시작함 |
 | `rebaseFirst` | base branch 실패로 Release된 뒤에만 있음. Check 전에 base branch 위로 rebase할 것 |
 | `runId`, `version`, `updatedAt` | 어느 Run과 어느 [버전](./internals.md#versions)이 언제 썼는지 |
 

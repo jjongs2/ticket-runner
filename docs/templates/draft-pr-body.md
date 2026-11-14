@@ -13,9 +13,9 @@ ran, which is where a human can still read them once the Host is gone.
 
 The body is the hand-off's whether the hand-off opened the pull request or made
 one that was already open a draft: that one's body is what an earlier pass or
-Run wrote, with a verdict nothing is merging on and a last line about another
-place. A draft is opened before the transcripts are kept, because the state
-records it, so its body is written again once they are.
+Run published, describing a branch nothing is merging yet. A draft is opened
+before the transcripts are kept, because the state records it, so its body is
+written again once they are.
 
 ## When the failure was unexpected
 

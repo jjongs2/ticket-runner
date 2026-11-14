@@ -2,9 +2,11 @@
 
 Closes #<n>
 
-Verdict: <k> met · <u> unmet · <v> unverifiable
+<problem>
 
-- <branch commit subject>
-- <branch commit subject>
+<solution>
+
+Unverified:
+- <criterion> — <evidence>
 
 Co-authored-by: <name> <email>

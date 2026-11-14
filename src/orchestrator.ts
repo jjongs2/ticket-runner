@@ -11,7 +11,6 @@ import { tickMetCriteria } from "./criteria.js";
 import type { BaseBranchChecks, FailingBase } from "./failing-base.js";
 import { type SkipReason, isGuardReason, skipReason } from "./guards.js";
 import { markHandoffsTaken } from "./handoff.js";
-import type { HostKind } from "./host.js";
 import type { Landing, LandingTurn } from "./landing.js";
 import type { FailureKind, FailurePoint } from "./lifecycle.js";
 import {
@@ -61,7 +60,10 @@ import {
 } from "./templates.js";
 import type { StartTimer } from "./timer.js";
 import {
+  BRANCH_PROSE_FIELDS,
+  type BranchProse,
   CODE_STAGE_JSON_SCHEMA,
+  parseBranchProse,
   parseNoCommitReason,
   parseTitle,
   pullRequestTitle,
@@ -136,11 +138,6 @@ export interface Pipeline {
    * `package.json` or runs git, so every stamp of one Run is the same string.
    */
   version: string;
-  /**
-   * The Host the Run is on, which decides whether a merged pull request's body
-   * can point at the Run's directory: a cloud Host's is gone with its session.
-   */
-  host: HostKind;
   /**
    * What every Stage of this Run is billed to, chosen once when it started:
    * the subscription, or the Host's API key for a Run started with `--api-key`.
@@ -377,6 +374,7 @@ async function takeTicket(
     fixUsed: resume?.fixUsed ?? false,
     ...(resume?.pullRequest === undefined ? {} : { pullRequest: resume.pullRequest }),
     ...(resume?.title === undefined ? {} : { title: resume.title }),
+    ...(resume === undefined ? {} : recordedProse(resume)),
     ...(resume?.rebaseFirst === true ? { rebaseFirst: true } : {}),
   });
 
@@ -546,7 +544,7 @@ async function takeTicket(
         title = pullRequestTitle(record.title, commits, issue.title);
         pullRequest = await publishPullRequest(
           pipeline,
-          { issue, branch, worktree, verdict, title },
+          { issue, branch, worktree, title, body: record.prose.body },
           pullRequest,
         );
         await record.advance({ pullRequest });
@@ -588,7 +586,15 @@ async function takeTicket(
     point = "merge";
     await tracker.squashMerge(
       pullRequest,
-      squashCommit({ ticket, pullRequest, title, verdict, commits, coAuthors }),
+      squashCommit({
+        ticket,
+        pullRequest,
+        title,
+        ...record.prose,
+        verdict,
+        commits,
+        coAuthors,
+      }),
     );
     await progress.record({ point: "merge", outcome: `✅ #${pullRequest}` });
   } catch (error) {
@@ -808,7 +814,10 @@ type Reached = Omit<TicketState, "runId" | "updatedAt">;
 
 /** What one write moves that on by. */
 type Advance = Partial<
-  Pick<Reached, "state" | "fixUsed" | "pullRequest" | "title" | "rebaseFirst">
+  Pick<
+    Reached,
+    "state" | "fixUsed" | "pullRequest" | "title" | "body" | "problem" | "solution" | "rebaseFirst"
+  >
 >;
 
 /**
@@ -855,6 +864,11 @@ class ResumeRecord {
   /** The latest title a Stage answered for the branch, in this Run or an earlier one. */
   get title(): string | undefined {
     return this.reached.title;
+  }
+
+  /** The latest body, problem and solution a Stage answered for the branch, in this Run or an earlier one. */
+  get prose(): BranchProse {
+    return recordedProse(this.reached);
   }
 
   /**
@@ -1075,15 +1089,32 @@ async function collectNotes(
 }
 
 /**
- * Record the title a code Stage answered for the whole branch, when it answered
- * one that counts, so it names the pull request and outlives this Run.
+ * Record the title, the body, the problem and the solution a code Stage
+ * answered for the whole branch, each one it answered with something that
+ * counts, so they write the pull request and the squash commit and outlive
+ * this Run.
  *
- * One that does not count costs the title alone, as a malformed Note costs that
- * Note: the one before it, or the first commit subject, is used instead.
+ * One that does not count, or one answered blank, costs that answer alone, as
+ * a malformed Note costs that Note: the one an earlier Stage answered stands,
+ * and for the title, the first commit subject after it.
  */
-async function recordTitle(result: StageResult, record: ResumeRecord): Promise<void> {
+async function recordAnswers(result: StageResult, record: ResumeRecord): Promise<void> {
   const title = parseTitle(result.result);
-  if (title !== undefined) await record.advance({ title });
+  const answered: Advance = {
+    ...(title === undefined ? {} : { title }),
+    ...parseBranchProse(result.result),
+  };
+  if (Object.keys(answered).length > 0) await record.advance(answered);
+}
+
+/** The body, the problem and the solution a state names, without the keys it holds none for. */
+function recordedProse(state: BranchProse): BranchProse {
+  const prose: BranchProse = {};
+  for (const field of BRANCH_PROSE_FIELDS) {
+    const answer = state[field];
+    if (answer !== undefined) prose[field] = answer;
+  }
+  return prose;
 }
 
 /** What the Run's standing Notes issue is found — and opened — with. */
@@ -1188,7 +1219,7 @@ async function implement(
     resultRequired: false,
   });
   await collectNotes(pipeline, issue.number, "implement", result, notes);
-  await recordTitle(result, record);
+  await recordAnswers(result, record);
 
   // Pushed whatever became of the Stage, like its Notes: a session that
   // committed and then was stopped by the rate limit or an API failure still
@@ -1491,8 +1522,13 @@ async function verify(
  * What the fix budget buys: a fresh session on the same branch in the same
  * worktree, handed the failure and its evidence and nothing else to do.
  *
- * It drives no plugin skill. The implement skill would re-read the Ticket and
- * start over, where what is wanted here is one concrete defect mended.
+ * It drives no plugin skill but the `pr` skill, for a body its fix changes.
+ * The implement skill would re-read the Ticket and start over, where what is
+ * wanted here is one concrete defect mended.
+ *
+ * It is handed the body, the problem and the solution answered so far, so a
+ * fix that changes what one says revises it for the whole branch rather than
+ * describing only itself, and one that does not leaves it standing.
  */
 async function fix(
   pipeline: Pipeline,
@@ -1523,6 +1559,7 @@ async function fix(
       pipeline.selfHosted,
       pipeline.config.checks,
       await standingNotesNumber(pipeline),
+      record.prose,
     ),
     cwd: worktree,
     logDir,
@@ -1530,7 +1567,7 @@ async function fix(
     resultRequired: false,
   });
   await collectNotes(pipeline, issue.number, "fix", result, notes);
-  await recordTitle(result, record);
+  await recordAnswers(result, record);
 
   // Pushed whatever became of the Stage, as the implement Stage's work is.
   const grew = (await commitCount(pipeline, branch)) > commitsBefore;
@@ -1683,17 +1720,18 @@ interface PullRequestSubject {
   issue: Issue;
   branch: string;
   worktree: string;
-  verdict: Verdict;
   title: string;
+  /** The latest body a Stage answered for the branch, when one has. */
+  body: string | undefined;
 }
 
 /**
  * Push the branch, then open the pull request or bring the open one up to date.
  *
  * A second pass comes back to a pull request that already exists: the push is
- * what GitHub re-runs its checks on, and the title and body are rewritten so
- * the subject and the verdict a human reads there are the ones that will reach
- * the base branch.
+ * what GitHub re-runs its checks on, and the title and body are rewritten
+ * from the latest a Stage answered, so a fix Stage's revision is the one a
+ * human reads there.
  *
  * One that already exists is also taken out of draft, because a Ticket resumed
  * after a hand-off comes back to the pull request the hand-off drafted and a
@@ -1703,15 +1741,13 @@ interface PullRequestSubject {
  */
 async function publishPullRequest(
   pipeline: Pipeline,
-  { issue, branch, worktree, verdict, title }: PullRequestSubject,
+  { issue, branch, worktree, title, body: answered }: PullRequestSubject,
   existing: number | undefined,
 ): Promise<number> {
   await pipeline.workspace.push(worktree, branch);
   const body = pullRequestBody({
     ticket: issue.number,
-    verdict,
-    runId: pipeline.runId,
-    host: pipeline.host,
+    ...(answered === undefined ? {} : { body: answered }),
   });
 
   if (existing !== undefined) {

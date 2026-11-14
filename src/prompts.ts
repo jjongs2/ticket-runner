@@ -7,7 +7,7 @@
 import type { FailureKind } from "./lifecycle.js";
 import { OWN_DEFECT } from "./note-schema.js";
 import { STAGE_ENV_VAR } from "./stage-guard.js";
-import { BRANCH_TITLE, SUBJECT_SHAPE } from "./title.js";
+import { BRANCH_PROSE_FIELDS, BRANCH_TITLE, type BranchProse, SUBJECT_SHAPE } from "./title.js";
 
 /**
  * Appended to every Stage prompt, the fix Stage included, in every Target. The
@@ -89,6 +89,50 @@ const titleGuidance = (base: string) =>
   `- Answer a \`title\` beside your Notes: ${BRANCH_TITLE}, in the \`${SUBJECT_SHAPE}\` shape and without the \`(#<n>)\`. It titles the pull request and the squash commit on \`${base}\`, so each commit subject describes only its own commit.`;
 
 /**
+ * Where the pull request body's shape comes from. A Target's own rules come
+ * first: a Stage reads its instructions anyway, so ignoring them would leave it
+ * two conflicting orders. The `pr` skill is named by its full name, because a
+ * short name may match a skill of the Target's own.
+ */
+const BODY_SHAPE =
+  "in the shape this repository's contributing guide or its `.github/PULL_REQUEST_TEMPLATE.md` sets, when either sets a pull request body's sections or content beyond the `Closes` line; where neither does, invoke `/mattpocock-skills:pr` by that full name and write it in that skill's shape";
+
+/**
+ * How the problem and the solution read. The shape is stated here rather than
+ * pointed at, because the skill it comes from is a personal one, not part of
+ * the plugin a Target installs.
+ */
+const PROSE_SHAPE =
+  "as this repository's contributing guide sets a commit body, when it does; where it does not, the problem is the state before the change and its effect, and the solution is what the change does and why, each in at most two sentences, readable without opening the Ticket, leaving out what the diff and the body already show, such as side changes and individual names";
+
+/**
+ * What none of the three may carry. They are published on the Target's
+ * repository, and the pipeline writes the one `Closes #<n>` itself, so a
+ * second closing keyword could close an issue nobody meant to.
+ */
+const PROSE_LIMITS =
+  "None of the three carries a title, a closing keyword (`Closes`, `Fixes`, `Resolves`) before an issue reference, a screenshot or a local path: they are published on this repository, and the pipeline writes the one `Closes #<n>` itself.";
+
+/**
+ * How the implement Stage is told to answer the body, the problem and the
+ * solution: once, for the whole branch, after the review that changes it.
+ */
+const PROSE_GUIDANCE = `- Once the review's fixes are committed, answer a \`body\`, a \`problem\` and a \`solution\` beside \`title\`, each written for the whole branch. The \`body\` is the pull request's body below the \`Closes #<n>\` line the pipeline writes: write it ${BODY_SHAPE}. The \`problem\` and the \`solution\` open the squash commit's body, so \`git log\` says why without the Ticket: write them ${PROSE_SHAPE}. ${PROSE_LIMITS}`;
+
+/**
+ * The language a Stage writes its answers in. A Stage left to itself wrote
+ * English on a Target whose issues and commits are in another language. The
+ * criterion's text is the exception, because ticking matches it.
+ */
+const languageLine = (answers: string) =>
+  `- Write ${answers} in the language this repository's contributing guide sets for issues and commits, and where it sets none, in the language the Ticket is written in. A criterion's text stays as the Ticket writes it.`;
+
+/** What the two Stages that write code answer in the Target's language. */
+const CODE_STAGE_LANGUAGE = languageLine(
+  "your Notes, `title`, `body`, `problem`, `solution` and `noCommitReason`",
+);
+
+/**
  * Guidance appended to every implement Stage, working around known defects of
  * the `implement` skill in an unattended session.
  *
@@ -104,6 +148,8 @@ const implementGuidance = (
 
 - Make an initial commit before running \`/mattpocock-skills:code-review\`, so the reviewed diff is not empty.
 ${titleGuidance(base)}
+${PROSE_GUIDANCE}
+${CODE_STAGE_LANGUAGE}
 - The review the skill asks for is \`/mattpocock-skills:code-review\`. Invoke it by that full name: the short name also matches the CLI's own built-in review skill, which runs neither the Standards review nor the Spec review.
 - Pass the review this Ticket's URL, \`${issueUrl}\`, as the spec. It otherwise looks for the spec in the commit messages, which need not name the Ticket, and reviews with no spec without saying so.
 - Spawn its review sub-agents with \`run_in_background: false\` set explicitly, several in one message so they still run in parallel. Omitting \`run_in_background\` still runs them in the background, and you would then reach your answer before the review has come back.
@@ -217,7 +263,8 @@ const verifyInstructions = (checks: readonly string[]) => `You are the verify St
 - Mark a criterion \`unverifiable\` only when no evidence can be gathered, never as a substitute for looking.
 - When a criterion ${NEEDS_A_HUMAN}, mark it \`unmet\` and say in its evidence that a human decision is needed, naming what it collides with. A workaround that sidesteps the collision does not meet it.
 - An \`unmet\` criterion's evidence states the failure: where it sits, what you ran or read, what you expected, what came back, and the counterexample. It proposes no fix and no direction for one, and neither does what you say about whether a human decision is needed. It may quote a limit the Ticket, a documented decision or another criterion sets, naming where it comes from. A fix written there is what the fix Stage behind you would implement in place of finding the cause. This holds for a criterion's evidence only: a Note's \`next\` still carries the fix.
-- End by emitting the verdict: one entry per criterion with its status and the evidence you actually gathered.`;
+- End by emitting the verdict: one entry per criterion with its status and the evidence you actually gathered.
+${languageLine("your Notes and the verdict's evidence")}`;
 
 /** The Checks as the verify Stage is told about them: passed, and not its to run. */
 function verifyChecksLine(checks: readonly string[]): string {
@@ -235,6 +282,9 @@ function verifyChecksLine(checks: readonly string[]): string {
  * It is also told to fix the cause the evidence points at, not the patch the
  * evidence may still propose, and to test that fix the way the next verify will
  * attack it, for the reason {@link verifyInstructions} gives.
+ *
+ * It drives no plugin skill but the `pr` skill: the implement skill would
+ * re-read the Ticket and start over.
  */
 const fixInstructions = (
   base: string,
@@ -249,15 +299,28 @@ const fixInstructions = (
 ${FINISH_GUIDANCE}
 - Write commit subjects in the \`${SUBJECT_SHAPE}\` shape. The pipeline re-runs the Checks and the verify Stage as soon as you finish.
 ${titleGuidance(base)}
+${FIX_PROSE_GUIDANCE}
+${CODE_STAGE_LANGUAGE}
+- Invoke no plugin skill but \`/mattpocock-skills:pr\`: the implement skill would re-read the Ticket and start over.
 ${NO_COMMIT_LINE}`;
+
+/**
+ * How the fix Stage is told to answer the body, the problem and the solution:
+ * revised for the whole branch where its fix changes what one says, so the
+ * before an earlier Stage found is not lost, and blank otherwise, which keeps
+ * the earlier one.
+ */
+const FIX_PROSE_GUIDANCE = `- The \`body\`, \`problem\` and \`solution\` answered for this branch so far are below, when there are any. When your fix changes what one of them says, answer that one revised for the whole branch, keeping whatever it says of the branch before your fix that still holds: the \`body\` ${BODY_SHAPE}; the \`problem\` and the \`solution\` ${PROSE_SHAPE}. Answer each one your fix leaves true as an empty string, which keeps it. ${PROSE_LIMITS}`;
 
 /**
  * What every fix Stage is told about ending without a new commit, whatever it
  * was sent in for. Ending so hands the Ticket to a human, and the reason the
  * Stage answers is the one thing of what it said that reaches the hand-off:
  * under `--json-schema` a last message in prose stays in the transcript. The
- * implement Stage is not told this: the schema's description is all it reads
- * of the field, so its prompt does not invite it to end without committing.
+ * implement Stage is not told this: its prompt names the field only among the
+ * answers it writes in the Target's language, and the schema's description is
+ * all it reads of what the field is for, so its prompt does not invite it to
+ * end without committing.
  */
 const NO_COMMIT_LINE =
   "- If you end without a new commit, say why in `noCommitReason`, in a few sentences: committing nothing hands the Ticket to a human, and the hand-off comment quotes your reason. Otherwise answer it empty.";
@@ -376,7 +439,10 @@ export function conflictPrompt(
   ]);
 }
 
-/** A fresh session with no plugin skill, given one failure and told to mend it. */
+/**
+ * A fresh session with no plugin skill but the `pr` skill, given one failure
+ * and told to mend it, and the body, problem and solution answered so far.
+ */
 export function fixPrompt(
   issueUrl: string,
   failure: FixFailure,
@@ -385,11 +451,13 @@ export function fixPrompt(
   selfHosted: boolean,
   checks: readonly string[],
   standingNotes?: number,
+  prose: BranchProse = {},
 ): string {
   return sections([
     `Ticket: ${issueUrl}`,
     fixInstructions(base, failure.kind, checks),
     failureSection(failure, base),
+    proseSection(prose),
     stageBoundary(selfHosted),
     notesGuidance(standingNotes),
     extraPrompt,
@@ -412,6 +480,29 @@ function failureSection({ kind, summary, evidence }: FixFailure, base: string): 
 /** How the fix Stage reads the unmet criteria's evidence, said beside it. */
 const UNMET_EVIDENCE_LEAD =
   "This is the verify Stage's evidence for each unmet criterion. A fix this evidence proposes is a lead, not the answer: find the cause yourself, starting from the failure it states.";
+
+/**
+ * The body, the problem and the solution answered for the branch so far, each
+ * under its field's name; nothing where none has been answered.
+ */
+function proseSection(prose: BranchProse): string {
+  const answered = BRANCH_PROSE_FIELDS.flatMap((field) => {
+    const answer = prose[field];
+    return answer === undefined ? [] : [`### \`${field}\`\n\n${fenced(answer)}`];
+  });
+  if (answered.length === 0) return "";
+  return ["## What the branch's answers say now", ...answered].join("\n\n");
+}
+
+/**
+ * Text fenced with more backticks than any run inside it, so a body that
+ * carries a fence of its own reads as one block.
+ */
+function fenced(text: string): string {
+  const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length));
+  const fence = "`".repeat(Math.max(3, longest + 1));
+  return `${fence}\n${text}\n${fence}`;
+}
 
 /** The unmet criteria a fix Stage was sent in for, and what meeting them now takes. */
 function unmetBeforeSection(evidence: string): string {

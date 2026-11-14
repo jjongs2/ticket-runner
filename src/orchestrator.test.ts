@@ -5,7 +5,6 @@ import { throwOnFailure } from "./adapters/exec.js";
 import { resolveBaseBranch } from "./base-branch.js";
 import type { Config } from "./config.js";
 import { type Billing, type Credential, emptyBilling } from "./credential.js";
-import type { HostKind } from "./host.js";
 import { BaseBranchChecks } from "./failing-base.js";
 import { Landing } from "./landing.js";
 import { StandingNotes } from "./notes.js";
@@ -105,6 +104,12 @@ const UNMET_VERDICT = verdictResult([
 /** What a code Stage answers: a title for the whole branch, and no Notes. */
 const titled = (title: string) => stageResult({ result: { title, notes: [] } });
 
+/** What a code Stage answers when it writes the pull request body, the problem and the solution too. */
+const described = (
+  prose: { body?: string; problem?: string; solution?: string },
+  title = "feat(cli): do the whole thing",
+) => stageResult({ result: { title, notes: [], ...prose } });
+
 /** A code Stage's structured answer, with whatever it said about committing. */
 const answer = (fields: { noCommitReason?: string }) => ({
   title: "fix(cli): mend the thing",
@@ -179,7 +184,6 @@ function stateAtEachStage(): { stage: StageName; state: TicketState | undefined 
  */
 async function run(
   overrides: Partial<Config> = {},
-  host: HostKind = "workstation",
   credential: Credential = "subscription",
 ): Promise<TicketOutcome> {
   const settings = config(overrides);
@@ -192,7 +196,6 @@ async function run(
       repoRoot,
       runId: "run-1",
       version: VERSION,
-      host,
       credential,
       billing,
       baseBranch: await resolveBaseBranch(tracker, settings),
@@ -270,24 +273,7 @@ describe("the happy path", () => {
     expect(pr.draft).toBe(false);
     expect(pr.head).toBe(BRANCH);
     expect(pr.title).toBe("feat(cli): do the thing");
-    expect(pr.body.split("\n")[0]).toBe(`Closes #${TICKET}`);
-    expect(pr.body).toContain("**Verdict:** 1 met · 0 unmet · 0 unverifiable");
-  });
-
-  it("points a workstation's reader at the Run's directory, which is still there", async () => {
-    await run();
-
-    expect(tracker.pullRequest(100).body).toContain(
-      `Run \`run-1\` · transcripts in \`.ticket-runner/runs/run-1/${TICKET}/\``,
-    );
-  });
-
-  it("names the Run alone on a cloud Host, whose run directory goes with its session", async () => {
-    await run({}, "cloud");
-
-    const body = tracker.pullRequest(100).body;
-    expect(body.endsWith("</details>\n\nRun `run-1`\n")).toBe(true);
-    expect(body).not.toContain("transcripts");
+    expect(pr.body).toBe(`Closes #${TICKET}\n`);
   });
 
   it("clears in-progress after the merge and keeps the assignee as the record", async () => {
@@ -479,12 +465,11 @@ describe("the pull request title and the squash commit", () => {
     );
   });
 
-  it("composes a body of Closes, the verdict counts and every branch commit in order", async () => {
-    workspace.commits = [
-      "feat(cli): do the thing (#2)",
-      "test(cli): cover the thing (#2)",
-      "docs: write it down (#2)",
-    ];
+  it("composes a body of Closes, the problem, the solution and the unverified criteria", async () => {
+    runner.queue(
+      "implement",
+      described({ body: "## Summary", problem: "There was no flag.", solution: "It adds one." }),
+    );
     runner.queue("verify", stageResult({ result: MIXED_VERDICT }));
 
     await run();
@@ -493,7 +478,29 @@ describe("the pull request title and the squash commit", () => {
       [
         `Closes #${TICKET}`,
         "",
-        "Verdict: 1 met · 0 unmet · 1 unverifiable",
+        "There was no flag.",
+        "",
+        "It adds one.",
+        "",
+        "Unverified:",
+        "- the docs say so — the docs are not readable from here",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("lets every branch commit stand in, in order, for a solution no Stage answered", async () => {
+    workspace.commits = [
+      "feat(cli): do the thing (#2)",
+      "test(cli): cover the thing (#2)",
+      "docs: write it down (#2)",
+    ];
+
+    await run();
+
+    expect(tracker.pullRequest(100).squashCommit?.body).toBe(
+      [
+        `Closes #${TICKET}`,
         "",
         "- feat(cli): do the thing (#2)",
         "- test(cli): cover the thing (#2)",
@@ -503,15 +510,22 @@ describe("the pull request title and the squash commit", () => {
     );
   });
 
-  it("keeps the evidence out of the commit: no HTML and no details block", async () => {
+  it("carries no verdict counts, no HTML and no Run line in the commit", async () => {
     runner.queue("verify", stageResult({ result: MIXED_VERDICT }));
 
     await run();
     const commit = tracker.pullRequest(100).squashCommit;
 
     expect(commit?.body).not.toContain("<");
-    expect(commit?.body).not.toContain("details");
-    expect(commit?.body).not.toContain("the docs are not readable from here");
+    expect(commit?.body).not.toMatch(/Verdict|met ·|Run `/);
+  });
+
+  it("writes the pull request body from the body the implement Stage answered, below Closes", async () => {
+    runner.queue("implement", described({ body: "## Summary\n\nA flag." }));
+
+    await run();
+
+    expect(tracker.pullRequest(100).body).toBe(`Closes #${TICKET}\n\n## Summary\n\nA flag.\n`);
   });
 
   it("reads the branch commits after the rebase, so the merge lists what lands", async () => {
@@ -1300,7 +1314,7 @@ describe("the transcripts a hand-off keeps on the remote", () => {
   it("names them in the draft pull request's body too, and not the directory on this Host", async () => {
     workspace.failCheck("npm test", "FAIL src/a.test.ts");
 
-    await run({}, "cloud");
+    await run({});
 
     const body = tracker.pullRequest(100).body;
     expect(tracker.pullRequest(100).draft).toBe(true);
@@ -1650,7 +1664,38 @@ describe("the fix Stage", () => {
     await run();
 
     expect(tracker.pullRequest(100).squashCommit?.body).toContain(
-      "Verdict: 1 met · 0 unmet · 1 unverifiable",
+      "Unverified:\n- the docs say so — the docs are not readable from here\n",
+    );
+  });
+
+  it("hands the fix Stage the body, problem and solution answered so far", async () => {
+    runner.queue(
+      "implement",
+      described({ body: "## Summary", problem: "There was no flag.", solution: "It adds one." }),
+    );
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+
+    await run();
+
+    const prompt = runner.prompts("fix")[0] ?? "";
+    expect(prompt).toContain("## Summary");
+    expect(prompt).toContain("There was no flag.");
+    expect(prompt).toContain("It adds one.");
+  });
+
+  it("keeps each answer the fix Stage left blank, and takes each one it revised", async () => {
+    runner.queue(
+      "implement",
+      described({ body: "## Summary", problem: "There was no flag.", solution: "It adds one." }),
+    );
+    runner.queue("fix", described({ body: "", problem: "", solution: "It adds one, tested." }));
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+
+    await run();
+
+    expect(tracker.pullRequest(100).body).toBe(`Closes #${TICKET}\n\n## Summary\n`);
+    expect(tracker.pullRequest(100).squashCommit?.body).toBe(
+      `Closes #${TICKET}\n\nThere was no flag.\n\nIt adds one, tested.\n`,
     );
   });
 
@@ -1706,19 +1751,17 @@ describe("the fix Stage", () => {
     ]);
   });
 
-  it("rewrites the pull request body with the verdict the second pass reached", async () => {
+  it("rewrites the pull request body with the body the fix Stage answered", async () => {
     tracker.queueCi({ state: "failed", summary: "checks/build failed", excerpt: "" });
-    runner.queue("verify", stageResult({ result: MIXED_VERDICT }));
-    runner.queue("verify", stageResult({ result: PASSING_VERDICT }));
+    runner.queue("implement", described({ body: "## Before the fix" }));
+    runner.queue("fix", described({ body: "## After the fix" }));
 
     await run();
 
-    // The merge carries the second verdict, so the pull request a human reads
-    // must too.
+    // The body is rewritten from the latest answer, so the pull request a human
+    // reads describes the branch that merges.
     expect(tracker.calls).toContain("updatePullRequestBody:100");
-    expect(tracker.pullRequest(100).body).toContain(
-      "**Verdict:** 1 met · 0 unmet · 0 unverifiable",
-    );
+    expect(tracker.pullRequest(100).body).toBe(`Closes #${TICKET}\n\n## After the fix\n`);
   });
 
   it("leaves the pull request body alone when there was no second pass", async () => {
@@ -2387,7 +2430,7 @@ describe("releasing a Ticket whose API key ran out of budget", () => {
   it("releases the Ticket as a rate limit does, naming the budget", async () => {
     runner.queue("implement", outOfBudget);
 
-    const outcome = await run({}, "workstation", "api-key");
+    const outcome = await run({}, "api-key");
 
     expect(outcome).toEqual({
       outcome: "released",
@@ -2413,7 +2456,7 @@ describe("releasing a Ticket whose API key ran out of budget", () => {
     workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
     runner.queue("fix", outOfBudget);
 
-    expect(await run({}, "workstation", "api-key")).toMatchObject({
+    expect(await run({}, "api-key")).toMatchObject({
       outcome: "released",
       stage: "fix",
       cause: "out-of-budget",
@@ -2427,7 +2470,7 @@ describe("releasing a Ticket whose API key ran out of budget", () => {
     workspace.rebaseStateAfterStage = UNRESOLVED;
     runner.queue("conflict", outOfBudget);
 
-    expect(await run({}, "workstation", "api-key")).toMatchObject({
+    expect(await run({}, "api-key")).toMatchObject({
       outcome: "released",
       stage: "rebase",
       cause: "out-of-budget",
@@ -2441,7 +2484,7 @@ describe("the rate limit of a Run on the API key", () => {
   it("is put down to the API's rate limit, not the subscription's", async () => {
     runner.queue("verify", { ok: false, failure: "rate-limited" });
 
-    const outcome = await run({}, "workstation", "api-key");
+    const outcome = await run({}, "api-key");
 
     expect(outcome).toMatchObject({ outcome: "released", stage: "verify", cause: "rate-limited" });
     expect(progressTable()).toContain("| verify | ⏸ API rate limited |");
@@ -2472,7 +2515,7 @@ describe("a Stage billed to something other than its Run's subscription or API k
   it("is a Stage on the subscription in a Run on the API key", async () => {
     runner.queue("implement", { apiKeySource: "none" });
 
-    await run({}, "workstation", "api-key");
+    await run({}, "api-key");
 
     expect(billing.strays).toEqual([{ ticket: TICKET, stage: "implement", apiKeySource: "none" }]);
   });
@@ -2480,7 +2523,7 @@ describe("a Stage billed to something other than its Run's subscription or API k
   it("is never a Stage that ran on the Run's own, or said nothing", async () => {
     runner.queue("implement", { apiKeySource: "ANTHROPIC_API_KEY" });
 
-    await run({}, "workstation", "api-key");
+    await run({}, "api-key");
 
     expect(billing.strays).toEqual([]);
     expect(logged.join("\n")).not.toContain("apiKeySource");
@@ -2494,7 +2537,7 @@ describe("what a Run's Stages were billed", () => {
     runner.queue("implement", { apiKeySource: ON_KEY, costUsd: 10.53 });
     runner.queue("verify", stageResult({ result: PASSING_VERDICT, apiKeySource: ON_KEY, costUsd: 0.42 }));
 
-    expect(await run({}, "workstation", "api-key")).toMatchObject({ outcome: "merged" });
+    expect(await run({}, "api-key")).toMatchObject({ outcome: "merged" });
 
     expect(billing.spendUsd).toBeCloseTo(10.95);
     expect(billing.spendUnreported).toBe(false);
@@ -2506,7 +2549,7 @@ describe("what a Run's Stages were billed", () => {
     runner.queue("implement", { apiKeySource: ON_KEY });
     runner.queue("verify", stageResult({ result: PASSING_VERDICT, apiKeySource: ON_KEY, costUsd: 0.42 }));
 
-    await run({}, "workstation", "api-key");
+    await run({}, "api-key");
 
     expect(billing.spendUsd).toBeCloseTo(0.42);
     expect(billing.spendUnreported).toBe(true);
@@ -2516,7 +2559,7 @@ describe("what a Run's Stages were billed", () => {
     runner.queue("implement", { apiKeySource: ON_KEY, costUsd: 6.2, costIncomplete: true });
     runner.queue("verify", stageResult({ result: PASSING_VERDICT, apiKeySource: ON_KEY, costUsd: 0.42 }));
 
-    await run({}, "workstation", "api-key");
+    await run({}, "api-key");
 
     expect(billing.spendUsd).toBeCloseTo(6.62);
     expect(billing.spendUnreported).toBe(true);
@@ -2525,7 +2568,7 @@ describe("what a Run's Stages were billed", () => {
   it("leaves out a Stage that printed no init event, figure or none", async () => {
     runner.queue("implement", { costUsd: 3 });
 
-    await run({}, "workstation", "api-key");
+    await run({}, "api-key");
 
     expect(billing).toMatchObject({ spendUsd: 0, spendUnreported: false });
   });
@@ -2533,7 +2576,7 @@ describe("what a Run's Stages were billed", () => {
   it("keeps a stray Stage's figure on the stray, out of the spend", async () => {
     runner.queue("implement", { apiKeySource: "apiKeyHelper", costUsd: 4.15 });
 
-    await run({}, "workstation", "api-key");
+    await run({}, "api-key");
 
     expect(billing.strays).toEqual([
       { ticket: TICKET, stage: "implement", apiKeySource: "apiKeyHelper", costUsd: 4.15 },
@@ -2722,7 +2765,6 @@ describe("a Check the base branch fails too", () => {
         repoRoot,
         runId: "run-1",
         version: VERSION,
-        host: "workstation",
         credential: "subscription",
         billing: emptyBilling(),
         baseBranch: "main",
@@ -2763,7 +2805,6 @@ describe("Tickets in several Lanes failing against one merge-base", () => {
       repoRoot,
       runId: "run-1",
       version: VERSION,
-      host: "workstation",
       credential: "subscription",
       billing: emptyBilling(),
       baseBranch: "main",
@@ -2909,6 +2950,34 @@ describe("the state file a claimed Ticket keeps", () => {
     expect(seen.find(({ stage }) => stage === "verify")?.state).toMatchObject({
       title: "feat(cli): do the whole thing",
     });
+  });
+
+  it("records the body, problem and solution the implement Stage answered", async () => {
+    runner.queue(
+      "implement",
+      described({ body: "## Summary", problem: "There was no flag.", solution: "It adds one." }),
+    );
+    const seen = stateAtEachStage();
+
+    await run();
+
+    expect(seen.find(({ stage }) => stage === "verify")?.state).toMatchObject({
+      body: "## Summary",
+      problem: "There was no flag.",
+      solution: "It adds one.",
+    });
+  });
+
+  it("records nothing for a body, problem or solution answered blank", async () => {
+    runner.queue("implement", described({ body: " ", problem: "", solution: "\n" }));
+    const seen = stateAtEachStage();
+
+    await run();
+
+    const state = seen.find(({ stage }) => stage === "verify")?.state;
+    expect(state).not.toHaveProperty("body");
+    expect(state).not.toHaveProperty("problem");
+    expect(state).not.toHaveProperty("solution");
   });
 
   it("keeps the recorded title through a hand-off", async () => {
@@ -3068,6 +3137,17 @@ describe("resuming a stranded Ticket", () => {
     expect(tracker.calls).not.toContain(`assign:${TICKET}:pipeline-user`);
     expect(tracker.calls).not.toContain(`addLabel:${TICKET}:in-progress`);
     expect(tracker.calls).not.toContain(`removeLabel:${TICKET}:ready-for-agent`);
+  });
+
+  it("writes the pull request and the squash commit from the body, problem and solution recorded", async () => {
+    strandedTicket({ body: "## Summary", problem: "There was no flag.", solution: "It adds one." });
+
+    await run();
+
+    expect(tracker.pullRequest(100).body).toBe(`Closes #${TICKET}\n\n## Summary\n`);
+    expect(tracker.pullRequest(100).squashCommit?.body).toBe(
+      `Closes #${TICKET}\n\nThere was no flag.\n\nIt adds one.\n`,
+    );
   });
 
   it("runs the implement Stage again when that is the state recorded", async () => {
@@ -4666,7 +4746,6 @@ describe("the Landing", () => {
       repoRoot,
       runId: "run-1",
       version: VERSION,
-      host: "workstation",
       credential: "subscription",
       billing: emptyBilling(),
       baseBranch: await resolveBaseBranch(tracker, settings),

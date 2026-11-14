@@ -98,7 +98,6 @@ function pipeline(lanes = 1, credential: Credential = "subscription"): Pipeline 
     repoRoot,
     runId: "run-1",
     version: VERSION,
-    host: "workstation",
     credential,
     billing: emptyBilling(),
     baseBranch: "main",

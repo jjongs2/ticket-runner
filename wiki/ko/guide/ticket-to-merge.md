@@ -79,12 +79,21 @@ claim은 Ticket에 '가져감' 표시를 해서 다른 Run이 가져가지 않�
 
 | Stage | 프롬프트 첫머리 | 구조화된 답변 |
 |---|---|---|
-| implement | `/mattpocock-skills:implement <issue URL>` | 선택 항목 `title`, [`notes`](#notes), `noCommitReason` |
+| implement | `/mattpocock-skills:implement <issue URL>` | 선택 항목 `title`, `body`, `problem`, `solution`, [`notes`](#notes), `noCommitReason` |
 | verify | `Ticket: <issue URL>`, 스킬 없음 | 판정, 선택 항목 `notes` |
-| fix | `Ticket: <issue URL>`, 스킬 없음 | 선택 항목 `title`, `notes`, `noCommitReason` |
+| fix | `Ticket: <issue URL>`, `/mattpocock-skills:pr` 말고는 스킬 없음 | 선택 항목 `title`, `body`, `problem`, `solution`, `notes`, `noCommitReason` |
 | conflict | `Ticket: <issue URL>`, 스킬 없음 | 없음 |
 
 프롬프트 마지막에는 Stage별 [`extraPrompt`](./configuration.md#stages)가 붙습니다.
+
+**Stage가 쓰는 글과 그 언어.** `body`는 `Closes #<n>` 아래에 들어가는 [pull request 본문](#pull-request)이고, `problem`과 `solution`은 [squash commit](#squash-merge-and-its-commit) 본문의 첫머리가 됩니다. Target이 정한 형식이 먼저입니다.
+
+| 답변 | 형식 |
+|---|---|
+| `body` | Target의 기여 가이드나 `.github/PULL_REQUEST_TEMPLATE.md`가 `Closes` 줄 밖에 정한 형식. 둘 다 정하지 않았으면 `/mattpocock-skills:pr`의 Summary, Evidence, Merge Danger |
+| `problem`, `solution` | 기여 가이드가 commit 본문에 정한 형식. 정하지 않았으면 바뀌기 전 상태와 그 영향, 그리고 변경이 하는 일과 그 이유를 각각 두 문장 이내로, Ticket을 열지 않아도 읽히게 |
+
+어느 것에도 제목, 이슈 참조 앞의 closing keyword, 스크린샷, 로컬 경로는 넣지 않습니다. 답하는 Stage는 모두 Note, 판정의 근거, 이 답변들을 Target의 기여 가이드가 이슈와 commit에 정한 언어로 쓰고, 정한 언어가 없으면 Ticket이 쓰인 언어로 씁니다. 기준의 문구는 Ticket에 적힌 그대로 둡니다. 진행 상황 표처럼 파이프라인이 직접 쓰는 줄은 영어 그대로입니다.
 
 **Stage가 과금되는 곳.** Stage는 Host의 `ANTHROPIC_API_KEY`를 환경에서 뺀 채 Claude 로그인으로 돌아갑니다. Run을 [`--api-key`](./running.md#api-key)로 시작했으면 그 키로 돌아갑니다. 세션의 `apiKeySource`가 다른 곳을 말하면 Run의 로그와 요약이 그 Stage를 짚습니다.
 
@@ -104,7 +113,7 @@ Stage마다 디스크에 무엇을 남기는지는 [로그와 transcript](./runn
 
 ## implement Stage {#the-implement-stage}
 
-implement 스킬이 Ticket을 읽고, 만들고, 리뷰합니다. 세션이 끝나면 파이프라인은 [Note](#notes)를 보내고, `title`을 기록하고, commit이 있으면 branch를 push합니다. 다른 Host의 Run도 거기서 이어 갈 수 있게 하려는 것입니다. 그다음은 이렇습니다.
+implement 스킬이 Ticket을 읽고, 만들고, 리뷰합니다. 리뷰에서 나온 수정까지 commit한 뒤 Stage는 branch 전체에 대해 `title`, `body`, `problem`, `solution`을 답합니다. 세션이 끝나면 파이프라인은 [Note](#notes)를 보내고, 비어 있지 않은 답변을 state file에 기록하고, commit이 있으면 branch를 push합니다. 다른 Host의 Run도 거기서 이어 갈 수 있게 하려는 것입니다. 그다음은 이렇습니다.
 
 - 끝까지 가지 못한 Stage는 `implement`에서 Hand-off됩니다.
 - base branch보다 commit이 하나도 늘지 않은 branch도 Hand-off됩니다. 조용히 포기한 에이전트는 판정할 거리를 남기지 않기 때문입니다. Stage가 `noCommitReason`에 이유를 답했다면 hand-off 코멘트가 그 이유를 인용합니다.
@@ -155,7 +164,7 @@ merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 �
 
 ## fix Stage와 fix 기회 {#the-fix-stage-and-the-fix-budget}
 
-fix 기회는 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사람에게 넘어갑니다. fix Stage는 같은 branch에서 플러그인 스킬 없이 새로 띄운 세션이고, 실패와 그 근거를 받아 그 결함 하나를 고칩니다. `unmet` 기준 때문에 불려 왔는데 그중 하나라도 문서로 남은 결정이나 다른 기준을 뒤집어야만 충족된다면, 아무것도 commit하지 말고 `noCommitReason`에 이유를 밝히라고 합니다. 그러면 Ticket이 사람에게 넘어갑니다. 그렇지 않다면 근거에 적힌 수정안은 답이 아니라 실마리로만 봅니다. 원인은 직접 찾고, 더 좁은 수정에 만족하기 전에 Ticket의 범위 안에서 그 원인을 고칠 방법을 찾습니다. commit하기 전에는 받은 반례만이 아니라 그 원인에서 만든 입력으로도 수정을 시험합니다.
+fix 기회는 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사람에게 넘어갑니다. fix Stage는 같은 branch에서 `/mattpocock-skills:pr` 말고는 플러그인 스킬 없이 새로 띄운 세션이고, 실패와 그 근거를 받아 그 결함 하나를 고칩니다. branch에 대해 마지막으로 답한 `body`, `problem`, `solution`도 함께 받습니다. 수정으로 내용이 달라지는 답변은 branch 전체에 맞게 고쳐 다시 답하고, 그대로 맞는 답변은 비워 답해 앞의 것을 남깁니다. `unmet` 기준 때문에 불려 왔는데 그중 하나라도 문서로 남은 결정이나 다른 기준을 뒤집어야만 충족된다면, 아무것도 commit하지 말고 `noCommitReason`에 이유를 밝히라고 합니다. 그러면 Ticket이 사람에게 넘어갑니다. 그렇지 않다면 근거에 적힌 수정안은 답이 아니라 실마리로만 봅니다. 원인은 직접 찾고, 더 좁은 수정에 만족하기 전에 Ticket의 범위 안에서 그 원인을 고칠 방법을 찾습니다. commit하기 전에는 받은 반례만이 아니라 그 원인에서 만든 입력으로도 수정을 시험합니다.
 
 새 세션이 고칠 수 있는 결함만 fix 기회를 씁니다.
 
@@ -241,7 +250,7 @@ rebase로 branch가 다시 쓰였으니 `--force-with-lease`로 push합니다. b
 2. branch의 첫 commit 제목
 3. Ticket 제목 그대로
 
-**본문**은 `Closes #<n>`, 판정 집계, 접힌 기준 목록(`met`이 아닌 것은 근거 표시), 그리고 Run을 밝히는 한 줄입니다. 워크스테이션에서는 그 줄이 `.ticket-runner/runs/<runId>/<n>/`도 가리킵니다. 클라우드 Host의 Run 디렉터리는 세션과 함께 사라지므로 거기서는 Run만 밝힙니다.
+**본문**은 `Closes #<n>`, 빈 줄, 그리고 이번 Run에서든 앞선 Run이 state file에 기록한 것이든 implement나 fix Stage가 마지막으로 답한 `body`입니다. 답한 것이 없으면 `Closes #<n>`만 씁니다. 파이프라인이 덧붙이는 것은 없습니다. 판정은 진행 상황 코멘트의 verify 줄에 있고, met 기준은 merge할 때 체크됩니다. [Hand-off](./stopping-and-resuming.md#hand-off)가 남긴 draft pull request는 Run이 다시 게시할 때까지 자기 본문을 유지합니다.
 
 ### CI 대기와 유예 시간 {#ci-wait-and-grace-period}
 
@@ -270,15 +279,17 @@ check가 실패하면 실패한 Actions job들의 로그 끝부분을 근거로 
 
 Closes #<n>
 
-Verdict: <k> met · <u> unmet · <v> unverifiable
+<problem>
 
-- <branch commit subject>
-- <branch commit subject>
+<solution>
+
+Unverified:
+- <criterion> — <evidence>
 
 Co-authored-by: <name> <email>
 ```
 
-제목은 pull request 제목입니다. commit 제목들과 `Co-authored-by` trailer는 rebase 이후에 읽습니다. rebase한 뒤의 commit이 실제로 들어가기 때문입니다. 기준별 근거는 pull request 본문에만 둡니다.
+제목은 pull request 제목입니다. `<problem>`과 `<solution>`은 Stage가 마지막으로 답한 것이고, 72칸이 넘는 줄은 공백에서 끊습니다. 한글 같은 전각 문자는 두 칸으로 셉니다. Stage가 쓴 줄은 그대로 두므로 목록은 목록으로 남습니다. `solution`을 답한 것이 없으면 branch의 commit 제목들이 `- <subject>` 줄로 그 자리를 대신하고, `problem`이 있으면 그 뒤에 옵니다. 빠진 답변을 지어내지는 않습니다. `Unverified:`는 `unverifiable` 기준이 있을 때만 붙고, 기준마다 근거를 한 줄로 이어 씁니다. 그 이유를 남기는 곳이 여기 말고는 없기 때문입니다. commit 제목들과 `Co-authored-by` trailer는 rebase 이후에 읽습니다. rebase한 뒤의 commit이 실제로 들어가기 때문입니다.
 
 ### merge 이후 {#after-the-merge}
 

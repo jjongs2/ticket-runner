@@ -22,7 +22,7 @@ Run은 무인으로 돌기 때문에, 빠진 게 있다면 Ticket 도중이 아�
 | Node 22 이상 | 패키지의 `engines` 필드 | 설치할 때 npm |
 | `git` | Ticket마다 worktree와 branch를 따로 만듦 | – |
 | Target에 인증된 [`gh`](https://cli.github.com/) | GitHub 호출은 모두 `gh api`로 감 | `init`이 알려 주고, `gh`가 없는 Host에서는 `run`이 거절 |
-| `mattpocock-skills` 플러그인 1.2.3 이상 버전이 설치된 `claude` | Stage 하나하나가 `claude -p` 세션이고, implement Stage가 이 플러그인의 스킬을 실행함 ([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)) | 둘 다 `init`이 알려 줌. 플러그인은 이름만 확인 |
+| `mattpocock-skills` 플러그인 1.3.0 이상 버전이 설치된 `claude` | Stage 하나하나가 `claude -p` 세션이고, implement Stage가 이 플러그인의 스킬을 실행하며, implement Stage와 fix Stage가 1.3.0에 추가된 `pr` 스킬로 pull request 본문을 씀 ([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)) | 둘 다 `init`이 알려 줌. 플러그인은 이름만 확인 |
 | Claude 요금제로 로그인한 `claude` | Run을 [`--api-key`](./running.md#api-key)로 시작하지 않는 한, Stage는 그 로그인으로 돌고 셸이 export한 `ANTHROPIC_API_KEY`를 보지 못함 | – |
 | Ticket이 계획되어 있는 GitHub 저장소 | Ticket은 보드에서 옴. [Planning](./planning.md) 참고 | – |
 | 이슈 트래커로 GitHub Issues를 골라 저장소에서 한 번 실행해 둔 `/setup-matt-pocock-skills` | 이 설정이 있어야 계획용 스킬이 Spec과 Ticket을 GitHub 이슈로 만듦. 실행하면 묻고 나서 `docs/agents/issue-tracker.md`와 `CLAUDE.md`의 `## Agent skills` 블록을 쓰므로, 이 둘이 있으면 돌린 것 | – |
