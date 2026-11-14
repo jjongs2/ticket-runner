@@ -122,7 +122,7 @@ describe("ticking a criterion by its number", () => {
     const { texts, untickable } = tickCriteria([edited], listCriteria([listedFrom]));
 
     expect(texts).toEqual([edited]);
-    expect(untickable).toEqual([{ number: 1, lines: 0 }]);
+    expect(untickable).toEqual([{ number: 1, matching: 0 }]);
   });
 
   it("ticks neither of two lines that both read as the criterion's", () => {
@@ -132,8 +132,8 @@ describe("ticking a criterion by its number", () => {
 
     expect(texts).toEqual([body]);
     expect(untickable).toEqual([
-      { number: 1, lines: 2 },
-      { number: 2, lines: 2 },
+      { number: 1, matching: 2 },
+      { number: 2, matching: 2 },
     ]);
   });
 
@@ -143,13 +143,26 @@ describe("ticking a criterion by its number", () => {
     const { texts, untickable } = tickCriteria(["- [ ] it works", "- [ ] it works"], listed);
 
     expect(texts).toEqual(["- [ ] it works", "- [ ] it works"]);
-    expect(untickable).toEqual([{ number: 1, lines: 2 }]);
+    expect(untickable).toEqual([{ number: 1, matching: 2 }]);
+  });
+
+  it("lists and ticks a body whose lines end in CRLF, as GitHub's web form writes them", () => {
+    const body = "## AC\r\n\r\n- [ ] one\r\n  detail\r\n- [ ] two\r\n";
+    const listed = listCriteria([body]);
+
+    expect(listed.map(({ text, details }) => [text, details])).toEqual([
+      ["one", ["  detail"]],
+      ["two", []],
+    ]);
+    expect(tickCriteria([body], listed).texts).toEqual([
+      "## AC\r\n\r\n- [x] one\r\n  detail\r\n- [x] two\r\n",
+    ]);
   });
 
   it("leaves a box a human ticked since alone, and says it found no line", () => {
     const listed = listCriteria(["- [ ] it works"]);
 
-    expect(tickCriteria(["- [x] it works"], listed).untickable).toEqual([{ number: 1, lines: 0 }]);
+    expect(tickCriteria(["- [x] it works"], listed).untickable).toEqual([{ number: 1, matching: 0 }]);
   });
 
   it("ticks every box of #284 its verdict met, sub-lists, escapes and all", () => {

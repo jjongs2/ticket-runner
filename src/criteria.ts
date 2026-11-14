@@ -36,7 +36,7 @@ export interface MetCriterion {
 export interface Untickable {
   number: number;
   /** 0 when no line reads so any more, 2 or more when it is no longer one line. */
-  lines: number;
+  matching: number;
 }
 
 /**
@@ -68,7 +68,7 @@ export function tickCriteria(
     const matches = open.filter((line) => line.line === wanted);
     const [only] = matches;
     if (matches.length === 1 && only !== undefined) chosen.add(only.key);
-    else untickable.push({ number: criterion.number, lines: matches.length });
+    else untickable.push({ number: criterion.number, matching: matches.length });
   }
   if (chosen.size === 0) return { texts: [...texts], untickable };
 
@@ -128,10 +128,10 @@ export async function tickMetCriteria(
   }
 
   const missed = [
-    ...untickable.map(({ number, lines }) =>
-      lines === 0
+    ...untickable.map(({ number, matching }) =>
+      matching === 0
         ? `criterion ${number}, which no unticked line reads as any more`
-        : `criterion ${number}, which ${lines} unticked lines read as`,
+        : `criterion ${number}, which ${matching} unticked lines read as`,
     ),
     ...unwritten.map((number) => `criterion ${number}, in a comment it cannot edit`),
   ];

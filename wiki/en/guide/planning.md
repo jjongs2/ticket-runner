@@ -54,7 +54,7 @@ The command must refuse bad input.              ← not: prose
 1. [ ] a numbered item                          ← not: no bullet
 ```
 
-The pipeline numbers the unticked boxes, the body's first and then each comment's, and the verify Stage grades each one by its number as `met`, `unmet` or `unverifiable` ([From Ticket to merge](./ticket-to-merge.md#the-verify-stage-and-its-verdict)). The indented lines under a box that are not boxes themselves belong to it, so a sub-list or a code block can say what the line means; a nested box is a criterion of its own. Beside the criteria, verify also grades any defect the branch itself made.
+The pipeline numbers the unticked boxes, the body's first and then each comment's, and the verify Stage grades each one by its number as `met`, `unmet` or `unverifiable` ([From Ticket to merge](./ticket-to-merge.md#the-verify-stage-and-its-verdict)). The indented lines under a box that are not boxes themselves belong to it, so a sub-list or a code block can say what the line means; a nested box is a criterion of its own.
 
 Write criteria that a session can check by running or reading code. A criterion that needs a human's eyes (a screenshot, a feel) comes back `unverifiable`.
 

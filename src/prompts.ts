@@ -7,7 +7,7 @@
 import type { ListedCriterion } from "./acceptance-criteria.js";
 import type { FailureKind } from "./lifecycle.js";
 import { BRANCH_DEFECT, OWN_DEFECT } from "./note-schema.js";
-import type { WrittenNote } from "./notes.js";
+import { NOTE_PARTS, type WrittenNote } from "./notes.js";
 import { STAGE_ENV_VAR } from "./stage-guard.js";
 import { BRANCH_PROSE_FIELDS, BRANCH_TITLE, type BranchProse, SUBJECT_SHAPE } from "./title.js";
 
@@ -573,7 +573,7 @@ function writtenNotesSection(written: readonly WrittenNote[]): string {
   if (written.length === 0) return "";
   const lines = written.flatMap(({ stage, note }) => [
     `- From the ${stage} Stage${note.ticket === undefined ? "" : `, for #${note.ticket}`}: ${note.summary}`,
-    ...(["evidence", "impact", "next"] as const).flatMap((part) => {
+    ...NOTE_PARTS.flatMap((part) => {
       const text = note[part];
       return text === undefined ? [] : [`  ${part}: ${text}`];
     }),

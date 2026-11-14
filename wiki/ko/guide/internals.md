@@ -164,7 +164,7 @@ sequenceDiagram
 | [`verdict.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/verdict.ts) | 판정 스키마와 통과 여부 |
 | [`title.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/title.ts) | pull request 제목: Stage의 답, 그다음 commit, 그다음 Ticket |
 | [`note-schema.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/note-schema.ts), [`notes.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/notes.ts) | Note: Stage가 적는 방식과 보내지는 곳 |
-| [`acceptance-criteria.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/acceptance-criteria.ts), [`criteria.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/criteria.ts) | 기준의 모양, merge 뒤 `met`인 것에 체크 |
+| [`acceptance-criteria.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/acceptance-criteria.ts), [`criteria.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/criteria.ts) | 기준의 모양과 verify가 판정하는 번호 매긴 목록, merge 뒤 `met`인 것에 체크 |
 | [`progress.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/progress.ts) | Ticket마다 하나인 진행 상황 코멘트를 제자리에서 고침 |
 | [`templates.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts) | GitHub에 쓰는 모든 모양과 Run 요약. 원본은 `docs/templates/` |
 | [`log-tail.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/log-tail.ts) | CI 발췌와 실패한 base branch의 Note가 함께 인용하는 로그 끝부분. 40줄, 4,000자 이내 |

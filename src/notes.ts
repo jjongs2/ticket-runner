@@ -61,7 +61,7 @@ export interface Note extends NoteText {
  * among them is graded rather than left to the Note.
  */
 export interface WrittenNote {
-  stage: "implement" | "fix";
+  stage: Exclude<NotingStage, "verify">;
   note: Note;
 }
 
@@ -107,7 +107,7 @@ const noteSchema = z.object({
 });
 
 /** The parts of a Note beside its summary. */
-const NOTE_PARTS = ["evidence", "impact", "next"] as const;
+export const NOTE_PARTS = ["evidence", "impact", "next"] as const;
 
 /**
  * The Notes in a Stage's structured output, and nothing else from it.

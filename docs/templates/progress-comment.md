@@ -86,8 +86,9 @@ Ticket for a later Run to resume.
 
 `<d> defects` counts the defects the verify Stage found this branch made, and
 reads `1 defect` for one; they fail the verdict as unmet criteria do.
-`❌ misnumbered` is a verdict that left out a criterion the pipeline listed, or
-answered one it did not list, so it graded nothing to merge on.
+`❌ misnumbered` is a verdict that left out a criterion the pipeline listed,
+answered one it did not list, or answered one twice, so it graded nothing to
+merge on.
 
 A `checks` row tells a command that exited non-zero from one the wall-clock
 limit killed: both are the same failure to the fix budget, but a hang is not a

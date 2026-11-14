@@ -83,7 +83,9 @@ export interface ListedCriterion {
 export function listCriteria(texts: readonly string[]): ListedCriterion[] {
   const listed: ListedCriterion[] = [];
   for (const text of texts) {
-    const lines = text.split("\n");
+    // A body edited on GitHub's web form ends its lines in CRLF; the line a
+    // criterion is listed as is the one ticking finds, which never holds the CR.
+    const lines = text.split(/\r?\n/);
     for (const [index, line] of lines.entries()) {
       const match = CRITERION_LINE.exec(line);
       if (match === null) continue;
