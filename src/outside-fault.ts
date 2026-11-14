@@ -57,18 +57,28 @@ const REMOTE_FAULTS = [
   /Operation timed out/i,
   /Connection reset by peer/i,
   /Failed to connect to/i,
-  /The requested URL returned error: 5\d\d/,
-  /RPC failed; HTTP 5\d\d/,
 ];
+
+/** The remote answering with a 5xx, which a push it failed on reports too. */
+const REMOTE_5XX = [/The requested URL returned error: 5\d\d/, /RPC failed; HTTP 5\d\d/];
 
 /** Whether `gh` printed a fault of GitHub's own. */
 export function isGitHubFault(output: string): boolean {
   return GITHUB_FAULTS.some((pattern) => pattern.test(output));
 }
 
+/**
+ * A push the remote, or a hook before it, refused. A connection that cannot
+ * be made fails before git gets that far, so the words of one printed beside
+ * it are a pre-push hook's own output, such as a test that could not reach
+ * its database, and no fault of the remote's.
+ */
+const PUSH_REFUSED = /failed to push some refs/;
+
 /** Whether git printed that it could not connect to or authenticate with the remote. */
 export function isRemoteFault(output: string): boolean {
-  return REMOTE_FAULTS.some((pattern) => pattern.test(output));
+  if (REMOTE_5XX.some((pattern) => pattern.test(output))) return true;
+  return !PUSH_REFUSED.test(output) && REMOTE_FAULTS.some((pattern) => pattern.test(output));
 }
 
 /**

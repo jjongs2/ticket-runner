@@ -34,6 +34,7 @@ describe("whose fault a failed command is", () => {
     "fatal: unable to access 'https://github.com/acme/repo/': Failed to connect to github.com port 443",
     "fatal: unable to access 'https://github.com/acme/repo/': The requested URL returned error: 502",
     "error: RPC failed; HTTP 503 curl 22 The requested URL returned error: 503",
+    "error: RPC failed; HTTP 502 curl 22 The requested URL returned error: 502\nerror: failed to push some refs to 'https://github.com/acme/repo.git'",
   ])("reads git printing %s as the remote's", (output) => {
     expect(faultSide("git", output)).toBe("remote");
   });
@@ -44,6 +45,7 @@ describe("whose fault a failed command is", () => {
     " ! [rejected]        main       -> main  (non-fast-forward)",
     "error: cannot pull with rebase: You have unstaged changes.",
     "fatal: Not possible to fast-forward, aborting.",
+    "Error: connect ECONNREFUSED 127.0.0.1:5432 (Connection refused)\nerror: failed to push some refs to 'github.com:acme/repo.git'",
   ])("reads git printing %s as no fault outside the Ticket", (output) => {
     expect(faultSide("git", output)).toBeUndefined();
   });
@@ -75,6 +77,22 @@ describe("a failed command's error", () => {
       });
       expect((error as Error).message).toMatch(/^`git pull --ff-only origin main` exited 1\n/);
     }
+  });
+
+  it("quotes the first line gh printed on stderr, not the body of the 5xx before it", () => {
+    try {
+      throwOnFailure("gh", ["api", "user"], {
+        exitCode: 1,
+        stdout: "<html>\n<title>502</title>",
+        stderr: "gh: Bad Gateway (HTTP 502)",
+        output: "<html>\n<title>502</title>\ngh: Bad Gateway (HTTP 502)",
+        timedOut: false,
+      });
+    } catch (error) {
+      expect(error).toMatchObject({ side: "github", line: "gh: Bad Gateway (HTTP 502)" });
+      return;
+    }
+    throw new Error("throwOnFailure did not throw");
   });
 
   it("stays a plain error for any other failure", () => {

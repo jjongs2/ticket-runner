@@ -2029,6 +2029,25 @@ describe("a Ticket GitHub or the remote failed on its own side", () => {
     expect(tracker.issue(4).labels).toEqual(["ready-for-agent"]);
   });
 
+  it("leaves a Ticket whose claim GitHub cut short for the next Run to take up", async () => {
+    tracker.addIssue({ number: 4 });
+    const assign = tracker.assign.bind(tracker);
+    let failing = true;
+    tracker.assign = async (number, user) => {
+      if (failing) {
+        throw new OutsideFault("github", "gh api --method POST assignees", "gh: Bad Gateway (HTTP 502)", "x");
+      }
+      await assign(number, user);
+    };
+
+    expect((await processRun(pipeline())).outcomes).toMatchObject([
+      { outcome: "released", ticket: 4, stage: "setup", cause: "github" },
+    ]);
+    failing = false;
+
+    expect((await processRun(pipeline())).outcomes).toMatchObject([{ outcome: "merged", ticket: 4 }]);
+  });
+
   it("is resumed by the next Run as any released Ticket is", async () => {
     tracker.addIssue({ number: 4 });
     workspace.pullBaseFailure = unreachable();

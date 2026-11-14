@@ -147,9 +147,10 @@ Remote unreachable · `git pull --ff-only origin main` · git@github.com: Permis
 GitHub failure · `gh api --method POST repos/{owner}/{repo}/pulls -f base=main …` · gh: Bad Gateway (HTTP 502)
 
 One met before the claim, or while the claim was being made, reads `at setup`
-and leaves the Ticket as the claim left it. One met while the Ticket was being
-handed off or released leaves it claimed, and the next Run resumes it as a
-Stranded Ticket.
+and leaves the Ticket as the claim left it: free for the next Run, or claimed,
+which the next Run resumes as a Stranded Ticket. One met while the Ticket was
+being released leaves it claimed in the same way, and one met while it was
+being handed off leaves it as far as the hand-off got.
 
 A Ticket a Run resumed has no row of its own, released or stranded: it merges,
 is handed off, or is released again like any other, and the header already names

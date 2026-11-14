@@ -209,9 +209,10 @@ export function throwOnFailure(
     // The same message either way: what differs is whether the caller can
     // tell GitHub or the remote failed, rather than the Ticket's own work.
     const side = faultSide(command, result.output);
-    throw side === undefined
-      ? new Error(message)
-      : new OutsideFault(side, shown, firstLine(result.output), message);
+    // stderr first, where both commands say why they failed: `gh api` prints
+    // the body of a 5xx, often a page of HTML, on stdout before it.
+    const line = firstLine(result.stderr) || firstLine(result.output);
+    throw side === undefined ? new Error(message) : new OutsideFault(side, shown, line, message);
   }
   return result;
 }

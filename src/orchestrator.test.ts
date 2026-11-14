@@ -251,8 +251,8 @@ describe("the happy path", () => {
     await run();
 
     expect(tracker.calls.slice(0, 3)).toEqual([
-      `assign:${TICKET}:pipeline-user`,
       `addLabel:${TICKET}:in-progress`,
+      `assign:${TICKET}:pipeline-user`,
       `removeLabel:${TICKET}:ready-for-agent`,
     ]);
     // Asking whether the branch is there is not a side effect; creating the
@@ -3503,8 +3503,8 @@ describe("resuming a released Ticket", () => {
     await run();
 
     expect(tracker.calls.slice(0, 3)).toEqual([
-      `assign:${TICKET}:pipeline-user`,
       `addLabel:${TICKET}:in-progress`,
+      `assign:${TICKET}:pipeline-user`,
       `removeLabel:${TICKET}:ready-for-agent`,
     ]);
   });

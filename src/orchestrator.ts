@@ -425,9 +425,14 @@ async function takeTicket(
   // before anything else can go wrong. A stranded Ticket is resumed in place,
   // wearing the claim it never gave up — re-writing what is already there would
   // only risk the Ticket on three tracker calls that change nothing.
+  //
+  // In an order that leaves the Ticket free or stranded wherever a write
+  // fails, as one GitHub keeps failing does: `in-progress` with no assignee is
+  // still on the Frontier, and an assignee wearing `in-progress` is the claim.
+  // An assignee alone would be neither, and no Run would take it up again.
   if (!stranded) {
-    await tracker.assign(ticket, user);
     await tracker.addLabel(ticket, config.labels.inProgress);
+    await tracker.assign(ticket, user);
     await tracker.removeLabel(ticket, config.labels.readyForAgent);
   }
   log(`#${ticket} ${howItWasTaken(resume, stranded)} · ${branch}`);
@@ -694,9 +699,11 @@ async function takeTicket(
       });
     } catch (handing) {
       if (!(handing instanceof OutsideFault)) throw handing;
-      // The hand-off's own writes met the fault, so whatever of it landed
-      // stays, and the claim with it: the next Run resumes the Ticket as
-      // stranded, and this one claims no more, as over any fault of the kind.
+      // The hand-off's own writes met the fault, so the Ticket is left as far
+      // as the hand-off got, and this Run claims no more, as over any fault of
+      // the kind. A Ticket still wearing its claim is resumed by the next Run
+      // as stranded; one the hand-off had already taken further waits for a
+      // human, as a hand-off would have it.
       log(`#${ticket} could not be handed off at ${failure.point} · ${handing.message}`);
       return faultOutcome(issue, branch, failure.point, handing, notes);
     }
@@ -2058,9 +2065,9 @@ async function release(
 
   await progress.settle();
 
-  // The claim, undone in the order it was made, so the assignee — which is what
-  // another Run reads to tell a taken Ticket from a free one — comes off last.
-  await unclaim(pipeline, ticket, user);
+  // The assignee — which is what another Run reads to tell a taken Ticket from
+  // a free one — comes off last.
+  await undoClaim(pipeline, ticket, user);
   pipeline.log?.(
     `#${ticket} released at ${stopped.point} · ${releaseWords(stopped.reason, pipeline.credential)} · ${branch}`,
   );
@@ -2092,7 +2099,7 @@ async function release(
  * resumed by the next Run. Logged and nothing more, since the Release stands
  * either way.
  */
-async function unclaim(pipeline: Pipeline, ticket: number, user: string): Promise<void> {
+async function undoClaim(pipeline: Pipeline, ticket: number, user: string): Promise<void> {
   const { tracker, config } = pipeline;
   let labelOff = false;
   try {

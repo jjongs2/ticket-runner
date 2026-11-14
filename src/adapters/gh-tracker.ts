@@ -900,7 +900,7 @@ export class GhTracker implements Tracker {
       });
       const fault = githubFaultIn(result, options);
       const delay = options.once === true ? undefined : GITHUB_RETRY_DELAYS_MS[tried];
-      if (fault === undefined || delay === undefined) return settled(args, result, fault, options);
+      if (fault === undefined || delay === undefined) return finalAnswer(args, result, fault, options);
       await this.sleep(delay);
       if (await options.landed?.()) return result;
     }
@@ -933,7 +933,7 @@ function incompleteJson(stdout: string, json: Json): string | undefined {
 }
 
 /** A call's last answer, as its caller takes it: the result, or the error it is. */
-function settled(
+function finalAnswer(
   args: string[],
   result: Execution,
   fault: string | undefined,

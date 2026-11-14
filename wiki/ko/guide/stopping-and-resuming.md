@@ -343,7 +343,7 @@ flowchart TD
 
 ## 참고 자료 {#references}
 
-- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `takeTicket`, `resumable`, `ResumeRecord`, `rebaseFirst`, `release`, `unclaim`, `noteFailingBase`, `handOff`
+- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `takeTicket`, `resumable`, `ResumeRecord`, `rebaseFirst`, `release`, `undoClaim`, `noteFailingBase`, `handOff`
 - [`src/failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts): `BaseBranchChecks`
 - [`src/outside-fault.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/outside-fault.ts): `OutsideFault`, `faultSide`
 - [`src/adapters/gh-tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts): `GITHUB_RETRY_DELAYS_MS`
