@@ -4,6 +4,43 @@ One section per Version, newest first, written in the Version PR that cut it and
 published as the body of that Version's GitHub Release (ADR-0007). The shape is
 `docs/templates/version-notes.md`.
 
+## 0.6.6 (2026-11-15)
+
+A Target can leave the merge to a human, a public Target's hand-off transcripts stay off its remote, and a Run releases a Ticket that GitHub or the remote failed.
+
+### Stages
+
+- Code Stages write the pull request body and the squash commit's problem and solution, with the verdict left out ([#321])
+- Verify answers each criterion by its number, and fails a defect the branch made ([#324])
+
+### Runs
+
+- A Host, GitHub or remote fault releases the Ticket, after GitHub's 5xx errors are retried ([#325])
+- A shallow clone is fetched in full at Run start ([#325])
+- A Hand-off a fault cut short reads `handed`, unless the next Run resumes the Ticket ([#330])
+- A hand-off names its worktree relative to the checkout, not by absolute path ([#330])
+- `merge: false` leaves a green Ticket's merge to a human ([#328])
+- A public Target's hand-off transcripts stay off its remote unless `keepTranscripts` is `true` ([#326])
+- The progress comment gives durations to the second ([#332])
+
+### Operator
+
+- The Operator starts the Run detached, reports only Ticket endings, and may relabel a handed-off Ticket ([#327])
+
+### After upgrading
+
+1. Update the `mattpocock-skills` plugin to 1.3.0 or later: a code Stage invokes its `pr` skill, which older versions lack
+2. Run `ticket-runner init` in each Target, then commit and push what it writes: the conventions document and the Operator's skill describe the new pull request body, verify's grading and the Operator's Run
+
+[#321]: https://github.com/jjongs2/ticket-runner/pull/321
+[#324]: https://github.com/jjongs2/ticket-runner/pull/324
+[#325]: https://github.com/jjongs2/ticket-runner/pull/325
+[#326]: https://github.com/jjongs2/ticket-runner/pull/326
+[#327]: https://github.com/jjongs2/ticket-runner/pull/327
+[#328]: https://github.com/jjongs2/ticket-runner/pull/328
+[#330]: https://github.com/jjongs2/ticket-runner/pull/330
+[#332]: https://github.com/jjongs2/ticket-runner/pull/332
+
 ## 0.6.5 (2026-11-05)
 
 The conventions document `init` writes is cut to what the Stage prompts do not say, and a code Stage that commits nothing now says why in its Hand-off.
