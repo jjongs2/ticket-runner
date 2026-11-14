@@ -1,3 +1,4 @@
+import { type ListedCriterion, listCriteria } from "./acceptance-criteria.js";
 import { branchName, worktreePath } from "./branch.js";
 import type { Config } from "./config.js";
 import {
@@ -9,7 +10,7 @@ import {
 } from "./credential.js";
 import { tickMetCriteria } from "./criteria.js";
 import type { BaseBranchChecks, FailingBase } from "./failing-base.js";
-import { type SkipReason, isGuardReason, skipReason } from "./guards.js";
+import { type SkipReason, isGuardReason, skipReason, tickedBoxes } from "./guards.js";
 import { markHandoffsTaken } from "./handoff.js";
 import type { Landing, LandingTurn } from "./landing.js";
 import type { FailureKind, FailurePoint } from "./lifecycle.js";
@@ -18,6 +19,8 @@ import {
   type RoutedNote,
   type StandingNotes,
   type StandingNotesLookup,
+  type WrittenNote,
+  parseNotes,
   routeNotes,
 } from "./notes.js";
 import type {
@@ -69,9 +72,15 @@ import {
   pullRequestTitle,
 } from "./title.js";
 import {
+  type AnsweredVerdict,
+  type Defect,
+  type GradedCriterion,
+  type Misnumbered,
   type Verdict,
   VERDICT_JSON_SCHEMA,
   countStatuses,
+  gradeVerdict,
+  isMisnumbered,
   parseVerdict,
   passes,
   unmetCriteria,
@@ -418,6 +427,12 @@ async function takeTicket(
   // the verify behind it is held to. Only this Run's: the state file keeps no
   // verdict, so a retry a later Run resumes is graded without them.
   let unmetBefore: string | undefined;
+  // The Notes this Ticket's code Stages write in this Run, which every verify
+  // behind them grades for a defect of the branch.
+  const written: WrittenNote[] = [];
+  // The criteria verify grades, numbered once from the Ticket as it was
+  // claimed, so a verify behind a fix answers the same numbers as the first.
+  const criteria = listCriteria([issue.body, ...issue.comments.map((comment) => comment.body)]);
 
   // Declared out here because ticking the Acceptance Criteria it proved happens
   // after the merge, where a failure may no longer hand the Ticket off.
@@ -471,7 +486,7 @@ async function takeTicket(
     }
     if (resume === undefined || resume.state === "claimed") {
       point = "implement";
-      await implement(pipeline, issue, worktree, branch, logDir, progress, notes, record);
+      await implement(pipeline, issue, worktree, branch, logDir, progress, { notes, written }, record);
       // The branch now carries work no later Run should pay for again.
       await record.advance({ state: "implemented" });
     }
@@ -500,7 +515,11 @@ async function takeTicket(
         await requireCommitted(pipeline, worktree, progress);
         await runChecks(pipeline, worktree, progress);
         point = "verify";
-        verdict = await verify(pipeline, issue, worktree, logDir, progress, notes, unmetBefore);
+        verdict = await verify(pipeline, issue, worktree, logDir, progress, notes, {
+          criteria,
+          written,
+          unmetBefore,
+        });
 
         point = "rebase";
         // The Landing, from here until the base branch has been pulled: the
@@ -573,7 +592,7 @@ async function takeTicket(
           logDir,
           { kind: failure.kind, summary: failure.summary, evidence: failure.evidence },
           progress,
-          notes,
+          { notes, written },
           record,
         );
         // Recorded once the Stage has come back, not when the budget was
@@ -926,7 +945,7 @@ async function passOver(
 
   if (isGuardReason(reason)) {
     if (!hasGuardWarning(issue.comments, reason)) {
-      await tracker.comment(issue.number, guardComment(reason));
+      await tracker.comment(issue.number, guardComment(reason, tickedBoxes(issue)));
     }
     // A Spec is not a Ticket and no edit will make it one; the other two are
     // fixable in place, so their candidates keep the label and stay visible.
@@ -1073,7 +1092,12 @@ async function collectNotes(
   stage: NotingStage,
   result: StageResult,
   notes: RoutedNote[],
+  /** Where a code Stage's Notes are kept for the verify Stage behind it, whether they reach GitHub or not. */
+  written?: WrittenNote[],
 ): Promise<void> {
+  if (written !== undefined && stage !== "verify") {
+    written.push(...parseNotes(result.result).map((note) => ({ stage, note })));
+  }
   notes.push(
     ...(await routeNotes(
       {
@@ -1189,6 +1213,15 @@ function leftNoCommits(
   );
 }
 
+/**
+ * Where a code Stage's Notes go: the Run's list of those that reached GitHub,
+ * and the Ticket's own list of what its code Stages wrote, for verify.
+ */
+interface CodeStageNotes {
+  notes: RoutedNote[];
+  written: WrittenNote[];
+}
+
 async function implement(
   pipeline: Pipeline,
   issue: Issue,
@@ -1196,7 +1229,7 @@ async function implement(
   branch: string,
   logDir: string,
   progress: Progress,
-  notes: RoutedNote[],
+  { notes, written }: CodeStageNotes,
   record: ResumeRecord,
 ): Promise<void> {
   const stage = pipeline.config.stages.implement;
@@ -1218,7 +1251,7 @@ async function implement(
     // implemented the Ticket exactly as it always did.
     resultRequired: false,
   });
-  await collectNotes(pipeline, issue.number, "implement", result, notes);
+  await collectNotes(pipeline, issue.number, "implement", result, notes, written);
   await recordAnswers(result, record);
 
   // Pushed whatever became of the Stage, like its Notes: a session that
@@ -1446,8 +1479,18 @@ async function verify(
   logDir: string,
   progress: Progress,
   notes: RoutedNote[],
-  /** The unmet criteria and evidence of the verdict a fix Stage was sent in for. */
-  unmetBefore: string | undefined,
+  {
+    criteria,
+    written,
+    unmetBefore,
+  }: {
+    /** The Ticket's criteria, numbered, which the verdict answers by number. */
+    criteria: readonly ListedCriterion[];
+    /** The Notes this Ticket's code Stages wrote in this Run. */
+    written: readonly WrittenNote[];
+    /** The unmet criteria, defects and evidence of the verdict a fix Stage was sent in for. */
+    unmetBefore: string | undefined;
+  },
 ): Promise<Verdict> {
   const stage = pipeline.config.stages.verify;
   const result = await runStage(pipeline, "verify", {
@@ -1459,6 +1502,7 @@ async function verify(
       pipeline.config.checks,
       await standingNotesNumber(pipeline),
       unmetBefore,
+      { criteria, written },
     ),
     cwd: worktree,
     logDir,
@@ -1478,9 +1522,9 @@ async function verify(
 
   if (!result.ok) throw await stageDidNotFinish(pipeline, progress, "verify", result);
 
-  let verdict: Verdict;
+  let answered: AnsweredVerdict;
   try {
-    verdict = parseVerdict(result.result);
+    answered = parseVerdict(result.result);
   } catch (error) {
     await progress.record(stageRow("verify", result, "❌ no verdict"));
     throw new TicketFailure(
@@ -1490,24 +1534,46 @@ async function verify(
     );
   }
 
+  // A verdict that left a listed criterion out, or graded one nobody listed,
+  // has not graded this Ticket, whatever it says of the rest: it is no
+  // evidence to merge on, and no fix Stage can mend a session's arithmetic.
+  const graded = gradeVerdict(answered, criteria);
+  if (isMisnumbered(graded)) {
+    await progress.record(stageRow("verify", result, "❌ misnumbered"));
+    throw new TicketFailure(
+      "verify",
+      "the verdict's numbers are not the criteria it was given, so it graded nothing to merge on",
+      misnumberedEvidence(graded, criteria.length),
+    );
+  }
+  const verdict = graded;
   const counts = countStatuses(verdict);
 
   // The agent's own `pass` is advisory; this is the decision that counts.
   if (!passes(verdict)) {
     const unmet = unmetCriteria(verdict);
-    if (unmet.length === 0) {
+    const { defects } = verdict;
+    if (unmet.length === 0 && defects.length === 0) {
       await progress.record(stageRow("verify", result, "❌ no evidence"));
       throw new TicketFailure(
         "verify",
         "every criterion came back unverifiable, so there is no evidence to merge on",
-        verdict.criteria.map((c) => `- ${c.text} — ${c.evidence}`).join("\n"),
+        verdict.criteria.map(criterionLine).join("\n"),
       );
     }
-    await progress.record(stageRow("verify", result, `❌ ${unmet.length} unmet`));
+    const cell = [
+      ...(unmet.length === 0 ? [] : [`${unmet.length} unmet`]),
+      ...(defects.length === 0 ? [] : [defectCount(defects.length)]),
+    ].join(" · ");
+    const summary = [
+      ...(unmet.length === 0 ? [] : [`${unmet.length} of ${verdict.criteria.length} criteria unmet`]),
+      ...(defects.length === 0 ? [] : [`the branch made ${defectCount(defects.length)}`]),
+    ].join(", and ");
+    await progress.record(stageRow("verify", result, `❌ ${cell}`));
     throw new TicketFailure(
       "verify",
-      `${unmet.length} of ${verdict.criteria.length} criteria unmet`,
-      unmet.map((c) => `- ${c.text} — ${c.evidence}`).join("\n"),
+      summary,
+      [...unmet.map(criterionLine), ...defects.map(defectLine)].join("\n"),
       "unmet-criteria",
     );
   }
@@ -1516,6 +1582,33 @@ async function verify(
   await progress.record(stageRow("verify", result, `✅ ${summary}`));
   pipeline.log?.(`#${issue.number} verified · ${summary}`);
   return verdict;
+}
+
+/**
+ * A criterion as a hand-off, a fix Stage and the verify behind it read it: its
+ * number, its checkbox line as the Ticket writes it, and the verdict's evidence.
+ */
+function criterionLine(criterion: GradedCriterion): string {
+  return `- ${criterion.number}. ${criterion.text} — ${criterion.evidence}`;
+}
+
+/** A defect of the branch, beside the criteria in the same evidence. */
+function defectLine(defect: Defect): string {
+  return `- Defect: ${defect.summary} — ${defect.evidence}`;
+}
+
+function defectCount(count: number): string {
+  return `${count} ${count === 1 ? "defect" : "defects"}`;
+}
+
+/** Which numbers a verdict answered wrong, against the list it was given. */
+function misnumberedEvidence({ missing, unlisted, repeated }: Misnumbered, listed: number): string {
+  return [
+    `The verify Stage was given criteria 1 to ${listed}.`,
+    ...(missing.length === 0 ? [] : [`Not answered: ${missing.join(", ")}`]),
+    ...(unlisted.length === 0 ? [] : [`Answered but not listed: ${unlisted.join(", ")}`]),
+    ...(repeated.length === 0 ? [] : [`Answered more than once: ${repeated.join(", ")}`]),
+  ].join("\n");
 }
 
 /**
@@ -1538,7 +1631,7 @@ async function fix(
   logDir: string,
   failure: FixFailure,
   progress: Progress,
-  notes: RoutedNote[],
+  { notes, written }: CodeStageNotes,
   record: ResumeRecord,
 ): Promise<void> {
   const stage = pipeline.config.stages.fix;
@@ -1566,7 +1659,7 @@ async function fix(
     jsonSchema: CODE_STAGE_JSON_SCHEMA,
     resultRequired: false,
   });
-  await collectNotes(pipeline, issue.number, "fix", result, notes);
+  await collectNotes(pipeline, issue.number, "fix", result, notes, written);
   await recordAnswers(result, record);
 
   // Pushed whatever became of the Stage, as the implement Stage's work is.

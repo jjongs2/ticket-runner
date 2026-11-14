@@ -77,11 +77,26 @@ function config(overrides: Partial<Config> = {}): Config {
   };
 }
 
+/**
+ * A verdict answering the Ticket's criteria in order, by number. `text` is the
+ * checkbox each answer is for, which {@link ticketReads} writes on the Ticket
+ * when a test's criteria are not the default `it works`.
+ */
 function verdictResult(
   criteria: { text: string; status: string; evidence: string }[],
   pass = true,
+  defects: { summary: string; evidence: string }[] = [],
 ) {
-  return { criteria, pass };
+  return {
+    criteria: criteria.map(({ status, evidence }, index) => ({ number: index + 1, status, evidence })),
+    ...(defects.length === 0 ? {} : { defects }),
+    pass,
+  };
+}
+
+/** Write the Ticket's criteria as one checkbox per text, as the claim will read them. */
+function ticketReads(...texts: string[]): void {
+  tracker.issue(TICKET).body = texts.map((text) => `- [ ] ${text}`).join("\n");
 }
 
 const PASSING_VERDICT = verdictResult([
@@ -471,6 +486,7 @@ describe("the pull request title and the squash commit", () => {
       described({ body: "## Summary", problem: "There was no flag.", solution: "It adds one." }),
     );
     runner.queue("verify", stageResult({ result: MIXED_VERDICT }));
+    ticketReads("it works", "the docs say so");
 
     await run();
 
@@ -512,6 +528,7 @@ describe("the pull request title and the squash commit", () => {
 
   it("carries no verdict counts, no HTML and no Run line in the commit", async () => {
     runner.queue("verify", stageResult({ result: MIXED_VERDICT }));
+    ticketReads("it works", "the docs say so");
 
     await run();
     const commit = tracker.pullRequest(100).squashCommit;
@@ -809,6 +826,7 @@ describe("the verify Stage", () => {
     // called a pass; the decision under test is the pipeline's, not the agent's.
     runner.queue("verify", { result: claimsToPass });
     runner.queue("verify", { result: claimsToPass });
+    ticketReads("it works", "it is documented");
 
     const outcome = await run();
 
@@ -831,6 +849,7 @@ describe("the verify Stage", () => {
         { text: "it reads well", status: "unverifiable", evidence: "taste" },
       ]),
     });
+    ticketReads("it works", "it reads well");
 
     expect(await run()).toMatchObject({ outcome: "merged" });
   });
@@ -850,6 +869,159 @@ describe("the verify Stage", () => {
     runner.queue("verify", { result: { nonsense: true } });
 
     expect(await run()).toMatchObject({ outcome: "handed-off", stage: "verify" });
+  });
+
+  it("lists the Ticket's unticked criteria by number, with the lines under each", async () => {
+    tracker.issue(TICKET).body = "- [ ] it works\n  on every platform\n- [x] done already";
+    tracker.issue(TICKET).comments.push({ id: "77", body: "Brief:\n\n- [ ] it is documented" });
+    runner.queue(
+      "verify",
+      stageResult({
+        result: verdictResult([
+          { text: "it works", status: "met", evidence: "green" },
+          { text: "it is documented", status: "met", evidence: "read it" },
+        ]),
+      }),
+    );
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+
+    const prompt = runner.prompts("verify")[0] ?? "";
+    expect(prompt).toContain("1. it works\n   on every platform\n2. it is documented");
+    expect(prompt).not.toContain("done already");
+  });
+
+  it.each([
+    ["leaves a listed number out", [{ number: 1, status: "met", evidence: "green" }], "Not answered: 2"],
+    [
+      "answers a number nobody listed",
+      [
+        { number: 1, status: "met", evidence: "green" },
+        { number: 2, status: "met", evidence: "green" },
+        { number: 3, status: "met", evidence: "green" },
+      ],
+      "Answered but not listed: 3",
+    ],
+  ])("hands off a verdict that %s, as one with no evidence, without a fix", async (_, criteria, evidence) => {
+    ticketReads("it works", "it is documented");
+    runner.queue("verify", stageResult({ result: { criteria, pass: true } }));
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "verify" });
+    expect(runner.stages()).not.toContain("fix");
+    expect(progressTable()).toContain("| verify | ❌ misnumbered |");
+    expect(handoffBody()).toContain("the verdict's numbers are not the criteria it was given");
+    expect(handoffBody()).toContain(evidence);
+  });
+
+  it("gives the hand-off a criterion as its checkbox line reads, not as the verdict wrote it", async () => {
+    tracker.issue(TICKET).body = "- [ ] the table reads `a \\| b`:\n\n  | a | b |";
+    const unmet = {
+      criteria: [{ number: 1, status: "unmet", evidence: "it does not", text: "the table reads a | b" }],
+      pass: false,
+    };
+    runner.queue("verify", stageResult({ result: unmet }));
+    runner.queue("verify", stageResult({ result: unmet }));
+
+    await run();
+
+    expect(handoffBody()).toContain("- 1. the table reads `a \\| b`: — it does not");
+    expect(handoffBody()).not.toContain("the table reads a | b");
+  });
+});
+
+describe("a defect of the branch the verify Stage reports", () => {
+  const DEFECT = { summary: "the new flag crashes on an empty file", evidence: "ran it: TypeError" };
+  const withDefect = stageResult({
+    result: verdictResult(
+      [{ text: "it works", status: "met", evidence: "green" }],
+      true,
+      [DEFECT],
+    ),
+  });
+
+  it("fails the verdict, every criterion met, and spends the fix budget on it", async () => {
+    runner.queue("verify", withDefect);
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).toEqual(["implement", "verify", "fix", "verify"]);
+    expect(progressTable()).toContain("| verify | ❌ 1 defect |");
+  });
+
+  it("hands the fix Stage the defect and its evidence", async () => {
+    runner.queue("verify", withDefect);
+
+    await run();
+
+    const prompt = runner.prompts("fix")[0] ?? "";
+    expect(prompt).toContain("the branch made 1 defect");
+    expect(prompt).toContain("- Defect: the new flag crashes on an empty file — ran it: TypeError");
+  });
+
+  it("hands the retry verify the defect as it hands it the unmet criteria", async () => {
+    runner.queue("verify", withDefect);
+
+    await run();
+
+    const retry = runner.prompts("verify")[1] ?? "";
+    expect(retry).toContain("## Judged unmet before the fix");
+    expect(retry).toContain("- Defect: the new flag crashes on an empty file — ran it: TypeError");
+  });
+
+  it("hands off a defect the retry verify still finds, naming it, beside an unmet criterion", async () => {
+    runner.queue("verify", withDefect);
+    runner.queue(
+      "verify",
+      stageResult({
+        result: verdictResult(
+          [{ text: "it works", status: "unmet", evidence: "red" }],
+          false,
+          [DEFECT],
+        ),
+      }),
+    );
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "verify" });
+    expect(progressTable()).toContain("| verify | ❌ 1 unmet · 1 defect |");
+    expect(handoffBody()).toContain("1 of 1 criteria unmet, and the branch made 1 defect");
+    expect(handoffBody()).toContain("- Defect: the new flag crashes on an empty file");
+  });
+});
+
+describe("the Notes a verify Stage is shown", () => {
+  it("lists the Notes this Ticket's implement and fix Stages wrote in this Run", async () => {
+    runner.queue(
+      "implement",
+      stageResult({
+        result: {
+          title: "feat(cli): do the thing",
+          notes: [{ summary: "the flag leaks a file handle", evidence: "lsof shows it" }],
+        },
+      }),
+    );
+    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    runner.queue(
+      "fix",
+      stageResult({ result: { notes: [{ ticket: 9, summary: "the help drifts", impact: "users" }] } }),
+    );
+
+    await run();
+
+    const [verify = ""] = runner.prompts("verify");
+    expect(verify).toContain("## Notes this Ticket's implement and fix Stages wrote in this Run");
+    expect(verify).toContain("- From the implement Stage: the flag leaks a file handle\n  evidence: lsof shows it");
+    expect(verify).toContain("- From the fix Stage, for #9: the help drifts\n  impact: users");
+  });
+
+  it("shows no Notes section when the code Stages wrote none", async () => {
+    await run();
+
+    expect(runner.prompts("verify")[0]).not.toContain("## Notes this Ticket's");
   });
 });
 
@@ -1658,8 +1830,17 @@ describe("the fix Stage", () => {
   });
 
   it("merges the verdict of the pass that succeeded, not the one that failed", async () => {
-    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
+    runner.queue(
+      "verify",
+      stageResult({
+        result: verdictResult([
+          { text: "it works", status: "unmet", evidence: "npm test is red" },
+          { text: "the docs say so", status: "unverifiable", evidence: "not yet" },
+        ]),
+      }),
+    );
     runner.queue("verify", stageResult({ result: MIXED_VERDICT }));
+    ticketReads("it works", "the docs say so");
 
     await run();
 
@@ -1830,6 +2011,7 @@ describe("a fix Stage that committed nothing", () => {
   });
 
   it("hands off with the unmet criteria and their evidence it was sent in for", async () => {
+    ticketReads("it reads the feed");
     runner.queue(
       "verify",
       stageResult({
@@ -1847,11 +2029,12 @@ describe("a fix Stage that committed nothing", () => {
 
     expect(handoffBody()).toContain("the fix Stage left no new commits on the branch");
     expect(handoffBody()).toContain(
-      "- it reads the feed — ADR-0003 forbids the feed; a human decision is needed",
+      "- 1. it reads the feed — ADR-0003 forbids the feed; a human decision is needed",
     );
   });
 
   it("quotes the reason it gave, beside the failure line and the evidence it was sent in with", async () => {
+    ticketReads("it reads the feed");
     runner.queue(
       "verify",
       stageResult({
@@ -1871,7 +2054,7 @@ describe("a fix Stage that committed nothing", () => {
     const body = handoffBody();
     expect(body).toContain(`**The fix Stage said:** ${FIX_REASON}`);
     expect(body).toContain("- Failure: the fix Stage left no new commits on the branch");
-    expect(body).toContain("- it reads the feed — ADR-0003 forbids the feed");
+    expect(body).toContain("- 1. it reads the feed — ADR-0003 forbids the feed");
     expect(body.indexOf("The fix Stage said")).toBeLessThan(body.indexOf("<details>"));
   });
 
@@ -4010,6 +4193,17 @@ describe("the Planning guards", () => {
     expect(tracker.calls).toContain(`removeLabel:${TICKET}:ready-for-agent`);
   });
 
+  it("tells a candidate whose every checkbox is ticked how many are", async () => {
+    tracker.issue(TICKET).body = "- [x] it works\n- [X] it is documented";
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "skipped", reason: "no-criteria" });
+    expect(warnings()[0]).toContain(
+      "all 2 of its checkboxes are already ticked. Untick each criterion not yet done",
+    );
+  });
+
   it("skips a candidate with no acceptance criteria anywhere", async () => {
     tracker.issue(TICKET).body = "## What to build\n\nSomething good.";
 
@@ -4381,22 +4575,27 @@ describe("ticking the Acceptance Criteria a merge proved", () => {
 
   it("ticks criteria a triage comment posted instead of the body", async () => {
     tracker.issue(TICKET).body = "## What to build\n\nSomething good.";
-    tracker.issue(TICKET).comments.push({ id: "77", body: "Brief:\n\n- [ ] it works\n" });
+    tracker.issue(TICKET).comments.push({ id: "77", body: `Brief:\n\n${MIXED_BODY}` });
 
     await run();
 
     expect(tracker.updatedComments).toContainEqual({
       id: "77",
-      body: "Brief:\n\n- [x] it works\n",
+      body: "Brief:\n\n- [x] it works\n- [ ] the docs say so\n",
     });
   });
 
-  it("leaves the body alone when the verdict proved nothing that is in it", async () => {
-    tracker.issue(TICKET).body = "- [ ] something nobody graded\n";
+  it("ticks nothing, and says so, for a met criterion whose line was reworded after verify got it", async () => {
+    runner.leaves("verify", () => {
+      tracker.issue(TICKET).body = "- [ ] it works, reworded\n- [ ] the docs say so\n";
+    });
 
-    await run();
+    expect(await run()).toMatchObject({ outcome: "merged" });
 
     expect(tracker.calls).not.toContain(`updateIssueBody:${TICKET}`);
+    expect(logged).toContain(
+      `#${TICKET} ticked 0 of 1 met criteria; left unticked: criterion 1, which no unticked line reads as any more`,
+    );
   });
 
   it("ticks nothing until the Ticket has actually merged", async () => {

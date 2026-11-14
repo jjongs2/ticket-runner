@@ -55,6 +55,16 @@ export interface Note extends NoteText {
   ticket?: number;
 }
 
+/**
+ * A Note one of this Ticket's code Stages wrote, as the verify Stage behind it
+ * is shown it: what it says and which Stage said it, so a defect of the branch
+ * among them is graded rather than left to the Note.
+ */
+export interface WrittenNote {
+  stage: "implement" | "fix";
+  note: Note;
+}
+
 /** A Note that reached GitHub, which is what a Run summary reports. */
 export interface RoutedNote {
   /** The Ticket whose Stage made the finding, or whose Release did. */

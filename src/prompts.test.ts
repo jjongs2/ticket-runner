@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { listCriteria } from "./acceptance-criteria.js";
 import { CONVENTIONS_PATH } from "./conventions.js";
 import {
   SELF_HOSTING_GUIDANCE,
@@ -156,7 +157,6 @@ describe("verifyPrompt", () => {
 
     expect(prompt).toContain(url);
     expect(prompt).toMatch(/acceptance criteria/i);
-    expect(prompt).toMatch(/body and .*comments/i);
     expect(prompt).toMatch(/falsify|disprove|prove .* not met/i);
     expect(prompt).toMatch(/never commit|do not commit/i);
     expect(prompt).toMatch(/verdict/i);
@@ -361,7 +361,64 @@ describe("the Stage boundary guidance", () => {
   });
 });
 
+describe("the criteria verify grades", () => {
+  const criteria = listCriteria([
+    "- [ ] it works\n  - on Linux\n  - on Windows\n  - [ ] it is fast",
+    "Brief:\n\n- [ ] it is documented",
+  ]);
+
+  it("lists each unticked criterion by number, with the indented lines under its checkbox", () => {
+    const prompt = verifyPrompt(url, "", OTHER_TARGET, NO_CHECKS, undefined, undefined, { criteria });
+
+    expect(prompt).toContain("## The Acceptance Criteria, by number");
+    expect(prompt).toContain(
+      "1. it works\n   - on Linux\n   - on Windows\n2. it is fast\n3. it is documented",
+    );
+  });
+
+  it("asks for each criterion back by its number, every listed number once", () => {
+    const prompt = verifyPrompt(url, "", OTHER_TARGET, NO_CHECKS, undefined, undefined, { criteria });
+
+    expect(prompt).toContain("answer each by its number, every listed number once and no other");
+    expect(prompt).not.toMatch(/verbatim/i);
+  });
+
+  it("fences a criterion that carries a fence of its own", () => {
+    const fenced = listCriteria(["- [ ] it prints:\n\n  ```\n  ok\n  ```"]);
+
+    const prompt = verifyPrompt(url, "", OTHER_TARGET, NO_CHECKS, undefined, undefined, {
+      criteria: fenced,
+    });
+
+    expect(prompt).toContain("````\n1. it prints:\n\n   ```\n   ok\n   ```\n````");
+  });
+});
+
+describe("the Notes a verify Stage is shown", () => {
+  it("lists what this Ticket's code Stages wrote, part by part", () => {
+    const prompt = verifyPrompt(url, "", OTHER_TARGET, NO_CHECKS, undefined, undefined, {
+      written: [
+        { stage: "implement", note: { summary: "a handle leaks", evidence: "lsof", next: "close it" } },
+      ],
+    });
+
+    expect(prompt).toContain("## Notes this Ticket's implement and fix Stages wrote in this Run");
+    expect(prompt).toContain("- From the implement Stage: a handle leaks\n  evidence: lsof\n  next: close it");
+    expect(prompt).toMatch(/defect this branch made is graded in your verdict's `defects`/);
+  });
+});
+
 describe("the Notes channel", () => {
+  it("tells every Stage with the channel that what the Ticket's own deliverable records is not a Note", () => {
+    for (const prompt of [
+      implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS),
+      fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS),
+      verifyPrompt(url, "", OTHER_TARGET, NO_CHECKS),
+    ]) {
+      expect(prompt).toContain("What this Ticket's own deliverable already records is not a Note");
+    }
+  });
+
   it("tells the implement Stage where a finding for another Ticket goes", () => {
     const prompt = implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS);
 
@@ -662,8 +719,31 @@ describe("a defect the branch introduced", () => {
     }
   });
 
-  it("is not something verify is told to fix or gate on", () => {
-    expect(verifyPrompt(url, "", OTHER_TARGET, NO_CHECKS)).not.toMatch(/this branch introduced/i);
+  it("is reported in verify's verdict beside the criteria, not as a Note, unless the Ticket or a decision accepts it", () => {
+    const prompt = verifyPrompt(url, "", OTHER_TARGET, NO_CHECKS);
+
+    expect(prompt).toContain(
+      "A defect this branch introduced, one that behaves correctly on the base branch and wrongly here, or one in code this branch added, is reported in the verdict's `defects`, beside the criteria and not as a Note, when you show it with the evidence an `unmet` criterion needs, unless the Ticket leaves it out of scope or a documented decision accepts it.",
+    );
+    expect(prompt).toMatch(/fails the verdict as an `unmet` criterion does/);
+  });
+
+  it("no longer leaves verify grading the Acceptance Criteria and nothing else", () => {
+    expect(verifyPrompt(url, "", OTHER_TARGET, NO_CHECKS)).not.toMatch(/and nothing else/i);
+  });
+
+  it("reaches a fix Stage sent in for it, which commits nothing for one only a human can settle", () => {
+    const prompt = fixPrompt(
+      url,
+      { kind: "unmet-criteria", summary: "the branch made 1 defect", evidence: "- Defect: it crashes — ran it" },
+      BASE,
+      "",
+      OTHER_TARGET,
+      NO_CHECKS,
+    );
+
+    expect(prompt).toContain("unmet Acceptance Criteria, or defects this branch made");
+    expect(prompt).toMatch(/or any defect cannot be fixed without overturning one.*commit nothing/);
   });
 });
 

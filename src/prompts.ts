@@ -4,8 +4,10 @@
  * (ADR-0002).
  */
 
+import type { ListedCriterion } from "./acceptance-criteria.js";
 import type { FailureKind } from "./lifecycle.js";
-import { OWN_DEFECT } from "./note-schema.js";
+import { BRANCH_DEFECT, OWN_DEFECT } from "./note-schema.js";
+import type { WrittenNote } from "./notes.js";
 import { STAGE_ENV_VAR } from "./stage-guard.js";
 import { BRANCH_PROSE_FIELDS, BRANCH_TITLE, type BranchProse, SUBJECT_SHAPE } from "./title.js";
 
@@ -122,7 +124,7 @@ const PROSE_GUIDANCE = `- Once the review's fixes are committed, answer a \`body
 /**
  * The language a Stage writes its answers in. A Stage left to itself wrote
  * English on a Target whose issues and commits are in another language. The
- * criterion's text is the exception, because ticking matches it.
+ * criterion's text is the exception: it is the Ticket's, quoted.
  */
 const languageLine = (answers: string) =>
   `- Write ${answers} in the language this repository's contributing guide sets for issues and commits, and where it sets none, in the language the Ticket is written in. A criterion's text stays as the Ticket writes it.`;
@@ -182,14 +184,15 @@ ${noteEntryGuidance(standingNotes)}`;
  * The guidance above is written for a Stage that could have fixed what it found
  * and is told not to. verify could not: it is told to fix nothing in the first
  * place, and what it has instead of a commit is a verdict with a slot per
- * Acceptance Criterion. So this says which findings that verdict already
- * carries — every judgement of a criterion — and gives the rest the Notes list,
- * because a defect outside the criteria has no slot anywhere else.
+ * Acceptance Criterion and a list of the defects the branch made. So this says
+ * which findings that verdict already carries and gives the rest the Notes
+ * list, because a defect that is not the branch's has no slot anywhere else.
  */
-const verifyNotesGuidance = (standingNotes?: number) => `Notes for other Tickets: your verdict grades this Ticket's Acceptance Criteria and nothing else, so anything you find beside them is lost unless you record it as a Note.
+const verifyNotesGuidance = (standingNotes?: number) => `Notes for other Tickets: your verdict carries what you make of each criterion and every defect this branch made, so anything else you find is lost unless you record it as a Note.
 
 - What you make of a criterion belongs in the verdict. A criterion you judge \`unmet\` or \`unverifiable\` is reported in its own slot with the evidence you gathered, and never in a Note as well.
-- A defect the criteria do not cover is a Note. Your structured output carries a \`notes\` list beside the criteria, and the pipeline posts each entry where a human will meet it.
+- A defect this branch made belongs in the verdict's \`defects\`, never in a Note, and so does one among the Notes this Ticket's implement and fix Stages wrote.
+- Any other defect is a Note. Your structured output carries a \`notes\` list beside the criteria, and the pipeline posts each entry where a human will meet it.
 - A Note of yours carries the evidence that the defect is real in its \`evidence\` field, held to the standard you hold a criterion you judge \`unmet\` to. You have the branch and you can run it, so something you suspect but did not demonstrate is not a Note.
 - Writing the Note is all you do about it: fix nothing, commit nothing, stage nothing, exactly as the rest of your brief says.
 ${noteEntryGuidance(standingNotes)}`;
@@ -206,6 +209,7 @@ ${noteEntryGuidance(standingNotes)}`;
  * to write more.
  */
 const noteEntryGuidance = (standingNotes?: number) => `- A Note is a defect — something that behaves wrongly or breaks. A preference of yours, a refactor you would enjoy and a test that would be nice to have are not Notes, however right you are about them.
+- What this Ticket's own deliverable already records is not a Note either, such as a finding in the report section the Ticket asks for.
 - Set \`ticket\` to the issue number the Note belongs to, and leave it out when you are not sure which one: a Note with no number becomes a comment on the issue the pipeline gathers Notes for triage on, where a wrong number lands on somebody else's Ticket.
 - Write each Note in its parts: \`summary\` is one short sentence naming the defect; \`evidence\` is where the defect is and what shows it is real, what you ran or read, what you expected and what came back; \`impact\` is what breaks, and for whom; \`next\` is the fix, or the decision a human has to take before anyone can fix it, and is left out when there is neither.
 - Write every part as plain sentences. No checkboxes: they would read as Acceptance Criteria.
@@ -253,17 +257,26 @@ const NEEDS_A_HUMAN =
  * counterexample; the next verify broke the patch with the next input, while a
  * fix of the cause was open within the Ticket's limit all along. A limit the
  * evidence quotes is still the fix Stage's to know, so it may stay.
+ *
+ * The criteria are listed by the pipeline and answered by number, so the
+ * verdict never has to copy a criterion for anything to find it again.
+ *
+ * A defect the branch itself made is graded here too, beside the criteria,
+ * and fails the verdict as an unmet criterion does. Sent to a Note instead, it
+ * merged with the branch that made it, and triage opened a bug Ticket for it
+ * within hours.
  */
-const verifyInstructions = (checks: readonly string[]) => `You are the verify Stage of an unattended pipeline. Your job is adversarial: try to prove each Acceptance Criterion is NOT met.
+const verifyInstructions = (checks: readonly string[]) => `You are the verify Stage of an unattended pipeline. Your job is adversarial: try to prove each Acceptance Criterion is NOT met, and find the defects this branch made.
 
-- Read the Ticket's Acceptance Criteria from its body and from its comments; the checkbox list may live in either.
+- The pipeline lists the Ticket's Acceptance Criteria below, numbered, each with the indented lines under its checkbox. Read the Ticket for their context, and grade the criteria as listed: answer each by its number, every listed number once and no other.
 - Work in the checked-out branch, which already contains the implementation.
 - Attempt to falsify every criterion: run the code, run the tests that bear on it, and write throwaway tests where that is the only way to tell.${verifyChecksLine(checks)}
 - Judge the code as it is. Do not fix anything, and never commit, stage or push. Scratch files are fine; the pipeline discards them.
 - Mark a criterion \`unverifiable\` only when no evidence can be gathered, never as a substitute for looking.
 - When a criterion ${NEEDS_A_HUMAN}, mark it \`unmet\` and say in its evidence that a human decision is needed, naming what it collides with. A workaround that sidesteps the collision does not meet it.
+- ${BRANCH_DEFECT}, is reported in the verdict's \`defects\`, beside the criteria and not as a Note, when you show it with the evidence an \`unmet\` criterion needs, unless the Ticket leaves it out of scope or a documented decision accepts it. It fails the verdict as an \`unmet\` criterion does, and its evidence follows the same rule.
 - An \`unmet\` criterion's evidence states the failure: where it sits, what you ran or read, what you expected, what came back, and the counterexample. It proposes no fix and no direction for one, and neither does what you say about whether a human decision is needed. It may quote a limit the Ticket, a documented decision or another criterion sets, naming where it comes from. A fix written there is what the fix Stage behind you would implement in place of finding the cause. This holds for a criterion's evidence only: a Note's \`next\` still carries the fix.
-- End by emitting the verdict: one entry per criterion with its status and the evidence you actually gathered.
+- End by emitting the verdict: one entry per listed criterion, by its number, with its status and the evidence you actually gathered, and one entry in \`defects\` per defect of this branch you showed.
 ${languageLine("your Notes and the verdict's evidence")}`;
 
 /** The Checks as the verify Stage is told about them: passed, and not its to run. */
@@ -294,7 +307,7 @@ const fixInstructions = (
 
 - Commit your fix on the branch you are on, in this worktree. ${NO_OTHER_BRANCH} Do not open pull requests, and do not close the Ticket.
 - Start from the evidence: reproduce the failure, find what actually causes it, and fix that rather than the symptom.
-- Where the failure is an unmet Acceptance Criterion, add the regression test that would have caught it and commit it with the fix.${kind === "unmet-criteria" ? `${UNMET_CAUSE_LINES}${HUMAN_DECISION_LINE}` : ""}
+- Where the failure is an unmet Acceptance Criterion or a defect this branch made, add the regression test that would have caught it and commit it with the fix.${kind === "unmet-criteria" ? `${UNMET_CAUSE_LINES}${HUMAN_DECISION_LINE}` : ""}
 - Stay inside this Ticket's Acceptance Criteria and the defects this branch introduced. Anything else you find belongs to another Ticket, not to this session; record it as a Note rather than mending it.${codeChecksLine(checks, false)}
 ${FINISH_GUIDANCE}
 - Write commit subjects in the \`${SUBJECT_SHAPE}\` shape. The pipeline re-runs the Checks and the verify Stage as soon as you finish.
@@ -332,7 +345,7 @@ const UNMET_CAUSE_LINES = `
 
 /** What the fix Stage sent in for unmet criteria does with one only a human can settle. */
 const HUMAN_DECISION_LINE = `
-- When any unmet criterion ${NEEDS_A_HUMAN}, as the verify Stage's evidence may already say, commit nothing and give your reason in \`noCommitReason\`: which criterion, and what it collides with. Do not work around it: a fix Stage that commits nothing hands the Ticket to a human, with the unmet criteria, their evidence and your reason.`;
+- When any unmet criterion ${NEEDS_A_HUMAN}, or any defect cannot be fixed without overturning one, as the verify Stage's evidence may already say, commit nothing and give your reason in \`noCommitReason\`: which criterion or defect, and what it collides with. Do not work around it: a fix Stage that commits nothing hands the Ticket to a human, with the unmet criteria, the defects, their evidence and your reason.`;
 
 /**
  * The conflict Stage's brief. It may reach past the conflicted files only to
@@ -363,7 +376,7 @@ const failureSentences = (base: string): Record<FailureKind, string> => ({
   "uncommitted-work":
     "the Stage before you left changes in this worktree it never committed, listed below; commit what belongs to this Ticket and discard the rest",
   "failed-check": "a Check the pipeline runs itself failed",
-  "unmet-criteria": "the verify Stage found unmet Acceptance Criteria",
+  "unmet-criteria": "the verify Stage found unmet Acceptance Criteria, or defects this branch made",
   "failed-ci": "a pull request check failed after the branch was pushed",
   "unresolved-conflict": `the branch conflicts with ${base}, and the session sent in to resolve the rebase did not finish it`,
 });
@@ -395,6 +408,14 @@ export function implementPrompt(
   ]);
 }
 
+/** What the verify Stage is given to grade beside the Ticket's URL. */
+export interface VerifyBrief {
+  /** The Ticket's unticked criteria, numbered, which the verdict answers by number. */
+  criteria?: readonly ListedCriterion[];
+  /** The Notes this Ticket's implement and fix Stages wrote in this Run. */
+  written?: readonly WrittenNote[];
+}
+
 /**
  * A fresh session with no plugin skill, graded against the verdict schema.
  *
@@ -410,11 +431,14 @@ export function verifyPrompt(
   checks: readonly string[],
   standingNotes?: number,
   unmetBefore?: string,
+  { criteria = [], written = [] }: VerifyBrief = {},
 ): string {
   return sections([
     `Ticket: ${issueUrl}`,
     verifyInstructions(checks),
+    criteriaSection(criteria),
     unmetBefore === undefined ? "" : unmetBeforeSection(unmetBefore),
+    writtenNotesSection(written),
     stageBoundary(selfHosted),
     verifyNotesGuidance(standingNotes),
     extraPrompt,
@@ -479,7 +503,7 @@ function failureSection({ kind, summary, evidence }: FixFailure, base: string): 
 
 /** How the fix Stage reads the unmet criteria's evidence, said beside it. */
 const UNMET_EVIDENCE_LEAD =
-  "This is the verify Stage's evidence for each unmet criterion. A fix this evidence proposes is a lead, not the answer: find the cause yourself, starting from the failure it states.";
+  "This is the verify Stage's evidence for each unmet criterion, given as its checkbox line reads, and for each defect this branch made. A fix this evidence proposes is a lead, not the answer: find the cause yourself, starting from the failure it states.";
 
 /**
  * The body, the problem and the solution answered for the branch so far, each
@@ -504,13 +528,63 @@ function fenced(text: string): string {
   return `${fence}\n${text}\n${fence}`;
 }
 
-/** The unmet criteria a fix Stage was sent in for, and what meeting them now takes. */
+/** The unmet criteria and defects a fix Stage was sent in for, and what clearing them now takes. */
 function unmetBeforeSection(evidence: string): string {
   return outputSection(
     "## Judged unmet before the fix",
     evidence,
-    "The verify Stage before you judged these criteria unmet, with this evidence, and a fix Stage has worked on the branch since. Such a criterion is met only when that counterexample is gone and the whole criterion holds: a fix that answers the evidence but not the rest of the criterion, or a caveat in place of the behaviour, leaves it `unmet`.",
+    "The verify Stage before you judged these criteria unmet, and these defects the branch's own, with this evidence, and a fix Stage has worked on the branch since. Such a criterion is met only when that counterexample is gone and the whole criterion holds: a fix that answers the evidence but not the rest of the criterion, or a caveat in place of the behaviour, leaves it `unmet`. Such a defect goes in your `defects` again until its counterexample is gone.",
   );
+}
+
+/**
+ * The criteria the verdict answers, by number, each with the lines under its
+ * checkbox; fenced, because they are the Ticket's Markdown, quoted.
+ */
+function criteriaSection(criteria: readonly ListedCriterion[]): string {
+  if (criteria.length === 0) return "";
+  const listed = criteria.flatMap(({ number, text, details }) => [
+    `${number}. ${text}`,
+    ...indented(details),
+  ]);
+  return [
+    "## The Acceptance Criteria, by number",
+    "",
+    "Each is an unticked checkbox on the Ticket, in the order the body and then its comments write them. A checkbox nested under another is a criterion of its own.",
+    "",
+    fenced(listed.join("\n")),
+  ].join("\n");
+}
+
+/** Lines under a numbered criterion, their own indent kept relative to each other. */
+function indented(lines: readonly string[]): string[] {
+  const widths = lines
+    .filter((line) => line.trim() !== "")
+    .map((line) => (/^[ \t]*/.exec(line)?.[0] ?? "").length);
+  const common = Math.min(...widths);
+  return lines.map((line) => (line.trim() === "" ? "" : `   ${line.slice(common)}`));
+}
+
+/**
+ * The Notes this Ticket's code Stages wrote in this Run, which the verify Stage
+ * grades for a defect of the branch; nothing where they wrote none.
+ */
+function writtenNotesSection(written: readonly WrittenNote[]): string {
+  if (written.length === 0) return "";
+  const lines = written.flatMap(({ stage, note }) => [
+    `- From the ${stage} Stage${note.ticket === undefined ? "" : `, for #${note.ticket}`}: ${note.summary}`,
+    ...(["evidence", "impact", "next"] as const).flatMap((part) => {
+      const text = note[part];
+      return text === undefined ? [] : [`  ${part}: ${text}`];
+    }),
+  ]);
+  return [
+    "## Notes this Ticket's implement and fix Stages wrote in this Run",
+    "",
+    "The pipeline has already posted these. One that is a defect this branch made is graded in your verdict's `defects`, held to the same evidence as one you found yourself.",
+    "",
+    fenced(lines.join("\n")),
+  ].join("\n");
 }
 
 /**

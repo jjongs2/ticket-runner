@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TICKED_BOX, UNCHECKED_BOX } from "./acceptance-criteria.js";
+import { TICKED_BOX, UNCHECKED_BOX, listCriteria } from "./acceptance-criteria.js";
 import { tickCriteria, tickMetCriteria } from "./criteria.js";
 import { skipReason } from "./guards.js";
 import type { Issue } from "./ports/tracker.js";
@@ -43,7 +43,14 @@ async function tickedByMerge(text: string): Promise<{ body: string; lines: strin
   await tickMetCriteria(
     tracker,
     TICKET,
-    { criteria: [{ text: "it works", status: "met", evidence: "npm test is green" }], pass: true },
+    {
+      criteria: listCriteria([text]).map((criterion) => ({
+        ...criterion,
+        status: "met" as const,
+        evidence: "npm test is green",
+      })),
+      defects: [],
+    },
     (line) => lines.push(line),
   );
   return { body: tracker.issue(TICKET).body, lines };
@@ -74,13 +81,19 @@ const CRITERIA = [
 ];
 const NOT_CRITERIA = ["- [x] it works", "-[ ] it works", "a - [ ] it works", "[ ] it works"];
 
-describe("the shape the guard, the ticker, the tick count and the Note escaper share", () => {
+describe("the shape the guard, the list, the ticker and the Note escaper share", () => {
   it.each(CRITERIA)("is counted by the guard in %j", (text) => {
     expect(guardCountsCriteria(text)).toBe(true);
   });
 
+  it.each(CRITERIA)("is listed for verify in %j", (text) => {
+    expect(listCriteria([text]).map((criterion) => criterion.text)).toEqual(["it works"]);
+  });
+
   it.each(CRITERIA)("is ticked by the merge in %j", (text) => {
-    expect(tickCriteria([text], ["it works"])).toEqual([expect.stringContaining("[x] it works")]);
+    expect(tickCriteria([text], listCriteria([text])).texts).toEqual([
+      expect.stringContaining("[x] it works"),
+    ]);
   });
 
   it.each(CRITERIA)("is counted as ticked by the merge in %j", async (text) => {
@@ -95,9 +108,10 @@ describe("the shape the guard, the ticker, the tick count and the Note escaper s
     expect(guardCountsCriteria(posted(text))).toBe(false);
   });
 
-  it.each(NOT_CRITERIA)("is not read into %j by the guard, the ticker or a Note", (text) => {
+  it.each(NOT_CRITERIA)("is not read into %j by the guard, the list, the ticker or a Note", (text) => {
     expect(guardCountsCriteria(text)).toBe(false);
-    expect(tickCriteria([text], ["it works"])).toEqual([text]);
+    expect(listCriteria([text])).toEqual([]);
+    expect(tickCriteria([text], [{ number: 1, line: text }]).texts).toEqual([text]);
     expect(posted(text)).toContain(text);
   });
 });

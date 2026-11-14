@@ -1,4 +1,4 @@
-import { UNCHECKED_BOX } from "./acceptance-criteria.js";
+import { TICKED_BOX, UNCHECKED_BOX } from "./acceptance-criteria.js";
 import type { Issue } from "./ports/tracker.js";
 
 /**
@@ -79,9 +79,24 @@ const CRITERION_LINE = new RegExp(UNCHECKED_BOX, "m");
 
 /** Triage posts its brief as a comment, so criteria are not always in the body. */
 function hasCriteria(issue: Issue): boolean {
-  return [issue.body, ...issue.comments.map((comment) => comment.body)].some((text) =>
-    CRITERION_LINE.test(text),
-  );
+  return texts(issue).some((text) => CRITERION_LINE.test(text));
+}
+
+/** {@link TICKED_BOX}, over every line of a text, whichever case its `x` is in. */
+const TICKED_LINE = new RegExp(TICKED_BOX, "gmi");
+
+/**
+ * How many ticked checkboxes the Ticket carries, which is what the
+ * `no-criteria` guard says of one that has no unticked box: written with every
+ * box already ticked, it reads as having no criteria at all unless told so.
+ */
+export function tickedBoxes(issue: Issue): number {
+  return texts(issue).reduce((count, text) => count + [...text.matchAll(TICKED_LINE)].length, 0);
+}
+
+/** Every place a Ticket writes its criteria: its body, then its comments. */
+function texts(issue: Issue): string[] {
+  return [issue.body, ...issue.comments.map((comment) => comment.body)];
 }
 
 /**

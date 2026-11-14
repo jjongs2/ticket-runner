@@ -33,7 +33,7 @@ const ALL_LABELS = [
 const VERSION = "0.4.0+331d79c";
 
 const PASSING_VERDICT = {
-  criteria: [{ text: "it works", status: "met", evidence: "npm test is green" }],
+  criteria: [{ number: 1, status: "met", evidence: "npm test is green" }],
   pass: true,
 };
 
@@ -1102,7 +1102,7 @@ describe("what a Run tells its Stages about the checkout they stand in", () => {
       "verify",
       stageResult({
         result: {
-          criteria: [{ text: "it works", status: "unmet", evidence: "npm test is red" }],
+          criteria: [{ number: 1, status: "unmet", evidence: "npm test is red" }],
           pass: false,
         },
       }),

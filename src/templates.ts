@@ -108,13 +108,29 @@ export function hasGuardWarning(comments: IssueComment[], reason: GuardReason): 
   return findMarkedComment(comments, guardMarker(reason)) !== undefined;
 }
 
-/** The one warning a skipped candidate gets. Two sentences: the reason, the fix. */
-export function guardComment(reason: GuardReason): string {
-  return [
-    guardMarker(reason),
-    `**Skipped by ticket-runner.** ${GUARD_SENTENCES[reason]}`,
-    "",
-  ].join("\n");
+/**
+ * What the `no-criteria` guard says of a Ticket whose checkboxes are all
+ * ticked. Told only that it has no criteria, a human looking at a list of them
+ * reads the comment as wrong.
+ */
+function allTickedSentences(ticked: number): string {
+  const boxes = ticked === 1 ? "its one checkbox is" : `all ${ticked} of its checkboxes are`;
+  return (
+    `No \`- [ ]\` acceptance criteria found: ${boxes} already ticked. ` +
+    "Untick each criterion not yet done, then re-run."
+  );
+}
+
+/**
+ * The one warning a skipped candidate gets. Two sentences: the reason, the fix.
+ *
+ * `ticked` is how many ticked checkboxes the Ticket carries, which only the
+ * `no-criteria` warning reads.
+ */
+export function guardComment(reason: GuardReason, ticked = 0): string {
+  const sentences =
+    reason === "no-criteria" && ticked > 0 ? allTickedSentences(ticked) : GUARD_SENTENCES[reason];
+  return [guardMarker(reason), `**Skipped by ticket-runner.** ${sentences}`, ""].join("\n");
 }
 
 export interface PullRequestBody {

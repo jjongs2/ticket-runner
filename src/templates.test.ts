@@ -29,21 +29,31 @@ import {
   squashCommit,
   wrapLines,
 } from "./templates.js";
-import { parseVerdict } from "./verdict.js";
+import { listCriteria } from "./acceptance-criteria.js";
+import type { CriterionStatus, Verdict } from "./verdict.js";
 
-const verdict = parseVerdict({
-  criteria: [
-    { text: "tests pass", status: "met", evidence: "npm test green" },
-    { text: "docs updated", status: "unverifiable", evidence: "no way to tell" },
-  ],
-  pass: true,
-});
+/** A verdict on a Ticket whose checkboxes are `criteria`, graded as each one says. */
+function graded(
+  criteria: { text: string; status: CriterionStatus; evidence: string }[],
+  body = criteria.map(({ text }) => `- [ ] ${text}`).join("\n"),
+): Verdict {
+  return {
+    criteria: listCriteria([body]).map((listed, index) => ({
+      ...listed,
+      status: criteria[index]?.status ?? "met",
+      evidence: criteria[index]?.evidence ?? "",
+    })),
+    defects: [],
+  };
+}
+
+const verdict = graded([
+  { text: "tests pass", status: "met", evidence: "npm test green" },
+  { text: "docs updated", status: "unverifiable", evidence: "no way to tell" },
+]);
 
 /** A verdict with every criterion met, which leaves the squash commit no unverified lines. */
-const allMet = parseVerdict({
-  criteria: [{ text: "tests pass", status: "met", evidence: "npm test green" }],
-  pass: true,
-});
+const allMet = graded([{ text: "tests pass", status: "met", evidence: "npm test green" }]);
 
 /** The version the Run ran, which its summary is headed with. */
 const VERSION = "0.4.0+331d79c";
@@ -287,16 +297,13 @@ describe("squashCommit", () => {
       pullRequest: 100,
       title: "feat(cli): add a flag",
       solution: "It adds one.",
-      verdict: parseVerdict({
-        criteria: [
-          {
-            text: "the docs say so",
-            status: "unverifiable",
-            evidence: "No browser here.\n\n  The wiki renders only on GitHub.",
-          },
-        ],
-        pass: true,
-      }),
+      verdict: graded([
+        {
+          text: "the docs say so",
+          status: "unverifiable",
+          evidence: "No browser here.\n\n  The wiki renders only on GitHub.",
+        },
+      ]),
       commits: [],
       coAuthors: [],
     }).body;
@@ -304,6 +311,23 @@ describe("squashCommit", () => {
     expect(body).toContain(
       "Unverified:\n- the docs say so — No browser here. The wiki renders only on GitHub.\n",
     );
+  });
+
+  it("names an unverifiable criterion as its checkbox line reads, without the lines under it", () => {
+    const body = squashCommit({
+      ticket: 2,
+      pullRequest: 100,
+      title: "feat(cli): add a flag",
+      solution: "It adds one.",
+      verdict: graded(
+        [{ text: "", status: "unverifiable", evidence: "no browser" }],
+        "- [ ] the table reads `a \\| b`:\n\n  | a | b |",
+      ),
+      commits: [],
+      coAuthors: [],
+    }).body;
+
+    expect(body).toContain("Unverified:\n- the table reads `a \\| b`: — no browser\n");
   });
 
   it("carries no verdict counts and no Run line", () => {
@@ -535,12 +559,15 @@ describe("handoffComment", () => {
       expect(comment).toContain("- \\[ \\] it writes the feed");
       expect(comment).toContain("  * \\[ \\] nested too");
       expect(new RegExp(UNCHECKED_BOX, "m").test(comment)).toBe(false);
-      // The merge ticks what it finds on the body and the comments together:
-      // the hand-off adds no box for it to tick, nor one it reads as written.
-      expect(tickCriteria([body, comment], ["it writes the feed", "nested too"])).toEqual([
-        body,
-        comment,
-      ]);
+      // The pipeline lists the body and the comments together for verify: the
+      // hand-off adds no criterion to the list, nor a box the merge could tick.
+      expect(listCriteria([body, comment]).map(({ text }) => text)).toEqual(["it reads the feed"]);
+      expect(
+        tickCriteria([body, comment], [
+          { number: 2, line: "- [ ] it writes the feed" },
+          { number: 3, line: "  * [ ] nested too" },
+        ]).texts,
+      ).toEqual([body, comment]);
     });
   });
 });
@@ -641,6 +668,23 @@ describe("guardComment", () => {
     expect(guardComment("no-criteria")).toContain(
       "No `- [ ]` acceptance criteria found in the body or comments.",
     );
+  });
+
+  it("tells a Ticket with no checkbox at all what it always did, whatever it is told about ticked ones", () => {
+    expect(guardComment("no-criteria", 0)).toBe(guardComment("no-criteria"));
+  });
+
+  it("tells a Ticket whose every checkbox is ticked how many are, and to untick those not done", () => {
+    const comment = guardComment("no-criteria", 3);
+
+    expect(comment.split("\n")[0]).toBe("<!-- ticket-runner:guard:no-criteria -->");
+    expect(comment).toContain(
+      "No `- [ ]` acceptance criteria found: all 3 of its checkboxes are already ticked. Untick each criterion not yet done, then re-run.",
+    );
+  });
+
+  it("says a Ticket's one ticked checkbox is one", () => {
+    expect(guardComment("no-criteria", 1)).toContain("its one checkbox is already ticked");
   });
 
   it("tells a body-only blocker how to make the edge native", () => {

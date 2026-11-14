@@ -32,7 +32,7 @@ describe("NOTES_LIST_SCHEMA", () => {
 
   it("is the one declaration of a Note both the Stages that write and the one that grades read", () => {
     expect(CODE_STAGE_JSON_SCHEMA.properties.notes.items).toBe(NOTES_LIST_SCHEMA.items);
-    expect(VERDICT_JSON_SCHEMA.properties.notes).toBe(NOTES_LIST_SCHEMA);
+    expect(VERDICT_JSON_SCHEMA.properties.notes.items).toBe(NOTES_LIST_SCHEMA.items);
   });
 
   it("tells the Stages that write code a defect their branch introduced is theirs to fix", () => {
