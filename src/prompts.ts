@@ -310,7 +310,7 @@ ${NO_COMMIT_LINE}`;
  * before an earlier Stage found is not lost, and blank otherwise, which keeps
  * the earlier one.
  */
-const FIX_PROSE_GUIDANCE = `- The \`body\`, \`problem\` and \`solution\` answered for this branch so far are below, when there are any. When your fix changes what one of them says, answer that one revised for the whole branch, keeping what it says of the branch before your fix still holds: the \`body\` ${BODY_SHAPE}; the \`problem\` and the \`solution\` ${PROSE_SHAPE}. Answer each one your fix leaves true as an empty string, which keeps it. ${PROSE_LIMITS}`;
+const FIX_PROSE_GUIDANCE = `- The \`body\`, \`problem\` and \`solution\` answered for this branch so far are below, when there are any. When your fix changes what one of them says, answer that one revised for the whole branch, keeping whatever it says of the branch before your fix that still holds: the \`body\` ${BODY_SHAPE}; the \`problem\` and the \`solution\` ${PROSE_SHAPE}. Answer each one your fix leaves true as an empty string, which keeps it. ${PROSE_LIMITS}`;
 
 /**
  * What every fix Stage is told about ending without a new commit, whatever it

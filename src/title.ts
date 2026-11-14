@@ -38,9 +38,8 @@ const CONVENTIONAL_SUBJECT = /^[a-z]+(\([a-z0-9._-]+\))?: \S/;
 const TICKET_REFERENCE = /\s*\(#\d+\)$/;
 
 /**
- * What the pull request body, the problem and the solution are, in the words
- * the schema gives each; the prompts of the code Stages say how to write them.
- * An empty answer is how a fix Stage keeps the one before it.
+ * How the schema tells a Stage to keep an answer: an empty one is how a fix
+ * Stage leaves the body, problem or solution before it standing.
  */
 const KEEP_EARLIER = "An empty string keeps the one an earlier Stage answered.";
 
@@ -75,11 +74,11 @@ export const CODE_STAGE_JSON_SCHEMA = {
     },
     problem: {
       type: "string",
-      description: `The problem the branch solves, for the squash commit's body: the state before the change and its effect. ${KEEP_EARLIER}`,
+      description: `The problem the branch solves, for the squash commit's body, in the shape your prompt gives. ${KEEP_EARLIER}`,
     },
     solution: {
       type: "string",
-      description: `The solution, for the squash commit's body after the problem: what the change does and why. ${KEEP_EARLIER}`,
+      description: `The solution, for the squash commit's body after the problem, in the shape your prompt gives. ${KEEP_EARLIER}`,
     },
     notes: CODE_STAGE_NOTES_LIST_SCHEMA,
     noCommitReason: {
