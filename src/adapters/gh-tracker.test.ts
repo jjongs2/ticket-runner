@@ -192,6 +192,28 @@ describe("reading", () => {
     expect(await gh.repository()).toBeUndefined();
   });
 
+  it.each([
+    ["public", "public"],
+    ["private", "private"],
+    ["internal", "private"],
+  ] as const)("reads a %s Target's visibility through REST as %s", async (said, answer) => {
+    expect(await tracker(ok(`${said}\n`)).visibility()).toBe(answer);
+    expect(calls[0]).toEqual(["api", "repos/{owner}/{repo}", "--jq", ".visibility"]);
+  });
+
+  /** A Target whose visibility cannot be read counts as public, which the caller decides. */
+  it("answers with no visibility rather than throwing when gh fails or says something else", async () => {
+    expect(await tracker(failedExecution("HTTP 404")).visibility()).toBeUndefined();
+    expect(await tracker(ok("\n")).visibility()).toBeUndefined();
+    expect(await tracker(ok("secret\n")).visibility()).toBeUndefined();
+    const gh = trackerWith({
+      run: async () => {
+        throw new Error("spawn gh ENOENT");
+      },
+    });
+    expect(await gh.visibility()).toBeUndefined();
+  });
+
   it("lists label names through REST, every page of them", async () => {
     const labels = await tracker(ok('[{"name":"needs-triage"},{"name":"wontfix"}]')).listLabels();
 

@@ -124,10 +124,11 @@ function parseJson(contents: string): unknown {
 
 /**
  * The branch of the Target's remote that holds every Ticket's state, one file
- * per Ticket, and the transcripts of a handed-off Ticket's Stages beside it,
- * under the prefix the pipeline owns (ADR-0004). Named here rather than only in
- * the Workspace that writes it, because `ticket-runner remove` deletes it by
- * name and the conventions document names it to every human.
+ * per Ticket, and the transcripts of a handed-off Ticket's Stages beside it
+ * where the Run keeps them on the remote, under the prefix the pipeline owns
+ * (ADR-0004). Named here rather than only in the Workspace that writes it,
+ * because `ticket-runner remove` deletes it by name and the conventions
+ * document names it to every human.
  */
 export const STATE_BRANCH = "ticket-runner/state";
 

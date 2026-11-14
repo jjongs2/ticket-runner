@@ -1,6 +1,6 @@
 import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { type Host, currentHost, sameHost } from "../host.js";
 import {
   LOCK_BRANCH,
@@ -36,7 +36,7 @@ import {
   stateFileName,
   stateFileTicket,
 } from "../resume.js";
-import { transcriptFiles } from "../run-log.js";
+import { stageLogDir, transcriptFiles } from "../run-log.js";
 import { exec, execOrThrow, throwOnFailure } from "./exec.js";
 
 /**
@@ -681,6 +681,12 @@ export class GitWorkspace implements Workspace {
       files.map((file) => ({ name: `${directory}${file.name}`, from: file.path })),
     );
     return { branch: STATE_BRANCH, path: directory };
+  }
+
+  async transcriptsOnHost(ticket: number, runId: string): Promise<string | undefined> {
+    if (transcriptFiles(this.repoRoot, runId, ticket).length === 0) return undefined;
+    const directory = relative(this.repoRoot, stageLogDir(this.repoRoot, runId, ticket));
+    return `${directory.split(sep).join("/")}/`;
   }
 
   /**

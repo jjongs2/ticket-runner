@@ -453,6 +453,14 @@ export interface Workspace {
    */
   keepTranscripts(ticket: number, runId: string): Promise<KeptTranscripts | undefined>;
   /**
+   * Where on this Host Run `runId` wrote the files {@link keepTranscripts}
+   * would keep for `ticket`, as a `/`-separated directory relative to the
+   * checkout and ending in `/`, or nothing when it wrote none. Asked of a
+   * hand-off whose Run keeps transcripts off the remote: relative, so a public
+   * comment naming it does not publish the Host's home path.
+   */
+  transcriptsOnHost(ticket: number, runId: string): Promise<string | undefined>;
+  /**
    * Take the Run lock for this Run, or say what stands in the way. Taking it is
    * the whole of the mutual exclusion: two Runs never both get `taken`, on one
    * Host or on two.

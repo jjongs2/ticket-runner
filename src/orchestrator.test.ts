@@ -18,6 +18,7 @@ import type { StageName } from "./ports/agent-runner.js";
 import type { TicketState } from "./ports/workspace.js";
 import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./testing/fakes.js";
 import { settle } from "./testing/settle.js";
+import type { TranscriptHome } from "./transcript-home.js";
 
 /** The version this Run is, as the CLI resolves it once and hands it down. */
 const VERSION = "0.4.0+331d79c";
@@ -161,10 +162,13 @@ let worktree: string;
 let logged: string[];
 /** The Stages the Run named for being billed to something other than its own. */
 let billing: Billing;
+/** Where the Run keeps a handed-off Ticket's transcripts: the remote, unless a test says otherwise. */
+let transcriptHome: TranscriptHome;
 
 beforeEach(() => {
   logged = [];
   billing = emptyBilling();
+  transcriptHome = "remote";
   worktree = join(repoRoot, ".worktrees", `ticket-${TICKET}`);
   tracker = new FakeTracker();
   tracker.addIssue({ number: TICKET, title: "Skeleton: one Ticket end to end", url: URL });
@@ -220,6 +224,7 @@ async function run(
       standingNotes: new StandingNotes(),
       baseChecks: new BaseBranchChecks(),
       selfHosted: false,
+      transcriptHome,
       log: (line) => logged.push(line),
     },
     TICKET,
@@ -2961,6 +2966,7 @@ describe("a Check the base branch fails too", () => {
         standingNotes: new StandingNotes(),
         baseChecks: new BaseBranchChecks(),
         selfHosted: false,
+        transcriptHome,
       },
       TICKET,
     );
@@ -3001,6 +3007,7 @@ describe("Tickets in several Lanes failing against one merge-base", () => {
       standingNotes: new StandingNotes(),
       baseChecks: new BaseBranchChecks(),
       selfHosted: false,
+      transcriptHome,
     };
 
     const outcomes = await Promise.all([processTicket(shared, TICKET), processTicket(shared, SECOND)]);
@@ -4126,6 +4133,7 @@ describe("releasing a Ticket GitHub or the remote failed on its own side", () =>
         standingNotes: standing,
         baseChecks: new BaseBranchChecks(),
         selfHosted: false,
+        transcriptHome,
         log: (line) => logged.push(line),
       },
       TICKET,
@@ -5369,6 +5377,7 @@ describe("the Landing", () => {
       standingNotes: new StandingNotes(),
       baseChecks: new BaseBranchChecks(),
       selfHosted: false,
+      transcriptHome,
       log: (line) => logged.push(line),
     };
   });

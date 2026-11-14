@@ -31,7 +31,6 @@ import type {
 } from "./ports/agent-runner.js";
 import type { Issue, Tracker } from "./ports/tracker.js";
 import type {
-  KeptTranscripts,
   ReachedState,
   RebaseOutcome,
   TicketState,
@@ -61,8 +60,10 @@ import {
   hasGuardWarning,
   pullRequestBody,
   squashCommit,
+  type TranscriptsPlace,
 } from "./templates.js";
 import type { StartTimer } from "./timer.js";
+import type { TranscriptHome } from "./transcript-home.js";
 import {
   BRANCH_PROSE_FIELDS,
   type BranchProse,
@@ -195,6 +196,12 @@ export interface Pipeline {
    * there is a Stage told to exercise it through its tests and fakes.
    */
   selfHosted: boolean;
+  /**
+   * Where a handed-off Ticket's transcripts are kept, decided once before the
+   * Run started ({@link import("./transcript-home.js").resolveTranscriptHome}):
+   * on the Target's remote, or kept off it on this Host.
+   */
+  transcriptHome: TranscriptHome;
   /**
    * How the Run waits between its looks at the Frontier while a Lane is free
    * and another busy: the real clock, unless a test hands it one it moves
@@ -2256,11 +2263,12 @@ interface HandOff {
  * worktree and the state file stay put, so a human who relabels the Ticket
  * `ready-for-agent` hands it back and the next Run carries on from what it
  * reached. The Stages' transcripts go up beside the state, since the Host they
- * were written on may be gone by the time a human looks, and the comment says
- * where they and the branch are. The draft pull request's body says where they
- * are too, once they are kept: a draft is opened first, because the state
- * records it, and one that was already open is rewritten, since its body is an
- * earlier Run's.
+ * were written on may be gone by the time a human looks, unless the Run keeps
+ * them off the remote, where they stay on this Host; the comment says where
+ * they and the branch are. The draft pull request's body says where they are
+ * too, once they are kept: a draft is opened first, because the state records
+ * it, and one that was already open is rewritten, since its body is an earlier
+ * Run's.
  *
  * A Ticket handed over before its worktree was created has none: nothing was
  * branched, so there is no directory to name and nothing to push a draft pull
@@ -2364,9 +2372,10 @@ async function handOff(
       ...(pullRequest === undefined ? {} : { pullRequest }),
     });
   }
-  // Only beside a state that stays, because they go when it does, and after
-  // it, so the state they sit beside is the one a resuming Run reads.
-  const transcripts = keepsState ? await keepTranscripts(pipeline, ticket) : undefined;
+  // Only beside a state that stays, because on the remote they go when it
+  // does, and after it, so the state they sit beside is the one a resuming Run
+  // reads. A hand-off that leaves no state ran no Stage, so it has none anyway.
+  const transcripts = keepsState ? await transcriptsPlace(pipeline, ticket) : undefined;
   // A draft this hand-off opened went up before anything was kept, and one it
   // converted still carries an earlier body, so either learns where only now.
   if (pullRequest !== undefined && !(drafted && transcripts === undefined)) {
@@ -2419,20 +2428,28 @@ async function handOff(
 }
 
 /**
- * Keep the transcripts of the Stages this Run ran for a handed-off Ticket on
- * the remote, where a human can still read them once this Host is gone, and
- * say where.
+ * Keep the transcripts of the Stages this Run ran for a handed-off Ticket where
+ * the Run keeps them, and say where: on the remote, where a human can still
+ * read them once this Host is gone, or off it, on this Host, for a Run whose
+ * Target would publish them (ADR-0004).
  *
- * Nothing when that fails, and the failure logged: the hand-off is what a
- * human is waiting for, and the transcripts are still on this Host for as long
- * as it lasts.
+ * Nothing when the Run wrote none for the Ticket, and nothing when keeping
+ * them fails, the failure logged: the hand-off is what a human is waiting for,
+ * and the transcripts are still on this Host for as long as it lasts.
  */
-async function keepTranscripts(
+async function transcriptsPlace(
   pipeline: Pipeline,
   ticket: number,
-): Promise<KeptTranscripts | undefined> {
+): Promise<TranscriptsPlace | undefined> {
+  const { transcriptHome, workspace, runId } = pipeline;
   try {
-    return await pipeline.workspace.keepTranscripts(ticket, pipeline.runId);
+    if (transcriptHome === "remote") {
+      const kept = await workspace.keepTranscripts(ticket, runId);
+      return kept === undefined ? undefined : { on: "remote", ...kept };
+    }
+    const path = await workspace.transcriptsOnHost(ticket, runId);
+    if (path === undefined) return undefined;
+    return transcriptHome === "cloud" ? { on: "cloud" } : { on: "workstation", path };
   } catch (error) {
     pipeline.log?.(
       `#${ticket} handed off, but keeping its transcripts failed: ${(error as Error).message}`,

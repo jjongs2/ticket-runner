@@ -159,8 +159,8 @@ export interface DraftPullRequestBody {
    */
   failure: string;
   runId: string;
-  /** Where the hand-off kept the Stages' transcripts on the remote, when it kept any. */
-  transcripts?: KeptTranscripts;
+  /** Where the hand-off kept the Stages' transcripts, when there are any. */
+  transcripts?: TranscriptsPlace;
 }
 
 /**
@@ -184,7 +184,7 @@ export function draftPullRequestBody({
     ...evidenceBlock(shown.evidence),
     `See the hand-off comment on #${ticket} for the branch, worktree and evidence.`,
     "",
-    runLine(runId, transcripts === undefined ? undefined : keptPlace(transcripts)),
+    runLine(runId, transcripts),
     "",
   ].join("\n");
 }
@@ -215,17 +215,49 @@ function evidenceBlock(evidence: string): string[] {
 }
 
 /**
- * The line a draft pull request's body ends with: the Run, and where its
- * transcripts are when there is somewhere that outlives the Host to point at.
+ * Where a hand-off says the Stages' transcripts are: on the remote beside the
+ * Ticket's state, or kept off it on the Host, which a workstation outlives and
+ * a cloud Host's VM does not. A workstation's directory is named relative to
+ * the checkout, so a public comment does not publish the Host's home path.
  */
-function runLine(runId: string, where: string | undefined): string {
+export type TranscriptsPlace =
+  | ({ on: "remote" } & KeptTranscripts)
+  | { on: "workstation"; path: string }
+  | { on: "cloud" };
+
+/**
+ * The line a draft pull request's body ends with: the Run, and where its
+ * transcripts are when there are any.
+ */
+function runLine(runId: string, transcripts: TranscriptsPlace | undefined): string {
   const run = `Run \`${runId}\``;
-  return where === undefined ? run : `${run} · transcripts in ${where}`;
+  if (transcripts === undefined) return run;
+  const where = placeOf(transcripts);
+  return where.directory
+    ? `${run} · transcripts in ${where.phrase}`
+    : `${run} · transcripts ${where.phrase}`;
 }
 
-/** Where a hand-off kept the transcripts, as every shape that names it spells it. */
-function keptPlace(transcripts: KeptTranscripts): string {
-  return `\`${transcripts.path}\` on the \`${transcripts.branch}\` branch`;
+/**
+ * Where the transcripts are, as every shape that names it spells it, and
+ * whether the phrase opens on a directory, which a sentence leads into with
+ * `in`.
+ */
+function placeOf(transcripts: TranscriptsPlace): { phrase: string; directory: boolean } {
+  switch (transcripts.on) {
+    case "remote":
+      return {
+        phrase: `\`${transcripts.path}\` on the \`${transcripts.branch}\` branch`,
+        directory: true,
+      };
+    case "workstation":
+      return { phrase: `\`${transcripts.path}\` on the Host, kept off the remote`, directory: true };
+    case "cloud":
+      return {
+        phrase: "kept off the remote, on the cloud Host, so they go with its VM",
+        directory: false,
+      };
+  }
 }
 
 export interface SquashCommitMessage extends Pick<BranchProse, "problem" | "solution"> {
@@ -382,8 +414,8 @@ export interface HandoffComment {
   evidence: string;
   /** Whether the Ticket's fix budget had already been spent when this failure came. */
   fixUsed?: boolean;
-  /** Where the Stages' transcripts were kept on the remote, when any were. */
-  transcripts?: KeptTranscripts;
+  /** Where the Stages' transcripts are, when there are any. */
+  transcripts?: TranscriptsPlace;
   /**
    * Why the Stage this hand-off is for committed nothing, as it answered it in
    * `noCommitReason`. Set only for an implement or fix Stage that finished and
@@ -412,7 +444,7 @@ export function handoffComment(handoff: HandoffComment): string {
     `- ${location}`,
     ...(handoff.transcripts === undefined
       ? []
-      : [`- Transcripts: ${keptPlace(handoff.transcripts)}`]),
+      : [`- Transcripts: ${placeOf(handoff.transcripts).phrase}`]),
     "",
     ...stageSaid(handoff.stage, handoff.reason),
     ...evidenceBlock(shown.evidence),

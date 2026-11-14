@@ -55,6 +55,7 @@ const configSchema = z
     ciTimeoutMinutes: z.number().positive().optional(),
     ciGraceMinutes: z.number().nonnegative().optional(),
     checkTimeoutMinutes: z.number().positive().optional(),
+    keepTranscripts: z.boolean().optional(),
     labels: z
       .object({
         needsTriage: z.string().min(1).optional(),
@@ -121,6 +122,12 @@ export interface Config {
    * the whole pipeline, and every command gets the whole of it.
    */
   checkTimeoutMinutes: number;
+  /**
+   * Whether a handed-off Ticket's transcripts are kept on the Target's remote,
+   * where the config says. Absent means it follows the Target's visibility,
+   * which {@link import("./transcript-home.js").resolveTranscriptHome} reads.
+   */
+  keepTranscripts?: boolean;
   labels: Labels;
 }
 
@@ -203,6 +210,8 @@ export function loadConfig(repoRoot: string, version: string): Config {
     ciTimeoutMinutes: file.ciTimeoutMinutes ?? 30,
     ciGraceMinutes: file.ciGraceMinutes ?? DEFAULT_CI_GRACE_MINUTES,
     checkTimeoutMinutes: file.checkTimeoutMinutes ?? DEFAULT_CHECK_TIMEOUT_MINUTES,
+    // Spread, as baseBranch is: unset is an answer of its own, not false.
+    ...(file.keepTranscripts === undefined ? {} : { keepTranscripts: file.keepTranscripts }),
     labels: labels(file.labels),
   };
 }
