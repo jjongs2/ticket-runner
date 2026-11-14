@@ -64,11 +64,17 @@ interface GhOptions {
    */
   once?: boolean;
   /**
-   * Asked after each wait, before trying again: whether what the call does has
-   * already happened, as a pull request a 502 opened all the same has. Yes
-   * ends the tries, and the call answers with the failure it last met.
+   * Whether what the call does has already happened, as a pull request a 502
+   * opened all the same has. Yes ends the tries, and the call answers with the
+   * failure it last met.
+   *
+   * Asked after each wait, before trying again, as a glance: once, and a
+   * failure to answer is a no. Asked again when GitHub refuses the call, since
+   * a refusal can be GitHub declining to do twice what an earlier try did while
+   * the glance between them failed. That ask is `patient`: tried again like any
+   * read, and a fault of GitHub's that outlasts the tries is thrown.
    */
-  landed?: () => Promise<boolean>;
+  landed?: (patient: boolean) => Promise<boolean>;
 }
 
 /**
@@ -525,7 +531,9 @@ export class GhTracker implements Tracker {
    *
    * Tried again after a fault of GitHub's like any write, but only once no
    * pull request is open on the branch: one the failed try opened all the
-   * same is the answer, where a second try would be refused over it.
+   * same is the answer. A try GitHub refuses, as it refuses a second pull
+   * request on one branch, is asked about the same way, so one opened while
+   * the lookup between tries failed is still the answer.
    */
   async createPullRequest(pr: CreatePullRequest): Promise<PullRequestRef> {
     let opened: PullRequestRef | undefined;
@@ -536,8 +544,8 @@ export class GhTracker implements Tracker {
       {
         typed: [`draft=${pr.draft}`],
         json: "document",
-        landed: async () => {
-          opened = await this.openPullRequestOn(pr.head);
+        landed: async (patient) => {
+          opened = await this.openPullRequestOn(pr.head, patient);
           return opened !== undefined;
         },
       },
@@ -559,20 +567,24 @@ export class GhTracker implements Tracker {
   }
 
   /**
-   * The open pull request from `head`, asked once between the tries of a
-   * create, or nothing where there is none or GitHub would not say: the next
-   * try then asks GitHub to open one, as it would have anyway.
+   * The open pull request from `head`, or nothing where there is none.
+   *
+   * Between the tries of a create it is asked once, and GitHub not saying is
+   * nothing too: the next try then asks GitHub to open one, as it would have
+   * anyway. After a refusal it is asked `patient`ly, and a GitHub that still
+   * will not say is a fault of GitHub's, thrown as any read's is.
    */
-  private async openPullRequestOn(head: string): Promise<PullRequestRef | undefined> {
+  private async openPullRequestOn(head: string, patient: boolean): Promise<PullRequestRef | undefined> {
     try {
       const pulls = await this.list<{ number: number; html_url: string; head: { ref: string } }>(
         "repos/{owner}/{repo}/pulls",
         ["-f", "state=open"],
-        { once: true },
+        patient ? {} : { once: true },
       );
       const pull = pulls.find((candidate) => candidate.head.ref === head);
       return pull === undefined ? undefined : { number: pull.number, url: pull.html_url };
-    } catch {
+    } catch (error) {
+      if (patient) throw error;
       return undefined;
     }
   }
@@ -707,8 +719,9 @@ export class GhTracker implements Tracker {
    * as the commit's title and message.
    *
    * Tried again after a fault of GitHub's, but only while the pull request has
-   * not merged: a merge the failed try made is done, and a second would be
-   * refused as one GitHub cannot make.
+   * not merged: a merge the failed try made is done. A try GitHub refuses, as
+   * it refuses to merge a pull request already merged, is asked about the same
+   * way, so a merge made while the lookup between tries failed is still done.
    */
   async squashMerge(number: number, commit: SquashCommit): Promise<void> {
     await this.rest(
@@ -716,10 +729,11 @@ export class GhTracker implements Tracker {
       `repos/{owner}/{repo}/pulls/${number}/merge`,
       ["merge_method=squash", `commit_title=${commit.subject}`, `commit_message=${commit.body}`],
       {
-        landed: async () => {
+        landed: async (patient) => {
           try {
-            return (await this.pullRequest(number, { once: true })).merged === true;
-          } catch {
+            return (await this.pullRequest(number, patient ? {} : { once: true })).merged === true;
+          } catch (error) {
+            if (patient) throw error;
             return false;
           }
         },
@@ -891,7 +905,9 @@ export class GhTracker implements Tracker {
    * GitHub's: the call waits and tries again, {@link GITHUB_RETRY_DELAYS_MS}
    * apart, and one that still fails after the last is an {@link OutsideFault}
    * — or, for a caller that takes failures as answers, the failure it met.
-   * Every other failure is the caller's at once, as it always was.
+   * Every other failure is the caller's at once, as it always was, unless the
+   * call can tell it has landed: a refusal that follows a try GitHub failed may
+   * be GitHub declining to do again what that try did after all.
    */
   private async gh(args: string[], options: GhOptions = {}): Promise<Execution> {
     for (let tried = 0; ; tried++) {
@@ -900,9 +916,14 @@ export class GhTracker implements Tracker {
       });
       const fault = githubFaultIn(result, options);
       const delay = options.once === true ? undefined : GITHUB_RETRY_DELAYS_MS[tried];
-      if (fault === undefined || delay === undefined) return finalAnswer(args, result, fault, options);
+      if (fault === undefined || delay === undefined) {
+        if (tried > 0 && refused(result, fault, options) && (await options.landed?.(true))) {
+          return result;
+        }
+        return finalAnswer(args, result, fault, options);
+      }
       await this.sleep(delay);
-      if (await options.landed?.()) return result;
+      if (await options.landed?.(false)) return result;
     }
   }
 }
@@ -919,6 +940,15 @@ function githubFaultIn(result: Execution, options: GhOptions): string | undefine
     return isGitHubFault(result.output) ? firstLine(result.output) : undefined;
   }
   return options.json === undefined ? undefined : incompleteJson(result.stdout, options.json);
+}
+
+/**
+ * Whether GitHub turned the call down, as a 4xx: a failure that is no fault of
+ * GitHub's and that the caller does not take as an answer.
+ */
+function refused(result: Execution, fault: string | undefined, options: GhOptions): boolean {
+  if (result.exitCode === 0 || fault !== undefined || options.allowFailure) return false;
+  return options.tolerate?.test(result.output) !== true;
 }
 
 /** Why `stdout` is not the JSON a caller reads, or nothing when it is. */

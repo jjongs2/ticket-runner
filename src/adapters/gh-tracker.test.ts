@@ -1670,6 +1670,96 @@ describe("GitHub failing on its own side", () => {
     expect(calls.filter((args) => args.includes("POST"))).toHaveLength(1);
   });
 
+  describe("a try refused after one GitHub failed, while the lookup between them failed too", () => {
+    const EXISTS =
+      "gh: Validation Failed (HTTP 422)\n" +
+      '{"message":"Validation Failed","errors":[{"message":"A pull request already exists for acme:agent/2-x."}]}';
+    const OPEN = JSON.stringify([
+      { number: 9, html_url: "https://github.com/acme/repo/pull/9", head: { ref: "agent/9-y" } },
+      { number: 40, html_url: "https://github.com/acme/repo/pull/40", head: { ref: "agent/2-x" } },
+    ]);
+    const create = (gh: ReturnType<typeof timed>) =>
+      gh.createPullRequest({ base: "main", head: "agent/2-x", title: "feat: x", body: "Closes #2", draft: false });
+    const posts = () => calls.filter((args) => args.includes("POST"));
+
+    it.each([
+      ["a 5xx", BAD_GATEWAY],
+      ["an answer gh could not parse", "unexpected end of JSON input"],
+    ])("uses the pull request the first try opened when the lookup after it met %s", async (_, lookup) => {
+      const gh = timed(failedExecution(BAD_GATEWAY), failedExecution(lookup), failedExecution(EXISTS), ok(OPEN));
+
+      expect(await create(gh)).toEqual({ number: 40, url: "https://github.com/acme/repo/pull/40" });
+      expect(posts()).toHaveLength(2);
+    });
+
+    it("uses it after several failed tries and lookups", async () => {
+      const gh = timed(
+        failedExecution(BAD_GATEWAY),
+        failedExecution(BAD_GATEWAY),
+        failedExecution("gh: Gateway Timeout (HTTP 504)"),
+        failedExecution(BAD_GATEWAY),
+        failedExecution(EXISTS),
+        failedExecution(BAD_GATEWAY),
+        ok(OPEN),
+      );
+
+      expect(await create(gh)).toEqual({ number: 40, url: "https://github.com/acme/repo/pull/40" });
+      expect(posts()).toHaveLength(3);
+    });
+
+    it("throws GitHub's fault when the lookup after the refusal never answers", async () => {
+      const gh = timed(
+        failedExecution(BAD_GATEWAY),
+        failedExecution(BAD_GATEWAY),
+        failedExecution(EXISTS),
+        ...failing(BAD_GATEWAY),
+      );
+
+      await expect(create(gh)).rejects.toMatchObject({ side: "github", line: BAD_GATEWAY });
+      expect(posts()).toHaveLength(2);
+    });
+
+    it("throws the refusal when no pull request is open on the branch", async () => {
+      const gh = timed(failedExecution(BAD_GATEWAY), failedExecution(BAD_GATEWAY), failedExecution(EXISTS), ok("[]"));
+
+      const creating = create(gh);
+
+      await expect(creating).rejects.toThrow(/HTTP 422/);
+      await expect(creating).rejects.not.toBeInstanceOf(OutsideFault);
+    });
+
+    it("throws a first try's refusal without asking, as before", async () => {
+      const gh = timed(failedExecution(EXISTS));
+
+      await expect(create(gh)).rejects.toThrow(/HTTP 422/);
+      expect(calls).toHaveLength(1);
+    });
+
+    it("does not merge a second time a pull request the first try merged", async () => {
+      const gh = timed(
+        failedExecution(BAD_GATEWAY),
+        failedExecution(BAD_GATEWAY),
+        failedExecution("gh: Pull Request is not mergeable (HTTP 405)"),
+        ok(JSON.stringify({ number: 12, draft: false, merged: true, head: { sha: "abc" } })),
+      );
+
+      await gh.squashMerge(12, { subject: "feat: x (#12)", body: "Closes #2" });
+
+      expect(calls.filter((args) => args.includes("PUT"))).toHaveLength(2);
+    });
+
+    it("throws a refused merge when the pull request has not merged", async () => {
+      const gh = timed(
+        failedExecution(BAD_GATEWAY),
+        failedExecution(BAD_GATEWAY),
+        failedExecution("gh: Pull Request is not mergeable (HTTP 405)"),
+        ok(JSON.stringify({ number: 12, draft: false, merged: false, head: { sha: "abc" } })),
+      );
+
+      await expect(gh.squashMerge(12, { subject: "s", body: "b" })).rejects.toThrow(/HTTP 405/);
+    });
+  });
+
   it("does not merge again a pull request the failed try merged", async () => {
     const gh = timed(
       failedExecution(BAD_GATEWAY),
