@@ -166,7 +166,7 @@ The header ends with what the Stages were billed to: `subscription`, or `API key
 | Row | Meaning |
 |---|---|
 | `merged` | Merged; the pull request is named |
-| `handed` | Handed off to a human: the Stage it stopped at, and why. `merge · left to a human, as this Target merges by hand` is a green Ticket on a Target that [merges by hand](./configuration.md#merge) |
+| `handed` | Handed off to a human: the Stage it stopped at, and why. `merge · left to a human, as this Target merges by hand` is a green Ticket on a Target that [merges by hand](./configuration.md#merge). A row ending `hand-off cut short · GitHub failure` (or `remote unreachable`) is a Hand-off [that fault stopped partway](./stopping-and-resuming.md#release-over-a-github-or-remote-failure): finish it by hand |
 | `released` | Released at the named Stage by the `rate limit` (`API rate limit` on an `--api-key` Run), an `API failure`, or `out of API budget`, at `checks` or `ci` by a `failing base branch`, or at any step by a `GitHub failure` or the `remote unreachable`. Nobody has to do anything about the Ticket |
 | `skipped` | Passed over, with the reason ([guards](./planning.md#guards), or the table above) |
 | `billed` | A Stage of the Ticket above that said, in its `apiKeySource`, it was billed to something other than what the header names: an `apiKeyHelper` in the Host's settings, say, which no environment variable removes. It ends with that Stage's own amount, `· $4.15`, where it gave one, which the header's leaves out |
@@ -180,10 +180,10 @@ The header ends with what the Stages were billed to: `subscription`, or `API key
 | `API failure.` | A Release by a transient API failure stopped it, and the rate limit released no Ticket after it: the rate limit outranks an API failure on the last line |
 | `Out of API budget.` | A Release by the key's credit or spend limit stopped it. It outranks the rate limit and an API failure, since only it needs you: look at the Console |
 | ``Base branch `main` fails `npm test` at 1a2b3c4.`` | A Release over a failing base branch stopped it: the Check, and the merge-base it failed at. Mend it on the base branch; the Note on the standing Notes issue has its output |
-| ``Remote unreachable · `git pull --ff-only origin main` · git@github.com: Permission denied (publickey).`` | A Release over [GitHub or the remote failing](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) stopped it: the command, and the first line it printed. `GitHub failure · …` for GitHub. A login or key it names needs you first |
+| ``Remote unreachable · `git pull --ff-only origin main` · git@github.com: Permission denied (publickey).`` | A Release over [GitHub or the remote failing](./stopping-and-resuming.md#release-over-a-github-or-remote-failure), or a Hand-off the same fault cut short, stopped it: the command, and the first line it printed. `GitHub failure · …` for GitHub. A login or key it names needs you first |
 | `Stopped at 22:07 · finishing #4 #9.` | A Stop arrived at that time (UTC), while those Tickets were in its Lanes |
 
-A Run a Stop or a Release ended prints no `blocked` rows, since it never reached the end of the Frontier.
+A Run a Stop, a Release or a Hand-off a fault cut short ended prints no `blocked` rows, since it never reached the end of the Frontier.
 
 ## Exit codes
 
