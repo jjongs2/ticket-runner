@@ -155,10 +155,16 @@ const checksOnBranch = () =>
 let tracker: FakeTracker;
 let runner: FakeAgentRunner;
 let workspace: FakeWorkspace;
-/** The repo root the Run is given; nothing under it is read or written. */
-const repoRoot = "/repo";
+/**
+ * The repo root the Run is given; nothing under it is read or written. Under a
+ * home directory, as a workstation's checkout is, so a test can tell the
+ * Host's path from the one a hand-off names.
+ */
+const repoRoot = "/home/me/acme";
 /** Where this Ticket's Stages run, under the repo root the Run was given. */
 let worktree: string;
+/** The same worktree as a hand-off names it, relative to the Target's checkout. */
+const SHOWN_WORKTREE = `.worktrees/ticket-${TICKET}`;
 /** The Run log, for the lines a Ticket is expected to print — or not to. */
 let logged: string[];
 /** The Stages the Run named for being billed to something other than its own. */
@@ -1399,7 +1405,9 @@ describe("hand-off", () => {
     expect(tracker.issue(TICKET).labels).toEqual(["ready-for-human"]);
     expect(tracker.issue(TICKET).assignees).toEqual([]);
     expect(handoffBody()).toContain(`Branch \`${BRANCH}\``);
-    expect(handoffBody()).toContain(`worktree \`${worktree}\``);
+    // Relative to the Target's checkout, so the comment publishes no Host path.
+    expect(handoffBody()).toContain(`worktree \`${SHOWN_WORKTREE}\``);
+    expect(handoffBody()).not.toContain(repoRoot);
     expect(handoffBody()).toContain("PR #100 (draft)");
   });
 
@@ -3774,9 +3782,13 @@ describe("resuming from the remote branch", () => {
 
         expect(outcome).toMatchObject({ outcome: "handed-off", stage: "setup" });
         expect(handoffBody()).toContain(
-          `the worktree at ${worktree} and the branch ${BRANCH} on the remote have parted`,
+          `the worktree at ${SHOWN_WORKTREE} and the branch ${BRANCH} on the remote have parted`,
         );
-        expect(handoffBody()).toContain(`worktree \`${worktree}\``);
+        expect(handoffBody()).toContain(
+          `\`git worktree remove ${SHOWN_WORKTREE} && git branch -D ${BRANCH}\``,
+        );
+        expect(handoffBody()).toContain(`worktree \`${SHOWN_WORKTREE}\``);
+        expect(handoffBody()).not.toContain(repoRoot);
         expect(runner.stages()).toEqual([]);
         expect(tracker.issue(TICKET).labels).toEqual(["ready-for-human"]);
       });
@@ -3793,6 +3805,39 @@ describe("resuming from the remote branch", () => {
         expect(handoffBody()).toContain(`\`git branch -D ${BRANCH}\``);
         expect(handoffBody()).not.toContain("worktree `");
         expect(workspace.state(TICKET)).toMatchObject({ state: "implemented" });
+      });
+
+      it("names the worktree relative to the checkout in the draft body of a pull request already open", async () => {
+        workspace.recordState({
+          ticket: TICKET,
+          branch: BRANCH,
+          state: "implemented",
+          fixUsed: false,
+          pullRequest: 100,
+          runId: "run-0",
+          updatedAt: "2026-09-17T09:00:00.000Z",
+        });
+        tracker.pullRequests.push({
+          number: 100,
+          base: "main",
+          head: BRANCH,
+          title: "feat: x",
+          body: "Closes #2",
+          draft: false,
+          merged: false,
+        });
+
+        const outcome = await run();
+
+        if (outcome.outcome !== "handed-off") throw new Error("the Ticket was not handed off");
+        expect(outcome.failure).toContain(`the worktree at ${SHOWN_WORKTREE} and the branch`);
+        expect(outcome.failure).not.toContain(repoRoot);
+        const pr = tracker.pullRequest(100);
+        expect(pr.draft).toBe(true);
+        expect(pr.body).toContain(
+          `\`git worktree remove ${SHOWN_WORKTREE} && git branch -D ${BRANCH}\``,
+        );
+        expect(pr.body).not.toContain(repoRoot);
       });
 
       it("pushes nothing over the remote branch and opens no draft pull request", async () => {
@@ -3907,15 +3952,16 @@ describe("a branch that outlived its worktree", () => {
     expect(outcome).toMatchObject({
       outcome: "handed-off",
       stage: "setup",
-      failure: `the branch ${BRANCH} already exists and is checked out at ${worktree}; \
-finish the work there by hand, or throw it away with \`git worktree remove ${worktree} && \
+      failure: `the branch ${BRANCH} already exists and is checked out at ${SHOWN_WORKTREE}; \
+finish the work there by hand, or throw it away with \`git worktree remove ${SHOWN_WORKTREE} && \
 git branch -D ${BRANCH}\`, then relabel the Ticket ready-for-agent`,
     });
     // The advice a branch git is holding cannot take: `git branch -D` on its own.
     expect(handoffBody()).not.toContain(`\`git branch -D ${BRANCH}\``);
     expect(workspace.calls).not.toContain(`createWorktree:${BRANCH}`);
     // The worktree is on disk here, so the hand-off still sends the human to it.
-    expect(handoffBody()).toContain(`worktree \`${worktree}\``);
+    expect(handoffBody()).toContain(`worktree \`${SHOWN_WORKTREE}\``);
+    expect(handoffBody()).not.toContain(repoRoot);
     // And the state file the claim wrote goes, alone among hand-offs: no Stage
     // of this Run ran in there, so a later resume would implement over a human.
     expect(workspace.states.has(TICKET)).toBe(false);
@@ -4350,6 +4396,146 @@ describe("releasing a Ticket GitHub or the remote failed on its own side", () =>
 
     expect(await run()).toMatchObject({ outcome: "released", stage: "implement", cause: "github" });
     expect(tracker.issue(TICKET).labels).toContain("in-progress");
+  });
+
+  /**
+   * A hand-off's writes, in turn, and how to fail each one with a 502 for as
+   * long as the hand-off lasts. The comment is only ever the hand-off's own
+   * by then: the progress comment's writes are logged and nothing more.
+   */
+  const HANDOFF_WRITES: Record<string, () => void> = {
+    "the draft pull request": () => {
+      tracker.convertPullRequestToDraft = async () => {
+        throw badGateway(["api", "graphql"]);
+      };
+    },
+    "the comment": () => {
+      tracker.comment = async () => {
+        throw badGateway(["api", "--method", "POST", "comments"]);
+      };
+    },
+    "taking in-progress off": () => {
+      const removeLabel = tracker.removeLabel.bind(tracker);
+      tracker.removeLabel = async (number, label) => {
+        if (label === "in-progress") throw badGateway(["api", "--method", "DELETE", "labels"]);
+        await removeLabel(number, label);
+      };
+    },
+    "putting ready-for-human on": () => {
+      const addLabel = tracker.addLabel.bind(tracker);
+      tracker.addLabel = async (number, label) => {
+        if (label === "ready-for-human") throw badGateway(["api", "--method", "POST", "labels"]);
+        await addLabel(number, label);
+      };
+    },
+    "taking its assignee off": () => {
+      tracker.unassign = async () => {
+        throw badGateway(["api", "--method", "DELETE", "assignees"]);
+      };
+    },
+  };
+  const failAt = (write: string) => (HANDOFF_WRITES[write] as () => void)();
+
+  describe("a hand-off that keeps no state, cut short", () => {
+    /** A branch of the Ticket's name already here, which a human holds. */
+    beforeEach(() => {
+      workspace.branches.add(BRANCH);
+    });
+
+    it("is reported handed off at setup over a branch already present, with the comment failing", async () => {
+      failAt("the comment");
+
+      const outcome = await run();
+
+      expect(outcome).toEqual({
+        outcome: "handed-off",
+        ticket: TICKET,
+        title: "Skeleton: one Ticket end to end",
+        branch: BRANCH,
+        stage: "setup",
+        failure: expect.stringContaining(`the branch ${BRANCH} already exists`),
+        fault: {
+          side: "github",
+          command: "gh api --method POST comments",
+          line: "gh: Bad Gateway (HTTP 502)",
+        },
+        notes: [],
+      });
+      // Left as the hand-off got it: claimed, with no state file for the
+      // sweep to find, so the row is what tells a human.
+      expect(tracker.issue(TICKET).labels).toEqual(["in-progress"]);
+      expect(tracker.issue(TICKET).assignees).toEqual(["pipeline-user"]);
+      expect(workspace.states.has(TICKET)).toBe(false);
+      expect(logged).toContain(
+        `#${TICKET} handed off at setup, but the hand-off was cut short · ${badGateway(["api", "--method", "POST", "comments"]).message}`,
+      );
+    });
+
+    it.each([
+      "the comment",
+      "taking in-progress off",
+      "putting ready-for-human on",
+      "taking its assignee off",
+    ])("is reported handed off whichever write meets the fault: %s", async (write) => {
+      failAt(write);
+
+      expect(await run()).toMatchObject({
+        outcome: "handed-off",
+        stage: "setup",
+        fault: { side: "github", line: "gh: Bad Gateway (HTTP 502)" },
+      });
+      expect(workspace.states.has(TICKET)).toBe(false);
+    });
+
+    it("is reported handed off over a branch checked out in a worktree too", async () => {
+      workspace.worktrees.set(worktree, BRANCH);
+      failAt("taking in-progress off");
+
+      expect(await run()).toMatchObject({ outcome: "handed-off", stage: "setup", fault: { side: "github" } });
+      expect(workspace.states.has(TICKET)).toBe(false);
+    });
+  });
+
+  describe("a hand-off that keeps state, cut short", () => {
+    /** Red CI, once and again behind the fix Stage: handed off at ci, its pull request open. */
+    beforeEach(() => {
+      tracker.ci = { state: "failed", summary: "checks/build failed", excerpt: "" };
+    });
+
+    it.each(["the draft pull request", "the comment", "taking in-progress off"])(
+      "is reported released at %s, still claimed, for the next Run to resume as stranded",
+      async (write) => {
+        failAt(write);
+
+        const outcome = await run();
+
+        expect(outcome).toMatchObject({ outcome: "released", stage: "ci", cause: "github" });
+        expect(outcome).not.toHaveProperty("fault.side");
+        expect(tracker.issue(TICKET).labels).toContain("in-progress");
+        expect(tracker.issue(TICKET).assignees).toEqual(["pipeline-user"]);
+        expect(workspace.state(TICKET)).toMatchObject({ pullRequest: 100 });
+        expect(logged.some((line) => line.startsWith(`#${TICKET} could not be handed off at ci · `))).toBe(true);
+      },
+    );
+
+    it.each(["putting ready-for-human on", "taking its assignee off"])(
+      "is reported handed off at %s, since nothing sweeps it from there",
+      async (write) => {
+        failAt(write);
+
+        const outcome = await run();
+
+        expect(outcome).toMatchObject({
+          outcome: "handed-off",
+          stage: "ci",
+          pullRequest: 100,
+          fault: { side: "github", line: "gh: Bad Gateway (HTTP 502)" },
+        });
+        expect(tracker.issue(TICKET).labels).not.toContain("in-progress");
+        expect(tracker.issue(TICKET).assignees).toEqual(["pipeline-user"]);
+        expect(workspace.state(TICKET)).toMatchObject({ pullRequest: 100 });
+      },
+    );
   });
 });
 
@@ -5035,7 +5221,10 @@ describe("a Target that merges by hand", () => {
     expect(comment).toContain(
       "**Handed off.** PR #100 passed every gate and waits for a human to merge it: this Target merges by hand.",
     );
-    expect(comment).toContain(`- Branch \`${BRANCH}\` on the remote · worktree \`${worktree}\` · PR #100`);
+    expect(comment).toContain(
+      `- Branch \`${BRANCH}\` on the remote · worktree \`${SHOWN_WORKTREE}\` · PR #100`,
+    );
+    expect(comment).not.toContain(repoRoot);
     expect(comment).toContain("- the docs say so — the docs are not readable from here");
     expect(comment).not.toContain("Failure:");
     expect(comment).not.toContain("<details>");
