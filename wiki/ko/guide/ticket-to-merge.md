@@ -5,7 +5,7 @@ description: Ticket 하나가 Run 안에서 claim부터 Stage, Check, 판정, fi
 
 # Ticket 하나가 merge되기까지
 
-Run은 아무도 지켜보지 않으니, 세션 하나의 말만 믿고 merge할 수는 없습니다. 그래서 모든 [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 같은 게이트를 같은 순서로 지납니다. 결과가 늘 같은(결정론적) Check, 작업이 틀렸음을 증명하려 드는 두 번째 세션, 그리고 CI입니다. 새 세션이 고칠 수 있는 실패라면 fix Stage를 딱 한 번 얻고, 그 밖의 실패는 사람에게 넘어갑니다. 한 Run의 Ticket들은 나란히 구현되지만 merge는 하나씩 하므로, CI가 판정한 코드가 그대로 base branch에 들어갑니다.
+Run은 아무도 지켜보지 않으니, 세션 하나의 말만 믿고 merge할 수는 없습니다. 그래서 모든 [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 같은 게이트를 같은 순서로 지납니다. 결과가 늘 같은(결정론적) Check, 작업이 틀렸음을 증명하려 드는 두 번째 세션, 그리고 CI입니다. 새 세션이 고칠 수 있는 실패라면 fix Stage를 딱 한 번 얻고, 그 밖의 실패는 사람에게 넘어갑니다. 한 Run의 Ticket들은 나란히 구현되지만 merge는 하나씩 하므로, CI가 판정한 코드가 그대로 base branch에 들어갑니다. [사람이 직접 merge하는](./configuration.md#merge) Target에서는 CI가 초록인 Ticket이 대신 Hand-off되고, 사람이 merge합니다.
 
 이 페이지는 Ticket 하나를 claim부터 merge까지 따라갑니다. Hand-off, Release, Stop, 돌아오지 못한 Run처럼 중간에 멈추는 경우는 [Hand-off, 멈추고 이어 하기](./stopping-and-resuming.md)에서 다룹니다.
 
@@ -35,6 +35,7 @@ flowchart TD
     K2 --> P
     P --> CI["CI 대기"]
     CI -->|통과| M["squash merge"]
+    CI -->|"통과, merge 끔"| H
     K -->|"고칠 수 있음, fix 기회 남음"| F["fix Stage"]
     V -->|"고칠 수 있음, fix 기회 남음"| F
     X -->|"충돌 남음, fix 기회 남음"| F
@@ -47,7 +48,7 @@ flowchart TD
 
 fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종류와 상관없이 두 번째 실패, 또는 fix Stage가 손쓸 수 없는 실패는 Hand-off입니다. rate limit, API 장애, API 예산으로 멈춘 Stage, base branch도 똑같이 겪는 실패([아래](#a-failure-the-base-branch-shares)), 그리고 어느 단계에서든 [GitHub나 git remote가 장애를 일으킨 경우](./stopping-and-resuming.md#release-over-a-github-or-remote-failure)는 이 그림을 아예 벗어나 Ticket을 [Release](./stopping-and-resuming.md#release-on-a-rate-limit)합니다.
 
-[Hand-off](./stopping-and-resuming.md#hand-off)는 claim을 풀고, `ready-for-human`을 달고, 실패와 작업이 있는 곳을 코멘트로 남기고, 열린 pull request를 draft로 되돌립니다. branch와 state file은 Target의 remote에 남습니다. 사람이 볼 즈음에는 작업한 Host가 없어졌을 수도 있기 때문입니다. 넘겨진 Stage들의 transcript는 [`keepTranscripts`](./configuration.md#keeptranscripts)에 따라 그 옆이나 Host에 남고, hand-off 코멘트가 그 위치를 알려 줍니다. 사람이 Ticket의 라벨을 `ready-for-agent`로 바꾸면 Ticket이 파이프라인으로 돌아가고, implement Stage를 다시 돌리지 않고 도달한 지점부터 이어 갑니다. state file은 파이프라인의 작업이 남지 않는 [setup에서의 Hand-off](./stopping-and-resuming.md#when-a-hand-off-does-less)에서 지워집니다. 새로 시작한 Ticket이 worktree가 생기기 전에 실패했거나, Run이 덮어쓰지 않으려 한 branch가 이미 있던 경우입니다. 거기서는 이 Run의 Stage가 하나도 돌지 않았으니 파이프라인이 이어 갈 것이 없습니다.
+[Hand-off](./stopping-and-resuming.md#hand-off)는 claim을 풀고, `ready-for-human`을 달고, 실패와 작업이 있는 곳을 코멘트로 남기고, 열린 pull request를 draft로 되돌립니다. branch와 state file은 Target의 remote에 남습니다. 사람이 볼 즈음에는 작업한 Host가 없어졌을 수도 있기 때문입니다. 넘겨진 Stage들의 transcript는 [`keepTranscripts`](./configuration.md#keeptranscripts)에 따라 그 옆이나 Host에 남고, hand-off 코멘트가 그 위치를 알려 줍니다. 사람이 Ticket의 라벨을 `ready-for-agent`로 바꾸면 Ticket이 파이프라인으로 돌아가고, implement Stage를 다시 돌리지 않고 도달한 지점부터 이어 갑니다. [사람이 직접 merge하는](./configuration.md#merge) Target에서는 CI가 초록인 Ticket이 실패한 것 없이 [`merge`에서 Hand-off됩니다](./stopping-and-resuming.md#when-nothing-failed). pull request는 ready 상태로 남고, transcript는 남기지 않습니다. state file은 파이프라인의 작업이 남지 않는 [setup에서의 Hand-off](./stopping-and-resuming.md#when-a-hand-off-does-less)에서 지워집니다. 새로 시작한 Ticket이 worktree가 생기기 전에 실패했거나, Run이 덮어쓰지 않으려 한 branch가 이미 있던 경우입니다. 거기서는 이 Run의 Stage가 하나도 돌지 않았으니 파이프라인이 이어 갈 것이 없습니다.
 
 ## claim {#the-claim}
 
@@ -204,7 +205,7 @@ Run은 [Lane](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) �
 
 ## Landing {#the-landing}
 
-rebase 직전의 base branch pull부터 merge 직후의 pull까지인 [Landing](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)에는 한 번에 Ticket 하나만, 도착한 순서대로 들어갑니다. 그래서 Ticket의 rebase와 merge 사이에 base branch가 움직일 수 없고, CI가 판정한 그대로 merge됩니다([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)). 시간이 많이 드는 implement와 verify는 계속 병렬로 돌아갑니다. 대신 한 Lane의 conflict Stage나 느린 CI가 다른 Lane의 Landing을 붙잡아 둡니다.
+rebase 직전의 base branch pull부터 merge 직후의 pull까지인 [Landing](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)에는 한 번에 Ticket 하나만, 도착한 순서대로 들어갑니다. 그래서 Ticket의 rebase와 merge 사이에 base branch가 움직일 수 없고, CI가 판정한 그대로 merge됩니다([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)). 시간이 많이 드는 implement와 verify는 계속 병렬로 돌아갑니다. 대신 한 Lane의 conflict Stage나 느린 CI가 다른 Lane의 Landing을 붙잡아 둡니다. [사람이 직접 merge하는](./configuration.md#merge) Target은 merge 없이 Landing을 나오므로, 거기서는 이 보장이 설정 페이지에 적힌 만큼만 성립합니다.
 
 ```mermaid
 sequenceDiagram
@@ -265,7 +266,7 @@ rebase로 branch가 다시 쓰였으니 `--force-with-lease`로 push합니다. b
 
 | GitHub 상태 | 진행 상황 칸 | 결과 |
 |---|---|---|
-| 모든 check가 통과하거나 건너뜀 | `✅ passed` | merge |
+| 모든 check가 통과하거나 건너뜀 | `✅ passed` | merge. [사람이 직접 merge하는](./configuration.md#merge) Target이면 `merge` 줄이 `👤 left to a human`인 Hand-off |
 | check가 실패, 취소, 시간 초과, 조치 필요, 시작 실패 중 하나 | `❌ failed` | fix 기회를 씀 |
 | 위와 같고, merge-base도 Check 명령에 실패 | ``⏸ `<command>` fails on the base branch`` | Release([위](#a-failure-the-base-branch-shares) 참고) |
 | 1분가량 다시 시도해도 GitHub 쪽 장애가 이어짐 | `⏸ GitHub failure` | [Release](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) |
@@ -297,7 +298,7 @@ Unverified:
 Co-authored-by: <name> <email>
 ```
 
-제목은 pull request 제목입니다. `<problem>`과 `<solution>`은 Stage가 마지막으로 답한 것이고, 72칸이 넘는 줄은 공백에서 끊습니다. 한글 같은 전각 문자는 두 칸으로 셉니다. Stage가 쓴 줄은 그대로 두므로 목록은 목록으로 남습니다. `solution`을 답한 것이 없으면 branch의 commit 제목들이 `- <subject>` 줄로 그 자리를 대신하고, `problem`이 있으면 그 뒤에 옵니다. 빠진 답변을 지어내지는 않습니다. `Unverified:`는 `unverifiable` 기준이 있을 때만 붙고, 기준마다 근거를 한 줄로 이어 씁니다. 그 이유를 남기는 곳이 여기 말고는 없기 때문입니다. commit 제목들과 `Co-authored-by` trailer는 rebase 이후에 읽습니다. rebase한 뒤의 commit이 실제로 들어가기 때문입니다.
+제목은 pull request 제목입니다. `<problem>`과 `<solution>`은 Stage가 마지막으로 답한 것이고, 72칸이 넘는 줄은 공백에서 끊습니다. 한글 같은 전각 문자는 두 칸으로 셉니다. Stage가 쓴 줄은 그대로 두므로 목록은 목록으로 남습니다. `solution`을 답한 것이 없으면 branch의 commit 제목들이 `- <subject>` 줄로 그 자리를 대신하고, `problem`이 있으면 그 뒤에 옵니다. 빠진 답변을 지어내지는 않습니다. `Unverified:`는 `unverifiable` 기준이 있을 때만 붙고, 기준마다 근거를 한 줄로 이어 씁니다. 그 이유를 남기는 곳이 여기 말고는 없기 때문입니다. commit 제목들과 `Co-authored-by` trailer는 rebase 이후에 읽습니다. rebase한 뒤의 commit이 실제로 들어가기 때문입니다. [사람이 직접 merge하는](./configuration.md#merge) Target에서는 이 메시지를 조립하지 않습니다. merge하는 사람은 Target의 기본 메시지를 받습니다.
 
 ### merge 이후 {#after-the-merge}
 

@@ -12,7 +12,7 @@ Run은 아무도 지켜보지 않는 사이에 돌아가니, 일이 틀어졌을
 | 끝맺음 | 원인 | 남는 것 |
 |---|---|---|
 | merge | 모든 게이트를 초록으로 통과 | 닫힌 이슈. branch와 state file은 사라짐 |
-| [Hand-off](#hand-off) | fix 기회로 감당할 수 없는 실패 | `ready-for-human`, 코멘트, draft pull request. 작업과 state 유지 |
+| [Hand-off](#hand-off) | fix 기회로 감당할 수 없는 실패, 또는 [사람이 직접 merge하는](./configuration.md#merge) Target에서의 초록 통과 | `ready-for-human`, 코멘트, draft pull request(실패한 것이 없으면 ready 상태). 작업과 state 유지 |
 | [Release](#release-on-a-rate-limit) | 요금제나 API의 rate limit, 일시적인 API 장애, [API 키의 예산 소진](#release-out-of-api-budget), [base branch 실패](#release-over-a-failing-base-branch), 또는 [GitHub나 git remote 장애](#release-over-a-github-or-remote-failure) | `ready-for-agent`, Ticket에 코멘트 없음. 작업과 state 유지 |
 | [Stop](#stop-and-kill) | `ticket-runner stop`(SIGTERM) | 새로 남는 것 없음 |
 | [kill](#stop-and-kill) | Ctrl+C, SIGKILL, 사라진 Host | claim, 마지막 push 시점의 작업, state |
@@ -39,7 +39,7 @@ stateDiagram-v2
 
 ## Hand-off {#hand-off}
 
-[Hand-off](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 Ticket을 사람에게 넘기는 일입니다. merge도 Release도 아닌 끝은 모두 Hand-off입니다. fix 기회를 쓴 뒤의 두 번째 실패, 시간을 넘긴 Stage, 끝나지 않은 CI, setup에서 앞을 막은 branch 같은 경우입니다.
+[Hand-off](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 Ticket을 사람에게 넘기는 일입니다. merge도 Release도 아닌 끝은 모두 Hand-off입니다. fix 기회를 쓴 뒤의 두 번째 실패, 시간을 넘긴 Stage, 끝나지 않은 CI, setup에서 앞을 막은 branch 같은 경우입니다. [사람이 직접 merge하는](./configuration.md#merge) Target에서는 CI가 초록인 Ticket도 Hand-off로 끝납니다([실패한 것이 없을 때](#when-nothing-failed)).
 
 Hand-off가 남기는 것:
 
@@ -98,6 +98,27 @@ Failure 줄은 무엇이 Ticket을 멈췄는지 말합니다. 그에 따라 할 
 
 코멘트는 worktree가 있으면 늘 알려 줍니다. 이 Run의 worktree이거나, 앞을 막은 branch가 checkout된 worktree입니다. Failure 줄에 해야 할 일이 적혀 있습니다. 예를 들면 `delete it with git branch -D <branch> if the work on it is abandoned, or finish it by hand, then relabel the Ticket ready-for-agent` 같은 식입니다.
 
+### 실패한 것이 없을 때 {#when-nothing-failed}
+
+[`merge`](./configuration.md#merge)를 `false`로 둔 Target에서는 CI가 초록인 Ticket을 merge하지 않고 `merge`에서 Hand-off합니다. 실패한 것이 없으니 이 Hand-off는 이렇게 합니다.
+
+- pull request는 Run이 게시한 그대로 둡니다. ready 상태이고, 제목과 본문도 바뀌지 않습니다.
+- pull request가 모든 게이트를 통과해 사람의 merge를 기다린다고 코멘트합니다. Failure 줄과 근거는 없고, 확인할 수 없었던(`unverifiable`) 기준을 근거와 함께 하나씩 적습니다.
+- state file은 남기지만 transcript는 남기지 않고, 기준에 체크하지도 않습니다.
+
+```md
+<!-- ticket-runner:handoff -->
+**Handed off.** PR #31 passed every gate and waits for a human to merge it: this Target merges by hand.
+
+- Branch `agent/8-rate-limit-release` on the remote · worktree `/home/me/acme/.worktrees/ticket-8` · PR #31
+
+**Unverifiable criteria:**
+
+- The guide shows the new table — no wiki build runs on this Host
+```
+
+진행 상황 코멘트의 `merge` 줄에는 `👤 left to a human`이 적힙니다. 이 Ticket이 막고 있는 Ticket들은 이것이 merge될 때까지 기다립니다. 끝내는 방법은 다른 Hand-off된 Ticket과 같습니다([Ticket 돌려주기](#handing-a-ticket-back)).
+
 ### 무엇이 어디에 남나 {#what-stays-where}
 
 사람이 들여다볼 즈음에는 작업하던 Host가 이미 없을 수도 있습니다. 클라우드 Host의 VM이 그렇습니다. 그래서 다음 Run에 필요한 것은 모두 Target의 remote에 둡니다. Hand-off된 Ticket의 transcript도 [`keepTranscripts`](./configuration.md#keeptranscripts)가 remote에 남기게 할 때는 거기 둡니다.
@@ -129,7 +150,7 @@ Hand-off된 Ticket은 네 가지 중 하나로 끝내면 됩니다.
 |---|---|
 | Ticket이나 기준, 설정을 바꾸고 돌려주기 | 다음 Run이 그때 이슈에 적힌 대로 판정함 |
 | remote의 branch에 commit을 push하고 돌려주기 | 다음 Run이 자기 사본을 그 tip까지 끌어올림. 이력을 다시 쓰면 그 대신 사본이 갈라짐 |
-| 직접 마무리하기: 변경이 아닌 Hand-off를 설명하는 draft 본문을 고쳐 쓰고, ready로 바꾸고 merge | 이슈가 닫힘. `ready-for-human`은 직접 떼고, worktree와 로컬 branch는 그것을 만든 Host에서 지우기 |
+| 직접 마무리하기: pull request를 merge. draft의 본문은 변경이 아닌 Hand-off를 설명하니 먼저 고쳐 쓰고 ready로 바꾸기. [실패한 것 없이 넘겨진](#when-nothing-failed) pull request는 Run이 게시한 본문 그대로 이미 ready 상태 | 이슈가 닫힘. `ready-for-human`은 직접 떼고, worktree와 로컬 branch는 그것을 만든 Host에서 지우기 |
 | 버리기: 이슈를 닫음 | draft pull request와 branch는 직접 닫고 지울 때까지 남음 |
 
 ```bash

@@ -266,6 +266,7 @@ Run과 `init`은 파이프라인 자신의 저장소에서 공개된 가장 높�
 - **결정**: Landing은 merge queue가 아니라, 한 번에 Lane 하나만 들어가는 구간입니다.
 - **이유**: CI를 두 번 치르지 않고도 CI가 판정한 그대로 merge됩니다. GitHub merge queue는 저장소 설정 하나를 Target 준비 상태의 일부로 만들었을 것입니다.
 - **비용**: 느린 CI나 conflict Stage 하나가 다른 모든 Lane의 Landing을 붙잡습니다.
+- **개정**: [사람이 직접 merge하는](./configuration.md#merge) Target은 merge 없이 Landing을 나옵니다. 사람이 merge할 때까지 Landing을 붙잡고 있으면 모든 Lane이 몇 시간씩 멈추기 때문입니다. 거기서는 Target이 merge 전에 branch를 최신 상태로 맞추도록 요구할 때만 CI가 판정한 그대로 merge됩니다.
 
 ### [ADR-0006: Stop is a signal, and Ctrl+C stays a kill](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md) {#adr-0006}
 
