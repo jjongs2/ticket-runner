@@ -112,7 +112,7 @@ describe("the conventions document", () => {
     ["Note", "defects it met that belong to another Ticket or to none yet"],
     ["Hand-off", "A Hand-off gives a Ticket to a human rather than merging it"],
     ["Operator", "the Claude session a human opens on a cloud Host"],
-    ["Acceptance Criteria", "the only thing the verify Stage grades"],
+    ["Acceptance Criteria", "The verify Stage grades them one by one"],
     ["Check", "a command the pipeline runs itself on a Ticket's code"],
     ["Lane", "each Lane holds one Ticket in progress"],
     ["Release", "given back to the pipeline for a later Run to take up again"],

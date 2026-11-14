@@ -15,7 +15,7 @@ This page follows one Ticket from its claim to its merge. What happens when it s
 | Worktree | `agent/<n>-<slug>` in `.worktrees/ticket-<n>` | git |
 | implement Stage | `/mattpocock-skills:implement` in the worktree | an agent |
 | Checks | Nothing uncommitted, then each Check command | exit codes |
-| verify Stage | Adversarial grading of the Acceptance Criteria | the pipeline, from the verdict |
+| verify Stage | Adversarial grading of the Acceptance Criteria, and of defects the branch made | the pipeline, from the verdict |
 | fix Stage | One fresh session given the failure, once per Ticket | the fix budget |
 | Landing | Rebase, conflict Stage, pull request, CI, squash merge | one Lane at a time |
 | After the merge | Tick met criteria, clean up | the pipeline |
@@ -80,7 +80,7 @@ Every Stage runs in the Ticket's worktree with `--permission-prompts none`, the 
 | Stage | Prompt opens with | Structured answer |
 |---|---|---|
 | implement | `/mattpocock-skills:implement <issue URL>` | optional `title`, `body`, `problem`, `solution`, [`notes`](#notes) and `noCommitReason` |
-| verify | `Ticket: <issue URL>`, no skill | the verdict, optional `notes` |
+| verify | `Ticket: <issue URL>` and the criteria by number, no skill | the verdict, optional `notes` |
 | fix | `Ticket: <issue URL>`, no skill but `/mattpocock-skills:pr` | optional `title`, `body`, `problem`, `solution`, `notes` and `noCommitReason` |
 | conflict | `Ticket: <issue URL>`, no skill | none |
 
@@ -149,22 +149,26 @@ The Release posts the pipeline's own Note on the standing Notes issue, naming th
 
 ## The verify Stage and its verdict
 
-No human reviews the code before it merges, and the session that wrote it is the last one to trust on whether it works. So a fresh session, with no plugin skill, tries to prove each Acceptance Criterion is **not** met. It reads the criteria from the body and the comments, runs the code, may write throwaway tests, and must not commit. A criterion that cannot be met without overturning a documented decision or another criterion is `unmet`, with evidence saying a human decision is needed. An `unmet` criterion's evidence states the failure: where it sits, what was run or read, what was expected, what came back, and the counterexample. It proposes no fix, though it may quote a limit the Ticket, a documented decision or another criterion sets, naming where it comes from. Its scratch files are discarded afterwards, so they never reach the pull request. What it finds beside the criteria leaves the session as a [Note](#notes), because the verdict has a slot per criterion and none for anything else.
+No human reviews the code before it merges, and the session that wrote it is the last one to trust on whether it works. So a fresh session, with no plugin skill, tries to prove each Acceptance Criterion is **not** met. The pipeline lists the Ticket's unticked criteria by number, each with the indented lines under its box ([Planning the work](./planning.md#acceptance-criteria)), and the session runs the code, may write throwaway tests, and must not commit. A criterion that cannot be met without overturning a documented decision or another criterion is `unmet`, with evidence saying a human decision is needed. An `unmet` criterion's evidence states the failure: where it sits, what was run or read, what was expected, what came back, and the counterexample. It proposes no fix, though it may quote a limit the Ticket, a documented decision or another criterion sets, naming where it comes from. Its scratch files are discarded afterwards, so they never reach the pull request.
 
-The **verdict** grades each criterion `met`, `unmet` or `unverifiable`, with evidence. The agent's own pass or fail is advisory; the pipeline decides for itself: **no criterion unmet and at least one met.**
+It also grades the branch itself. A defect the branch introduced, or one in code it added, shown with the evidence an `unmet` criterion needs, goes in the verdict's `defects` rather than a Note, unless the Ticket leaves it out of scope or a documented decision accepts it. The session is shown the Notes this Ticket's implement and fix Stages wrote in the Run, so such a defect among them is graded too. Anything else it finds leaves the session as a [Note](#notes).
+
+The **verdict** answers each criterion by its number, `met`, `unmet` or `unverifiable`, with evidence, and lists the defects of the branch. The agent's own pass or fail is advisory; the pipeline decides for itself: **no criterion unmet, no defect of the branch, and at least one criterion met.** Wherever a criterion is shown afterwards, in the fix and retry verify prompts, the hand-off and the squash commit, it is its checkbox line as the Ticket reads, never the verdict's copy.
 
 | Verdict | Progress cell | Result |
 |---|---|---|
 | Passes | `✅ <k> met · <v> unverifiable` | On to the Landing |
 | Some `unmet` | `❌ <u> unmet` | Spends the fix budget; the fix Stage gets each unmet criterion with its evidence |
+| A defect the branch made | `❌ <d> defects`, or `❌ <u> unmet · <d> defects` | As `unmet`: spends the fix budget, and the fix Stage gets each defect with its evidence |
+| A listed number left out, answered twice, or one answered that was not listed | `❌ misnumbered` | Hand-off: it has not graded the Ticket |
 | All `unverifiable` | `❌ no evidence` | Hand-off: there is nothing to merge on |
 | Missing or malformed | `❌ no verdict` | Hand-off |
 
-A verify after a fix for unmet criteria gets the first verdict's unmet criteria and their evidence, and is told such a criterion is met only when that counterexample is gone and the whole criterion holds.
+A verify after a fix for unmet criteria or defects gets the first verdict's unmet criteria and defects with their evidence, and is told such a criterion is met only when that counterexample is gone and the whole criterion holds. A defect it finds in the fix's own code is a Hand-off like any second failure, so the gate cannot loop.
 
 ## The fix Stage and the fix budget
 
-The fix budget is one fix Stage per Ticket, and whatever still fails after it goes to a human. The fix Stage is a fresh session on the same branch, with no plugin skill but `/mattpocock-skills:pr`, given the failure and its evidence to mend that one defect. It is also given the latest `body`, `problem` and `solution` answered for the branch: one its fix changes it answers again, revised for the whole branch, and one it leaves true it answers blank, which keeps the earlier one. Sent in for unmet criteria, it commits nothing and says why in `noCommitReason` when one cannot be met without overturning a documented decision or another criterion, which hands the Ticket to a human. Otherwise it takes a fix the evidence proposes as a lead, not the answer: it finds the cause itself, looks for a fix of that cause within the Ticket's scope before settling for a narrower one, and before committing tests its fix with inputs built from that cause, not only with the counterexample it was given.
+The fix budget is one fix Stage per Ticket, and whatever still fails after it goes to a human. The fix Stage is a fresh session on the same branch, with no plugin skill but `/mattpocock-skills:pr`, given the failure and its evidence to mend that one defect. It is also given the latest `body`, `problem` and `solution` answered for the branch: one its fix changes it answers again, revised for the whole branch, and one it leaves true it answers blank, which keeps the earlier one. Sent in for unmet criteria or defects of the branch, it commits nothing and says why in `noCommitReason` when one cannot be met or fixed without overturning a documented decision or another criterion, which hands the Ticket to a human. Otherwise it takes a fix the evidence proposes as a lead, not the answer: it finds the cause itself, looks for a fix of that cause within the Ticket's scope before settling for a narrower one, and before committing tests its fix with inputs built from that cause, not only with the counterexample it was given.
 
 Only a defect a fresh session could mend spends the budget:
 
@@ -174,12 +178,14 @@ Only a defect a fresh session could mend spends the budget:
 | A Check failed or timed out | checks | Yes |
 | A Check failed that the merge-base fails too | checks | No, a Release |
 | A criterion `unmet` | verify | Yes |
+| A defect the branch made | verify | Yes |
 | The conflict Stage did not finish the rebase | rebase | Yes |
 | A pull request check failed | ci | Yes |
 | A pull request check failed, and the merge-base fails a Check | ci | No, a Release |
 | A Stage that did not finish (timed out, turn-capped, non-zero, invalid result) | its Stage | No, Hand-off |
 | implement left no commits | implement | No, Hand-off |
 | A verdict with no evidence, or none at all | verify | No, Hand-off |
+| A verdict that leaves out a listed number or adds one | verify | No, Hand-off |
 | The conflict Stage could not be run, or git could not be asked | rebase | No, Hand-off |
 | The base branch could not be pulled | rebase | No, Hand-off |
 | Pushing or opening the pull request failed | pr | No, Hand-off |
@@ -321,11 +327,11 @@ The Ticket is merged, so nothing below can hand it off. Each step's failure is l
 
 Rows carry a few words only. Anything a human has to act on is its own comment, since those are worth a notification: a hand-off, a guard warning, a Note.
 
-**Ticking met criteria.** After the merge, every criterion the verdict marked `met` is ticked (`- [ ]` → `- [x]`) wherever it is written: the body, or any comment, such as the one triage posted its brief in. Matching forgives differences in whitespace and case. A criterion that matches no checkbox even so, ticked or not, gets a second chance: with one trailing parenthetical dropped, such as the `(table)` the verify Stage appends to a criterion whose content sits in a block below it, and with each `...` or `…` read as any run of characters. That looser match is tried against the lines the first pass left unticked, across the body and every comment together, and ticks a line only when exactly one matches; with none or more than one, the criterion stays unticked. An `unverifiable` criterion stays unticked, because nobody gathered evidence for it. A criterion the Stage reworded past matching is left unticked, and the Run log says how many were not matched.
+**Ticking met criteria.** After the merge, every criterion the verdict marked `met` is ticked by its number (`- [ ]` → `- [x]`) wherever it is written: the body, or any comment, such as the one triage posted its brief in. The box ticked is the unticked line, across the body and every comment together, that still reads as the line the number named when verify got the list. When no line, or more than one, reads so, because the Ticket was edited in between, none is ticked and the Run log names the criterion: an untouched box is safer than a wrong one. An `unverifiable` criterion stays unticked, because nobody gathered evidence for it.
 
 ## Notes
 
-A Stage keeps meeting defects that are not its Ticket's. Fixing them widens the Ticket past what verify grades; ignoring them loses them in a transcript. So the implement, verify and fix Stages end with a list of [Notes](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), and the pipeline posts each one where a human will meet it. A Note is a defect outside the Ticket, something that behaves wrongly or breaks, never a preference, a refactor or a test that would be nice to have, and never acted on in it. A defect the branch itself introduced, one that behaves correctly on the base branch and wrongly on the branch or sits in code the branch added, belongs to the Ticket: the implement and fix Stages fix it rather than note it, and only verify, which fixes nothing, still notes one it demonstrates beside the criteria. Notes are routed before the Stage's own outcome is judged, so a Stage that ran out of turns still reports what it noticed.
+A Stage keeps meeting defects that are not its Ticket's. Fixing them widens the Ticket past what verify grades; ignoring them loses them in a transcript. So the implement, verify and fix Stages end with a list of [Notes](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), and the pipeline posts each one where a human will meet it. A Note is a defect outside the Ticket, something that behaves wrongly or breaks, never a preference, a refactor or a test that would be nice to have, and never acted on in it. What the Ticket's own deliverable already records, such as a report section the Ticket asks for, is not a Note either. A defect the branch itself introduced, one that behaves correctly on the base branch and wrongly on the branch or sits in code the branch added, belongs to the Ticket: the implement and fix Stages fix it rather than note it, and verify, which fixes nothing, reports it in its verdict, [failing it](#the-verify-stage-and-its-verdict). Notes are routed before the Stage's own outcome is judged, so a Stage that ran out of turns still reports what it noticed.
 
 | The Note names | Where it goes |
 |---|---|
@@ -352,7 +358,7 @@ A `- [ ]` at the head of a line in a Note is escaped, so a Note is never read as
 - [`src/failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts): the Checks run at a merge-base, once per Run
 - [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts), [`src/frontier.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts), [`src/landing.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/landing.ts)
 - [`src/prompts.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/prompts.ts), [`src/self-hosting.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/self-hosting.ts), [`src/verdict.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/verdict.ts), [`src/title.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/title.ts), [`src/note-schema.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/note-schema.ts), [`src/lifecycle.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lifecycle.ts)
-- [`src/progress.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/progress.ts), [`src/criteria.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/criteria.ts), [`src/notes.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/notes.ts), [`src/templates.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts), [`src/handoff.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/handoff.ts)
+- [`src/progress.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/progress.ts), [`src/acceptance-criteria.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/acceptance-criteria.ts), [`src/criteria.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/criteria.ts), [`src/notes.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/notes.ts), [`src/templates.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts), [`src/handoff.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/handoff.ts)
 - [`src/stage-guard.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stage-guard.ts), [`src/run-log.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run-log.ts), [`src/startup.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts), [`src/config.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts)
 - [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts), [`src/adapters/git-workspace.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts), [`src/adapters/gh-tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts), [`src/adapters/process-tree.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/process-tree.ts)
 - [ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md): one `claude -p` child process per Stage

@@ -19,7 +19,7 @@ Besides names such as GitHub and Claude Code, a capitalised word below is one of
 
 A Ticket is one issue the pipeline can implement in a single session. It is refused unless it carries all three:
 
-- **Acceptance Criteria** — unticked task list items, a `- [ ]` at the head of a line, in the issue body or in one of its comments. They are the only thing the verify Stage grades, so a promise written as prose is not one.
+- **Acceptance Criteria** — unticked task list items, a `- [ ]` at the head of a line, in the issue body or in one of its comments. The verify Stage grades them one by one, and beside them any defect the Ticket's own branch made, which fails the Ticket as an unmet criterion does unless the Ticket leaves it out of scope or a documented decision accepts it. A promise written as prose is not a criterion, and a Ticket whose checkboxes are all ticked has none.
 - **Blockers as native dependencies** — GitHub's own `blocked by` edges, as `gh issue create --blocked-by <n>` records them. A `Blocked by` section in the body is a human-readable copy and nothing the pipeline reads.
 - **The `ready-for-agent` label** — how a Run finds the Ticket. A Run labels it `in-progress` for as long as it holds it.
 

@@ -67,7 +67,7 @@ function config(): Config {
 const VERSION = "0.4.0+331d79c";
 
 const PASSING_VERDICT = {
-  criteria: [{ text: "it works", status: "met", evidence: "npm test is green" }],
+  criteria: [{ number: 1, status: "met", evidence: "npm test is green" }],
   pass: true,
 };
 

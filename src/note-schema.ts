@@ -21,8 +21,9 @@
  * only needs a Ticket by its `next`. `next` alone is optional, because a Stage
  * that knows neither a fix nor the decision in the way has nothing to put there.
  *
- * This is the list as the verify Stage reads it. The Stages that write code read
- * {@link CODE_STAGE_NOTES_LIST_SCHEMA}, the same list with one more sentence.
+ * Each Stage reads it with one more sentence in its description, saying where a
+ * defect of its own branch goes instead: the Stages that write code read
+ * {@link CODE_STAGE_NOTES_LIST_SCHEMA}, and verify reads the verdict's copy.
  */
 export const NOTES_LIST_SCHEMA = {
   type: "array",
@@ -61,17 +62,19 @@ export const NOTES_LIST_SCHEMA = {
 } as const;
 
 /**
- * Whose a defect the branch itself introduced is, in the words both the code
- * Stages' schema and their prompts use: one declaration, so the two cannot drift.
+ * What a defect the branch itself made is, in the words every Stage is told it
+ * in: one declaration, so the code Stages and verify cannot drift apart on it.
  */
-export const OWN_DEFECT =
-  "A defect this branch introduced, one that behaves correctly on the base branch and wrongly here, or one in code this branch added, belongs to this Ticket";
+export const BRANCH_DEFECT =
+  "A defect this branch introduced, one that behaves correctly on the base branch and wrongly here, or one in code this branch added";
+
+/** Whose such a defect is, in the words the code Stages' schema and prompts use. */
+export const OWN_DEFECT = `${BRANCH_DEFECT}, belongs to this Ticket`;
 
 /**
  * The list as the implement and fix Stages read it: a defect their own branch
- * introduced is theirs to fix, not to list. verify keeps the list without it,
- * because it fixes nothing and grades the Acceptance Criteria alone, so a
- * regression it demonstrates beside them still has only a Note to go in.
+ * introduced is theirs to fix, not to list. verify reads the list with a
+ * description of its own, which sends such a defect to its verdict instead.
  */
 export const CODE_STAGE_NOTES_LIST_SCHEMA = {
   ...NOTES_LIST_SCHEMA,

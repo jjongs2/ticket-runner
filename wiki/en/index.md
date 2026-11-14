@@ -25,7 +25,7 @@ It fits when:
 It does not fit when:
 
 - **The work needs a human's judgement midway.** A Run asks nobody anything; a Ticket it cannot finish reaches a human only as a Hand-off.
-- **No checkbox can grade the criteria.** The verify Stage grades only `- [ ]` lines, and a verdict of nothing but `unverifiable` fails: it is no evidence to merge on.
+- **No checkbox can grade the criteria.** The verify Stage grades the `- [ ]` lines and any defect the branch itself made, and a verdict of nothing but `unverifiable` fails: it is no evidence to merge on.
 - **Nothing may merge without a person's review.** A pull request is squash-merged as soon as its CI passes; nobody approves it first.
 - **The repository has no CI or tests.** A Run refuses to start without a Check and hands off a pull request with no CI checks, unless [`gates`](./guide/configuration.md#gates) is switched off, and then it merges unchecked code.
 
