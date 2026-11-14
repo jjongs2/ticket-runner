@@ -1,7 +1,7 @@
 import { resolveBaseBranch } from "./base-branch.js";
 import type { Config } from "./config.js";
 import { type Credential, credentialRefusal, emptyBilling } from "./credential.js";
-import { type HostKind, hostKind } from "./host.js";
+import { hostKind } from "./host.js";
 import { BaseBranchChecks } from "./failing-base.js";
 import { printEachOutputOnce } from "./failure-message.js";
 import { Landing } from "./landing.js";
@@ -175,7 +175,7 @@ export async function startRun(given: StartOptions): Promise<number> {
   const stopping = new StopSignal();
   const deafen = listenForStop(stopping, options.signals);
   try {
-    return await execute(options, { credential, host, baseBranch }, log, stopping);
+    return await execute(options, { credential, baseBranch }, log, stopping);
   } finally {
     // The lock goes first: SIGTERM between the two is a kill again, and a kill
     // that leaves the lock behind costs the next Run a stale holder to reclaim,
@@ -194,11 +194,7 @@ export async function startRun(given: StartOptions): Promise<number> {
 
 async function execute(
   options: StartOptions,
-  {
-    credential,
-    host,
-    baseBranch,
-  }: { credential: Credential; host: HostKind; baseBranch: string },
+  { credential, baseBranch }: { credential: Credential; baseBranch: string },
   print: (line: string) => void,
   stopping: StopSignal,
 ): Promise<number> {
@@ -239,7 +235,6 @@ async function execute(
     repoRoot,
     runId,
     version,
-    host,
     credential,
     billing: emptyBilling(),
     baseBranch,

@@ -23,9 +23,11 @@ import {
   isNotesIssue,
   noteComment,
   notesIssue,
+  columns,
   pullRequestBody,
   runSummary,
   squashCommit,
+  wrapLines,
 } from "./templates.js";
 import { parseVerdict } from "./verdict.js";
 
@@ -34,6 +36,12 @@ const verdict = parseVerdict({
     { text: "tests pass", status: "met", evidence: "npm test green" },
     { text: "docs updated", status: "unverifiable", evidence: "no way to tell" },
   ],
+  pass: true,
+});
+
+/** A verdict with every criterion met, which leaves the squash commit no unverified lines. */
+const allMet = parseVerdict({
+  criteria: [{ text: "tests pass", status: "met", evidence: "npm test green" }],
   pass: true,
 });
 
@@ -124,52 +132,14 @@ const GH_EVIDENCE = ["<details><summary>Evidence</summary>", "", "```", GH_OUTPU
 const SSH_EVIDENCE = ["<details><summary>Evidence</summary>", "", "```", SSH_OUTPUT, "```"].join("\n");
 
 describe("pullRequestBody", () => {
-  it("starts with Closes #<n> on its own line so the merge closes the Ticket", () => {
-    const body = pullRequestBody({ ticket: 2, verdict, runId: "r1", host: "workstation" });
+  it("is Closes #<n>, a blank line, and the body a Stage answered", () => {
+    const body = pullRequestBody({ ticket: 2, body: "## Summary\n\nIt adds a flag." });
 
-    expect(body.split("\n")[0]).toBe("Closes #2");
+    expect(body).toBe("Closes #2\n\n## Summary\n\nIt adds a flag.\n");
   });
 
-  it("summarises the verdict by status count", () => {
-    const body = pullRequestBody({ ticket: 2, verdict, runId: "r1", host: "workstation" });
-
-    expect(body).toContain("**Verdict:** 1 met · 0 unmet · 1 unverifiable");
-  });
-
-  it("lists every criterion, with evidence for the ones not met", () => {
-    const body = pullRequestBody({ ticket: 2, verdict, runId: "r1", host: "workstation" });
-
-    expect(body).toContain("- ✅ tests pass");
-    expect(body).toContain("- ❓ docs updated — no way to tell");
-  });
-
-  it("points a workstation's reader at the Run's directory, which outlives the Run", () => {
-    const body = pullRequestBody({ ticket: 2, verdict, runId: "r1", host: "workstation" });
-
-    expect(body).toBe(
-      [
-        "Closes #2",
-        "",
-        "**Verdict:** 1 met · 0 unmet · 1 unverifiable",
-        "",
-        "<details><summary>Criteria</summary>",
-        "",
-        "- ✅ tests pass",
-        "- ❓ docs updated — no way to tell",
-        "",
-        "</details>",
-        "",
-        "Run `r1` · transcripts in `.ticket-runner/runs/r1/2/`",
-        "",
-      ].join("\n"),
-    );
-  });
-
-  it("names the Run alone on a cloud Host, whose VM goes with its session", () => {
-    const body = pullRequestBody({ ticket: 2, verdict, runId: "r1", host: "cloud" });
-
-    expect(body.endsWith("</details>\n\nRun `r1`\n")).toBe(true);
-    expect(body).not.toContain("transcripts");
+  it("is Closes #<n> alone when no Stage answered a body", () => {
+    expect(pullRequestBody({ ticket: 2 })).toBe("Closes #2\n");
   });
 });
 
@@ -221,11 +191,12 @@ describe("draftPullRequestBody", () => {
 });
 
 describe("squashCommit", () => {
-  const commit = () =>
+  const commit = (prose: { problem?: string; solution?: string } = {}) =>
     squashCommit({
       ticket: 2,
       pullRequest: 100,
       title: "feat(cli): add a flag",
+      ...prose,
       verdict,
       commits: ["feat(cli): add a flag (#2)", "docs: write it down (#2)"],
       coAuthors: [],
@@ -235,46 +206,165 @@ describe("squashCommit", () => {
     expect(commit().subject).toBe("feat(cli): add a flag (#100)");
   });
 
-  it("carries the branch's co-authors as trailers at the end of the body", () => {
-    const body = squashCommit({
-      ticket: 2,
-      pullRequest: 100,
-      title: "feat(cli): add a flag",
-      verdict,
-      commits: ["feat(cli): add a flag (#2)"],
-      coAuthors: ["Claude Opus 5 <noreply@anthropic.com>", "Pat <pat@example.com>"],
-    }).body;
-
-    expect(body.endsWith(
-      [
-        "- feat(cli): add a flag (#2)",
-        "",
-        "Co-authored-by: Claude Opus 5 <noreply@anthropic.com>",
-        "Co-authored-by: Pat <pat@example.com>",
-        "",
-      ].join("\n"),
-    )).toBe(true);
-  });
-
-  it("opens the body with Closes, then the verdict counts, then the branch commits in order", () => {
-    expect(commit().body).toBe(
+  it("opens the body with Closes, the problem, the solution, then the unverified criteria", () => {
+    expect(commit({ problem: "The CLI had no flag.", solution: "It adds one." }).body).toBe(
       [
         "Closes #2",
         "",
-        "Verdict: 1 met · 0 unmet · 1 unverifiable",
+        "The CLI had no flag.",
         "",
-        "- feat(cli): add a flag (#2)",
-        "- docs: write it down (#2)",
+        "It adds one.",
+        "",
+        "Unverified:",
+        "- docs updated — no way to tell",
         "",
       ].join("\n"),
     );
   });
 
-  it("carries no HTML and no evidence: git log renders neither", () => {
-    const body = commit().body;
+  it("carries the branch's co-authors as trailers at the end of the body", () => {
+    const body = squashCommit({
+      ticket: 2,
+      pullRequest: 100,
+      title: "feat(cli): add a flag",
+      solution: "It adds one.",
+      verdict: allMet,
+      commits: ["feat(cli): add a flag (#2)"],
+      coAuthors: ["Claude Opus 5 <noreply@anthropic.com>", "Pat <pat@example.com>"],
+    }).body;
 
+    expect(body).toBe(
+      [
+        "Closes #2",
+        "",
+        "It adds one.",
+        "",
+        "Co-authored-by: Claude Opus 5 <noreply@anthropic.com>",
+        "Co-authored-by: Pat <pat@example.com>",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("lets the branch's commit subjects stand in for a solution no Stage answered, after the problem", () => {
+    expect(commit({ problem: "The CLI had no flag." }).body).toContain(
+      [
+        "The CLI had no flag.",
+        "",
+        "- feat(cli): add a flag (#2)",
+        "- docs: write it down (#2)",
+        "",
+        "Unverified:",
+      ].join("\n"),
+    );
+    expect(commit().body.startsWith("Closes #2\n\n- feat(cli): add a flag (#2)\n")).toBe(true);
+  });
+
+  it("lets a solution stand alone when no Stage answered a problem, and drops the commit subjects", () => {
+    const body = commit({ solution: "It adds one." }).body;
+
+    expect(body.startsWith("Closes #2\n\nIt adds one.\n\nUnverified:")).toBe(true);
+    expect(body).not.toContain("- feat(cli)");
+  });
+
+  it("names no unverified criteria when every criterion was met", () => {
+    const body = squashCommit({
+      ticket: 2,
+      pullRequest: 100,
+      title: "feat(cli): add a flag",
+      solution: "It adds one.",
+      verdict: allMet,
+      commits: [],
+      coAuthors: [],
+    }).body;
+
+    expect(body).toBe("Closes #2\n\nIt adds one.\n");
+  });
+
+  it("joins an unverifiable criterion's evidence, and its text, into one line", () => {
+    const body = squashCommit({
+      ticket: 2,
+      pullRequest: 100,
+      title: "feat(cli): add a flag",
+      solution: "It adds one.",
+      verdict: parseVerdict({
+        criteria: [
+          {
+            text: "the docs say so",
+            status: "unverifiable",
+            evidence: "No browser here.\n\n  The wiki renders only on GitHub.",
+          },
+        ],
+        pass: true,
+      }),
+      commits: [],
+      coAuthors: [],
+    }).body;
+
+    expect(body).toContain(
+      "Unverified:\n- the docs say so — No browser here. The wiki renders only on GitHub.\n",
+    );
+  });
+
+  it("carries no verdict counts and no Run line", () => {
+    const body = commit({ problem: "The CLI had no flag.", solution: "It adds one." }).body;
+
+    expect(body).not.toMatch(/Verdict|met ·|Run `/);
     expect(body).not.toContain("<");
-    expect(body).not.toContain("no way to tell");
+  });
+
+  it("breaks a line of the problem or the solution wider than 72 columns at its spaces", () => {
+    const words = "word ".repeat(30).trim();
+    const body = commit({ problem: words, solution: words }).body;
+    const lines = body.split("\n");
+
+    expect(lines.every((line) => line.length <= 72 || line.startsWith("- "))).toBe(true);
+    expect(lines.slice(2, 4)).toEqual(["word ".repeat(14).trim(), "word ".repeat(14).trim()]);
+  });
+
+  it("keeps the lines the Stage wrote, so a list stays a list", () => {
+    const solution = "It adds:\n- a flag\n- its docs";
+
+    expect(commit({ solution }).body).toContain("\n\nIt adds:\n- a flag\n- its docs\n\n");
+  });
+
+  it("counts a wide character such as Hangul as two columns", () => {
+    const problem = "가나다 ".repeat(15).trim();
+    const lines = commit({ problem }).body.split("\n");
+
+    // Each "가나다 " is seven columns wide, so ten of them fill seventy.
+    expect(lines[2]).toBe("가나다 ".repeat(10).trim());
+    expect(lines[3]).toBe("가나다 ".repeat(5).trim());
+  });
+
+  it("leaves a word wider than 72 columns whole", () => {
+    const url = `https://example.com/${"a".repeat(80)}`;
+    const lines = commit({ problem: `See ${url} for it.` }).body.split("\n");
+
+    expect(lines.slice(2, 5)).toEqual(["See", url, "for it."]);
+  });
+});
+
+describe("columns", () => {
+  it("counts ASCII as one column each and Hangul syllables as two", () => {
+    expect(columns("abc")).toBe(3);
+    expect(columns("한국어")).toBe(6);
+    expect(columns("a 한")).toBe(4);
+  });
+});
+
+describe("wrapLines", () => {
+  it("leaves a line of exactly 72 columns as it is", () => {
+    const line = "a".repeat(72);
+
+    expect(wrapLines(line)).toEqual([line]);
+  });
+
+  it("keeps a line's indent on its first part", () => {
+    const line = `  ${"word ".repeat(20).trim()}`;
+    const [first] = wrapLines(line);
+
+    expect(first?.startsWith("  word")).toBe(true);
   });
 });
 

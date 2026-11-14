@@ -85,6 +85,21 @@ describe("what a state file says", () => {
     expect(file.readable && file.state).not.toHaveProperty("title");
   });
 
+  it("carries the body, problem and solution a Stage answered for the branch", () => {
+    const prose = { body: "## Summary", problem: "There was no flag.", solution: "It adds one." };
+
+    expect(read(stateFileContents(state(prose)))).toEqual({ readable: true, state: state(prose) });
+  });
+
+  it("still resumes a file written before a body, problem or solution was recorded in one", () => {
+    const file = read(JSON.stringify(state()));
+
+    expect(file).toEqual({ readable: true, state: state() });
+    for (const field of ["body", "problem", "solution"]) {
+      expect(file.readable && file.state).not.toHaveProperty(field);
+    }
+  });
+
   it("keeps reading a file a later pipeline added fields to", () => {
     expect(read(JSON.stringify({ ...state(), somethingNewer: "from a later version" }))).toEqual(
       { readable: true, state: state() },

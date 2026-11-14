@@ -170,8 +170,13 @@ describe("verifyPrompt", () => {
 });
 
 describe("fixPrompt", () => {
-  it("invokes no plugin skill: the failure is the whole brief", () => {
-    expect(fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS)).not.toContain("/mattpocock-skills:");
+  it("invokes no plugin skill but the pr skill: the implement skill would start over", () => {
+    const prompt = fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS);
+    const skills = prompt.match(/\/mattpocock-skills:[a-z-]+/g) ?? [];
+
+    expect(new Set(skills)).toEqual(new Set(["/mattpocock-skills:pr"]));
+    expect(prompt).toMatch(/Invoke no plugin skill but `\/mattpocock-skills:pr`/);
+    expect(prompt).not.toContain("/mattpocock-skills:implement");
   });
 
   it("names the Ticket, the failure and the evidence that was captured", () => {
@@ -680,8 +685,11 @@ describe("a code Stage that ends without a new commit", () => {
 
   it("is not invited by the implement prompt to end that way: the schema alone asks it", () => {
     const prompt = implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS);
+    const mentions = prompt.split("\n").filter((line) => line.includes("noCommitReason"));
 
-    expect(prompt).not.toContain("noCommitReason");
+    // Named only in the list of answers written in the Target's language.
+    expect(mentions).toHaveLength(1);
+    expect(mentions[0]).toMatch(/^- Write your Notes, .* in the language/);
     expect(prompt).not.toMatch(/without a new commit/i);
   });
 });
@@ -836,5 +844,86 @@ describe("the conflict Stage's reach", () => {
     );
     expect(prompt).toMatch(/implement nothing new/i);
     expect(prompt).toMatch(/change no behaviour this Ticket's Acceptance Criteria cover/i);
+  });
+});
+
+describe("the body, the problem and the solution", () => {
+  const implement = () => implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS);
+  const fix = (prose = {}) =>
+    fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS, undefined, prose);
+
+  it("has the implement Stage answer all three for the whole branch beside title, after the review's fixes", () => {
+    expect(implement()).toMatch(
+      /Once the review's fixes are committed, answer a `body`, a `problem` and a `solution` beside `title`, each written for the whole branch/,
+    );
+  });
+
+  it.each([
+    ["implement", implement],
+    ["fix", () => fix()],
+  ])("puts the Target's own shapes before the pr skill's in the %s prompt", (_, prompt) => {
+    const text = prompt();
+
+    expect(text).toContain(
+      "in the shape this repository's contributing guide or its `.github/PULL_REQUEST_TEMPLATE.md` sets, when either sets a pull request body's sections or content beyond the `Closes` line; where neither does, invoke `/mattpocock-skills:pr` by that full name",
+    );
+    expect(text).toContain("as this repository's contributing guide sets a commit body, when it does");
+  });
+
+  it.each([
+    ["implement", implement],
+    ["fix", () => fix()],
+  ])("states the problem and solution shape itself in the %s prompt", (_, prompt) => {
+    expect(prompt()).toContain(
+      "the problem is the state before the change and its effect, and the solution is what the change does and why, each in at most two sentences, readable without opening the Ticket, leaving out what the diff and the body already show",
+    );
+  });
+
+  it.each([
+    ["implement", implement],
+    ["fix", () => fix()],
+  ])("keeps titles, closing keywords, screenshots and local paths out of all three in the %s prompt", (_, prompt) => {
+    expect(prompt()).toContain(
+      "None of the three carries a title, a closing keyword (`Closes`, `Fixes`, `Resolves`) before an issue reference, a screenshot or a local path",
+    );
+  });
+
+  it("hands the fix Stage the answers so far, each under its field, and has it revise only what its fix changes", () => {
+    const prompt = fix({ body: "## Summary\n\n```text\na\n```", problem: "There was no flag." });
+
+    expect(prompt).toContain("## What the branch's answers say now");
+    expect(prompt).toContain("### `body`\n\n````\n## Summary\n\n```text\na\n```\n````");
+    expect(prompt).toContain("### `problem`\n\n```\nThere was no flag.\n```");
+    expect(prompt).not.toContain("### `solution`");
+    expect(prompt).toMatch(
+      /When your fix changes what one of them says, answer that one revised for the whole branch/,
+    );
+    expect(prompt).toMatch(/Answer each one your fix leaves true as an empty string, which keeps it/);
+  });
+
+  it("gives the fix Stage no answers section when none has been answered", () => {
+    expect(fix()).not.toContain("## What the branch's answers say now");
+  });
+});
+
+describe("the language a Stage writes in", () => {
+  const RULE =
+    "in the language this repository's contributing guide sets for issues and commits, and where it sets none, in the language the Ticket is written in. A criterion's text stays as the Ticket writes it.";
+
+  it("covers every answer of the two code Stages", () => {
+    for (const prompt of [
+      implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS),
+      fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS),
+    ]) {
+      expect(prompt).toContain(
+        `- Write your Notes, \`title\`, \`body\`, \`problem\`, \`solution\` and \`noCommitReason\` ${RULE}`,
+      );
+    }
+  });
+
+  it("covers the verify Stage's Notes and its verdict's evidence", () => {
+    expect(verifyPrompt(url, "", OTHER_TARGET, NO_CHECKS)).toContain(
+      `- Write your Notes and the verdict's evidence ${RULE}`,
+    );
   });
 });

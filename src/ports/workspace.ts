@@ -83,6 +83,16 @@ export interface TicketState {
    */
   title?: string;
   /**
+   * The latest pull request body, problem and solution a Stage answered for
+   * the whole branch, which the pull request body and the squash commit are
+   * written from. Without them a Run that resumes after the Stage that wrote
+   * them would publish `Closes #<n>` alone. Each is absent when no Stage has
+   * answered it, and in state an earlier pipeline left.
+   */
+  body?: string;
+  problem?: string;
+  solution?: string;
+  /**
    * Whether the Run that takes the Ticket up rebases its branch onto the Base
    * branch before its Checks. Set by a Release over a failing base branch, so
    * a fix a human has landed there meanwhile reaches the branch; absent
