@@ -246,6 +246,26 @@ describe("loadConfig", () => {
     },
   );
 
+  it("merges green Tickets unless the config says the Target merges by hand", () => {
+    expect(loadConfig(repoWith({}), VERSION).merge).toBe(true);
+    expect(
+      loadConfig(repoWith({ [CONFIG_FILENAME]: JSON.stringify({ merge: true }) }), VERSION).merge,
+    ).toBe(true);
+    expect(
+      loadConfig(repoWith({ [CONFIG_FILENAME]: JSON.stringify({ merge: false }) }), VERSION).merge,
+    ).toBe(false);
+  });
+
+  it.each(["false", 0, null, { by: "hand" }])(
+    "rejects %o as the merge setting with a message naming the field",
+    (value) => {
+      const root = repoWith({ [CONFIG_FILENAME]: JSON.stringify({ merge: value }) });
+
+      expect(() => loadConfig(root, VERSION)).toThrowError(ConfigError);
+      expect(() => loadConfig(root, VERSION)).toThrowError(/merge/);
+    },
+  );
+
   it("rejects an invalid field with a message naming it", () => {
     const root = repoWith({
       [CONFIG_FILENAME]: JSON.stringify({ ciTimeoutMinutes: "thirty" }),

@@ -72,7 +72,7 @@ notifies; this one is edited in place and notifies nobody after the first Stage.
 
 An icon and a handful of words. `✅` passed, `❌` ended the Ticket or spent its
 fix budget, `⚠️` was tolerated by a gate that is switched off, `⏸` released the
-Ticket for a later Run to resume.
+Ticket for a later Run to resume, `👤` handed it to a human with nothing failed.
 
 | Stage | Outcome |
 |---|---|
@@ -85,7 +85,7 @@ Ticket for a later Run to resume.
 | rebase | `⏸ remote unreachable` |
 | pr | `⏸ GitHub failure`, `⏸ remote unreachable` |
 | ci | `✅ passed`, `❌ failed`, `❌ conflicting`, `❌ no checks`, `⚠️ no checks`, `❌ timed out`, ``⏸ `<command>` fails on the base branch``, `⏸ GitHub failure`, `⏸ remote unreachable` |
-| merge | `✅ #<pr>`, `⏸ GitHub failure` |
+| merge | `✅ #<pr>`, `👤 left to a human`, `⏸ GitHub failure` |
 
 `<d> defects` counts the defects the verify Stage found this branch made, and
 reads `1 defect` for one; they fail the verdict as unmet criteria do.
@@ -130,6 +130,11 @@ steps. The row says which fault it was, and the Run's last line names the
 command and what it printed. A write GitHub refused here may be missing from
 the table, which is why the comment is written once more when the Ticket
 ends, if its last write failed.
+
+`👤 left to a human` is the `merge` row of a Ticket whose CI is green on a
+Target whose config sets `merge` to `false`: the pipeline merges nothing there,
+so the Ticket is handed off with its pull request as published, and this is the
+last row of its Run's table.
 
 `❌ uncommitted work` is the `checks` row no command wrote: the worktree held
 changes no commit carries, so no Check ran. What lands is the branch, and a

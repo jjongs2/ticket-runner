@@ -8,7 +8,7 @@ description: "ticket-runner runs the unattended half of the mattpocock-skills ch
 
 Humans plan, the pipeline executes.
 
-ticket-runner runs the unattended half of the [`mattpocock-skills`](https://github.com/mattpocock/skills) chain. Planning a feature takes judgement, so it stays with humans, in their own sessions: `/grilling`, `/to-spec` and `/to-tickets` (or `/triage`) turn it into GitHub issues, each with checkbox [Acceptance Criteria](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), its blockers linked and the `ready-for-agent` label. Carrying an issue from there to a merge is repetitive, so the pipeline does it unattended, driving `/implement` where a human would have typed it. For each [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) it has a headless Claude Code session implement the work, runs the repository's own tests, has a second session try to prove the criteria are not met, opens a pull request, waits for CI and squash-merges. Whatever it cannot finish goes back to a human with a draft pull request and a comment.
+ticket-runner runs the unattended half of the [`mattpocock-skills`](https://github.com/mattpocock/skills) chain. Planning a feature takes judgement, so it stays with humans, in their own sessions: `/grilling`, `/to-spec` and `/to-tickets` (or `/triage`) turn it into GitHub issues, each with checkbox [Acceptance Criteria](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), its blockers linked and the `ready-for-agent` label. Carrying an issue from there to a merge is repetitive, so the pipeline does it unattended, driving `/implement` where a human would have typed it. For each [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) it has a headless Claude Code session implement the work, runs the repository's own tests, has a second session try to prove the criteria are not met, opens a pull request, waits for CI and squash-merges, or, on a Target that [merges by hand](./guide/configuration.md#merge), hands the green pull request to a human to merge. Whatever it cannot finish goes back to a human with a draft pull request and a comment.
 
 ## Why it exists
 
@@ -26,7 +26,7 @@ It does not fit when:
 
 - **The work needs a human's judgement midway.** A Run asks nobody anything; a Ticket it cannot finish reaches a human only as a Hand-off.
 - **No checkbox can grade the criteria.** The verify Stage grades the `- [ ]` lines and any defect the branch itself made, and a verdict of nothing but `unverifiable` fails: it is no evidence to merge on.
-- **Nothing may merge without a person's review.** A pull request is squash-merged as soon as its CI passes; nobody approves it first.
+- **Nothing may merge without a person's review, and you want the pipeline to merge anyway.** A pull request is squash-merged as soon as its CI passes; nobody approves it first. A Target that sets [`merge`](./guide/configuration.md#merge) to `false` gets each green Ticket as a Hand-off instead, its pull request ready for a human to review and merge.
 - **The repository has no CI or tests.** A Run refuses to start without a Check and hands off a pull request with no CI checks, unless [`gates`](./guide/configuration.md#gates) is switched off, and then it merges unchecked code.
 
 ## Quick Start
@@ -67,6 +67,7 @@ flowchart LR
     K --> V[verify Stage]
     V --> L["Landing: rebase, pull request, CI"]
     L --> M[squash-merge]
+    L -. "green, merge off" .-> H
     K -. fails .-> X[fix Stage, once]
     V -. unmet .-> X
     L -. red CI .-> X

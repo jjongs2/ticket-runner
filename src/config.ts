@@ -38,6 +38,7 @@ const configSchema = z
     baseBranch: z.string().min(1).optional(),
     lanes: z.number().int().positive().optional(),
     checks: z.array(z.string().min(1)).optional(),
+    merge: z.boolean().optional(),
     gates: z
       .object({ checks: z.boolean().optional(), ci: z.boolean().optional() })
       .strict()
@@ -101,6 +102,13 @@ export interface Config {
    */
   lanes: number;
   checks: string[];
+  /**
+   * Whether a Run merges a Ticket whose CI is green. A Target that merges by
+   * hand sets it to `false`, and its green Tickets are handed off with their
+   * pull requests as published. Not a gate: a gate switched off loosens what
+   * reaches a merge, and this tightens it.
+   */
+  merge: boolean;
   gates: { checks: boolean; ci: boolean };
   stages: {
     implement: StageConfig;
@@ -196,6 +204,7 @@ export function loadConfig(repoRoot: string, version: string): Config {
     ...(file.baseBranch === undefined ? {} : { baseBranch: file.baseBranch }),
     lanes: file.lanes ?? DEFAULT_LANES,
     checks: file.checks ?? inferChecks(repoRoot),
+    merge: file.merge ?? true,
     gates: {
       checks: file.gates?.checks ?? true,
       ci: file.gates?.ci ?? true,
