@@ -1,0 +1,36 @@
+warning: docs/agents/pipeline-conventions.md was written by ticket-runner 0.6.4, and this is 0.6.5. Run `ticket-runner init` to bring it up to date.
+ticket-runner run 2026-11-10T21-04-11-302 · 2 lanes
+#303 skipped · no-criteria
+#301 claimed · agent/301-the-summary-names-the-version
+#297 resumed from implemented · agent/297-a-guard-refuses-a-body-with-no-criteria
+#297 rebased onto main before its Checks
+#301 rebased onto main before its Checks
+#297 verified · 4 met · 0 unverifiable
+#301 fixing · 1 unmet
+#301 noted on #323 for triage
+#297 merged · PR #305
+#299 taken from the top, still claimed · agent/299-stop-reports-the-lanes-it-left
+#301 verified · 5 met · 1 unverifiable
+#301 merged · PR #306
+#302 claimed · agent/302-a-released-ticket-keeps-its-branch
+#299 resolving a rebase conflict
+#302 released at implement · rate limit · agent/302-a-released-ticket-keeps-its-branch
+#302 stopped the Run · rate limit
+#299 left to finish · stopped
+#299 noted on #297
+#299 handed off at rebase · `git pull --ff-only origin main` failed
+fatal: Not possible to fast-forward, aborting.
+
+ticket-runner 0.6.5 run 2026-11-10T21-04-11-302 · 187m · subscription
+
+  skipped  #303 no-criteria
+  merged   #297 A guard refuses a body with no criteria (PR #305)
+  merged   #301 The summary names the version (PR #306)
+  noted    #323 comment · from #301 fix · the wiki's lock page still says a reclaimed VM needs…
+  released #302 A released Ticket keeps its branch · rate limit at implement
+  handed   #299 Stop reports the Lanes it left · rebase · `git pull --ff-only origin main` failed
+  noted    #297 comment · from #299 conflict · the guard reads a fenced checkbox as a criterion
+
+Rate limited.
+
+ticket-runner exited with 1

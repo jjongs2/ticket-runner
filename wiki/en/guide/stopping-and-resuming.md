@@ -306,7 +306,7 @@ What a Run makes of a held lock depends on where the holder is:
 | on this Host, its process gone (or its pid reused by another program) | abandoned | takes the lock over by itself, so a Run ended by Ctrl+C costs nothing |
 | on another Host | elsewhere | refused, never presumed dead |
 
-Nothing on one Host can see another Host's processes, so a lock left from another Host stays until a human releases it. The lock's last commit on GitHub names its holder, `Held by run <id> on <host>: …`; look on that Host, and release the lock only once its Run is gone. Ask an Operator, or commit a `lock.json` that reads `{ "held": false }` to the branch on GitHub, and only when no Run is running. A cloud VM reclaimed mid-Run costs exactly one such release.
+Nothing on one Host can see another Host's processes, so a lock left from another Host stays until a human releases it. The lock's last commit on GitHub names its holder, `Held by run <id> on <host>: …`; look on that Host, and release the lock only once its Run is gone. Ask an Operator, or commit a `lock.json` that reads `{ "held": false }` to the branch on GitHub, and only when no Run is running. A Run killed on a cloud Host, by a time limit or a reclaimed VM, costs such a release only when the next Run starts from another session: a Run started again from the same session is on the same Host, and takes the lock over by itself.
 
 A cloud Host is told apart by its session id; one that names no session gets a random id, so even its own later Runs see its lock as a stranger's. A Run that cannot release the lock when it ends says so, and keeps its own exit code.
 

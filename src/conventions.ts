@@ -111,7 +111,7 @@ A Ticket is one issue the pipeline can implement in a single session. It is refu
 
 ## The Operator's skill
 
-- \`.claude/skills/ticket-runner/\` belongs to the pipeline. It tells an Operator how to start a Run, report on it and pass on a Stop, a human's request that the Run finish the Tickets its Lanes hold and take no more. \`ticket-runner init\` writes it and rewrites it like this file, so an edit made there does not survive the next \`init\` either.
+- \`.claude/skills/ticket-runner/\` belongs to the pipeline. It tells an Operator how to start a Run, report on it and pass on a Stop, a human's request that the Run finish the Tickets its Lanes hold and take no more. It also says what an Operator may write on the board, only at a human's explicit request and only while no Run holds this repository: swap a handed-off Ticket's \`ready-for-human\` label for \`ready-for-agent\`, post the human's decision as a comment with each new criterion as its own \`- [ ]\` checkbox, and turn a criterion the human names as replaced into \`- (superseded)\` followed by its words. It rewrites no criterion and no body otherwise. \`ticket-runner init\` writes it and rewrites it like this file, so an edit made there does not survive the next \`init\` either.
 
 ## Local directories
 
