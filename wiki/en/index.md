@@ -74,6 +74,7 @@ flowchart LR
     X -. fails again .-> H["Hand-off: ready-for-human"]
     I -. "any Stage: rate limit, API failure, API budget" .-> RL["Release: ready-for-agent"]
     K -. base branch fails too .-> RL
+    L -. "any step: GitHub or the remote failing" .-> RL
   end
   R --> F
   M -. unblocks .-> F

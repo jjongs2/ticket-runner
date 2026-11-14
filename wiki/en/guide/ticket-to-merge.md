@@ -45,7 +45,7 @@ flowchart TD
 ```
 <!-- Sources: src/orchestrator.ts, src/lifecycle.ts -->
 
-Every edge to the fix Stage is taken at most once per Ticket. A second failure of any kind, or any failure the fix Stage cannot act on, is a Hand-off. A Stage stopped by the rate limit, an API failure or the API budget, and a failure the base branch shares ([below](#a-failure-the-base-branch-shares)), leave this diagram entirely: they [release](./stopping-and-resuming.md#release-on-a-rate-limit) the Ticket.
+Every edge to the fix Stage is taken at most once per Ticket. A second failure of any kind, or any failure the fix Stage cannot act on, is a Hand-off. A Stage stopped by the rate limit, an API failure or the API budget, a failure the base branch shares ([below](#a-failure-the-base-branch-shares)), and [GitHub or the git remote failing](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) at any step, leave this diagram entirely: they [release](./stopping-and-resuming.md#release-on-a-rate-limit) the Ticket.
 
 A [Hand-off](./stopping-and-resuming.md#hand-off) undoes the claim, puts `ready-for-human` on, comments the failure and where the work is, and puts an open pull request back into draft. The branch and the state file stay on the Target's remote, with the handed-off Stages' transcripts beside them, since the Host the work was done on may be gone by the time a human looks. A human who relabels the Ticket `ready-for-agent` hands it back, and it carries on from what it reached rather than paying for the implement Stage again. A [Hand-off at setup](./stopping-and-resuming.md#when-a-hand-off-does-less) that leaves no work of the pipeline's removes the state file: the Ticket started fresh and either failed before its worktree existed, or found a branch in the way that the Run would not branch over. No Stage of this Run worked there, so nothing is the pipeline's to resume.
 
@@ -192,6 +192,7 @@ Only a defect a fresh session could mend spends the budget:
 | CI timed out, found conflicting, or had no checks | ci | No, Hand-off |
 | The merge failed | merge | No, Hand-off |
 | A rate limit, a transient API failure or an API key out of budget, anywhere | any | No, a Release |
+| GitHub failing on its own side, or git unable to reach or log in to the remote, anywhere | any | No, a [Release](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) |
 
 After a fix Stage, the Ticket starts again at the Checks. Every gate grades the fix, the verify Stage included, so a fix is held to the same bar as the first attempt. A fix Stage whose branch did not grow is a Hand-off straight away: re-grading an untouched branch could only fail the same way. A squashed or amended branch counts as not grown. Its hand-off comment carries the evidence the fix Stage was sent in with, and quotes the reason the Stage gave in `noCommitReason` for committing nothing, whatever it was sent in for.
 
@@ -248,7 +249,7 @@ The Checks run again because the resolution is code no gate has seen. verify is 
 
 ### Pull request
 
-The branch is pushed with `--force-with-lease`, since the rebase rewrote it. The pipeline opens a ready (non-draft) pull request against the base branch, or updates the one it already has: a new title and body, and out of draft (a draft often runs no workflows, so a draft left from a Hand-off would read as "no checks").
+The branch is pushed with `--force-with-lease`, since the rebase rewrote it. The pipeline opens a ready (non-draft) pull request against the base branch, or updates the one it already has: a new title and body, and out of draft (a draft often runs no workflows, so a draft left from a Hand-off would read as "no checks"). A pull request already open on the branch counts as the one it has, since an attempt GitHub failed to answer may have opened it all the same.
 
 **The title** is the first of these in the commit convention's shape, `<type>(<scope>): <summary>` on one line (a trailing `(#<n>)` is dropped):
 
@@ -267,6 +268,7 @@ The pipeline polls the head commit's check runs and commit statuses until they s
 | Every check passed or skipped | `✅ passed` | Merge |
 | A check failed, was cancelled, timed out, needs action or could not start | `❌ failed` | Spends the fix budget |
 | The same, and the merge-base fails a Check command | ``⏸ `<command>` fails on the base branch`` | A Release ([above](#a-failure-the-base-branch-shares)) |
+| GitHub still failing on its own side after a minute of tries | `⏸ GitHub failure` | A [Release](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) |
 | Checks still pending at the timeout | `❌ timed out` | Hand-off |
 | No checks, and GitHub finds the pull request conflicting | `❌ conflicting` | Hand-off at once |
 | No checks after the grace period, `gates.ci` on | `❌ no checks` | Hand-off |

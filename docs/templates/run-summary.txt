@@ -127,6 +127,30 @@ Stage's Note does, from the `pipeline`:
 
 Base branch `main` fails `npm test` at 1a2b3c4.
 
+A Ticket GitHub or the git remote failed on its own side is released the same
+way, its fix budget as it was, from wherever its work stopped. GitHub's fault
+is a 5xx status or an answer that is not complete JSON, from a read, a write
+that sets a state or the opening of a pull request after about a minute of
+tries with backoff, or from any other call at once; the remote's is git unable
+to connect to it or to authenticate with it. A GitHub 4xx and every other git
+failure, a pull of the base branch over local changes or a diverged branch
+included, hand the Ticket off as before. The row names which of the two it
+was, and the last line names the command that failed and the first line it
+printed, since the fault may need a human, as an authentication failure does:
+
+  released #6 Rebase conflict resolution · remote unreachable at rebase
+
+Remote unreachable · `git pull --ff-only origin main` · git@github.com: Permission denied (publickey).
+
+  released #6 Rebase conflict resolution · GitHub failure at pr
+
+GitHub failure · `gh api --method POST repos/{owner}/{repo}/pulls -f base=main …` · gh: Bad Gateway (HTTP 502)
+
+One met before the claim, or while the claim was being made, reads `at setup`
+and leaves the Ticket as the claim left it. One met while the Ticket was being
+handed off or released leaves it claimed, and the next Run resumes it as a
+Stranded Ticket.
+
 A Ticket a Run resumed has no row of its own, released or stranded: it merges,
 is handed off, or is released again like any other, and the header already names
 the Run that took it.
@@ -184,8 +208,10 @@ row shows the Note's summary trimmed to one line; the whole Note is on GitHub.
 The last line says why the Run stopped: `Frontier empty.` when nothing is left,
 `Frontier blocked.` when every remaining candidate has an open blocker,
 `Rate limited.` or `API rate limited.`, with the reset time where the CLI gave
-one, `API failure.`, `Out of API budget.`, or
-``Base branch `<base>` fails `<command>` at <commit>.`` when a Release ended the
+one, `API failure.`, `Out of API budget.`,
+``Base branch `<base>` fails `<command>` at <commit>.``, or
+``GitHub failure · `<command>` · <first line>`` or
+``Remote unreachable · `<command>` · <first line>`` when a Release ended the
 Run, and `Stopped at <hh:mm> · ...`
 when a human stopped it. Where Releases differ, the first one's last line
 stands, except that out of API budget outranks the rate limit and an API

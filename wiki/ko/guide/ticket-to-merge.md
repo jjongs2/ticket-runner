@@ -45,7 +45,7 @@ flowchart TD
 ```
 <!-- Sources: src/orchestrator.ts, src/lifecycle.ts -->
 
-fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종류와 상관없이 두 번째 실패, 또는 fix Stage가 손쓸 수 없는 실패는 Hand-off입니다. rate limit, API 장애, API 예산으로 멈춘 Stage와 base branch도 똑같이 겪는 실패([아래](#a-failure-the-base-branch-shares))는 이 그림을 아예 벗어나 Ticket을 [Release](./stopping-and-resuming.md#release-on-a-rate-limit)합니다.
+fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종류와 상관없이 두 번째 실패, 또는 fix Stage가 손쓸 수 없는 실패는 Hand-off입니다. rate limit, API 장애, API 예산으로 멈춘 Stage, base branch도 똑같이 겪는 실패([아래](#a-failure-the-base-branch-shares)), 그리고 어느 단계에서든 [GitHub나 git remote가 장애를 일으킨 경우](./stopping-and-resuming.md#release-over-a-github-or-remote-failure)는 이 그림을 아예 벗어나 Ticket을 [Release](./stopping-and-resuming.md#release-on-a-rate-limit)합니다.
 
 [Hand-off](./stopping-and-resuming.md#hand-off)는 claim을 풀고, `ready-for-human`을 달고, 실패와 작업이 있는 곳을 코멘트로 남기고, 열린 pull request를 draft로 되돌립니다. branch와 state file은 Target의 remote에 남고, 넘겨진 Stage들의 transcript도 그 옆에 남습니다. 사람이 볼 즈음에는 작업한 Host가 없어졌을 수도 있기 때문입니다. 사람이 Ticket의 라벨을 `ready-for-agent`로 바꾸면 Ticket이 파이프라인으로 돌아가고, implement Stage를 다시 돌리지 않고 도달한 지점부터 이어 갑니다. state file은 파이프라인의 작업이 남지 않는 [setup에서의 Hand-off](./stopping-and-resuming.md#when-a-hand-off-does-less)에서 지워집니다. 새로 시작한 Ticket이 worktree가 생기기 전에 실패했거나, Run이 덮어쓰지 않으려 한 branch가 이미 있던 경우입니다. 거기서는 이 Run의 Stage가 하나도 돌지 않았으니 파이프라인이 이어 갈 것이 없습니다.
 
@@ -192,6 +192,7 @@ fix 기회는 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사�
 | CI 시간 초과, 충돌, check 없음 | ci | 아니요, Hand-off |
 | merge 실패 | merge | 아니요, Hand-off |
 | 어디서든 rate limit, 일시적인 API 장애, API 키의 예산 소진 | 어디든 | 아니요, Release |
+| 어디서든 GitHub 쪽 장애, 또는 git이 remote에 닿거나 로그인하지 못함 | 어디든 | 아니요, [Release](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) |
 
 fix Stage가 끝나면 Ticket은 Check부터 다시 시작합니다. verify Stage를 포함해 모든 게이트가 수정본을 다시 판정하므로, 수정본도 처음 구현과 같은 기준을 통과해야 합니다. fix Stage 후 branch가 자라지 않았다면 곧바로 Hand-off입니다. 아무도 건드리지 않은 branch를 다시 판정해 봐야 똑같이 실패할 뿐이기 때문입니다. squash하거나 amend한 branch도 자라지 않은 것으로 봅니다. 이때 hand-off 코멘트에는 fix Stage가 받았던 근거가 실리고, 무엇 때문에 불려 왔든 Stage가 `noCommitReason`에 답한 commit하지 않은 이유도 인용됩니다.
 
@@ -248,7 +249,7 @@ Check를 다시 돌리는 건 해결 내용이 어떤 게이트도 본 적 없�
 
 ### pull request {#pull-request}
 
-rebase로 branch가 다시 쓰였으니 `--force-with-lease`로 push합니다. base branch를 향한 ready(draft 아님) pull request를 새로 열거나, 이미 있는 것을 갱신합니다. 갱신할 때는 제목과 본문을 새로 쓰고 draft에서 꺼냅니다. draft에서는 워크플로가 아예 돌지 않는 경우가 많아서, Hand-off 때 남은 draft를 그대로 두면 "no checks"로 읽히기 때문입니다.
+rebase로 branch가 다시 쓰였으니 `--force-with-lease`로 push합니다. base branch를 향한 ready(draft 아님) pull request를 새로 열거나, 이미 있는 것을 갱신합니다. 갱신할 때는 제목과 본문을 새로 쓰고 draft에서 꺼냅니다. draft에서는 워크플로가 아예 돌지 않는 경우가 많아서, Hand-off 때 남은 draft를 그대로 두면 "no checks"로 읽히기 때문입니다. branch에 이미 열려 있는 pull request도 갖고 있던 것으로 칩니다. GitHub가 응답하지 못한 시도가 실제로는 열어 두었을 수 있기 때문입니다.
 
 **제목**은 아래 후보 가운데 commit 컨벤션 형식(`<type>(<scope>): <summary>`, 한 줄)에 맞는 첫 번째 것입니다. 끝의 `(#<n>)`는 떼어 냅니다.
 
@@ -267,6 +268,7 @@ rebase로 branch가 다시 쓰였으니 `--force-with-lease`로 push합니다. b
 | 모든 check가 통과하거나 건너뜀 | `✅ passed` | merge |
 | check가 실패, 취소, 시간 초과, 조치 필요, 시작 실패 중 하나 | `❌ failed` | fix 기회를 씀 |
 | 위와 같고, merge-base도 Check 명령에 실패 | ``⏸ `<command>` fails on the base branch`` | Release([위](#a-failure-the-base-branch-shares) 참고) |
+| 1분가량 다시 시도해도 GitHub 쪽 장애가 이어짐 | `⏸ GitHub failure` | [Release](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) |
 | 시간 초과 시점에 check가 아직 대기 중 | `❌ timed out` | Hand-off |
 | check가 없고 GitHub가 pull request를 충돌로 판단 | `❌ conflicting` | 곧바로 Hand-off |
 | 유예 시간이 지나도 check 없음, `gates.ci` 켬 | `❌ no checks` | Hand-off |

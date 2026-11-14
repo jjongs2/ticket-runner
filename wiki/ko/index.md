@@ -74,6 +74,7 @@ flowchart LR
     X -. 또 실패 .-> H["Hand-off: ready-for-human"]
     I -. "어느 Stage든: rate limit, API 장애, API 예산" .-> RL["Release: ready-for-agent"]
     K -. base branch도 실패 .-> RL
+    L -. "어느 단계든: GitHub나 remote 장애" .-> RL
   end
   R --> F
   M -. 막힘을 풂 .-> F
