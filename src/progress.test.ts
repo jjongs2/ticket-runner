@@ -72,6 +72,7 @@ describe("the comment body", () => {
   });
 
   it.each([
+    [-65_000, "0s"],
     [0, "0s"],
     [400, "0s"],
     [500, "1s"],

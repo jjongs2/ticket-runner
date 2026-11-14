@@ -142,14 +142,13 @@ function count(turns: number | undefined): string {
 }
 
 /**
- * A duration as GitHub Actions writes one on a pull request's checks — `40s`,
- * `1m 5s`, `3h 15m 35s` — which is where a human already reads them. Whole
- * minutes said little: most Checks and CI rows take one or two. From the
- * largest unit that is not zero, every unit below it stays, zero or not.
+ * A duration as GitHub Actions writes one on a pull request's checks: `40s`,
+ * `1m 5s`, `3h 15m 35s`. The template says why. A clock stepped back mid-Stage
+ * reads `0s` rather than a negative.
  */
 function duration(durationMs: number | undefined): string {
   if (durationMs === undefined) return NO_ANSWER;
-  const total = Math.round(durationMs / 1000);
+  const total = Math.max(0, Math.round(durationMs / 1000));
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
   const seconds = total % 60;
