@@ -85,7 +85,7 @@ When the watch expires before that, arm it again at once with `from` one past th
 Report what the watch shows, in a form a phone screen reads:
 
 - One short line per Ticket that ended, saying which Ticket and whether it merged, was handed off (given to a human to carry on), was released (given back for a later Run to take up again) or was skipped, and why when the Run gives a reason.
-- Any other line it shows, as it is worded: a refusal, which names what to do, the line saying a Release stopped the Run, the Tickets a Stop left to finish, a warning.
+- Any other line it shows, as it is worded: a refusal, which names what to do, the line saying a Release, or a hand-off GitHub or the remote cut short, stopped the Run, the Tickets a Stop left to finish, a warning.
 
 Say nothing about a line the watch did not show, and nothing when you arm it again.
 
