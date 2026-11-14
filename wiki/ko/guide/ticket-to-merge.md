@@ -319,12 +319,12 @@ Ticket은 이미 merge됐으니 여기서부터는 Hand-off될 수 없습니다.
 
 | Stage | Outcome | Turns | Duration |
 |---|---|---|---|
-| implement | ✅ committed | 46 | 21m |
-| checks | ❌ `npm test` failed | – | 2m |
-| fix | ✅ committed | 12 | 6m |
-| checks | ✅ passed | – | 2m |
-| verify | ✅ 6 met · 1 unverifiable | 9 | 4m |
-| ci | ✅ passed | – | 3m |
+| implement | ✅ committed | 46 | 21m 14s |
+| checks | ❌ `npm test` failed | – | 1m 48s |
+| fix | ✅ committed | 12 | 6m 2s |
+| checks | ✅ passed | – | 1m 52s |
+| verify | ✅ 6 met · 1 unverifiable | 9 | 4m 31s |
+| ci | ✅ passed | – | 2m 40s |
 | merge | ✅ #31 | – | – |
 ```
 

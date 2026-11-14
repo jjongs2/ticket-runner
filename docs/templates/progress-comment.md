@@ -3,22 +3,22 @@
 
 | Stage | Outcome | Turns | Duration |
 |---|---|---|---|
-| implement | ✅ committed | <n> | <m>m |
-| checks | ✅ passed | – | <m>m |
-| verify | ⏸ rate limited | <n> | <m>m |
+| implement | ✅ committed | <n> | <duration> |
+| checks | ✅ passed | – | <duration> |
+| verify | ⏸ rate limited | <n> | <duration> |
 
 **ticket-runner** `<version>` · run `<runId>` · `<branch>`
 
 | Stage | Outcome | Turns | Duration |
 |---|---|---|---|
-| checks | ✅ passed | – | <m>m |
-| verify | ❌ <k> unmet | <n> | <m>m |
-| fix | ✅ committed | <n> | <m>m |
-| checks | ✅ passed | – | <m>m |
-| verify | ✅ <k> met · <u> unverifiable | <n> | <m>m |
-| conflict | ✅ rebased | <n> | <m>m |
-| checks | ✅ passed | – | <m>m |
-| ci | ✅ passed | – | <m>m |
+| checks | ✅ passed | – | <duration> |
+| verify | ❌ <k> unmet | <n> | <duration> |
+| fix | ✅ committed | <n> | <duration> |
+| checks | ✅ passed | – | <duration> |
+| verify | ✅ <k> met · <u> unverifiable | <n> | <duration> |
+| conflict | ✅ rebased | <n> | <duration> |
+| checks | ✅ passed | – | <duration> |
+| ci | ✅ passed | – | <duration> |
 | merge | ✅ #<pr> | – | – |
 
 One section per Run that worked the Ticket, oldest first: the header naming
@@ -63,6 +63,16 @@ the one being written.
 
 `–` is what a cell has no answer for: Checks, CI and the merge run no agent, so
 they have no turn count, and the merge takes no measurable time of its own.
+
+`<duration>` is written as GitHub Actions writes one on a pull request's checks,
+where a human already reads them: `40s` under a minute, `1m 5s` under an hour,
+`3h 15m 35s` from an hour. It is rounded to the nearest second, starts at the
+largest unit that is not zero, and keeps every unit below it even at zero
+(`1m 0s`, `1h 0m 5s`); nothing is zero-padded. Whole minutes said little, since
+most `checks` and `ci` rows take one or two. The Run's length in `run-summary.txt`
+stays in whole minutes: seconds change nothing over a whole Run. A section an
+earlier Run wrote is carried forward as written, so one comment can read `2m` in
+an older section and `1m 48s` in a newer one.
 
 Details never go in a cell. The failing Check's output, the unmet criteria and
 their evidence belong to the hand-off comment, which is a separate comment so it

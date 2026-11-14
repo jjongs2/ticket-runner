@@ -1982,7 +1982,7 @@ describe("a fix Stage that committed nothing", () => {
     expect(outcome).toMatchObject({ outcome: "handed-off", stage: "fix" });
     expect(handoffBody()).toContain("the fix Stage left no new commits on the branch");
     expect(handoffBody()).toContain("after the fix budget was used");
-    expect(progressTable()).toContain("| fix | ❌ no commits | 7 | 0m |");
+    expect(progressTable()).toContain("| fix | ❌ no commits | 7 | 1s |");
   });
 
   it("stops the pass there, so nothing re-grades a branch nobody touched", async () => {
@@ -2149,7 +2149,7 @@ describe("a fix Stage that committed nothing", () => {
     const outcome = await run();
 
     expect(outcome).toMatchObject({ outcome: "merged" });
-    expect(progressTable()).toContain("| fix | ✅ committed | 7 | 0m |");
+    expect(progressTable()).toContain("| fix | ✅ committed | 7 | 1s |");
   });
 
   it("shows no reason from a Stage that committed, in the hand-off that comes later", async () => {
@@ -2467,7 +2467,7 @@ describe("releasing a rate-limited Ticket", () => {
 
     await run();
 
-    expect(progressTable()).toContain("| implement | ⏸ rate limited | 7 | 0m |");
+    expect(progressTable()).toContain("| implement | ⏸ rate limited | 7 | 1s |");
   });
 
   it("records the implement Stage's work when the verify Stage is stopped", async () => {
@@ -2580,7 +2580,7 @@ describe("releasing a Ticket a transient API failure stopped", () => {
     expect(workspace.worktrees.get(worktree)).toBe(BRANCH);
     expect(workspace.calls).not.toContain(`deleteRemoteBranch:${BRANCH}`);
     expect(state()).toMatchObject({ state: "claimed", fixUsed: false });
-    expect(progressTable()).toContain("| implement | ⏸ API failure | 7 | 0m |");
+    expect(progressTable()).toContain("| implement | ⏸ API failure | 7 | 1s |");
   });
 
   it("releases a verify Stage it stopped with the implement Stage's work recorded", async () => {
@@ -2651,7 +2651,7 @@ describe("releasing a Ticket whose API key ran out of budget", () => {
     expect(workspace.worktrees.get(worktree)).toBe(BRANCH);
     expect(workspace.calls).not.toContain(`deleteRemoteBranch:${BRANCH}`);
     expect(state()).toMatchObject({ state: "claimed", fixUsed: false });
-    expect(progressTable()).toContain("| implement | ⏸ out of API budget | 7 | 0m |");
+    expect(progressTable()).toContain("| implement | ⏸ out of API budget | 7 | 1s |");
     expect(logged).toContain(`#${TICKET} released at implement · out of API budget · ${BRANCH}`);
   });
 
@@ -4609,7 +4609,7 @@ describe("a progress write that failed", () => {
   it("is written once more when the Ticket is handed off", async () => {
     runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
     runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
-    failWrites("| verify | ❌ 1 unmet | 7 | 0m |\n| fix |");
+    failWrites("| verify | ❌ 1 unmet | 7 | 1s |\n| fix |");
     runner.leaves("fix", () => workspace.commits.push("fix(cli): x (#2)"));
 
     expect(await run()).toMatchObject({ outcome: "handed-off" });
@@ -4971,16 +4971,16 @@ describe("the progress comment", () => {
   it("reports what each Stage did, with its turns", async () => {
     await run();
 
-    expect(progressTable()).toContain("| implement | ✅ committed | 7 | 0m |");
-    expect(progressTable()).toContain("| checks | ✅ passed | – | 0m |");
-    expect(progressTable()).toContain("| verify | ✅ 1 met · 0 unverifiable | 7 | 0m |");
+    expect(progressTable()).toContain("| implement | ✅ committed | 7 | 1s |");
+    expect(progressTable()).toContain("| checks | ✅ passed | – | 0s |");
+    expect(progressTable()).toContain("| verify | ✅ 1 met · 0 unverifiable | 7 | 1s |");
     expect(progressTable()).toContain("| merge | ✅ #100 | – | – |");
   });
 
   it("says the checks row found no checks when no Check command ran", async () => {
     await run({ checks: [], gates: { checks: false, ci: true } });
 
-    expect(progressTable()).toContain("| checks | ⚠️ no checks | – | 0m |");
+    expect(progressTable()).toContain("| checks | ⚠️ no checks | – | 0s |");
     expect(progressTable()).not.toContain("| checks | ✅ passed |");
   });
 
@@ -5013,7 +5013,7 @@ describe("the progress comment", () => {
       "ci",
       "merge",
     ]);
-    expect(progressTable()).toContain("| checks | ❌ \`npm test\` failed | – | 0m |");
+    expect(progressTable()).toContain("| checks | ❌ \`npm test\` failed | – | 0s |");
   });
 
   it("adds a conflict row and the Checks that re-grade what it resolved", async () => {
@@ -5030,7 +5030,7 @@ describe("the progress comment", () => {
       "ci",
       "merge",
     ]);
-    expect(progressTable()).toContain("| conflict | ✅ rebased | 7 | 0m |");
+    expect(progressTable()).toContain("| conflict | ✅ rebased | 7 | 1s |");
   });
 
   it("carries on in the comment an earlier Run left, below that Run's section", async () => {

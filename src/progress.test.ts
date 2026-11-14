@@ -67,8 +67,30 @@ describe("the comment body", () => {
       ],
     });
 
-    expect(rendered).toContain("| implement | ✅ committed | 7 | 20m |");
-    expect(rendered).toContain("| checks | ✅ passed | – | 2m |");
+    expect(rendered).toContain("| implement | ✅ committed | 7 | 20m 0s |");
+    expect(rendered).toContain("| checks | ✅ passed | – | 2m 0s |");
+  });
+
+  it.each([
+    [0, "0s"],
+    [400, "0s"],
+    [500, "1s"],
+    [40_000, "40s"],
+    [59_400, "59s"],
+    [59_600, "1m 0s"],
+    [65_000, "1m 5s"],
+    [3_599_600, "1h 0m 0s"],
+    [3_605_000, "1h 0m 5s"],
+    [11_735_000, "3h 15m 35s"],
+  ])("gives a duration of %i ms as %s, the way GitHub Actions does", (durationMs, shown) => {
+    const rendered = progressComment({
+      version: VERSION,
+      runId: "run-1",
+      branch: BRANCH,
+      rows: [{ point: "checks", outcome: "✅ passed", durationMs }],
+    });
+
+    expect(rendered).toContain(`| checks | ✅ passed | – | ${shown} |`);
   });
 
   it("repeats a Stage that ran twice rather than overwriting its row", () => {
@@ -105,7 +127,7 @@ describe("the comment body", () => {
       rows: [{ point: "checks", outcome: "❌ `npm test | tee log` failed", durationMs: 0 }],
     });
 
-    expect(rendered).toContain("| checks | ❌ `npm test \\| tee log` failed | – | 0m |");
+    expect(rendered).toContain("| checks | ❌ `npm test \\| tee log` failed | – | 0s |");
   });
 });
 
@@ -163,7 +185,7 @@ describe("recording a Stage", () => {
     expect(tracker.comments).toHaveLength(1);
     expect(tracker.updatedComments).toHaveLength(1);
     expect(body(tracker)).toContain("| implement | ✅ committed | 7 | – |");
-    expect(body(tracker)).toContain("| checks | ✅ passed | – | 0m |");
+    expect(body(tracker)).toContain("| checks | ✅ passed | – | 0s |");
   });
 
   it("reuses the comment an earlier Run left behind", async () => {
@@ -268,6 +290,32 @@ describe("recording a Stage", () => {
     expect(body(tracker).startsWith(`${single}\n**ticket-runner** \`${VERSION}\` · run \`run-1\``)).toBe(
       true,
     );
+  });
+
+  it("carries an earlier Run's whole minutes forward as written, beside its own seconds", async () => {
+    const tracker = new FakeTracker();
+    const issue = tracker.addIssue({ number: TICKET });
+    const minutes = [
+      PROGRESS_MARKER,
+      `**ticket-runner** \`0.5.0\` · run \`run-0\` · \`${BRANCH}\``,
+      "",
+      "| Stage | Outcome | Turns | Duration |",
+      "|---|---|---|---|",
+      "| implement | ✅ committed | 46 | 21m |",
+      "| checks | ✅ passed | – | 0m |",
+      "| ci | ⏸ GitHub failure | – | 2m |",
+      "",
+    ].join("\n");
+    issue.comments.push({ id: "42", body: minutes });
+
+    await progress(tracker, issue.comments).record({
+      point: "ci",
+      outcome: "✅ passed",
+      durationMs: 65_000,
+    });
+
+    expect(body(tracker).startsWith(minutes)).toBe(true);
+    expect(body(tracker).endsWith("| ci | ✅ passed | – | 1m 5s |\n")).toBe(true);
   });
 
   it("keeps an earlier Run's header and rows without the footer a Host appended after them", async () => {
