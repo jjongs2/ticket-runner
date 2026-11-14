@@ -248,7 +248,7 @@ Readying the Host installs only what the cloud environment's setup script did no
 3. **`gh`**, from apt.
 4. **The Target's own dependencies**, in the main checkout, where every worktree's Checks find them.
 
-It reports each Ticket as the Run ends it, and any refusal or warning, but no progress line. When the Run ends, it gives the summary, what the exit code means and how many Notes the Run posted. If its Run ends without a summary, it offers to start it again rather than asking you to release the lock: a Run from the same session takes the lock over and resumes the Stranded Tickets.
+It reports each Ticket as the Run ends it, and any refusal or warning, but no progress line. When the Run ends, it gives the summary, what the exit code means and how many Notes the Run posted. If its Run ends without a summary, it offers to start it again rather than asking you to release the lock (below).
 
 While no Run holds the Target, the lock free or naming only the Operator's own Run that has gone, it carries your decision on a handed-off Ticket to the board, but only when you ask, and only in three ways:
 

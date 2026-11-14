@@ -42,7 +42,7 @@ describe("the Operator's skill", () => {
     ["Check", "a command the pipeline runs itself on a Ticket's code"],
     ["Hand-off", "handed off (given to a human to carry on)"],
     ["Release", "released (given back for a later Run to take up again)"],
-    ["Note", "A Note is a defect a Stage met that belongs to another Ticket or to none yet"],
+    ["Note", "Notes the Run posted: defects a Stage met that belong to another Ticket or to none yet"],
   ])("glosses %s", (_term, gloss) => {
     expect(operatorSkill()).toContain(gloss);
   });
@@ -62,7 +62,7 @@ function shellBlock(text: string): string {
 const RECORDED = readFileSync(new URL("./testing/operator-watch/run.log", import.meta.url), "utf8");
 const RECORDED_LINES = RECORDED.trimEnd().split("\n");
 
-/** What the watch shows of the recorded log from line `from` on: `<number>: <line>`. */
+/** What the watch shows of the given lines of the recorded log: `<number>: <line>`. */
 function shown(numbers: number[]): string[] {
   return numbers.map((number) => `${number}: ${RECORDED_LINES[number - 1]}`);
 }
@@ -154,14 +154,14 @@ describe.runIf(process.platform === "linux")("the Operator's commands", () => {
     expect(readFileSync(join(root, ".ticket-runner", "run.log"), "utf8")).toBe(RECORDED);
   });
 
-  it("watch shows the reported lines, the summary and the exit line, and exits", () => {
+  it("show only the reported lines, the summary and the exit line, and exits", () => {
     start(fakeRunner());
     const { lines, exited } = watch(1);
     expect(lines).toEqual(shown([...REPORTED, ...SUMMARY_AND_EXIT]));
     expect(exited).toBe(true);
   });
 
-  it("re-armed one past the last line shown, shows only what came after it", () => {
+  it("show, re-armed one past the last line shown, only what came after it", () => {
     start(fakeRunner());
     expect(watch(1).exited).toBe(true);
     const { lines, exited } = watch(15);

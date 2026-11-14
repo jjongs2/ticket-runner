@@ -1,6 +1,6 @@
 ---
 name: ticket-runner
-description: Operate ticket-runner on this repository from a Claude Code cloud session — ready the Host (the machine the pipeline runs on), start a Run (one invocation of the pipeline) detached from the session's shell, narrowed to the Tickets (GitHub issues each sized for one session of work) the human names when they name any, watch its log and report each Ticket as it ends, pass on a Stop (the human's request that a Run finish the Tickets it holds and take no more), release a Run lock a vanished Host left behind, and, while no Run holds this repository, carry the human's decision on a handed-off Ticket to the board when they ask. Use when the human asks to run the pipeline ("run it"), to work particular Tickets, to stop the Run, to release its lock, or to put a handed-off Ticket back for a Run. Never from a Stage (a Claude Code session a Run started for a single purpose).
+description: Operate ticket-runner on this repository from a Claude Code cloud session — ready the Host (the machine the pipeline runs on), start a Run (one invocation of the pipeline) detached from the session's shell, narrowed to the Tickets (GitHub issues each sized for one session of work) the human names when they name any, watch its log and report each Ticket as it ends, pass on a Stop (the human's request that a Run finish the Tickets it holds and take no more), release a Run lock a vanished Host left behind, and, while no Run holds this repository, carry the human's decision on a handed-off Ticket (one given to a human to carry on) to the board when they ask. Use when the human asks to run the pipeline ("run it"), to work particular Tickets, to stop the Run, to release its lock, or to put a handed-off Ticket back for a Run. Never from a Stage (a Claude Code session a Run started for a single purpose).
 ---
 
 # Operating ticket-runner
@@ -89,7 +89,7 @@ Report what the watch shows, in a form a phone screen reads:
 
 Say nothing about a line the watch did not show, and nothing when you arm it again.
 
-When the exit line arrives, report the summary, what the exit code means, and how many Notes the Run posted. Its exit code is `1` when at least one Ticket was handed off to a human, `2` when nothing was taken at all, because the Run was refused or because it was given Ticket numbers and took none of them, every one skipped or blocked, and `0` otherwise. A Note is a defect a Stage met that belongs to another Ticket or to none yet, posted on GitHub where a human will find it instead of being fixed there; the summary has one `noted` row for each.
+When the exit line arrives, report the summary, what the exit code means, and how many Notes the Run posted: defects a Stage met that belong to another Ticket or to none yet, posted on GitHub where a human will find them instead of being fixed there, one `noted` row each in the summary. Its exit code is `1` when at least one Ticket was handed off to a human, `2` when nothing was taken at all, because the Run was refused or because it was given Ticket numbers and took none of them, every one skipped or blocked, and `0` otherwise.
 
 ## Stop
 

@@ -1,4 +1,4 @@
-warning: docs/agents/pipeline-conventions.md was written by ticket-runner 0.6.4, and this is 0.6.5. Run `ticket-runner init` to bring it up to date.
+warning: This Target's `docs/agents/pipeline-conventions.md` was left by 0.6.4, and this Run is 0.6.5 — run `ticket-runner init` here to bring it up to date.
 ticket-runner run 2026-11-10T21-04-11-302 · 2 lanes
 #303 skipped · no-criteria
 #301 claimed · agent/301-the-summary-names-the-version
