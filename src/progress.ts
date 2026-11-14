@@ -93,7 +93,7 @@ export function progressComment({
     "|---|---|---|---|",
     ...rows.map(
       (row) =>
-        `| ${row.point} | ${cell(row.outcome)} | ${count(row.turns)} | ${minutes(row.durationMs)} |`,
+        `| ${row.point} | ${cell(row.outcome)} | ${count(row.turns)} | ${duration(row.durationMs)} |`,
     ),
     "",
   ].join("\n");
@@ -141,9 +141,20 @@ function count(turns: number | undefined): string {
   return turns === undefined ? NO_ANSWER : String(turns);
 }
 
-/** Minutes, as the rest of the pipeline reports durations to humans. */
-function minutes(durationMs: number | undefined): string {
-  return durationMs === undefined ? NO_ANSWER : `${Math.round(durationMs / 60_000)}m`;
+/**
+ * A duration as GitHub Actions writes one on a pull request's checks: `40s`,
+ * `1m 5s`, `3h 15m 35s`. The template says why. A clock stepped back mid-Stage
+ * reads `0s` rather than a negative.
+ */
+function duration(durationMs: number | undefined): string {
+  if (durationMs === undefined) return NO_ANSWER;
+  const total = Math.max(0, Math.round(durationMs / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
 }
 
 /**
