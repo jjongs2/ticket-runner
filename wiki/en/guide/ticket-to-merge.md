@@ -329,7 +329,7 @@ The Ticket is merged, so nothing below can hand it off. Each step's failure is l
 | merge | ✅ #31 | – | – |
 ```
 
-Rows carry a few words only. Anything a human has to act on is its own comment, since those are worth a notification: a hand-off, a guard warning, a Note.
+Rows carry a few words only. Anything a human has to act on is its own comment, since those are worth a notification: a hand-off, a guard warning, a Note. The exception is a green Ticket [handed off with nothing failed](./stopping-and-resuming.md#when-nothing-failed) and no criterion unverifiable, which gets no comment.
 
 **Ticking met criteria.** After the merge, every criterion the verdict marked `met` is ticked by its number (`- [ ]` → `- [x]`) wherever it is written: the body, or any comment, such as the one triage posted its brief in. The box ticked is the unticked line, across the body and every comment together, that still reads as the line the number named when verify got the list. When no line, or more than one, reads so, because the Ticket was edited in between, none is ticked and the Run log names the criterion: an untouched box is safer than a wrong one. An `unverifiable` criterion stays unticked, because nobody gathered evidence for it.
 

@@ -259,7 +259,7 @@ Run과 `init`은 파이프라인 자신의 저장소에서 공개된 가장 높�
 
 - **결정**: 이어받기 상태는 보드 밖의 state file로 두고, 지금은 Target의 remote에 있습니다. Hand-off도 이를 남기고, transcript도 그 옆에 남깁니다. 다만 [`keepTranscripts`](./configuration.md#keeptranscripts)가 Host에 두게 하면 그러지 않고, 공개 Target은 기본이 그렇습니다.
 - **이유**: 보드는 사람을 위한 곳입니다. 클라우드 Host는 버려지니 상태가 Host보다 오래 살아야 합니다. 라벨 한 번 바꿔서 이어받을 수 있어야 합니다. 공개 Target에 push한 transcript는 되돌릴 수 없고, 이는 Host가 사라질 수 있다는 점보다 무겁습니다.
-- **비용**: 예전 로컬 state는 옮겨 주지 않습니다. state branch는 `Workspace`를 거칩니다. 공개 Target의 클라우드 Host Hand-off는 Operator 말고는 transcript를 남기지 않습니다.
+- **비용**: 예전 로컬 state는 옮겨 주지 않습니다. state branch는 `Workspace`를 거칩니다. 공개 Target의 클라우드 Host Hand-off는 Operator 말고는 transcript를 남기지 않습니다. hand-off 코멘트 없이 Hand-off된 Ticket은 되찾아 올 때 사람이 읽은 진행 상황 코멘트에서 이어 갑니다.
 
 ### [ADR-0005: Landing is a serialized section, not a merge queue](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md) {#adr-0005}
 

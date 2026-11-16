@@ -629,22 +629,28 @@ describe("mergeByHandComment", () => {
     pullRequest: 12,
     verdict,
   };
+  /** The comment, which a verdict with an unverifiable criterion always gets. */
+  function posted(handoff: Parameters<typeof mergeByHandComment>[0]): string {
+    const comment = mergeByHandComment(handoff);
+    if (comment === undefined) throw new Error("no comment was written");
+    return comment;
+  }
 
   it("is a hand-off comment, so a later claim marks it as history", () => {
-    const comment = mergeByHandComment(base);
+    const comment = posted(base);
 
     expect(comment.split("\n")[0]).toBe(HANDOFF_MARKER);
     expect(handoffTakenComment(comment)).toContain(HANDOFF_TAKEN_LINE);
   });
 
   it("says the pull request passed every gate and waits for a human to merge it", () => {
-    expect(mergeByHandComment(base)).toContain(
+    expect(posted(base)).toContain(
       "**Handed off.** PR #12 passed every gate and waits for a human to merge it: this Target merges by hand.",
     );
   });
 
   it("names the branch, the worktree and the pull request, which is no draft", () => {
-    const comment = mergeByHandComment(base);
+    const comment = posted(base);
 
     expect(comment).toContain(
       "- Branch `agent/2-skeleton` on the remote · worktree `/repo/.worktrees/ticket-2` · PR #12\n",
@@ -653,7 +659,7 @@ describe("mergeByHandComment", () => {
   });
 
   it("has no failure line, no evidence block and no transcripts", () => {
-    const comment = mergeByHandComment(base);
+    const comment = posted(base);
 
     expect(comment).not.toContain("Failure:");
     expect(comment).not.toContain("Failed at");
@@ -662,7 +668,7 @@ describe("mergeByHandComment", () => {
   });
 
   it("lists each unverifiable criterion with its evidence, one line each", () => {
-    const comment = mergeByHandComment(base);
+    const comment = posted(base);
 
     expect(comment).toContain(
       [
@@ -675,10 +681,10 @@ describe("mergeByHandComment", () => {
     expect(comment).not.toContain("it works");
   });
 
-  it("drops the list when every criterion was met", () => {
+  it("is nothing when every criterion was met", () => {
     const met = graded([{ text: "it works", status: "met", evidence: "npm test is green" }]);
 
-    expect(mergeByHandComment({ ...base, verdict: met })).not.toContain("Unverifiable");
+    expect(mergeByHandComment({ ...base, verdict: met })).toBeUndefined();
   });
 
   it("adds no criterion to the Ticket, however the evidence is written", () => {
@@ -688,7 +694,7 @@ describe("mergeByHandComment", () => {
       body,
     );
 
-    const comment = mergeByHandComment({ ...base, verdict: boxed });
+    const comment = posted({ ...base, verdict: boxed });
 
     expect(new RegExp(UNCHECKED_BOX, "m").test(comment)).toBe(false);
     expect(listCriteria([body, comment]).map(({ text }) => text)).toEqual(["it reads the feed"]);

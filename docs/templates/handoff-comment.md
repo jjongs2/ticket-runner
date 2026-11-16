@@ -125,8 +125,18 @@ GitHub's default squash commit becomes.
 The unverifiable criteria are what the pipeline's own squash commit would have
 carried, one line each, the criterion as its checkbox line on the Ticket reads
 after the box and its evidence joined into one line. A human merging by hand
-gets GitHub's default message instead, so they are said here. The list and its
-heading are dropped when every criterion was met.
+gets GitHub's default message instead, so they are said here.
+
+The comment is posted only when at least one criterion was unverifiable. Those
+criteria are the one thing it carries that nothing else on the Ticket does.
+When every criterion was met, the `ready-for-human` label says a human has
+something to do, the progress comment's `merge` row reads `👤 left to a human`,
+the pull request that closes the Ticket is linked from it, and the worktree is
+where the conventions put it. The Run acts as the Target owner's account, which
+GitHub does not notify of its own comment, and once the human merges, a comment
+saying the pull request waits would be the closed issue's last word. Such a
+Ticket, taken back later, carries on in its progress comment, as
+`progress-comment.md` says.
 
 ## Once the Ticket has been taken again
 

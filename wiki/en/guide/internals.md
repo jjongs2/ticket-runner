@@ -259,7 +259,7 @@ The full records are in [`docs/adr/`](https://github.com/jjongs2/ticket-runner/t
 
 - **Decision**: Resume state is a state file kept off the board, now on the Target's remote. A Hand-off keeps it too, with its transcripts beside it unless [`keepTranscripts`](./configuration.md#keeptranscripts) keeps them on the Host, which is the default on a public Target.
 - **Why**: The board is for humans. A cloud Host is discarded, so the state must outlive it. A relabel should resume a Ticket. A transcript pushed to a public Target cannot be taken back, which outweighs a Host that may be gone.
-- **Cost**: No migration of old local state; the state branch goes through `Workspace`. A public Target's Hand-offs on a cloud Host keep no transcripts beyond the Operator.
+- **Cost**: No migration of old local state; the state branch goes through `Workspace`. A public Target's Hand-offs on a cloud Host keep no transcripts beyond the Operator. A Ticket handed off with no hand-off comment carries on in the progress comment the human read when taken back.
 
 ### [ADR-0005: Landing is a serialized section, not a merge queue](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md) {#adr-0005}
 

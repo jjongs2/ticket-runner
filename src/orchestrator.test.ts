@@ -213,6 +213,7 @@ function stateAtEachStage(): { stage: StageName; state: TicketState | undefined 
 async function run(
   overrides: Partial<Config> = {},
   credential: Credential = "subscription",
+  runId = "run-1",
 ): Promise<TicketOutcome> {
   const settings = config(overrides);
   return await processTicket(
@@ -222,7 +223,7 @@ async function run(
       workspace,
       config: settings,
       repoRoot,
-      runId: "run-1",
+      runId,
       version: VERSION,
       credential,
       billing,
@@ -5347,6 +5348,66 @@ describe("a Target that merges by hand", () => {
       .comments.filter(({ body }) => body.startsWith(HANDOFF_MARKER));
     expect(handoffs).toHaveLength(1);
     expect(handoffs[0]?.body).toContain(HANDOFF_TAKEN_LINE);
+  });
+});
+
+describe("a Target that merges by hand, with every criterion met", () => {
+  const BY_HAND = { merge: false };
+  const PR_BODY = "## Summary\n\nDoes the thing.";
+
+  beforeEach(() => {
+    ticketReads("it works");
+    runner.queue("implement", described({ body: PR_BODY, problem: "P.", solution: "S." }));
+  });
+
+  it("hands the Ticket off with no hand-off comment, and everything else as it is", async () => {
+    const outcome = await run(BY_HAND);
+
+    expect(outcome).toEqual({
+      outcome: "handed-off",
+      ticket: TICKET,
+      title: "Skeleton: one Ticket end to end",
+      branch: BRANCH,
+      stage: "merge",
+      failure: "left to a human, as this Target merges by hand",
+      pullRequest: 100,
+      notes: [],
+    });
+    expect(tracker.comments.filter(({ body }) => body.startsWith(HANDOFF_MARKER))).toEqual([]);
+    expect(notices()).toEqual([]);
+    expect(tracker.issue(TICKET).labels).toEqual(["ready-for-human"]);
+    expect(tracker.issue(TICKET).assignees).toEqual([]);
+    const pr = tracker.pullRequest(100);
+    expect(pr.merged).toBe(false);
+    expect(pr.draft).toBe(false);
+    expect(pr.body).toBe(`Closes #${TICKET}\n\n${PR_BODY}\n`);
+    expect(progressTable()).toContain("| merge | 👤 left to a human | – | – |");
+    expect(workspace.state(TICKET)).toMatchObject({
+      state: "implemented",
+      branch: BRANCH,
+      pullRequest: 100,
+      fixUsed: false,
+    });
+    expect(workspace.transcripts.has(TICKET)).toBe(false);
+  });
+
+  it("carries on in the progress comment it left once a human relabels it", async () => {
+    await run(BY_HAND);
+    tracker.issue(TICKET).labels = ["ready-for-agent"];
+
+    expect(await run({}, "subscription", "run-2")).toMatchObject({
+      outcome: "merged",
+      pullRequest: 100,
+    });
+    // Resumed from its state file: no second implement Stage, and the one pull request.
+    expect(runner.stages()).toEqual(["implement", "verify", "verify"]);
+    expect(tracker.pullRequests).toHaveLength(1);
+    // One progress comment, the first Run's section above the second's.
+    const table = progressTable();
+    expect(table.indexOf("run `run-1`")).toBeGreaterThan(-1);
+    expect(table.indexOf("run `run-2`")).toBeGreaterThan(table.indexOf("run `run-1`"));
+    expect(table).toContain("| merge | 👤 left to a human | – | – |");
+    expect(table).toContain("| merge | ✅ #100 | – | – |");
   });
 });
 

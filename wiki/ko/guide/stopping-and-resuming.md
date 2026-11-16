@@ -12,7 +12,7 @@ Run은 아무도 지켜보지 않는 사이에 돌아가니, 일이 틀어졌을
 | 끝맺음 | 원인 | 남는 것 |
 |---|---|---|
 | merge | 모든 게이트를 초록으로 통과 | 닫힌 이슈. branch와 state file은 사라짐 |
-| [Hand-off](#hand-off) | fix 기회로 감당할 수 없는 실패, 또는 [사람이 직접 merge하는](./configuration.md#merge) Target에서의 초록 통과 | `ready-for-human`, 코멘트, draft pull request(실패한 것이 없으면 ready 상태). 작업과 state 유지 |
+| [Hand-off](#hand-off) | fix 기회로 감당할 수 없는 실패, 또는 [사람이 직접 merge하는](./configuration.md#merge) Target에서의 초록 통과 | `ready-for-human`, 코멘트(실패한 것도, 확인할 수 없었던 기준도 없으면 없음), draft pull request(실패한 것이 없으면 ready 상태). 작업과 state 유지 |
 | [Release](#release-on-a-rate-limit) | 요금제나 API의 rate limit, 일시적인 API 장애, [API 키의 예산 소진](#release-out-of-api-budget), [base branch 실패](#release-over-a-failing-base-branch), 또는 [GitHub나 git remote 장애](#release-over-a-github-or-remote-failure) | `ready-for-agent`, Ticket에 코멘트 없음. 작업과 state 유지 |
 | [Stop](#stop-and-kill) | `ticket-runner stop`(SIGTERM) | 새로 남는 것 없음 |
 | [kill](#stop-and-kill) | Ctrl+C, SIGKILL, 사라진 Host | claim, 마지막 push 시점의 작업, state |
@@ -44,7 +44,7 @@ stateDiagram-v2
 Hand-off가 남기는 것:
 
 - push할 작업이 있으면, branch의 작업을 담은 draft pull request. 이미 열려 있던 pull request는 draft로 되돌아갑니다. [실패한 것이 없을 때](#when-nothing-failed)는 예외입니다.
-- 아래의 hand-off 코멘트. Ticket이 어디서, 왜 실패했는지 알려 줍니다.
+- 아래의 hand-off 코멘트. Ticket이 어디서, 왜 실패했는지 알려 줍니다. [실패한 것이 없을 때](#when-nothing-failed)는 확인할 수 없었던 기준이 있을 때만 답니다.
 - `in-progress` 대신 `ready-for-human`, 그리고 담당자 없음
 - 각 Stage의 명령줄과 transcript. [`keepTranscripts`](./configuration.md#keeptranscripts)에 따라 `ticket-runner/state` branch나 Host에 남습니다([무엇이 어디에 남나](#what-stays-where)).
 
@@ -103,7 +103,8 @@ Failure 줄은 무엇이 Ticket을 멈췄는지 말합니다. 그에 따라 할 
 [`merge`](./configuration.md#merge)를 `false`로 둔 Target에서는 CI가 초록인 Ticket을 merge하지 않고 `merge`에서 Hand-off합니다. 실패한 것이 없으니 이 Hand-off는 이렇게 합니다.
 
 - pull request는 Run이 게시한 그대로 둡니다. ready 상태이고, 제목과 본문도 바뀌지 않습니다.
-- pull request가 모든 게이트를 통과해 사람의 merge를 기다린다고 코멘트합니다. Failure 줄과 근거는 없고, 확인할 수 없었던(`unverifiable`) 기준을 근거와 함께 하나씩 적습니다.
+- 확인할 수 없었던(`unverifiable`) 기준이 있으면, pull request가 모든 게이트를 통과해 사람의 merge를 기다린다고 코멘트합니다. Failure 줄과 근거는 없고, 그 기준을 근거와 함께 하나씩 적습니다.
+- 모든 기준을 충족했으면 코멘트를 달지 않습니다. 라벨, 진행 상황 코멘트, 연결된 pull request가 이미 말해 줍니다.
 - state file은 남기지만 transcript는 남기지 않고, 기준에 체크하지도 않습니다.
 
 ```md
@@ -164,7 +165,7 @@ Ticket을 파이프라인에 돌려주려면 라벨을 `ready-for-human`에서 `
 - **fix 기회**: 새로 채워집니다. Ticket이 사람 손을 거쳤으니, 그 사람이 한 일에 새 기회를 쓰라는 뜻입니다. 예전 코멘트에는 fix 기회를 썼다고 그대로 남습니다. 실제로 썼으니까요.
 - **draft pull request**: CI를 기다리기 전에 draft를 풉니다. draft에서는 워크플로가 아예 돌지 않는 일이 많아서, 그대로 기다리면 "no checks"로 읽히기 때문입니다. 사람이 닫아 버린 pull request처럼 draft가 풀리지 않으면 `pr`에서 Hand-off합니다. 닫았다는 건 이어 가지 말라는 뜻이니까요.
 - **hand-off 코멘트**: 각 코멘트의 마커 바로 아래에 `_Taken again by a later Run; this hand-off is history._`가 붙습니다. 알림은 가지 않습니다.
-- **진행 상황 코멘트**: 새로 하나 답니다. 사람이 읽었던 코멘트는 읽은 모습 그대로 둡니다.
+- **진행 상황 코멘트**: 새로 하나 답니다. 사람이 읽었던 코멘트는 읽은 모습 그대로 둡니다. [코멘트 없이 Hand-off된](#when-nothing-failed) Ticket은 예외로, 진행 상황 코멘트에서 이어 가며 여러분이 읽은 섹션 아래에 섹션을 붙입니다. 읽은 섹션은 그대로입니다. hand-off 코멘트가 없으니 사람이 Ticket을 맡고 있었다는 걸 Run이 알 길이 없기 때문입니다.
 
 라벨을 바꾸기 전까지 state file은 가만히 있습니다. 어떤 Frontier도 `ready-for-human` Ticket을 내놓지 않고, sweep은 아무 말 없이 지나가며, 번호를 지정한 Run은 `not-ready`로 건너뜁니다. 이슈가 닫히면 다음 Run의 sweep이 파일과 transcript를 지웁니다.
 
@@ -179,7 +180,7 @@ Release가 하는 일:
 - 진행 상황 코멘트에 `⏸ rate limited`나 `⏸ API failure` 줄을 하나 남깁니다. 보고는 이게 전부입니다.
 - state file을 최신으로 맞춥니다. implement Stage가 멈췄으면 `claimed`, 그 뒤의 Stage가 멈췄으면 `implemented`입니다. fix 기회는 그대로 가져가되, 이렇게 멈춘 게 fix Stage 자신이면 쓴 것으로 치지 않습니다.
 - claim을 되돌립니다. `ready-for-agent`를 붙이고, `in-progress`를 떼고, 담당자를 해제합니다.
-- 따로 코멘트를 달지 않고, draft pull request도 열지 않습니다. 그 줄은 새 진행 상황 코멘트를 열 때만 알림을 보냅니다. 멈춘 Stage가 그 Ticket에서 처음 보고하는 Stage이거나, 사람에게서 되찾아 온 Ticket일 때입니다.
+- 따로 코멘트를 달지 않고, draft pull request도 열지 않습니다. 그 줄은 새 진행 상황 코멘트를 열 때만 알림을 보냅니다. 멈춘 Stage가 그 Ticket에서 처음 보고하는 Stage이거나, hand-off 코멘트를 남기고 사람에게 넘겼다가 되찾아 온 Ticket일 때입니다.
 
 그 뒤로 Run은 더 claim하지 않습니다. 한 Stage를 멈춘 원인은 다음 Stage도 멈출 테니까요. 바쁜 Lane은 자기 Ticket을 끝까지 마치고, Run은 한도가 풀리기를 기다리지 않고 끝납니다. 마지막 줄이 그 이유를 말하고, CLI가 알려 준 경우에는 한도가 풀리는 시각도 담습니다([요약](./running.md#the-summary)). Release된 Ticket도 가져간 것으로 치니, Hand-off가 없으면 종료 코드는 `0`입니다.
 

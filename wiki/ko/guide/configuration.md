@@ -99,7 +99,7 @@ No Check commands are configured and none could be inferred from package.json. A
 
 기본값인 `true`이면 Run은 CI가 초록인 Ticket마다 squash-merge합니다. 사람이 모든 pull request를 리뷰하고 merge하는 Target은 `false`로 두세요. GitHub에서 승인을 필수로 걸어도 같은 효과는 나지 않습니다. 파이프라인은 여러분의 계정으로 움직이고, 이 계정은 자기 pull request를 승인할 수 없으니 여러분이 직접 하는 merge까지 막힙니다.
 
-`false`이면 CI가 초록인 Ticket은 merge되지 않고 [Hand-off됩니다](./stopping-and-resuming.md#when-nothing-failed). pull request는 Run이 게시한 제목과 본문 그대로 리뷰를 기다리는 ready 상태로 남고, Hand-off 코멘트에는 verify가 확인하지 못한 기준이 근거와 함께 적힙니다. 이렇게 Ticket을 넘긴 Run은 종료 코드 `1`로 끝납니다. 이 설정이 `gates` 밖에 있는 이유는, 게이트를 끄면 merge까지 가는 길이 느슨해지지만 이 설정은 오히려 조이기 때문입니다.
+`false`이면 CI가 초록인 Ticket은 merge되지 않고 [Hand-off됩니다](./stopping-and-resuming.md#when-nothing-failed). pull request는 Run이 게시한 제목과 본문 그대로 리뷰를 기다리는 ready 상태로 남고, verify가 확인하지 못한 기준이 있으면 Hand-off 코멘트에 근거와 함께 적힙니다. 그런 기준이 없으면 코멘트를 달지 않습니다. 이렇게 Ticket을 넘긴 Run은 종료 코드 `1`로 끝납니다. 이 설정이 `gates` 밖에 있는 이유는, 게이트를 끄면 merge까지 가는 길이 느슨해지지만 이 설정은 오히려 조이기 때문입니다.
 
 이때 파이프라인이 직접 merge하면서 보장하던 두 가지가 Target에 달리게 됩니다.
 
