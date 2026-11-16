@@ -195,7 +195,7 @@ sequenceDiagram
 
 ## 버전 {#versions}
 
-버전은 `main`이 `v<x.y.z>` tag로 달고, npm에 올리고, GitHub Release로 공개하는 번호입니다. 설치된 사본이 이 번호를 알려 줍니다. 머신에는 `main`이 아니라 버전을 설치하니, `0.5.2`라고 말하는 두 머신은 같은 코드를 돌립니다. 예외는 마지막 버전 뒤에 merge된 commit을 돌리려고 전역으로 설치한 clone 하나인데, 이것은 다른 [개발 checkout](#the-stamp)처럼 번호 옆에 그 commit을 알려 줍니다([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
+버전은 `main`이 `v<x.y.z>` tag로 달고, npm에 올리고, GitHub Release로 공개하는 번호입니다. 설치된 사본이 이 번호를 알려 줍니다. 머신에는 `main`이 아니라 버전을 설치하니, `0.5.2`라고 말하는 두 머신은 같은 코드를 돌립니다. 마지막 버전 뒤에 merge된 commit을 돌리려고 clone을 전역으로 설치했을 때만 예외로, 이 사본은 [개발 checkout](#the-stamp)처럼 번호 옆에 그 commit을 알려 줍니다([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
 
 버전은 사람이 릴리스 PR을 merge해서 끊고, 그 pull request의 초안은 [`/cut-a-version`](https://github.com/jjongs2/ticket-runner/blob/main/.claude/skills/cut-a-version/SKILL.md)이 만듭니다. 단계와 거기 붙는 검사는 [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md#versions)에 있습니다. 이 pull request가 번호를 올리고 릴리스 노트를 싣습니다. 스킬을 돌리는 agent가 `CONTRIBUTING.md`의 규칙대로 번호를 제안하고 노트 초안을 쓰지만, 결정은 사람의 리뷰와 merge입니다. 언제 버전을 끊을지는 Planning의 결정이고, 무엇이 merge됐는지를 보고 짐작할 일이 아니기 때문입니다.
 
@@ -207,7 +207,7 @@ sequenceDiagram
 
 | `-v` 출력 | 언제 |
 |---|---|
-| `0.5.2` | 설치된 사본. 번호가 전부 |
+| `0.5.2` | npm에서 설치한 사본. 번호가 전부 |
 | `0.5.2+331d79c` | 깨끗한 개발 checkout |
 | `0.5.2+331d79c.dirty` | commit하지 않은 변경이 있는 개발 checkout |
 | `unknown` | 읽을 수 있는 `package.json`이 없음 |

@@ -207,7 +207,7 @@ The version is resolved once, in the CLI, and handed down. Every stamp one Run w
 
 | `-v` prints | When |
 |---|---|
-| `0.5.2` | an installed copy: the number is the whole of it |
+| `0.5.2` | a copy installed from npm: the number is the whole of it |
 | `0.5.2+331d79c` | a development checkout, clean |
 | `0.5.2+331d79c.dirty` | a development checkout with uncommitted changes |
 | `unknown` | no readable `package.json` |

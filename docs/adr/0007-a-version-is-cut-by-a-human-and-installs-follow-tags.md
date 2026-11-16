@@ -16,4 +16,4 @@ What was missing was a way to run a commit merged after the latest version, whic
 
 An install of `main` straight from GitHub, `npm install -g github:jjongs2/ticket-runner`, is not offered. npm 10 and 11 take it without a word, and npm records no commit for a git install, so that copy reports the number of a published version while running code the version does not have, and nothing can make it name its commit. That breaks the one thing the number alone promises.
 
-The cost stays with the clone's user: an `init` from it stamps the conventions document with the last version's number over text that version may not have, and an `init` from that published version rewrites the text back without a word, since it keeps a document only when the mark is newer.
+The cost stays with the clone's user: an `init` from it stamps the conventions document with the last version's number over text that version may not have, and an `init` from that published version rewrites the text back, saying only that the copy said something else, since it keeps a document only when the mark is newer.

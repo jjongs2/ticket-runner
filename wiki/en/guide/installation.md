@@ -93,7 +93,7 @@ ticket-runner --version   # 0.5.2+331d79c
 
 Not straight from GitHub (`npm install -g github:jjongs2/ticket-runner`): npm records no commit for that copy, so it reports the number of the published version while running code that version does not have ([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
 
-`init` from a clone stamps the conventions document with the last version's number over text that version may not have, and an `init` from that published version rewrites it back without a word.
+`init` from a clone stamps the conventions document with the last version's number over text that version may not have, and an `init` from that published version rewrites it back, saying only that the copy here said something else.
 
 ## Set a Target up with `init`
 

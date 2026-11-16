@@ -34,10 +34,9 @@ const UNKNOWN = "unknown";
  *
  * A copy installed from npm is its number and nothing else, because npm holds
  * only tags: two machines that say `0.4.0` run the same code. A development
- * checkout, a clone installed globally from its path among them, runs whatever
- * commit it has, so it adds that commit in semver's build-metadata position and
- * a `dirty` mark when the tree has uncommitted changes — `0.4.0`,
- * `0.4.0+331d79c`, `0.4.0+331d79c.dirty`.
+ * checkout runs whatever commit it has, so it adds that commit in semver's
+ * build-metadata position and a `dirty` mark when the tree has uncommitted
+ * changes — `0.4.0`, `0.4.0+331d79c`, `0.4.0+331d79c.dirty`.
  */
 export async function pipelineVersion(packageRoot: string = PACKAGE_ROOT): Promise<string> {
   const number = packageNumber(packageRoot);

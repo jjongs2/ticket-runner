@@ -93,7 +93,7 @@ ticket-runner --version   # 0.5.2+331d79c
 
 GitHub에서 바로 설치(`npm install -g github:jjongs2/ticket-runner`)하지는 마세요. npm이 그 사본의 commit을 기록하지 않아서, 그 버전에 없는 코드를 돌리면서도 공개된 버전의 번호를 알려 줍니다([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
 
-clone에서 `init`을 실행하면 conventions 문서에 마지막 버전의 번호를 찍지만 내용은 그 버전에 없을 수 있고, 그 공개 버전의 `init`은 아무 말 없이 문서를 다시 되돌려 씁니다.
+clone에서 `init`을 실행하면 conventions 문서에 마지막 버전의 번호를 찍지만 내용은 그 버전에 없을 수 있고, 그 공개 버전의 `init`은 내용이 달랐다고만 알리고 문서를 되돌려 씁니다.
 
 ## `init`으로 Target 준비하기 {#set-a-target-up-with-init}
 
