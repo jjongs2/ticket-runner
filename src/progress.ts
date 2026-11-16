@@ -13,6 +13,15 @@
  * to act on — a hand-off, a guard warning — stays a comment of its own, because
  * those are exactly the ones a notification is worth.
  *
+ * Except one Hand-off, which posts no comment: a green Ticket on a Target that
+ * merges by hand whose every criterion was met. Its label, its `merge` row
+ * here and the pull request linked from the Ticket already say what a human
+ * has to do, and the account the Run acts as, the Target's owner, is never
+ * notified of its own comment anyway. With no hand-off comment to tell it a
+ * human held the Ticket, the Run taking such a Ticket back carries on in this
+ * comment like any other, below the section that human read, which it leaves
+ * as it was (ADR-0004).
+ *
  * `docs/templates/progress-comment.md` is the source of truth for the shape.
  */
 
@@ -205,7 +214,10 @@ export class Progress {
     // Run resuming one rewrites nothing and starts a comment of its own. Every
     // other Run — a released Ticket, a stranded one, a second pass of this one
     // — carries on in the comment it finds, which is what the one comment is
-    // for, below whatever earlier Runs wrote in it.
+    // for, below whatever earlier Runs wrote in it. So does one taking back a
+    // Ticket handed off with no hand-off comment, which only a current one
+    // tells apart: nothing failed there, and the section the human read stays
+    // as it was above this Run's.
     this.comment = carriesCurrentHandoff(options.comments)
       ? undefined
       : findProgressComment(options.comments);

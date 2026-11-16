@@ -99,7 +99,7 @@ No Check commands are configured and none could be inferred from package.json. A
 
 With `true`, the default, a Run squash-merges each Ticket whose CI is green. A Target where a human reviews and merges every pull request sets it to `false`. Requiring an approval on GitHub does not get you that: the pipeline acts as your account, which cannot approve its own pull request, so your own merges would be blocked too.
 
-With `false`, a green Ticket is [handed off](./stopping-and-resuming.md#when-nothing-failed) rather than merged. Its pull request stays ready for review with the title and body the Run published, and the hand-off comment lists the criteria verify could not check, with their evidence. A Run that hands one off this way exits `1`. The setting sits outside `gates` because a gate switched off loosens what reaches a merge, and this tightens it.
+With `false`, a green Ticket is [handed off](./stopping-and-resuming.md#when-nothing-failed) rather than merged. Its pull request stays ready for review with the title and body the Run published, and a hand-off comment lists the criteria verify could not check, with their evidence; when there are none, no comment is posted. A Run that hands one off this way exits `1`. The setting sits outside `gates` because a gate switched off loosens what reaches a merge, and this tightens it.
 
 Two things the pipeline's own merge gives you then depend on the Target:
 

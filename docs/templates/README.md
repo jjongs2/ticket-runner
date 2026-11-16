@@ -9,7 +9,7 @@ Humans read all of these, so each stays short: one line of status, details folde
 | Template | Written when | Marker |
 |---|---|---|
 | `progress-comment.md` | first Stage of a Ticket; edited in place afterwards | `<!-- ticket-runner:progress -->` |
-| `handoff-comment.md` | a Ticket is handed to a human; marked as history when the Ticket is claimed again | `<!-- ticket-runner:handoff -->` |
+| `handoff-comment.md` | a Ticket is handed to a human, except a green one on a Target that merges by hand whose every criterion was met; marked as history when the Ticket is claimed again | `<!-- ticket-runner:handoff -->` |
 | `guard-comment.md` | a candidate is skipped by a guard | `<!-- ticket-runner:guard:<reason> -->` |
 | `note-comment.md` | a Stage makes a Note, wherever it is routed, or a Ticket is released over a failing base branch | `<!-- ticket-runner:note -->` |
 | `notes-issue.md` | a Note cannot reach a Ticket and no standing Notes issue is open | `<!-- ticket-runner:notes-issue -->` (issue body) |
@@ -31,7 +31,7 @@ Humans read all of these, so each stays short: one line of status, details folde
 
 The conventions document `init` writes carries a marker of its own, `<!-- ticket-runner:version <number> -->`, and is the one that is *on* a first line rather than *being* one: it ends the document's heading, so no reader of the document meets it. It also changes, because what it carries is the version that wrote the copy — which is what lets `init` leave a Target a newer pipeline set up alone, and a Run warn about a copy from another version without touching it (ADR-0007). It is not in this folder because no template writes it: `src/conventions.ts` is the document's only shape.
 
-Markers are how the pipeline finds its own writing again. A marker is the first line of the comment and never changes. A Ticket can carry more than one comment under the same marker: a hand-off is a comment of its own each time, and the claim marks every one of them as history rather than only the newest. `note-comment.md` carries one without ever looking it up: nothing about a Note is edited or posted twice, but a human meeting it on an unrelated Ticket can tell what wrote it.
+Markers are how the pipeline finds its own writing again. A marker is the first line of the comment and never changes. A Ticket can carry more than one comment under the same marker: a hand-off that writes one writes a comment of its own each time, and the claim marks every one of them as history rather than only the newest. `note-comment.md` carries one without ever looking it up: nothing about a Note is edited or posted twice, but a human meeting it on an unrelated Ticket can tell what wrote it.
 
 `notes-issue.md` is the one marker that is not on a comment at all: it is the first line of an issue body, and the only thing that identifies the standing Notes issue. A title can be renamed and a comment can be deleted; a body the pipeline wrote and never rewrites is what survives both. Its marker is deliberately not `note-comment.md`'s — one marks the issue, the other marks the Notes on it.
 

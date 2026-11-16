@@ -61,6 +61,12 @@ comment of its own below the one the human read, leaving that one exactly as
 they read it. So a Ticket can carry more than one of these, and the newest is
 the one being written.
 
+A Ticket handed off with no hand-off comment, a green one on a Target that
+merges by hand whose every criterion was met, carries on in this comment when it
+is taken back. Nothing tells the Run a human held it, and nothing failed there:
+the section the human read, ending in `👤 left to a human`, stays exactly as it
+was, above the new Run's.
+
 `–` is what a cell has no answer for: Checks, CI and the merge run no agent, so
 they have no turn count, and the merge takes no measurable time of its own.
 
@@ -76,7 +82,9 @@ an older section and `1m 48s` in a newer one.
 
 Details never go in a cell. The failing Check's output, the unmet criteria and
 their evidence belong to the hand-off comment, which is a separate comment so it
-notifies; this one is edited in place and notifies nobody after the first Stage.
+notifies the Ticket's watchers, though never the account the Run acts as, since
+GitHub notifies nobody of their own comment; this one is edited in place and
+notifies nobody after the first Stage.
 
 ## Outcome cells
 

@@ -247,7 +247,8 @@ class TicketFailure extends Error {
  * A Ticket that passed every gate on a Target that merges by hand (`merge`
  * off). Nothing failed: it ends in a hand-off only because a human merges here,
  * so the hand-off leaves its pull request as published and keeps no
- * transcripts, and its comment lists what the squash commit would have carried.
+ * transcripts, and its comment lists what the squash commit would have carried,
+ * posted only when that is anything.
  */
 class LeftToHuman extends TicketFailure {
   constructor(readonly verdict: Verdict) {
@@ -2306,7 +2307,9 @@ interface HandOff {
 
 /**
  * Hand the Ticket to a human: a draft pull request to review, a comment naming
- * where the work is, and the labels a human filters on. The branch, the
+ * where the work is, and the labels a human filters on. A green Ticket on a
+ * Target that merges by hand keeps its pull request ready for review, and gets
+ * the comment only when a criterion was unverifiable. The branch, the
  * worktree and the state file stay put, so a human who relabels the Ticket
  * `ready-for-agent` hands it back and the next Run carries on from what it
  * reached. The Stages' transcripts go up beside the state, since the Host they
@@ -2462,8 +2465,10 @@ async function handOff(
     const shownWorktree =
       worktree === undefined ? undefined : inCheckout(pipeline.repoRoot, worktree.path);
 
-    await tracker.comment(
-      ticket,
+    // A green Ticket whose every criterion was met gets no comment at all:
+    // nothing in one would be news beside its label, its progress comment and
+    // its pull request (`mergeByHandComment`).
+    const comment =
       byHand !== undefined && pullRequest !== undefined
         ? mergeByHandComment({
             branch,
@@ -2483,8 +2488,8 @@ async function handOff(
             ...(failure.reason === undefined ? {} : { reason: failure.reason }),
             fixUsed,
             ...(pullRequest === undefined ? {} : { pullRequest }),
-          }),
-    );
+          });
+    if (comment !== undefined) await tracker.comment(ticket, comment);
     await tracker.removeLabel(ticket, config.labels.inProgress);
     claimed = false;
     await tracker.addLabel(ticket, config.labels.readyForHuman);

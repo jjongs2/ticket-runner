@@ -12,7 +12,7 @@ Nobody watches a Run, so it has to end well when something goes wrong: a Ticket 
 | Ending | Caused by | Leaves behind |
 |---|---|---|
 | Merge | a green pass through every gate | a closed issue; branch and state file gone |
-| [Hand-off](#hand-off) | a failure the fix budget cannot cover, or a green pass on a Target that [merges by hand](./configuration.md#merge) | `ready-for-human`, a comment, a draft pull request (ready for review when nothing failed); work and state kept |
+| [Hand-off](#hand-off) | a failure the fix budget cannot cover, or a green pass on a Target that [merges by hand](./configuration.md#merge) | `ready-for-human`, a comment (none when nothing failed and no criterion was unverifiable), a draft pull request (ready for review when nothing failed); work and state kept |
 | [Release](#release-on-a-rate-limit) | the subscription or API rate limit, a transient API failure, an [API key out of budget](#release-out-of-api-budget), a [failing base branch](#release-over-a-failing-base-branch), or [GitHub or the git remote failing](#release-over-a-github-or-remote-failure) | `ready-for-agent`, no comment on the Ticket; work and state kept |
 | [Stop](#stop-and-kill) | `ticket-runner stop` (SIGTERM) | nothing new |
 | [Kill](#stop-and-kill) | Ctrl+C, SIGKILL, a vanished Host | the claim; work as last pushed, and state |
@@ -44,7 +44,7 @@ A [Hand-off](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) giv
 A Hand-off leaves you:
 
 - a draft pull request of the branch's work, where there is work to push; a pull request already open goes back into draft, except [when nothing failed](#when-nothing-failed)
-- the hand-off comment below, saying where the Ticket failed and why
+- the hand-off comment below, saying where the Ticket failed and why; [when nothing failed](#when-nothing-failed), only if a criterion was unverifiable
 - `ready-for-human` in place of `in-progress`, and no assignee
 - each Stage's command line and transcript, kept on the `ticket-runner/state` branch or on the Host, as [`keepTranscripts`](./configuration.md#keeptranscripts) decides ([What stays where](#what-stays-where))
 
@@ -103,7 +103,8 @@ The comment names a worktree wherever there is one: this Run's, or the one the b
 On a Target that sets [`merge`](./configuration.md#merge) to `false`, a Ticket whose CI is green is handed off at `merge` rather than merged. Nothing failed, so this Hand-off:
 
 - leaves the pull request as the Run published it: ready for review, its title and body unchanged
-- comments that the pull request passed every gate and waits for you to merge it, with no Failure line or evidence, and lists each unverifiable criterion with its evidence
+- when a criterion was unverifiable, comments that the pull request passed every gate and waits for you to merge it, with no Failure line or evidence, and lists each unverifiable criterion with its evidence
+- when every criterion was met, posts no comment: the label, the progress comment and the linked pull request already say it, the Run posts as your account so GitHub would not notify you, and after your merge the comment would still say the pull request waits
 - keeps the state file but no transcripts, and ticks no criteria
 
 ```md
@@ -164,7 +165,7 @@ A few things differ from the Run that handed it off:
 - **Fix budget**: fresh. The Ticket went through a human's hands, and whatever they did is what the new budget is for. The old comment still says the budget was spent, because it was.
 - **Draft pull request**: taken out of draft before CI is awaited, since a draft often runs no workflows and the wait would read "no checks". One that will not come out of draft, such as a pull request a human closed, is a Hand-off at `pr`: closing it said the work should not go on.
 - **Hand-off comments**: each is marked `_Taken again by a later Run; this hand-off is history._` under its marker, which notifies nobody.
-- **Progress comment**: a new one. The comment the human read is left exactly as they read it.
+- **Progress comment**: a new one. The comment the human read is left exactly as they read it. A Ticket [handed off with no comment](#when-nothing-failed) carries on in its progress comment instead, below the section you read, which stays as it was: with no hand-off comment, nothing tells the Run a human held it.
 
 Until the relabel, the state file is inert. No Frontier offers a `ready-for-human` Ticket, the sweep passes over it without a word, and a Run given its number skips it as `not-ready`. Once the issue closes, the next Run's sweep removes the file and its transcripts.
 
@@ -179,7 +180,7 @@ What the Release does:
 - writes a `⏸ rate limited` or `⏸ API failure` row in the progress comment, which is the whole report
 - brings the state file up to date, to `claimed` if the implement Stage was stopped and `implemented` if a later Stage was, and keeps the fix budget as it was, except that a fix Stage stopped this way spends nothing
 - undoes the claim: adds `ready-for-agent`, removes `in-progress`, and unassigns
-- posts no comment of its own and opens no draft pull request. Its row notifies watchers only when it opens a new progress comment: when the stopped Stage is the first to report on the Ticket, or the Ticket was taken back from a human
+- posts no comment of its own and opens no draft pull request. Its row notifies watchers only when it opens a new progress comment: when the stopped Stage is the first to report on the Ticket, or the Ticket was taken back from a human after a hand-off comment
 
 The Run then claims nothing more, because what stopped one Stage would stop the next. The busy Lanes finish their own Tickets, and the Run ends without waiting for the limit to reset. Its last line says why, and when the limit resets where the CLI said ([The summary](./running.md#the-summary)). A released Ticket counts as taken, so the exit code is `0` unless something was handed off.
 

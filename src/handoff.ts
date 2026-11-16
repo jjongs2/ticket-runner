@@ -22,7 +22,10 @@ import { HANDOFF_MARKER, findMarkedComments, handoffTakenComment } from "./templ
  * body that would mark it as history.
  *
  * One question, asked twice: it is what the claim edits, and it is also what
- * says a human has been holding the Ticket since the last Run put it down.
+ * says a human has been holding the Ticket since the last Run put it down —
+ * except a human holding one handed off with no comment, a green Ticket on a
+ * Target that merges by hand whose every criterion was met, which nothing here
+ * tells apart from a released one.
  */
 function unmarkedHandoffs(
   comments: IssueComment[],
@@ -34,7 +37,9 @@ function unmarkedHandoffs(
 }
 
 /**
- * Whether a human has been holding the Ticket since the last Run put it down.
+ * Whether a human has been holding the Ticket since the last Run put it down,
+ * as far as a hand-off comment says so: one handed off with no comment reads
+ * `false`.
  *
  * Asked of the comments as they were when the Ticket was claimed, so the Run
  * marking them now still sees the hand-off it is answering.

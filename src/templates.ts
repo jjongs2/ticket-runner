@@ -75,8 +75,8 @@ const GUARD_SENTENCES: Record<GuardReason, string> = {
  * The marker is the first line of every pipeline comment and never changes,
  * which is the whole point of it: this is how the pipeline finds what it has
  * already written rather than writing it again. Most markers are on one comment
- * per Ticket, but a hand-off is a comment of its own every time a Ticket is
- * handed off, so the marker alone does not promise there is only one.
+ * per Ticket, but a hand-off is a comment of its own nearly every time a Ticket
+ * is handed off, so the marker alone does not promise there is only one.
  */
 export function findMarkedComments(comments: IssueComment[], marker: string): IssueComment[] {
   return comments.filter((comment) => carriesMarker(comment.body, marker));
@@ -92,9 +92,10 @@ function carriesMarker(body: string, marker: string): boolean {
  * time.
  *
  * The newest rather than the first, because "one at a time" is not "one ever": a
- * Ticket taken back from a human starts a progress comment of its own beside the
- * table the human read, and the Run writing now must edit the one it just
- * posted rather than the one it deliberately left alone.
+ * Ticket taken back from a human with a hand-off comment to mark starts a
+ * progress comment of its own beside the table the human read, and the Run
+ * writing now must edit the one it just posted rather than the one it
+ * deliberately left alone.
  */
 export function findMarkedComment(
   comments: IssueComment[],
@@ -476,22 +477,25 @@ export interface MergeByHandComment extends Pick<HandoffComment, "branch" | "onR
  * GitHub's own message instead, so they are said here, where that human reads
  * them. They are posted on the Ticket, whose comments are read for Acceptance
  * Criteria, so a line that could read as a checkbox is defused.
+ *
+ * Nothing when every criterion was met: the label, the progress comment's
+ * `merge` row and the pull request linked from the Ticket already say all the
+ * rest, the Run's account notifies nobody of its own comment, and once a human
+ * merges, a comment still saying the pull request waits would be the closed
+ * issue's last word.
  */
-export function mergeByHandComment(handoff: MergeByHandComment): string {
+export function mergeByHandComment(handoff: MergeByHandComment): string | undefined {
   const unverifiable = unverifiableLines(handoff.verdict);
+  if (unverifiable.length === 0) return undefined;
   return [
     HANDOFF_MARKER,
     `**Handed off.** PR #${handoff.pullRequest} passed every gate and waits for a human to merge it: this Target merges by hand.`,
     "",
     `- ${whereTheWorkIs(handoff, `PR #${handoff.pullRequest}`)}`,
-    ...(unverifiable.length === 0
-      ? []
-      : [
-          "",
-          "**Unverifiable criteria:**",
-          "",
-          ...unverifiable.map(escapeCheckboxes),
-        ]),
+    "",
+    "**Unverifiable criteria:**",
+    "",
+    ...unverifiable.map(escapeCheckboxes),
   ].join("\n");
 }
 
