@@ -47,12 +47,6 @@ npm install -g ticket-runner
 
 업그레이드도 같은 명령입니다. 그다음 쓰던 것보다 새로운 버전마다 [Release](https://github.com/jjongs2/ticket-runner/releases)의 **After upgrading**을 읽으세요. `init` 다시 실행하기처럼 Target에서 해야 할 일이 적혀 있습니다.
 
-GitHub의 버전 tag에서 바로 설치해도 됩니다. 이 범위는 `main`이 아니라 가장 높은 tag를 가리키므로, 받는 사본은 언제나 tag가 붙은, 이름 있는 버전입니다([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
-
-```bash
-npm install -g "github:jjongs2/ticket-runner#semver:*"
-```
-
 `init`과 `run`은 GitHub Release로 공개된 가장 새로운 버전을 찾아봅니다. 그게 지금 사본이 보고하는 번호보다 높으면 한 줄을 출력할 뿐, 아무것도 거절하지 않습니다.
 
 ```text
@@ -79,6 +73,27 @@ npx ticket-runner remove   # 다 써 봤으면
 | 예전에 캐시된 것 말고 가장 새 버전 쓰기 | `npx ticket-runner@latest …` |
 | 명령마다 같은 버전 쓰기 | `npx ticket-runner@<version> …` |
 | `npx`가 남긴 것 지우기 | `~/.npm/_npx` 삭제 |
+
+### 릴리스 전 commit 실행하기 {#run-an-unreleased-commit}
+
+마지막 버전 뒤에 merge된 commit은 이 용도로 둔 파이프라인 저장소의 clone을 그 경로에서 전역으로 설치해 실행합니다. npm은 이 설치를 복사하지 않고 clone에 링크하므로, 사본은 [개발 checkout](./internals.md#the-stamp)처럼 번호 옆에 commit을 알려 줍니다. 링크는 clone의 의존성을 설치하지 않으니 먼저 `npm ci`를 실행하세요. `npm install`은 다른 npm에서 lock 파일을 고쳐 쓸 수 있고, 그러면 찍히는 번호마다 `dirty`가 붙습니다.
+
+```bash
+git clone https://github.com/jjongs2/ticket-runner ~/ticket-runner
+cd ~/ticket-runner
+npm ci
+npm install -g .
+ticket-runner --version   # 0.5.2+331d79c
+```
+
+| 하려는 일 | 할 일 |
+|---|---|
+| 새 commit 받기 | clone에서 `git pull`, `package-lock.json`이 바뀌었으면 `npm ci` 다시 실행 |
+| 공개된 버전으로 돌아가기 | `npm install -g ticket-runner` |
+
+GitHub에서 바로 설치(`npm install -g github:jjongs2/ticket-runner`)하지는 마세요. npm이 그 사본의 commit을 기록하지 않아서, 그 버전에 없는 코드를 돌리면서도 공개된 버전의 번호를 알려 줍니다([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
+
+clone에서 `init`을 실행하면 conventions 문서에 마지막 버전의 번호를 찍지만 내용은 그 버전에 없을 수 있고, 그 공개 버전의 `init`은 아무 말 없이 문서를 다시 되돌려 씁니다.
 
 ## `init`으로 Target 준비하기 {#set-a-target-up-with-init}
 

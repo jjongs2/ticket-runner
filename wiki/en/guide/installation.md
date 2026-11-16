@@ -47,12 +47,6 @@ npm install -g ticket-runner
 
 The same line upgrades it. Then read **After upgrading** in the [Release](https://github.com/jjongs2/ticket-runner/releases) of each version newer than the one you had: it says what your Targets need, such as running `init` again.
 
-Installing straight from GitHub's version tags works too. The range asks for the highest tag rather than `main`, so the copy you get is always a version it can name ([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)):
-
-```bash
-npm install -g "github:jjongs2/ticket-runner#semver:*"
-```
-
 `init` and `run` both look up the newest version published as a GitHub Release. When it is above the number this copy reports, they print one line, and refuse nothing:
 
 ```text
@@ -79,6 +73,27 @@ npx ticket-runner remove   # when you are done with it
 | Take the newest version rather than one npm cached earlier | `npx ticket-runner@latest …` |
 | Keep one version between commands | `npx ticket-runner@<version> …` |
 | Clear what `npx` left behind | delete `~/.npm/_npx` |
+
+### Run an unreleased commit
+
+A commit merged after the latest version runs from a clone of the pipeline's repository, kept for the purpose and installed globally from its path. npm links that install to the clone rather than copying it, so the copy reports its commit beside the number, as a [development checkout](./internals.md#the-stamp) does. The link does not install the clone's dependencies, so `npm ci` comes first; `npm install` may rewrite the lock file on another npm, and every stamp would then read `dirty`.
+
+```bash
+git clone https://github.com/jjongs2/ticket-runner ~/ticket-runner
+cd ~/ticket-runner
+npm ci
+npm install -g .
+ticket-runner --version   # 0.5.2+331d79c
+```
+
+| To | Do |
+|---|---|
+| Take newer commits | `git pull` in the clone, then `npm ci` again when `package-lock.json` changed |
+| Go back to a published version | `npm install -g ticket-runner` |
+
+Not straight from GitHub (`npm install -g github:jjongs2/ticket-runner`): npm records no commit for that copy, so it reports the number of the published version while running code that version does not have ([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
+
+`init` from a clone stamps the conventions document with the last version's number over text that version may not have, and an `init` from that published version rewrites it back without a word.
 
 ## Set a Target up with `init`
 
