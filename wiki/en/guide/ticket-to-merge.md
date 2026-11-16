@@ -87,14 +87,15 @@ Every Stage runs in the Ticket's worktree with `--permission-prompts none`, the 
 
 The prompt ends with the Stage's [`extraPrompt`](./configuration.md#stages).
 
-**What a Stage writes, and in what language.** `body` is the [pull request body](#pull-request) below `Closes #<n>`; `problem` and `solution` open the [squash commit](#squash-merge-and-its-commit). A Target's own shapes come first:
+**What a Stage writes, and in what language.** `title` titles the [pull request](#pull-request) and the squash commit; `body` is the pull request body below `Closes #<n>`; `problem` and `solution` open the [squash commit](#squash-merge-and-its-commit). A Target's own shapes come first:
 
 | Answer | Shape |
 |---|---|
+| `title`, commit subjects | `<type>[(<scope>)]: <summary>`, with the types, scopes and wording the contributing guide sets for a commit subject or pull request title; where it sets none, the shape alone. A fix Stage answers the title blank, which keeps the one before it, unless its fix changes what it says |
 | `body` | What the Target's contributing guide or `.github/PULL_REQUEST_TEMPLATE.md` sets beyond the `Closes` line; where neither does, `/mattpocock-skills:pr`'s Summary, Evidence and Merge Danger |
 | `problem`, `solution` | What the contributing guide sets for a commit body; where it sets none, the state before the change and its effect, and what the change does and why, each in at most two sentences, readable without the Ticket |
 
-None of them carries a title, a closing keyword before an issue reference, a screenshot or a local path. Every Stage that answers writes its Notes, its verdict's evidence and these answers in the language the Target's contributing guide sets for issues and commits, or else in the language the Ticket is written in; a criterion's text stays as the Ticket writes it. The lines the pipeline writes itself, such as the progress table, stay in English.
+None of `body`, `problem` and `solution` carries a title, a closing keyword before an issue reference, a screenshot or a local path. Every Stage that answers writes its Notes, its verdict's evidence and these answers in the language the Target's contributing guide sets for issues and commits, or else in the language the Ticket is written in; a criterion's text stays as the Ticket writes it. The lines the pipeline writes itself, such as the progress table, stay in English.
 
 **What a Stage is billed to.** A Stage runs on the Claude login, with the Host's `ANTHROPIC_API_KEY` taken out of its environment, unless the Run was started with [`--api-key`](./running.md#api-key), when it runs on that key. When the session's `apiKeySource` says otherwise, the Run's log and summary name the Stage.
 
@@ -169,7 +170,7 @@ A verify after a fix for unmet criteria or defects gets the first verdict's unme
 
 ## The fix Stage and the fix budget
 
-The fix budget is one fix Stage per Ticket, and whatever still fails after it goes to a human. The fix Stage is a fresh session on the same branch, with no plugin skill but `/mattpocock-skills:pr`, given the failure and its evidence to mend that one defect. It is also given the latest `body`, `problem` and `solution` answered for the branch: one its fix changes it answers again, revised for the whole branch, and one it leaves true it answers blank, which keeps the earlier one. Sent in for unmet criteria or defects of the branch, it commits nothing and says why in `noCommitReason` when one cannot be met or fixed without overturning a documented decision or another criterion, which hands the Ticket to a human. Otherwise it takes a fix the evidence proposes as a lead, not the answer: it finds the cause itself, looks for a fix of that cause within the Ticket's scope before settling for a narrower one, and before committing tests its fix with inputs built from that cause, not only with the counterexample it was given.
+The fix budget is one fix Stage per Ticket, and whatever still fails after it goes to a human. The fix Stage is a fresh session on the same branch, with no plugin skill but `/mattpocock-skills:pr`, given the failure and its evidence to mend that one defect. It is also given the latest `title`, `body`, `problem` and `solution` answered for the branch: one its fix changes it answers again, revised for the whole branch, and one it leaves true it answers blank, which keeps the earlier one. Sent in for unmet criteria or defects of the branch, it commits nothing and says why in `noCommitReason` when one cannot be met or fixed without overturning a documented decision or another criterion, which hands the Ticket to a human. Otherwise it takes a fix the evidence proposes as a lead, not the answer: it finds the cause itself, looks for a fix of that cause within the Ticket's scope before settling for a narrower one, and before committing tests its fix with inputs built from that cause, not only with the counterexample it was given.
 
 Only a defect a fresh session could mend spends the budget:
 
@@ -252,7 +253,7 @@ The Checks run again because the resolution is code no gate has seen. verify is 
 
 The branch is pushed with `--force-with-lease`, since the rebase rewrote it. The pipeline opens a ready (non-draft) pull request against the base branch, or updates the one it already has: a new title and body, and out of draft (a draft often runs no workflows, so a draft left from a Hand-off would read as "no checks"). A pull request already open on the branch counts as the one it has, since an attempt GitHub failed to answer may have opened it all the same.
 
-**The title** is the first of these in the commit convention's shape, `<type>(<scope>): <summary>` on one line (a trailing `(#<n>)` is dropped):
+**The title** is the first of these in the commit convention's shape, `<type>[(<scope>)]: <summary>` on one line (a trailing `(#<n>)` is dropped):
 
 1. The latest `title` the implement or fix Stage answered for the whole branch, in this Run or recorded in the state file by an earlier one.
 2. The branch's first commit subject.

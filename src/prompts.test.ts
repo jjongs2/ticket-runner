@@ -234,7 +234,7 @@ describe("fixPrompt", () => {
     const prompt = fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS);
     const lines = prompt.split("\n");
     const commits = lines.find((line) => line.startsWith("- Write commit subjects"));
-    const title = lines.find((line) => line.startsWith("- Answer a `title`"));
+    const title = lines.find((line) => /answer a `title`/i.test(line));
 
     expect(commits).toContain(`\`${SUBJECT_SHAPE}\``);
     expect(title).toContain(`\`${SUBJECT_SHAPE}\``);
@@ -575,12 +575,38 @@ describe("the title of the branch", () => {
 
   it("is what both code Stages are asked to answer, for the whole branch", () => {
     for (const prompt of prompts()) {
-      expect(prompt).toContain("Answer a `title` beside your Notes");
+      expect(prompt).toMatch(/answer a `title` beside your Notes/i);
       expect(prompt).toContain("summarising the whole branch as it stands when you finish");
-      expect(prompt).toContain("`<type>(<scope>): <summary>`");
+      expect(prompt).toContain("`<type>[(<scope>)]: <summary>`");
       expect(prompt).toContain("without the `(#<n>)`");
       expect(prompt).toContain("It titles the pull request and the squash commit on `main`");
     }
+  });
+
+  // A fix Stage that never opened the guide put a scope in the title of a
+  // Target whose guide forbids one (#334).
+  it("is written in the Target's own words within the shape, in both code Stages", () => {
+    const rule = `in the \`${SUBJECT_SHAPE}\` shape, using the types, scopes and wording this repository's contributing guide sets for a commit subject or a pull request title, where it sets them`;
+
+    for (const prompt of prompts()) {
+      const title = prompt.split("\n").find((line) => /answer a `title` beside your Notes/i.test(line));
+      expect(title).toContain(rule);
+    }
+    const commits = fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS)
+      .split("\n")
+      .find((line) => line.startsWith("- Write commit subjects"));
+    expect(commits).toContain(rule);
+  });
+
+  it("is kept by a fix Stage whose fix leaves it true, and answered by the implement Stage", () => {
+    const fix = fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS);
+
+    expect(fix).toContain(
+      "Answer `title` as an empty string, which keeps it, unless your fix changes what it says.",
+    );
+    expect(implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS)).not.toMatch(
+      /`title` as an empty string/,
+    );
   });
 
   it("is no longer read off the first commit", () => {
@@ -979,6 +1005,13 @@ describe("the body, the problem and the solution", () => {
       /When your fix changes what one of them says, answer that one revised for the whole branch/,
     );
     expect(prompt).toMatch(/Answer each one your fix leaves true as an empty string, which keeps it/);
+  });
+
+  it("hands the fix Stage the title answered so far first, under its field", () => {
+    const prompt = fix({ title: "feat: add a flag", body: "## Summary" });
+
+    expect(prompt).toContain("## What the branch's answers say now\n\n### `title`\n\n```\nfeat: add a flag\n```");
+    expect(prompt.indexOf("### `title`")).toBeLessThan(prompt.indexOf("### `body`"));
   });
 
   it("gives the fix Stage no answers section when none has been answered", () => {

@@ -68,10 +68,24 @@ describe("the conventions document", () => {
     const doc = conventionsDoc("0.4.0");
     const commits = section(doc, "Commits");
 
-    expect(commits).toContain("Subject: `<type>(<scope>): <summary>`");
+    expect(commits).toContain("Subject: `<type>[(<scope>)]: <summary>`");
     expect(commits).toMatch(/reads the shape, never the words/);
     expect(doc).not.toContain("(#<n>)");
     expect(doc).not.toMatch(/Ticket number/);
+  });
+
+  /**
+   * A Target whose contributing guide forbids a scope reads the section as
+   * fitting it, and the document leaves the vocabulary, and how a Stage titles
+   * its branch, to the Target and the prompts (#334).
+   */
+  it("marks the scope optional and leaves its use to the repository", () => {
+    const commits = section(conventionsDoc("0.4.0"), "Commits");
+
+    expect(commits).toContain("The scope is optional: `<type>: <summary>` fits the shape too.");
+    expect(commits).toContain("including whether it uses scopes at all");
+    expect(commits).not.toContain("<type>(<scope>): <summary>");
+    expect(commits).not.toMatch(/contributing guide/);
   });
 
   /**

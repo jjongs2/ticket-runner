@@ -6,8 +6,8 @@ Besides names such as GitHub and Claude Code, a capitalised word below is one of
 
 ## Commits
 
-- Subject: `<type>(<scope>): <summary>`.
-- The type and scope vocabulary is this repository's own. The pipeline reads the shape, never the words.
+- Subject: `<type>[(<scope>)]: <summary>`. The scope is optional: `<type>: <summary>` fits the shape too.
+- The type and scope vocabulary is this repository's own, including whether it uses scopes at all. The pipeline reads the shape, never the words.
 - This repository's own commit conventions must fit this shape: the pipeline titles its pull requests in it where it can, and so the squash commits they land as. Where it cannot, a pull request takes the Ticket's title.
 
 ## Branches

@@ -87,14 +87,15 @@ claim은 Ticket에 '가져감' 표시를 해서 다른 Run이 가져가지 않�
 
 프롬프트 마지막에는 Stage별 [`extraPrompt`](./configuration.md#stages)가 붙습니다.
 
-**Stage가 쓰는 글과 그 언어.** `body`는 `Closes #<n>` 아래에 들어가는 [pull request 본문](#pull-request)이고, `problem`과 `solution`은 [squash commit](#squash-merge-and-its-commit) 본문의 첫머리가 됩니다. Target이 정한 형식이 먼저입니다.
+**Stage가 쓰는 글과 그 언어.** `title`은 [pull request](#pull-request)와 squash commit의 제목이고, `body`는 `Closes #<n>` 아래에 들어가는 pull request 본문이고, `problem`과 `solution`은 [squash commit](#squash-merge-and-its-commit) 본문의 첫머리가 됩니다. Target이 정한 형식이 먼저입니다.
 
 | 답변 | 형식 |
 |---|---|
+| `title`, commit 제목 | `<type>[(<scope>)]: <summary>`. 기여 가이드가 commit 제목이나 pull request 제목에 정한 type, scope, 표현을 따르고, 정한 것이 없으면 형식만 따름. fix Stage는 자기 수정이 제목의 내용을 바꾸지 않으면 `title`을 빈 문자열로 답해 앞의 제목을 유지 |
 | `body` | Target의 기여 가이드나 `.github/PULL_REQUEST_TEMPLATE.md`가 `Closes` 줄 밖에 정한 형식. 둘 다 정하지 않았으면 `/mattpocock-skills:pr`의 Summary, Evidence, Merge Danger |
 | `problem`, `solution` | 기여 가이드가 commit 본문에 정한 형식. 정하지 않았으면 바뀌기 전 상태와 그 영향, 그리고 변경이 하는 일과 그 이유를 각각 두 문장 이내로, Ticket을 열지 않아도 읽히게 |
 
-어느 것에도 제목, 이슈 참조 앞의 closing keyword, 스크린샷, 로컬 경로는 넣지 않습니다. 답하는 Stage는 모두 Note, 판정의 근거, 이 답변들을 Target의 기여 가이드가 이슈와 commit에 정한 언어로 쓰고, 정한 언어가 없으면 Ticket이 쓰인 언어로 씁니다. 기준의 문구는 Ticket에 적힌 그대로 둡니다. 진행 상황 표처럼 파이프라인이 직접 쓰는 줄은 영어 그대로입니다.
+`body`, `problem`, `solution` 어느 것에도 제목, 이슈 참조 앞의 closing keyword, 스크린샷, 로컬 경로는 넣지 않습니다. 답하는 Stage는 모두 Note, 판정의 근거, 이 답변들을 Target의 기여 가이드가 이슈와 commit에 정한 언어로 쓰고, 정한 언어가 없으면 Ticket이 쓰인 언어로 씁니다. 기준의 문구는 Ticket에 적힌 그대로 둡니다. 진행 상황 표처럼 파이프라인이 직접 쓰는 줄은 영어 그대로입니다.
 
 **Stage가 과금되는 곳.** Stage는 Host의 `ANTHROPIC_API_KEY`를 환경에서 뺀 채 Claude 로그인으로 돌아갑니다. Run을 [`--api-key`](./running.md#api-key)로 시작했으면 그 키로 돌아갑니다. 세션의 `apiKeySource`가 다른 곳을 말하면 Run의 로그와 요약이 그 Stage를 짚습니다.
 
@@ -169,7 +170,7 @@ merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 �
 
 ## fix Stage와 fix 기회 {#the-fix-stage-and-the-fix-budget}
 
-fix 기회는 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사람에게 넘어갑니다. fix Stage는 같은 branch에서 `/mattpocock-skills:pr` 말고는 플러그인 스킬 없이 새로 띄운 세션이고, 실패와 그 근거를 받아 그 결함 하나를 고칩니다. branch에 대해 마지막으로 답한 `body`, `problem`, `solution`도 함께 받습니다. 수정으로 내용이 달라지는 답변은 branch 전체에 맞게 고쳐 다시 답하고, 그대로 맞는 답변은 비워 답해 앞의 것을 남깁니다. `unmet` 기준이나 branch의 결함 때문에 불려 왔는데 그중 하나라도 문서로 남은 결정이나 다른 기준을 뒤집어야만 충족되거나 고쳐진다면, 아무것도 commit하지 말고 `noCommitReason`에 이유를 밝히라고 합니다. 그러면 Ticket이 사람에게 넘어갑니다. 그렇지 않다면 근거에 적힌 수정안은 답이 아니라 실마리로만 봅니다. 원인은 직접 찾고, 더 좁은 수정에 만족하기 전에 Ticket의 범위 안에서 그 원인을 고칠 방법을 찾습니다. commit하기 전에는 받은 반례만이 아니라 그 원인에서 만든 입력으로도 수정을 시험합니다.
+fix 기회는 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사람에게 넘어갑니다. fix Stage는 같은 branch에서 `/mattpocock-skills:pr` 말고는 플러그인 스킬 없이 새로 띄운 세션이고, 실패와 그 근거를 받아 그 결함 하나를 고칩니다. branch에 대해 마지막으로 답한 `title`, `body`, `problem`, `solution`도 함께 받습니다. 수정으로 내용이 달라지는 답변은 branch 전체에 맞게 고쳐 다시 답하고, 그대로 맞는 답변은 비워 답해 앞의 것을 남깁니다. `unmet` 기준이나 branch의 결함 때문에 불려 왔는데 그중 하나라도 문서로 남은 결정이나 다른 기준을 뒤집어야만 충족되거나 고쳐진다면, 아무것도 commit하지 말고 `noCommitReason`에 이유를 밝히라고 합니다. 그러면 Ticket이 사람에게 넘어갑니다. 그렇지 않다면 근거에 적힌 수정안은 답이 아니라 실마리로만 봅니다. 원인은 직접 찾고, 더 좁은 수정에 만족하기 전에 Ticket의 범위 안에서 그 원인을 고칠 방법을 찾습니다. commit하기 전에는 받은 반례만이 아니라 그 원인에서 만든 입력으로도 수정을 시험합니다.
 
 새 세션이 고칠 수 있는 결함만 fix 기회를 씁니다.
 
@@ -252,7 +253,7 @@ Check를 다시 돌리는 건 해결 내용이 어떤 게이트도 본 적 없�
 
 rebase로 branch가 다시 쓰였으니 `--force-with-lease`로 push합니다. base branch를 향한 ready(draft 아님) pull request를 새로 열거나, 이미 있는 것을 갱신합니다. 갱신할 때는 제목과 본문을 새로 쓰고 draft에서 꺼냅니다. draft에서는 워크플로가 아예 돌지 않는 경우가 많아서, Hand-off 때 남은 draft를 그대로 두면 "no checks"로 읽히기 때문입니다. branch에 이미 열려 있는 pull request도 갖고 있던 것으로 칩니다. GitHub가 응답하지 못한 시도가 실제로는 열어 두었을 수 있기 때문입니다.
 
-**제목**은 아래 후보 가운데 commit 컨벤션 형식(`<type>(<scope>): <summary>`, 한 줄)에 맞는 첫 번째 것입니다. 끝의 `(#<n>)`는 떼어 냅니다.
+**제목**은 아래 후보 가운데 commit 컨벤션 형식(`<type>[(<scope>)]: <summary>`, 한 줄)에 맞는 첫 번째 것입니다. 끝의 `(#<n>)`는 떼어 냅니다.
 
 1. implement나 fix Stage가 branch 전체에 대해 마지막으로 답한 `title`. 이번 Run의 것이든, 이전 Run이 state file에 기록한 것이든 상관없습니다.
 2. branch의 첫 commit 제목

@@ -69,6 +69,7 @@ import type { StartTimer } from "./timer.js";
 import type { TranscriptHome } from "./transcript-home.js";
 import {
   BRANCH_PROSE_FIELDS,
+  type BranchAnswers,
   type BranchProse,
   CODE_STAGE_JSON_SCHEMA,
   parseBranchProse,
@@ -994,6 +995,12 @@ class ResumeRecord {
     return recordedProse(this.reached);
   }
 
+  /** The latest title beside the latest body, problem and solution, as a fix Stage is handed them. */
+  get answers(): BranchAnswers {
+    const { title } = this;
+    return { ...(title === undefined ? {} : { title }), ...this.prose };
+  }
+
   /**
    * Move the record on, and put it where the next Run will look for it.
    *
@@ -1759,7 +1766,7 @@ async function fix(
       pipeline.selfHosted,
       pipeline.config.checks,
       await standingNotesNumber(pipeline),
-      record.prose,
+      record.answers,
     ),
     cwd: worktree,
     logDir,

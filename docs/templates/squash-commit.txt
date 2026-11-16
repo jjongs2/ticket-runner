@@ -1,4 +1,4 @@
-<type>(<scope>): <summary> (#<pr>)
+<type>[(<scope>)]: <summary> (#<pr>)
 
 Closes #<n>
 
