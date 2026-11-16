@@ -104,7 +104,7 @@ Failure 줄은 무엇이 Ticket을 멈췄는지 말합니다. 그에 따라 할 
 
 - pull request는 Run이 게시한 그대로 둡니다. ready 상태이고, 제목과 본문도 바뀌지 않습니다.
 - 확인할 수 없었던(`unverifiable`) 기준이 있으면, pull request가 모든 게이트를 통과해 사람의 merge를 기다린다고 코멘트합니다. Failure 줄과 근거는 없고, 그 기준을 근거와 함께 하나씩 적습니다.
-- 모든 기준을 충족했으면 코멘트를 달지 않습니다. 라벨, 진행 상황 코멘트, 연결된 pull request가 이미 말해 줍니다. Run은 여러분의 계정으로 글을 쓰니 GitHub는 여러분에게 알림을 보내지 않고, merge한 뒤에도 그 코멘트는 pull request가 기다린다고 말하고 있을 것입니다.
+- 모든 기준을 충족했으면 코멘트를 달지 않습니다. 라벨, 진행 상황 코멘트, 연결된 pull request가 이미 말해 줍니다.
 - state file은 남기지만 transcript는 남기지 않고, 기준에 체크하지도 않습니다.
 
 ```md

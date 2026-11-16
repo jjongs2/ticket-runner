@@ -75,8 +75,8 @@ const GUARD_SENTENCES: Record<GuardReason, string> = {
  * The marker is the first line of every pipeline comment and never changes,
  * which is the whole point of it: this is how the pipeline finds what it has
  * already written rather than writing it again. Most markers are on one comment
- * per Ticket, but a hand-off is a comment of its own nearly every time a Ticket
- * is handed off, so the marker alone does not promise there is only one.
+ * per Ticket, but a hand-off that writes one writes a comment of its own every
+ * time a Ticket is handed off, so the marker alone does not promise there is only one.
  */
 export function findMarkedComments(comments: IssueComment[], marker: string): IssueComment[] {
   return comments.filter((comment) => carriesMarker(comment.body, marker));

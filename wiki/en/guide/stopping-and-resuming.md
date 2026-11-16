@@ -104,7 +104,7 @@ On a Target that sets [`merge`](./configuration.md#merge) to `false`, a Ticket w
 
 - leaves the pull request as the Run published it: ready for review, its title and body unchanged
 - when a criterion was unverifiable, comments that the pull request passed every gate and waits for you to merge it, with no Failure line or evidence, and lists each unverifiable criterion with its evidence
-- when every criterion was met, posts no comment: the label, the progress comment and the linked pull request already say it, the Run posts as your account so GitHub would not notify you, and after your merge the comment would still say the pull request waits
+- when every criterion was met, posts no comment: the label, the progress comment and the linked pull request already say it
 - keeps the state file but no transcripts, and ticks no criteria
 
 ```md
