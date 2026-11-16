@@ -20,7 +20,7 @@ function packageJson(version = "0.4.0"): void {
   writeFileSync(join(root, "package.json"), `${JSON.stringify({ version })}\n`);
 }
 
-/** Turn the package root into the one thing a global install never is. */
+/** Turn the package root into the one thing an install from npm never is. */
 function checkout(): void {
   git("init", "--initial-branch=main");
   git("config", "user.email", "pipeline@example.com");

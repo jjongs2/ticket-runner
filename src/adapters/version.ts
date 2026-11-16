@@ -19,7 +19,11 @@ import { exec } from "./exec.js";
  * process are the adapters, whoever they are asking about.
  */
 
-/** The package root: the directory this package's `package.json` sits in. */
+/**
+ * The package root: the directory this package's `package.json` sits in. For a
+ * clone installed globally from its path it is the clone, not npm's link to it,
+ * since Node resolves the link before it loads the module.
+ */
 export const PACKAGE_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
 /** What a copy with no number to read calls itself, rather than guessing one. */
@@ -28,8 +32,8 @@ const UNKNOWN = "unknown";
 /**
  * The version, as everything this Run writes will report it.
  *
- * An installed copy is its number and nothing else, because a machine installs
- * a tag: two machines that say `0.4.0` run the same code. A development
+ * A copy installed from npm is its number and nothing else, because npm holds
+ * only tags: two machines that say `0.4.0` run the same code. A development
  * checkout runs whatever commit it has, so it adds that commit in semver's
  * build-metadata position and a `dirty` mark when the tree has uncommitted
  * changes — `0.4.0`, `0.4.0+331d79c`, `0.4.0+331d79c.dirty`.
@@ -87,17 +91,19 @@ function packageField(packageRoot: string, field: string): unknown {
 
 /**
  * The commit a development checkout runs, with a `dirty` mark where the tree
- * has uncommitted changes. Undefined for an installed copy, and for a checkout
- * git could not be asked about.
+ * has uncommitted changes. Undefined for a copy installed from npm, and for a
+ * checkout git could not be asked about.
  *
  * Nothing is reported on a guess: a checkout whose status could not be read
  * gets no commit at all, because a transcript naming a commit the code did not
  * match is worse than one naming none.
  */
 async function checkoutCommit(packageRoot: string): Promise<string | undefined> {
-  // A package root that is a git repository is a development checkout, which a
-  // global install never is. `.git` is a directory in a clone and a file in a
-  // worktree, and its presence is the whole question.
+  // A package root that is a git repository is a development checkout. An
+  // install from npm never is one; a clone installed globally from its path is,
+  // since npm links it rather than copying it, and it reports its commit too.
+  // `.git` is a directory in a clone and a file in a worktree, and its presence
+  // is the whole question.
   if (!existsSync(join(packageRoot, ".git"))) return undefined;
 
   const commit = await git(packageRoot, ["rev-parse", "--short", "HEAD"]);

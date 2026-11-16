@@ -195,7 +195,7 @@ Tests sit beside each module as `*.test.ts`.
 
 ## Versions
 
-A version is a number that `main` carries as a tag `v<x.y.z>`, published to npm and with a GitHub Release. An installed copy reports it. Machines install a version, never `main`, so two machines that report `0.5.2` run the same code ([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
+A version is a number that `main` carries as a tag `v<x.y.z>`, published to npm and with a GitHub Release. An installed copy reports it. Machines install a version, never `main`, so two machines that report `0.5.2` run the same code. The one exception, a clone installed globally to run a commit merged after the latest version, reports that commit beside the number, as any [development checkout](#the-stamp) does ([ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md)).
 
 A human cuts one by merging a release PR, which [`/cut-a-version`](https://github.com/jjongs2/ticket-runner/blob/main/.claude/skills/cut-a-version/SKILL.md) drafts; the steps and the checks on it are in [`CONTRIBUTING.md`](https://github.com/jjongs2/ticket-runner/blob/main/CONTRIBUTING.md#versions). The pull request raises the number and carries the release notes. The agent running the skill proposes the number by the rule `CONTRIBUTING.md` gives and drafts the notes, and the human's review and merge are the decision, because when to cut a version is a Planning decision, never inferred from what merged.
 
@@ -207,7 +207,7 @@ The version is resolved once, in the CLI, and handed down. Every stamp one Run w
 
 | `-v` prints | When |
 |---|---|
-| `0.5.2` | an installed copy: the number is the whole of it |
+| `0.5.2` | a copy installed from npm: the number is the whole of it |
 | `0.5.2+331d79c` | a development checkout, clean |
 | `0.5.2+331d79c.dirty` | a development checkout with uncommitted changes |
 | `unknown` | no readable `package.json` |
@@ -276,8 +276,8 @@ The full records are in [`docs/adr/`](https://github.com/jjongs2/ticket-runner/t
 
 ### [ADR-0007: A version is cut by a human, and installs follow tags](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md) {#adr-0007}
 
-- **Decision**: A human cuts a version by merging a release PR; the tag workflow publishes it to npm, and installs come from there. The GitHub tag range keeps working.
-- **Why**: When to cut is a Planning decision. A number is only a useful stamp if two machines with it run the same code.
+- **Decision**: A human cuts a version by merging a release PR; the tag workflow publishes it to npm, and installs come from there. An unreleased commit runs from a clone installed globally, which reports its commit; nothing installs from GitHub.
+- **Why**: When to cut is a Planning decision. A number is only a useful stamp if two machines with it run the same code, and a copy installed from GitHub reports a published number for code that version does not have; npm 12 refuses such an install anyway.
 - **Cost**: Release notes are written by hand, with an agent's help.
 
 ### [ADR-0008: A cloud Host is a Claude Code cloud session, and the Run lock lives on GitHub](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md) {#adr-0008}
