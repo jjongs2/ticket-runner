@@ -9,7 +9,7 @@ import type { FailureKind } from "./lifecycle.js";
 import { BRANCH_DEFECT, OWN_DEFECT } from "./note-schema.js";
 import { NOTE_PARTS, type WrittenNote } from "./notes.js";
 import { STAGE_ENV_VAR } from "./stage-guard.js";
-import { BRANCH_PROSE_FIELDS, BRANCH_TITLE, type BranchProse, SUBJECT_SHAPE } from "./title.js";
+import { BRANCH_ANSWER_FIELDS, BRANCH_TITLE, type BranchAnswers, SUBJECT_SHAPE } from "./title.js";
 
 /**
  * Appended to every Stage prompt, the fix Stage included, in every Target. The
@@ -82,13 +82,35 @@ function codeChecksLine(checks: readonly string[], afterReview: boolean): string
 }
 
 /**
- * How the two Stages that write code are told to title the branch. The title is
- * an answer rather than a commit subject because a commit subject describes its
- * own commit, and a later Stage could not retitle a branch whose first commit
- * was already pushed without rewriting it.
+ * How a code Stage writes a commit subject and the title. The pipeline reads
+ * the shape, so the prompt states it; the words within it are the Target's, and
+ * a Stage that never opened the contributing guide put a scope in the title of
+ * a Target whose guide forbids one (#334). The guide is named rather than the
+ * conventions document, as {@link BODY_SHAPE} names it.
+ */
+const SUBJECT_RULE = `in the \`${SUBJECT_SHAPE}\` shape, using the types, scopes and wording this repository's contributing guide sets for a commit subject or a pull request title, where it sets them`;
+
+/** What the title is for, said wherever a code Stage is told to answer one. */
+const titleUse = (base: string) =>
+  `It titles the pull request and the squash commit on \`${base}\`, so each commit subject describes only its own commit.`;
+
+/**
+ * How the implement Stage is told to title the branch. The title is an answer
+ * rather than a commit subject because a commit subject describes its own
+ * commit, and a later Stage could not retitle a branch whose first commit was
+ * already pushed without rewriting it.
  */
 const titleGuidance = (base: string) =>
-  `- Answer a \`title\` beside your Notes: ${BRANCH_TITLE}, in the \`${SUBJECT_SHAPE}\` shape and without the \`(#<n>)\`. It titles the pull request and the squash commit on \`${base}\`, so each commit subject describes only its own commit.`;
+  `- Answer a \`title\` beside your Notes: ${BRANCH_TITLE}, ${SUBJECT_RULE}, and without the \`(#<n>)\`. ${titleUse(base)}`;
+
+/**
+ * How the fix Stage is told to title the branch: blank, which keeps the title
+ * answered before it, unless its fix changes what that title says. Told to
+ * answer one for the whole branch, a fix Stage that had not read the Target's
+ * rules replaced a title its fix left true with one that broke them (#334).
+ */
+const fixTitleGuidance = (base: string) =>
+  `- The \`title\` answered for this branch so far is below, when there is one. Answer \`title\` as an empty string, which keeps it, unless your fix changes what it says. When it does, or when none is below, answer a \`title\` beside your Notes: ${BRANCH_TITLE}, ${SUBJECT_RULE}, and without the \`(#<n>)\`. ${titleUse(base)}`;
 
 /**
  * Where the pull request body's shape comes from. A Target's own rules come
@@ -310,8 +332,8 @@ const fixInstructions = (
 - Where the failure is an unmet Acceptance Criterion or a defect this branch made, add the regression test that would have caught it and commit it with the fix.${kind === "unmet-criteria" ? `${UNMET_CAUSE_LINES}${HUMAN_DECISION_LINE}` : ""}
 - Stay inside this Ticket's Acceptance Criteria and the defects this branch introduced. Anything else you find belongs to another Ticket, not to this session; record it as a Note rather than mending it.${codeChecksLine(checks, false)}
 ${FINISH_GUIDANCE}
-- Write commit subjects in the \`${SUBJECT_SHAPE}\` shape. The pipeline re-runs the Checks and the verify Stage as soon as you finish.
-${titleGuidance(base)}
+- Write commit subjects ${SUBJECT_RULE}. The pipeline re-runs the Checks and the verify Stage as soon as you finish.
+${fixTitleGuidance(base)}
 ${FIX_PROSE_GUIDANCE}
 ${CODE_STAGE_LANGUAGE}
 - Invoke no plugin skill but \`/mattpocock-skills:pr\`: the implement skill would re-read the Ticket and start over.
@@ -465,7 +487,8 @@ export function conflictPrompt(
 
 /**
  * A fresh session with no plugin skill but the `pr` skill, given one failure
- * and told to mend it, and the body, problem and solution answered so far.
+ * and told to mend it, and the title, body, problem and solution answered so
+ * far.
  */
 export function fixPrompt(
   issueUrl: string,
@@ -475,13 +498,13 @@ export function fixPrompt(
   selfHosted: boolean,
   checks: readonly string[],
   standingNotes?: number,
-  prose: BranchProse = {},
+  answers: BranchAnswers = {},
 ): string {
   return sections([
     `Ticket: ${issueUrl}`,
     fixInstructions(base, failure.kind, checks),
     failureSection(failure, base),
-    proseSection(prose),
+    answersSection(answers),
     stageBoundary(selfHosted),
     notesGuidance(standingNotes),
     extraPrompt,
@@ -506,12 +529,12 @@ const UNMET_EVIDENCE_LEAD =
   "This is the verify Stage's evidence for each unmet criterion, given as its checkbox line reads, and for each defect this branch made. A fix this evidence proposes is a lead, not the answer: find the cause yourself, starting from the failure it states.";
 
 /**
- * The body, the problem and the solution answered for the branch so far, each
- * under its field's name; nothing where none has been answered.
+ * The title, the body, the problem and the solution answered for the branch so
+ * far, each under its field's name; nothing where none has been answered.
  */
-function proseSection(prose: BranchProse): string {
-  const answered = BRANCH_PROSE_FIELDS.flatMap((field) => {
-    const answer = prose[field];
+function answersSection(answers: BranchAnswers): string {
+  const answered = BRANCH_ANSWER_FIELDS.flatMap((field) => {
+    const answer = answers[field];
     return answer === undefined ? [] : [`### \`${field}\`\n\n${fenced(answer)}`];
   });
   if (answered.length === 0) return "";

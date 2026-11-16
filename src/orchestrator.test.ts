@@ -468,6 +468,23 @@ describe("the pull request title and the squash commit", () => {
     expect(tracker.pullRequest(100).title).toBe("feat(cli): do the whole thing");
   });
 
+  // A fix Stage told to answer a title for the whole branch replaced one its
+  // fix left true with one that broke the Target's own rules (#334).
+  it("hands the fix Stage the implement Stage's title, and keeps it when the fix Stage answers it blank", async () => {
+    runner.queue("implement", titled("feat: do the whole thing"));
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
+    runner.queue("verify", stageResult({ result: PASSING_VERDICT }));
+    runner.queue("fix", titled(""));
+    workspace.commits = ["feat(cli): start the thing", "fix(cli): mend the thing"];
+
+    await run();
+    const pr = tracker.pullRequest(100);
+
+    expect(runner.prompts("fix")[0]).toContain("### `title`\n\n```\nfeat: do the whole thing\n```");
+    expect(pr.title).toBe("feat: do the whole thing");
+    expect(pr.squashCommit?.subject).toBe("feat: do the whole thing (#100)");
+  });
+
   it.each([
     ["a missing", { notes: [{ summary: "the help drifts" }] }],
     ["a blank", { title: " ", notes: [{ summary: "the help drifts" }] }],

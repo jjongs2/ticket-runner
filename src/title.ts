@@ -29,9 +29,13 @@ export const BRANCH_TITLE =
  * The conventions document a Target carries states it to the readers the
  * pipeline does not brief.
  */
-export const SUBJECT_SHAPE = "<type>(<scope>): <summary>";
+export const SUBJECT_SHAPE = "<type>[(<scope>)]: <summary>";
 
-/** Any {@link SUBJECT_SHAPE}; the repo's own types and scopes are CONTRIBUTING.md's business. */
+/**
+ * Any {@link SUBJECT_SHAPE}, with or without the scope; the repo's own types
+ * and scopes, and whether it uses scopes at all, are its contributing guide's
+ * business.
+ */
 const CONVENTIONAL_SUBJECT = /^[a-z]+(\([a-z0-9._-]+\))?: \S/;
 
 /** The `(#<n>)` a commit may carry, which the squash commit's `Closes #<n>` replaces. */
@@ -39,7 +43,7 @@ const TICKET_REFERENCE = /\s*\(#\d+\)$/;
 
 /**
  * How the schema tells a Stage to keep an answer: an empty one is how a fix
- * Stage leaves the body, problem or solution before it standing.
+ * Stage leaves the title, body, problem or solution before it standing.
  */
 const KEEP_EARLIER = "An empty string keeps the one an earlier Stage answered.";
 
@@ -50,9 +54,9 @@ const KEEP_EARLIER = "An empty string keeps the one an earlier Stage answered.";
  * ended with no new commit when it did.
  *
  * All are required, so a Stage always says something about each: an empty
- * Notes list when it found nothing, a title however little it did, an empty
- * string for a body, problem or solution it leaves as it was, and an empty
- * reason when it committed. The parsers forgive each one on its own
+ * Notes list when it found nothing, an empty string for a title, body,
+ * problem or solution it leaves as it was, and an empty reason when it
+ * committed. The parsers forgive each one on its own
  * ({@link parseTitle}, {@link parseBranchProse}, `parseNotes` and
  * {@link parseNoCommitReason}), so a bad answer to one never costs the others.
  *
@@ -66,7 +70,7 @@ export const CODE_STAGE_JSON_SCHEMA = {
   properties: {
     title: {
       type: "string",
-      description: `Write ${BRANCH_TITLE}: \`${SUBJECT_SHAPE}\`, without the \`(#<n>)\`. It titles the pull request and the squash commit that lands.`,
+      description: `Write ${BRANCH_TITLE}: \`${SUBJECT_SHAPE}\`, without the \`(#<n>)\`. It titles the pull request and the squash commit that lands. ${KEEP_EARLIER}`,
     },
     body: {
       type: "string",
@@ -131,6 +135,18 @@ export interface BranchProse {
 
 /** The fields of {@link BranchProse}, in the order the squash commit and the prompts give them. */
 export const BRANCH_PROSE_FIELDS = ["body", "problem", "solution"] as const;
+
+/**
+ * Everything a code Stage has answered about the whole branch so far: the
+ * title beside the prose. A fix Stage is handed it, so it can keep each one its
+ * fix leaves true by answering it blank.
+ */
+export interface BranchAnswers extends BranchProse {
+  title?: string;
+}
+
+/** The fields of {@link BranchAnswers}, in the order the fix Stage's prompt gives them. */
+export const BRANCH_ANSWER_FIELDS = ["title", ...BRANCH_PROSE_FIELDS] as const;
 
 /**
  * The body, the problem and the solution in a Stage's structured output, each
