@@ -83,7 +83,7 @@ describe("the conventions document", () => {
     const commits = section(conventionsDoc("0.4.0"), "Commits");
 
     expect(commits).toContain("The scope is optional: `<type>: <summary>` fits the shape too.");
-    expect(commits).toContain("whether it uses scopes at all included");
+    expect(commits).toContain("including whether it uses scopes at all");
     expect(commits).not.toContain("<type>(<scope>): <summary>");
     expect(commits).not.toMatch(/contributing guide/);
   });

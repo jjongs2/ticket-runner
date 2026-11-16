@@ -39,6 +39,7 @@ describe("CODE_STAGE_JSON_SCHEMA", () => {
     expect(SUBJECT_SHAPE).toBe("<type>[(<scope>)]: <summary>");
     expect(description).toContain("without the `(#<n>)`");
     expect(description).toContain("An empty string keeps the one an earlier Stage answered.");
+    expect(description).toContain("using the types, scopes and wording this repository's contributing guide sets");
   });
 });
 

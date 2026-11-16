@@ -32,6 +32,16 @@ export const BRANCH_TITLE =
 export const SUBJECT_SHAPE = "<type>[(<scope>)]: <summary>";
 
 /**
+ * How a code Stage writes a commit subject and the title, in the words both
+ * the schema and the prompts use. The pipeline reads the shape, so it is
+ * stated; the words within it are the Target's, and a Stage that never opened
+ * the contributing guide put a scope in the title of a Target whose guide
+ * forbids one (#334). The guide is named rather than the conventions document,
+ * as the prompts name it for the pull request body.
+ */
+export const SUBJECT_RULE = `in the \`${SUBJECT_SHAPE}\` shape, using the types, scopes and wording this repository's contributing guide sets for a commit subject or a pull request title, where it sets them`;
+
+/**
  * Any {@link SUBJECT_SHAPE}, with or without the scope; the repo's own types
  * and scopes, and whether it uses scopes at all, are its contributing guide's
  * business.
@@ -70,7 +80,7 @@ export const CODE_STAGE_JSON_SCHEMA = {
   properties: {
     title: {
       type: "string",
-      description: `Write ${BRANCH_TITLE}: \`${SUBJECT_SHAPE}\`, without the \`(#<n>)\`. It titles the pull request and the squash commit that lands. ${KEEP_EARLIER}`,
+      description: `Write ${BRANCH_TITLE}, ${SUBJECT_RULE}, without the \`(#<n>)\`. It titles the pull request and the squash commit that lands. ${KEEP_EARLIER}`,
     },
     body: {
       type: "string",

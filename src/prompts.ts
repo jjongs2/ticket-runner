@@ -9,7 +9,7 @@ import type { FailureKind } from "./lifecycle.js";
 import { BRANCH_DEFECT, OWN_DEFECT } from "./note-schema.js";
 import { NOTE_PARTS, type WrittenNote } from "./notes.js";
 import { STAGE_ENV_VAR } from "./stage-guard.js";
-import { BRANCH_ANSWER_FIELDS, BRANCH_TITLE, type BranchAnswers, SUBJECT_SHAPE } from "./title.js";
+import { BRANCH_ANSWER_FIELDS, BRANCH_TITLE, type BranchAnswers, SUBJECT_RULE } from "./title.js";
 
 /**
  * Appended to every Stage prompt, the fix Stage included, in every Target. The
@@ -81,18 +81,9 @@ function codeChecksLine(checks: readonly string[], afterReview: boolean): string
   return `\n- The pipeline runs its Checks as soon as you finish: ${checkList(checks)}. While you work, run only the tests your change touches. Commit, then run the full Checks once, in the foreground, and commit whatever that run makes you change.${review}`;
 }
 
-/**
- * How a code Stage writes a commit subject and the title. The pipeline reads
- * the shape, so the prompt states it; the words within it are the Target's, and
- * a Stage that never opened the contributing guide put a scope in the title of
- * a Target whose guide forbids one (#334). The guide is named rather than the
- * conventions document, as {@link BODY_SHAPE} names it.
- */
-const SUBJECT_RULE = `in the \`${SUBJECT_SHAPE}\` shape, using the types, scopes and wording this repository's contributing guide sets for a commit subject or a pull request title, where it sets them`;
-
-/** What the title is for, said wherever a code Stage is told to answer one. */
-const titleUse = (base: string) =>
-  `It titles the pull request and the squash commit on \`${base}\`, so each commit subject describes only its own commit.`;
+/** The title a code Stage answers, what it is and what it is for, wherever it is told to answer one. */
+const titleAnswer = (base: string) =>
+  `a \`title\` beside your Notes: ${BRANCH_TITLE}, ${SUBJECT_RULE}, and without the \`(#<n>)\`. It titles the pull request and the squash commit on \`${base}\`, so each commit subject describes only its own commit.`;
 
 /**
  * How the implement Stage is told to title the branch. The title is an answer
@@ -100,8 +91,7 @@ const titleUse = (base: string) =>
  * commit, and a later Stage could not retitle a branch whose first commit was
  * already pushed without rewriting it.
  */
-const titleGuidance = (base: string) =>
-  `- Answer a \`title\` beside your Notes: ${BRANCH_TITLE}, ${SUBJECT_RULE}, and without the \`(#<n>)\`. ${titleUse(base)}`;
+const titleGuidance = (base: string) => `- Answer ${titleAnswer(base)}`;
 
 /**
  * How the fix Stage is told to title the branch: blank, which keeps the title
@@ -110,7 +100,7 @@ const titleGuidance = (base: string) =>
  * rules replaced a title its fix left true with one that broke them (#334).
  */
 const fixTitleGuidance = (base: string) =>
-  `- The \`title\` answered for this branch so far is below, when there is one. Answer \`title\` as an empty string, which keeps it, unless your fix changes what it says. When it does, or when none is below, answer a \`title\` beside your Notes: ${BRANCH_TITLE}, ${SUBJECT_RULE}, and without the \`(#<n>)\`. ${titleUse(base)}`;
+  `- The \`title\` answered for this branch so far is below, when there is one. Answer \`title\` as an empty string, which keeps it, unless your fix changes what it says. When it does, or when none is below, answer ${titleAnswer(base)}`;
 
 /**
  * Where the pull request body's shape comes from. A Target's own rules come
