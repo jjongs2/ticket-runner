@@ -33,11 +33,9 @@ describe("linkNumbers", () => {
     }
   });
 
-  it("leaves a number an ellipsis cut short plain, since it may be another one", () => {
-    const line = "  noted    #31 comment · from #5 fix · the cleanup that #12…";
-
-    expect(linkNumbers(line, REPOSITORY)).toBe(
-      `  noted    ${link(31)} comment · from ${link(5)} fix · the cleanup that #12…`,
+  it("links a number an ellipsis follows, which only the summary can tell was cut", () => {
+    expect(linkNumbers("see #128… and #12…more", REPOSITORY)).toBe(
+      `see ${link(128)}… and ${link(12)}…more`,
     );
   });
 

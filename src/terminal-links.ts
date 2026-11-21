@@ -11,11 +11,11 @@
 
 /**
  * A `#N` to link: not straight after a letter, a digit or a `/`, which is
- * another repository's number (`owner/repo#12`) or no number at all, and not
- * cut short by the ellipsis a trimmed `noted` row ends with, since `#1…` may
- * have been `#12`.
+ * another repository's number (`owner/repo#12`) or no number at all. A number
+ * a trimmed `noted` row cuts short looks whole here, so the summary leaves that
+ * one out itself, being the only writer that knows where it cut.
  */
-const LINKABLE_NUMBER = /(?<![\p{L}\p{N}/])#(\d+)(?![\d…])/gu;
+const LINKABLE_NUMBER = /(?<![\p{L}\p{N}/])#(\d+)(?!\d)/gu;
 
 /** OSC 8's opening and closing halves, each ended by the string terminator. */
 const OSC8 = "\x1b]8;;";

@@ -987,8 +987,9 @@ describe("the numbers a Run prints", () => {
   }
 
   /**
-   * A narrowed Run, from fresh fakes each time: #4 merges with a Note cut to
-   * its width mid-number and a title quoting other numbers, #5 is handed off
+   * A narrowed Run, from fresh fakes each time: #4 merges with a title quoting
+   * other numbers and two Notes cut to their width, one mid-number and one
+   * just after a whole number, #5 is handed off
    * when its fix commits nothing, and #57 has no issue.
    */
   async function narrowedRun(
@@ -1010,7 +1011,12 @@ describe("the numbers a Run prints", () => {
     runner.queue(
       "implement",
       stageResult({
-        result: { notes: [{ ticket: 9, summary: "the help drifts from READMEs, see #12834 too" }] },
+        result: {
+          notes: [
+            { ticket: 9, summary: "the help drifts from READMEs, see #12834 too" },
+            { ticket: 9, summary: "the help drifts from READMEs, see #128 and the rest of it" },
+          ],
+        },
       }),
     );
     const unmet = stageResult({
@@ -1035,6 +1041,9 @@ describe("the numbers a Run prints", () => {
     expect(out).toContain(
       `  noted    ${link(9)} comment · from ${link(4)} implement · the help drifts from READMEs, see #1283\u2026\n`,
     );
+    expect(out).toContain(
+      `  noted    ${link(9)} comment · from ${link(4)} implement · the help drifts from READMEs, see ${link(128)}\u2026\n`,
+    );
     expect(out).toContain(`  handed   ${link(5)} Ticket 5 · `);
     expect(out).toContain(`  skipped  ${link(57)} no-issue`);
     // Every number left plain is one the Run must not link: another
@@ -1051,6 +1060,9 @@ describe("the numbers a Run prints", () => {
     expect(out).toContain("  merged   #4 Follow up on #2 after acme/other#12 (PR #100)\n");
     expect(out).toContain(
       "  noted    #9 comment · from #4 implement · the help drifts from READMEs, see #1283\u2026\n",
+    );
+    expect(out).toContain(
+      "  noted    #9 comment · from #4 implement · the help drifts from READMEs, see #128\u2026\n",
     );
     expect(out).toBe((await narrowedRun(undefined)).out);
   });

@@ -227,10 +227,11 @@ async function execute(
   // opening included, links its numbers to this repository in a terminal.
   const target = await targetRepository(tracker);
   // Beneath everything else that prints, so a line is linked once it is
-  // whole, a `noted` row already cut to its width, and what the log compares
-  // is the plain text.
-  const print =
-    options.terminal === true ? (line: string) => write(linkNumbers(line, target)) : write;
+  // whole and what the log compares is the plain text. The summary links its
+  // own lines, since only it knows which number a `noted` row cut short.
+  const link =
+    options.terminal === true ? (line: string) => linkNumbers(line, target) : undefined;
+  const print = link === undefined ? write : (line: string) => write(link(line));
   // Every event of the Run goes through this, and one cause tends to fail
   // several of them with the same output, so each output is printed once. The
   // summary is printed as it is: it is one block, written once.
@@ -295,10 +296,11 @@ async function execute(
       billing: pipeline.billing,
       ...(newer === undefined ? {} : { newer }),
       stop,
+      ...(link === undefined ? {} : { link }),
     });
 
   const { outcomes, stop } = await processRun(pipeline, stopping, work.tickets);
-  print(`\n${summary(outcomes, stop)}`);
+  write(`\n${summary(outcomes, stop)}`);
   return exitCode(outcomes, work.tickets !== undefined);
 }
 
