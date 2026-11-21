@@ -2009,7 +2009,7 @@ async function requireGreenCi(
   landing: LandingTurn,
 ): Promise<void> {
   const startedAt = Date.now();
-  const workflowsCanRun = await anyWorkflowCanRunOn(pipeline, worktree, branch);
+  const workflowsCanRun = await workflowsCanRunOn(pipeline, worktree, branch);
   const outcome = await pipeline.tracker.waitForCi(
     pullRequest,
     pipeline.config.ciTimeoutMinutes * 60_000,
@@ -2072,7 +2072,7 @@ async function requireGreenCi(
  * read: being wrong that way costs the grace, and being wrong the other way
  * merges a pull request before its CI registers.
  */
-async function anyWorkflowCanRunOn(pipeline: Pipeline, worktree: string, branch: string): Promise<boolean> {
+async function workflowsCanRunOn(pipeline: Pipeline, worktree: string, branch: string): Promise<boolean> {
   try {
     const [workflows, changed] = await Promise.all([
       pipeline.workspace.workflowFiles(worktree),

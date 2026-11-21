@@ -290,7 +290,7 @@ check가 없는 pull request는 merge합니다. CI가 도는지는 pull request�
 | `pull_request` | `branches`나 `branches-ignore`가 base branch를 제외하거나, `paths`나 `paths-ignore`가 바뀐 파일을 모두 제외할 때. 이름이 바뀐 파일은 옛 경로와 새 경로를 모두 셈 |
 | `push` | `branches`나 `branches-ignore`가 pull request의 branch를 제외할 때 |
 
-패턴은 셸 glob이 아니라 GitHub의 filter pattern cheat sheet대로 읽습니다. `**.js`는 `src/js/app.js`와 맞습니다. 확실히 제외할 수 없는 것은 모두 돌 수 있는 워크플로로 치고 유예 시간을 줍니다. 파싱되지 않는 파일, 그 밖의 이벤트, 읽지 않는 필터(`types`, `push`의 `paths`, `tags`)가 있는데 읽는 필터가 이벤트를 제외하지 않을 때, `?`, `+`, `[]`, 맨 앞의 `!`가 든 패턴, `.`으로 시작하는 이름에 맞아야 하는 wildcard가 그렇습니다. 이쪽으로 틀리면 유예 시간만 쓰지만, 반대로 틀리면 CI가 등록되기 전에 pull request가 merge되기 때문입니다.
+패턴은 셸 glob이 아니라 GitHub의 filter pattern cheat sheet대로 읽습니다. `**.js`는 `src/js/app.js`와 맞습니다. 확실히 제외할 수 없는 것은 모두 돌 수 있는 워크플로로 치고 유예 시간을 줍니다. 파싱되지 않는 파일, 그 밖의 이벤트, 읽지 않는 필터(`types`, `push`의 `paths`, `tags`)가 있는데 읽는 필터가 이벤트를 제외하지 않을 때, `?`, `+`, `[]`, 맨 앞의 `!`가 든 패턴, `/`나 `./`로 시작하거나 `/`로 끝나는 경로, `.`으로 시작하는 이름에 맞아야 하는 wildcard가 그렇습니다. 이쪽으로 틀리면 유예 시간만 쓰지만, 반대로 틀리면 CI가 등록되기 전에 pull request가 merge되기 때문입니다.
 
 ### squash merge와 commit 메시지 {#squash-merge-and-its-commit}
 

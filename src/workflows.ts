@@ -147,6 +147,13 @@ function compileAll(values: unknown): ((subject: string) => Match)[] | undefined
 const UNREAD = /[?+[\]\\{}()|]/;
 
 /**
+ * Spellings of a path whose reading this does not know for sure: rooted, from
+ * `./`, or naming a directory with a trailing `/`. Taken literally they match
+ * no path git lists, which would rule out a workflow GitHub may run.
+ */
+const UNREAD_PATH = /^\.?\/|\/$/;
+
+/**
  * One pattern as GitHub's filter pattern cheat sheet reads it: `*` is any run
  * of characters but `/`, `**` any run at all, and `**` before a `/` any run
  * of whole directories, none included. Nothing for a pattern this does not read.
@@ -157,20 +164,38 @@ const UNREAD = /[?+[\]\\{}()|]/;
  * answer.
  */
 function compile(value: unknown): ((subject: string) => Match) | undefined {
-  if (typeof value !== "string" || value === "" || value.startsWith("!") || UNREAD.test(value)) {
+  if (
+    typeof value !== "string" ||
+    value === "" ||
+    value.startsWith("!") ||
+    UNREAD.test(value) ||
+    UNREAD_PATH.test(value)
+  ) {
     return undefined;
   }
-  const loose = regex(value, { any: ".", segment: "[^/]" });
-  // A dot a wildcard takes must follow something on its own name: not the
-  // start of the subject, and not a `/`.
+  const loose = regex(value, { any: ".", segment: "[^/]", innerDot: "\\." });
+  // A dot that starts a name must be the pattern's own, starting a name in the
+  // pattern too: not one a wildcard takes, and not one a wildcard that took
+  // nothing left at the start of a name, as `*.md` would of `.md`.
   const strict = regex(value, {
     any: "(?:[^.]|(?<=[^/])\\.)",
     segment: "(?:[^/.]|(?<=[^/])\\.)",
+    innerDot: "(?<=[^/])\\.",
   });
   return (subject) => (strict.test(subject) ? "yes" : loose.test(subject) ? "unknown" : "no");
 }
 
-function regex(pattern: string, wildcard: { any: string; segment: string }): RegExp {
+/**
+ * How each wildcard is spelt in the regex, and a literal `.` that does not
+ * start a name in the pattern.
+ */
+interface Spelling {
+  any: string;
+  segment: string;
+  innerDot: string;
+}
+
+function regex(pattern: string, wildcard: Spelling): RegExp {
   let source = "";
   for (let i = 0; i < pattern.length; ) {
     if (pattern.startsWith("**/", i)) {
@@ -181,6 +206,9 @@ function regex(pattern: string, wildcard: { any: string; segment: string }): Reg
       i += 2;
     } else if (pattern[i] === "*") {
       source += `${wildcard.segment}*`;
+      i += 1;
+    } else if (pattern[i] === "." && i > 0 && pattern[i - 1] !== "/") {
+      source += wildcard.innerDot;
       i += 1;
     } else {
       source += (pattern[i] as string).replace(/[.^$|?*+()[\]{}\\/]/g, "\\$&");

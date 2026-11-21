@@ -113,6 +113,16 @@ describe("workflowCanRun", () => {
       expect(canRun("on:\n  pull_request:\n    paths-ignore: ['.github/**']", { changed })).toBe(false);
     });
 
+    it("on a wildcard that matches nothing before a dot starting a name", () => {
+      expect(canRun("on:\n  pull_request:\n    paths-ignore: ['*.md']", { changed: [".md"] })).toBe(true);
+      expect(canRun("on:\n  pull_request:\n    paths-ignore: ['**.env']", { changed: ["config/.env"] })).toBe(true);
+      expect(canRun("on:\n  pull_request:\n    paths-ignore: ['*.md']", { changed: ["a.md"] })).toBe(false);
+    });
+
+    it.each(["docs/", "./src/**", "/src/**"])("on a path pattern spelt %s, which it does not read", (pattern) => {
+      expect(canRun(`on:\n  pull_request:\n    paths: ['${pattern}']`, { changed: ["docs/a.md", "src/a.ts"] })).toBe(true);
+    });
+
     it("on an event it does not know, or one that is not a pull request's push", () => {
       expect(canRun("on: [schedule, pull_request_target]")).toBe(true);
       expect(canRun("on:\n  merge_group:\n  workflow_dispatch:")).toBe(true);

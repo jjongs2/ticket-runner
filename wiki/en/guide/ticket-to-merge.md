@@ -290,7 +290,7 @@ A pull request with no checks merges: whether one runs CI is a fact about it, su
 | `pull_request` | `branches` or `branches-ignore` excludes the base branch, or `paths` or `paths-ignore` excludes every changed file, a renamed file counting under both paths |
 | `push` | `branches` or `branches-ignore` excludes the pull request's branch |
 
-Patterns are read as GitHub's filter pattern cheat sheet reads them, not as shell globs: `**.js` matches `src/js/app.js`. Anything the Run cannot rule out for certain counts as a workflow that can run, and the grace applies: a file that does not parse, any other event, a filter it does not read (`types`, a `push` `paths`, `tags`) unless one it reads rules the event out, a pattern with `?`, `+`, `[]` or a leading `!`, and a wildcard that would have to match a name starting with `.`. Wrong that way, it costs the grace; wrong the other way, a pull request would merge before its CI registers.
+Patterns are read as GitHub's filter pattern cheat sheet reads them, not as shell globs: `**.js` matches `src/js/app.js`. Anything the Run cannot rule out for certain counts as a workflow that can run, and the grace applies: a file that does not parse, any other event, a filter it does not read (`types`, a `push` `paths`, `tags`) unless one it reads rules the event out, a pattern with `?`, `+`, `[]` or a leading `!`, a path written from `/` or `./` or ending in `/`, and a wildcard that would have to match a name starting with `.`. Wrong that way, it costs the grace; wrong the other way, a pull request would merge before its CI registers.
 
 ### Squash merge and its commit
 
