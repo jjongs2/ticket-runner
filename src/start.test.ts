@@ -87,6 +87,7 @@ async function start(
   signals?: StopSource,
   repository?: string,
   env: Record<string, string | undefined> = {},
+  terminal?: boolean,
 ) {
   const out: string[] = [];
   const err: string[] = [];
@@ -105,6 +106,7 @@ async function start(
     log: (line) => out.push(line),
     error: (line) => err.push(line),
     ...(signals === undefined ? {} : { signals }),
+    ...(terminal === undefined ? {} : { terminal }),
   });
   return { code, out: out.join("\n"), lines: out, err: err.join("\n") };
 }
@@ -965,6 +967,120 @@ describe("the Run log", () => {
     expect(lines).toContain(`#4 handed off at rebase · ${pull} · the same output as above`);
     // The summary's row gives the one line, and its output is the hand-off's.
     expect(out).toContain(`  handed   #4 Ticket 4 · rebase · ${pull}\n`);
+  });
+});
+
+/**
+ * In a terminal, a human opens a Ticket or a pull request from the line that
+ * names it, so each `#N` is an OSC 8 link to it on the Target; anywhere else,
+ * the log file an Operator reads line by line included, the output is plain.
+ */
+describe("the numbers a Run prints", () => {
+  /** `#<n>` as a terminal is handed it, a link to that issue on `acme/shop`. */
+  function link(number: number): string {
+    return `\x1b]8;;https://github.com/acme/shop/issues/${number}\x1b\\#${number}\x1b]8;;\x1b\\`;
+  }
+
+  /** What the Run printed with every OSC 8 sequence taken out. */
+  function unlinked(text: string): string {
+    return text.replace(/\x1b\]8;;[^\x1b]*\x1b\\/g, "");
+  }
+
+  /**
+   * A narrowed Run, from fresh fakes each time: #4 merges with a title quoting
+   * other numbers and two Notes cut to their width, one mid-number and one
+   * just after a whole number, #5 is handed off
+   * when its fix commits nothing, and #57 has no issue.
+   */
+  async function narrowedRun(
+    terminal: boolean | undefined,
+    { named = true, unreadable = false }: { named?: boolean; unreadable?: boolean } = {},
+  ) {
+    tracker = new FakeTracker();
+    for (const name of ALL_LABELS) tracker.labels.add(name);
+    tracker.deleteBranchOnMergeEnabled = true;
+    tracker.repositoryName = named ? "acme/shop" : undefined;
+    tracker.repositoryFails = unreadable;
+    runner = new FakeAgentRunner({ verify: stageResult({ result: PASSING_VERDICT }) });
+    workspace = new FakeWorkspace();
+    pushInitFiles("main");
+
+    tracker.addIssue({ number: 4, title: "Follow up on #2 after acme/other#12" });
+    tracker.addIssue({ number: 5 });
+    tracker.addIssue({ number: 9 });
+    runner.queue(
+      "implement",
+      stageResult({
+        result: {
+          notes: [
+            { ticket: 9, summary: "the help drifts from READMEs, see #12834 too" },
+            { ticket: 9, summary: "the help drifts from READMEs, see #128 and the rest of it" },
+          ],
+        },
+      }),
+    );
+    const unmet = stageResult({
+      result: { criteria: [{ number: 1, status: "unmet", evidence: "red" }], pass: false },
+    });
+    runner.queue("verify", stageResult({ result: PASSING_VERDICT }));
+    runner.queue("verify", unmet);
+
+    return start({ command: "run", tickets: [4, 5, 57] }, undefined, undefined, {}, terminal);
+  }
+
+  it("links every #N on standard output in a terminal, but one after a letter, digit or slash", async () => {
+    const { out, lines } = await narrowedRun(true);
+
+    expect(lines[0]).toBe(`ticket-runner run run-1 · 1 lane · ${link(4)} ${link(5)} ${link(57)}`);
+    expect(lines).toContain(`${link(4)} claimed · agent/4-follow-up-on-2-after-acme-other-12`);
+    expect(lines.some((line) => line.startsWith(`${link(4)} merged · PR ${link(100)}`))).toBe(true);
+    expect(lines.some((line) => line.startsWith(`${link(5)} handed off at `))).toBe(true);
+    expect(out).toContain(
+      `  merged   ${link(4)} Follow up on ${link(2)} after acme/other#12 (PR ${link(100)})\n`,
+    );
+    expect(out).toContain(
+      `  noted    ${link(9)} comment · from ${link(4)} implement · the help drifts from READMEs, see #1283\u2026\n`,
+    );
+    expect(out).toContain(
+      `  noted    ${link(9)} comment · from ${link(4)} implement · the help drifts from READMEs, see ${link(128)}\u2026\n`,
+    );
+    expect(out).toContain(`  handed   ${link(5)} Ticket 5 · `);
+    expect(out).toContain(`  skipped  ${link(57)} no-issue`);
+    // Every number left plain is one the Run must not link: another
+    // repository's, and the one the `noted` row's ellipsis cut short.
+    const plain = out.replace(/\x1b\]8;;[^\x1b]*\x1b\\#\d+\x1b\]8;;\x1b\\/g, "").match(/.#\d+./g);
+    expect(plain).toEqual(["r#12 ", " #1283\u2026"]);
+  });
+
+  it("prints plain numbers when standard output is not a terminal", async () => {
+    const { out, lines } = await narrowedRun(false);
+
+    expect(out).not.toContain("\x1b");
+    expect(lines[0]).toBe("ticket-runner run run-1 · 1 lane · #4 #5 #57");
+    expect(out).toContain("  merged   #4 Follow up on #2 after acme/other#12 (PR #100)\n");
+    expect(out).toContain(
+      "  noted    #9 comment · from #4 implement · the help drifts from READMEs, see #1283\u2026\n",
+    );
+    expect(out).toContain(
+      "  noted    #9 comment · from #4 implement · the help drifts from READMEs, see #128\u2026\n",
+    );
+    expect(out).toBe((await narrowedRun(undefined)).out);
+  });
+
+  it("prints in a terminal, links taken out, exactly what it prints anywhere else", async () => {
+    const { out: linked } = await narrowedRun(true);
+    const { out: plain } = await narrowedRun(false);
+
+    expect(linked).not.toBe(plain);
+    expect(unlinked(linked)).toBe(plain);
+  });
+
+  it("leaves every number plain in a terminal where GitHub could not name the Target", async () => {
+    const { out: plain } = await narrowedRun(false);
+
+    expect((await narrowedRun(true, { named: false })).out).toBe(plain);
+    // And where the tracker could not be asked at all.
+    expect((await narrowedRun(true, { unreadable: true })).out).toBe(plain);
   });
 });
 

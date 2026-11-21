@@ -1,9 +1,11 @@
 /**
- * Whether a Run's Target is the pipeline's own repository.
+ * The Target's GitHub repository, read once per Run, and whether it is the
+ * pipeline's own; the same name is what a terminal's links point at
+ * (`terminal-links.ts`).
  *
- * Only there is the checkout a Stage stands in the pipeline itself, with tests
- * and fakes to exercise it through and spellings of its commands that name no
- * installed `ticket-runner` (`prompts.ts`). The pipeline decides this rather
+ * Only in the pipeline's own is the checkout a Stage stands in the pipeline
+ * itself, with tests and fakes to exercise it through and spellings of its
+ * commands that name no installed `ticket-runner` (`prompts.ts`). The pipeline decides this rather
  * than leaving a Stage to judge it from the files around it, and it decides it
  * once per Run, before the first Ticket.
  */
@@ -11,23 +13,32 @@
 import type { Tracker } from "./ports/tracker.js";
 
 /**
- * True where the Target's GitHub repository is `pipeline`, the pipeline's own
- * as its package names it, and false wherever either side cannot be read.
- *
- * GitHub reads `owner/name` without regard to case, so this does too. Nothing
- * here may stop a Run: a tracker that fails is a Target that is not the
- * pipeline's own, which gives its Stages the guidance that holds anywhere.
+ * The Target's GitHub repository as `owner/name`, read once per Run, or
+ * nothing wherever GitHub could not name it. Nothing here may stop a Run: a
+ * tracker that fails is a Target nobody could name.
  */
-export async function isPipelineRepository(
-  tracker: Tracker,
-  pipeline: string | undefined,
-): Promise<boolean> {
-  if (pipeline === undefined) return false;
-  let target: string | undefined;
+export async function targetRepository(
+  tracker: Pick<Tracker, "repository">,
+): Promise<string | undefined> {
   try {
-    target = await tracker.repository();
+    return await tracker.repository();
   } catch {
-    return false;
+    return undefined;
   }
-  return target !== undefined && target.toLowerCase() === pipeline.toLowerCase();
+}
+
+/**
+ * True where the Target's GitHub repository, `target`, is `pipeline`, the
+ * pipeline's own as its package names it, and false wherever either side could
+ * not be read, which gives the Target's Stages the guidance that holds anywhere.
+ *
+ * GitHub reads `owner/name` without regard to case, so this does too.
+ */
+export function isPipelineRepository(
+  target: string | undefined,
+  pipeline: string | undefined,
+): boolean {
+  return (
+    pipeline !== undefined && target !== undefined && target.toLowerCase() === pipeline.toLowerCase()
+  );
 }

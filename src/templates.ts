@@ -774,6 +774,12 @@ export interface RunSummary {
   newer?: string;
   /** Why the Run stopped, and with it whatever it can still say about the Frontier. */
   stop: RunStop;
+  /**
+   * What each line is handed through before it is printed: in a terminal, the
+   * one that makes every `#N` a link. The summary applies it itself, so a
+   * number a `noted` row cuts short stays out of it.
+   */
+  link?: (line: string) => string;
 }
 
 /**
@@ -821,26 +827,31 @@ export function runSummary({
   billing = emptyBilling(),
   newer,
   stop,
+  link = (line) => line,
 }: RunSummary): string {
   const rows = [
     ...outcomes.flatMap((outcome) => [
-      ...ticketRows(outcome, credential),
-      ...billing.strays.filter((stray) => stray.ticket === outcome.ticket).map(billedRow),
+      ...ticketRows(outcome, credential, link),
+      ...billing.strays
+        .filter((stray) => stray.ticket === outcome.ticket)
+        .map((stray) => link(billedRow(stray))),
     ]),
     // Only a Run that reached the end of the Frontier can name what was held
     // back all Run, so only that stop carries candidates to skip.
     ...(stop.reason === "frontier"
-      ? stop.blocked.map((ticket) => row("skipped", ticket, "blocked"))
+      ? stop.blocked.map((ticket) => link(row("skipped", ticket, "blocked")))
       : []),
   ];
 
   return [
-    ...(newer === undefined ? [] : [newer]),
-    `ticket-runner ${version} run ${runId} · ${Math.round(durationMs / 60_000)}m · ${billedTo(credential, billing)}`,
+    ...(newer === undefined ? [] : [link(newer)]),
+    link(
+      `ticket-runner ${version} run ${runId} · ${Math.round(durationMs / 60_000)}m · ${billedTo(credential, billing)}`,
+    ),
     "",
     ...(rows.length === 0 ? ["  nothing to do"] : rows),
     "",
-    lastLine(stop, credential),
+    link(lastLine(stop, credential)),
     "",
   ].join("\n");
 }
@@ -937,10 +948,14 @@ function holding(busy: number[]): string {
  * The Notes follow their own Ticket rather than being gathered at the end, so a
  * Run that took six Tickets still says which one noticed what.
  */
-function ticketRows(outcome: TicketOutcome, credential: Credential): string[] {
+function ticketRows(
+  outcome: TicketOutcome,
+  credential: Credential,
+  link: (line: string) => string,
+): string[] {
   return [
-    ticketRow(outcome, credential),
-    ...(outcome.outcome === "skipped" ? [] : outcome.notes.map(noteRow)),
+    link(ticketRow(outcome, credential)),
+    ...(outcome.outcome === "skipped" ? [] : outcome.notes.map((note) => noteRow(note, link))),
   ];
 }
 
@@ -956,14 +971,34 @@ function truncate(text: string, limit: number): string {
  */
 const NOTE_WIDTH = 40;
 
-/** One Note's line: where it went, where it came from, and the gist of it. */
-function noteRow({ origin, stage, issue, opened, summary }: RoutedNote): string {
+/**
+ * The `#N` the ellipsis of `kept`, as `truncate` cut it from `text`, cuts
+ * short, or nothing where it cuts no number: `#1283…` may have been `#12834`,
+ * and linking it would open another issue.
+ */
+function cutNumber(text: string, kept: string): string {
+  if (kept === text) return "";
+  const before = kept.slice(0, -1);
+  const number = /#\d*$/.exec(before);
+  return number !== null && /\d/.test(text.charAt(before.length)) ? number[0] : "";
+}
+
+/**
+ * One Note's line: where it went, where it came from, and the gist of it,
+ * handed through `link` but for a number its ellipsis cuts short.
+ */
+function noteRow(
+  { origin, stage, issue, opened, summary }: RoutedNote,
+  link: (line: string) => string,
+): string {
   const destination = opened ? "new" : "comment";
-  return row(
-    "noted",
-    issue,
-    `${destination} · from #${origin} ${stage} · ${truncate(splitMessage(summary).line, NOTE_WIDTH)}`,
-  );
+  const text = splitMessage(summary).line;
+  const kept = truncate(text, NOTE_WIDTH);
+  const line = row("noted", issue, `${destination} · from #${origin} ${stage} · ${kept}`);
+  const cut = cutNumber(text, kept);
+  return cut === ""
+    ? link(line)
+    : `${link(line.slice(0, line.length - cut.length - 1))}${cut}\u2026`;
 }
 
 /** What a `handed` row says of a hand-off a fault outside the Ticket cut short. */

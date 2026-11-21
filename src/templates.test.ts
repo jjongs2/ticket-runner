@@ -5,6 +5,7 @@ import { throwOnFailure } from "./adapters/exec.js";
 import { MAX_TAIL_CHARS } from "./log-tail.js";
 import { type Billing, emptyBilling } from "./credential.js";
 import type { RunStop } from "./run.js";
+import { linkNumbers } from "./terminal-links.js";
 import {
   HANDOFF_MARKER,
   HANDOFF_TAKEN_LINE,
@@ -1766,6 +1767,86 @@ describe("Notes in a Run summary", () => {
     expect(row).not.toContain(long);
     expect(row.length).toBeLessThan(90);
     expect(row.endsWith("\u2026")).toBe(true);
+  });
+
+  describe("with every #N handed through a link", () => {
+    /** `#<n>` as a terminal is handed it, a link to that issue on `acme/shop`. */
+    function link(number: number): string {
+      return `\x1b]8;;https://github.com/acme/shop/issues/${number}\x1b\\#${number}\x1b]8;;\x1b\\`;
+    }
+
+    /** The `noted` row a Note with `summary` gets in a linked summary, and in a plain one. */
+    function notedRow(summary: string): { linked: string; plain: string } {
+      const rows = [undefined, (line: string) => linkNumbers(line, "acme/shop")].map(
+        (linker) =>
+          runSummary({
+            credential: "subscription",
+            version: VERSION,
+            runId: "r1",
+            durationMs: 0,
+            outcomes: [{ ...merged, notes: [{ ...note, summary }] }],
+            stop: FRONTIER_EMPTY,
+            ...(linker === undefined ? {} : { link: linker }),
+          })
+            .split("\n")
+            .find((line) => line.includes("noted")) as string,
+      );
+      return { plain: rows[0] as string, linked: rows[1] as string };
+    }
+
+    const prefix = `  noted    ${link(8)} comment · from ${link(3)} implement · `;
+
+    it("links a whole number the ellipsis follows", () => {
+      // Cut at the space after it, which the trim takes away.
+      const { linked, plain } = notedRow("the help drifts from READMEs, see #128 and the rest of it");
+
+      expect(plain).toBe("  noted    #8 comment · from #3 implement · the help drifts from READMEs, see #128\u2026");
+      expect(linked).toBe(`${prefix}the help drifts from READMEs, see ${link(128)}\u2026`);
+    });
+
+    it("links a whole number the cut ends on", () => {
+      const { linked } = notedRow("the help drifts from READMEs, see #1283 and more");
+
+      expect(linked).toBe(`${prefix}the help drifts from READMEs, see ${link(1283)}\u2026`);
+    });
+
+    it("leaves a number the ellipsis cuts short plain, since it may be another one", () => {
+      const { linked, plain } = notedRow("the help drifts from READMEs, see #12834 too");
+
+      expect(plain.endsWith("see #1283\u2026")).toBe(true);
+      expect(linked).toBe(`${prefix}the help drifts from READMEs, see #1283\u2026`);
+    });
+
+    it("leaves a # the ellipsis cuts from its number plain", () => {
+      const { linked, plain } = notedRow("the help drifts from READMEs, see all #12");
+
+      expect(plain.endsWith("all #\u2026")).toBe(true);
+      expect(linked).toBe(`${prefix}the help drifts from READMEs, see all #\u2026`);
+    });
+
+    it("links a number a Note quotes with an ellipsis of its own", () => {
+      const { linked } = notedRow("see #12\u2026 more");
+
+      expect(linked).toBe(`${prefix}see ${link(12)}\u2026 more`);
+    });
+
+    it("links every other line of the summary", () => {
+      const summary = runSummary({
+        credential: "subscription",
+        version: VERSION,
+        runId: "r1",
+        durationMs: 0,
+        outcomes: [merged, handed],
+        stop: { ...FRONTIER_EMPTY, blocked: [40] },
+        newer: "ticket-runner 9.9.9 is out, see #77",
+        link: (line) => linkNumbers(line, "acme/shop"),
+      });
+
+      expect(summary).toContain(`see ${link(77)}\n`);
+      expect(summary).toContain(`  merged   ${link(3)} Run: drain the Frontier (PR ${link(12)})\n`);
+      expect(summary).toContain(`  handed   ${link(5)} Fix Stage`);
+      expect(summary).toContain(`  skipped  ${link(40)} blocked\n`);
+    });
   });
 
   it("says nothing extra for a Ticket whose Stages found nothing", () => {

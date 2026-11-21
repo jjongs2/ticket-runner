@@ -15,11 +15,12 @@ import { readinessRefusal, unpushedRefusal } from "./readiness.js";
 import { LOCAL_STATE_DIR, localStateTickets } from "./resume.js";
 import { writeRunVersion } from "./run-log.js";
 import { type RunStop, processRun } from "./run.js";
-import { isPipelineRepository } from "./self-hosting.js";
+import { isPipelineRepository, targetRepository } from "./self-hosting.js";
 import { conventionsWarning, newerVersionLine } from "./staleness.js";
 import { type StopSource, StopSignal, listenForStop } from "./stop.js";
 import { startupMessages } from "./startup.js";
 import { runSummary } from "./templates.js";
+import { linkNumbers } from "./terminal-links.js";
 import { resolveTranscriptHome } from "./transcript-home.js";
 
 /**
@@ -71,6 +72,12 @@ export interface StartOptions {
   /** The command line the Run lock records, for whoever loses it. */
   command: string;
   log?: (line: string) => void;
+  /**
+   * Whether `log` writes to a terminal, where every `#N` it is handed becomes a
+   * link to that issue on GitHub. The CLI says whether standard output is one;
+   * anywhere else nothing is linked.
+   */
+  terminal?: boolean;
   /** Warnings and refusals, which the CLI puts on stderr as it always has. */
   error?: (line: string) => void;
   /** Where SIGTERM comes from. The process itself, unless a test is watching. */
@@ -200,25 +207,36 @@ async function execute(
     baseBranch,
     host,
   }: { credential: Credential; baseBranch: string; host: HostKind },
-  print: (line: string) => void,
+  write: (line: string) => void,
   stopping: StopSignal,
 ): Promise<number> {
   const { work, repoRoot, config, tracker, runner, workspace, runId, version } = options;
-  // Every event of the Run goes through this, and one cause tends to fail
-  // several of them with the same output, so each output is printed once. The
-  // summary is printed as it is: it is one block, written once.
-  const log = printEachOutputOnce(print);
-
   // Before the first Stage, and before the tracker is asked anything: a
   // transcript has to sit beside the pipeline that wrote it, and the Run
   // summary that says the same thing is a terminal these files outlive.
   // Logged and nothing more when it fails — a directory that will not take a
   // one-line file is no reason to take no Ticket at all.
+  let versionUnrecorded: string | undefined;
   try {
     writeRunVersion(repoRoot, runId, version);
   } catch (error) {
-    log(`could not record the version beside the transcripts: ${(error as Error).message}`);
+    versionUnrecorded = `could not record the version beside the transcripts: ${(error as Error).message}`;
   }
+
+  // Read before the first line is printed, since every line of the Run, its
+  // opening included, links its numbers to this repository in a terminal.
+  const target = await targetRepository(tracker);
+  // Beneath everything else that prints, so a line is linked once it is
+  // whole and what the log compares is the plain text. The summary links its
+  // own lines, since only it knows which number a `noted` row cut short.
+  const link =
+    options.terminal === true ? (line: string) => linkNumbers(line, target) : undefined;
+  const print = link === undefined ? write : (line: string) => write(link(line));
+  // Every event of the Run goes through this, and one cause tends to fail
+  // several of them with the same output, so each output is printed once. The
+  // summary is printed as it is: it is one block, written once.
+  const log = printEachOutputOnce(print);
+  if (versionUnrecorded !== undefined) log(versionUnrecorded);
 
   // Asked once, and said twice: at the top of the log a human watches, and
   // again at the head of the summary they scroll back to hours later.
@@ -230,7 +248,7 @@ async function execute(
 
   // Once per Run: only a Target that is the pipeline's own repository
   // has a checkout that is the pipeline, and every Stage is told which it is in.
-  const selfHosted = await isPipelineRepository(tracker, options.repository);
+  const selfHosted = isPipelineRepository(target, options.repository);
   // Once per Run as well: whether the Target is public is read here and no
   // later, so every hand-off of the Run keeps its transcripts in one place.
   const transcriptHome = await resolveTranscriptHome({ config, tracker, host });
@@ -278,10 +296,11 @@ async function execute(
       billing: pipeline.billing,
       ...(newer === undefined ? {} : { newer }),
       stop,
+      ...(link === undefined ? {} : { link }),
     });
 
   const { outcomes, stop } = await processRun(pipeline, stopping, work.tickets);
-  print(`\n${summary(outcomes, stop)}`);
+  write(`\n${summary(outcomes, stop)}`);
   return exitCode(outcomes, work.tickets !== undefined);
 }
 
