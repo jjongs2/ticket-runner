@@ -95,7 +95,7 @@ describe("holding a CI wait open", () => {
     const hold = tracker.holdsCi();
     let answered = false;
 
-    const wait = tracker.waitForCi(100, 1_000).then(() => {
+    const wait = tracker.waitForCi(100, 1_000, { workflowsCanRun: true }).then(() => {
       answered = true;
     });
     await hold.started();
@@ -103,7 +103,7 @@ describe("holding a CI wait open", () => {
 
     // Recorded on arrival, so a test can say the Ticket is inside the wait
     // rather than short of it.
-    expect(tracker.ciWaits).toEqual([{ pullRequest: 100, timeoutMs: 1_000 }]);
+    expect(tracker.ciWaits).toEqual([{ pullRequest: 100, timeoutMs: 1_000, workflowsCanRun: true }]);
     expect(answered).toBe(false);
 
     hold.release();
@@ -117,7 +117,7 @@ describe("holding a CI wait open", () => {
     tracker.queueCi({ state: "timed-out" });
     const hold = tracker.holdsCi();
 
-    const wait = tracker.waitForCi(100, 1_000);
+    const wait = tracker.waitForCi(100, 1_000, { workflowsCanRun: true });
     await hold.started();
     hold.release();
 

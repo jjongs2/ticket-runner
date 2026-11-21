@@ -7,7 +7,7 @@ function config(overrides: Partial<Config>): Config {
     lanes: 1,
     checks: ["npm test"],
     merge: true,
-    gates: { checks: true, ci: true },
+    checksNamed: true,
     stages: {
       implement: {
         model: "claude-opus-5-5",
@@ -55,42 +55,27 @@ function config(overrides: Partial<Config>): Config {
 }
 
 describe("startupMessages", () => {
-  it("says nothing when both gates are on and Checks exist", () => {
+  it("says nothing when Checks exist", () => {
     expect(startupMessages(config({}))).toEqual({ warnings: [] });
+    expect(startupMessages(config({ checksNamed: false }))).toEqual({ warnings: [] });
   });
 
-  it("refuses to start when the Checks gate is on but no Check is configured", () => {
-    const { refusal } = startupMessages(config({ checks: [] }));
+  it("refuses to start when the config names no Check and none could be inferred, naming `\"checks\": []`", () => {
+    const { refusal, warnings } = startupMessages(config({ checks: [], checksNamed: false }));
 
     expect(refusal).toMatch(/no check commands/i);
     expect(refusal).toContain("ticket-runner.json");
-    expect(refusal).toMatch(/gates.*checks.*false/is);
+    expect(refusal).toContain('`"checks": []`');
+    expect(refusal).not.toMatch(/gates/);
+    expect(warnings).toEqual([]);
   });
 
-  it("lets a repo with no Checks run once the gate is turned off", () => {
-    const { refusal, warnings } = startupMessages(
-      config({ checks: [], gates: { checks: false, ci: true } }),
-    );
+  it("starts with a warning when the config names `\"checks\": []`", () => {
+    const { refusal, warnings } = startupMessages(config({ checks: [], checksNamed: true }));
 
     expect(refusal).toBeUndefined();
     expect(warnings).toEqual([
-      "Checks gate off: nothing deterministic will gate a merge.",
+      "No Check command: `checks` is `[]` in ticket-runner.json, so nothing deterministic grades a Ticket before it merges.",
     ]);
-  });
-
-  it("warns when the CI gate is off", () => {
-    const { warnings } = startupMessages(config({ gates: { checks: true, ci: false } }));
-
-    expect(warnings).toEqual([
-      "CI gate off: a pull request with no checks will still be merged.",
-    ]);
-  });
-
-  it("warns once per disabled gate", () => {
-    const { warnings } = startupMessages(
-      config({ checks: [], gates: { checks: false, ci: false } }),
-    );
-
-    expect(warnings).toHaveLength(2);
   });
 });

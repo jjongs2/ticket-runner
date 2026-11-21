@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { CONFIG_FILENAME, type Config } from "./config.js";
 import {
@@ -53,9 +53,6 @@ import { isHigher, versionNumber } from "./version-number.js";
  * drive the state machine with — a temporary repository root buys here, which
  * is how the local state under `.ticket-runner/` is already tested (ADR-0004).
  */
-
-/** Where GitHub Actions keeps a Target's workflows. */
-const WORKFLOWS_DIR = join(".github", "workflows");
 
 const PASS = "✓";
 const FAIL = "✗";
@@ -123,7 +120,7 @@ export async function initTarget(options: InitOptions): Promise<number> {
   const authentication = await tracker.authentication();
   const preflight = await runner.preflight();
   const github = await updateGitHub(tracker, config, authentication);
-  const reported = reportedItems(repoRoot, config, authentication, preflight);
+  const reported = reportedItems(config, authentication, preflight);
 
   logGroup(log, "Wrote", written, "nothing to write");
   logGroup(log, "GitHub", github);
@@ -354,11 +351,11 @@ interface Reported {
 }
 
 /**
- * What `init` cannot put in place itself: a login, two installs, a workflow the
- * Target's own CI owns, and a Check that has to be the human's to name.
+ * What `init` cannot put in place itself: a login, two installs, and a Check
+ * that has to be the human's to name. A Target with no CI workflow is not one
+ * to put right: a pull request with no checks merges.
  */
 function reportedItems(
-  repoRoot: string,
   config: Config,
   authentication: Authentication,
   preflight: AgentPreflight,
@@ -371,17 +368,26 @@ function reportedItems(
       `the \`${SKILLS_PLUGIN}\` plugin is installed`,
       `the \`${SKILLS_PLUGIN}\` plugin is not installed — an implement Stage has no skill without it`,
     ),
-    report(
-      hasCiWorkflow(repoRoot),
-      `a CI workflow is present in \`${WORKFLOWS_DIR}\``,
-      `no CI workflow in \`${WORKFLOWS_DIR}\` — a pull request with no checks is never merged`,
-    ),
-    report(
-      config.checks.length > 0,
-      `a Check is configured or inferable: ${config.checks.join(", ")}`,
-      `no Check is configured or inferable — name one in \`checks\` in ${CONFIG_FILENAME}, or add \`test\` and \`typecheck\` scripts to package.json`,
-    ),
+    checksReported(config),
   ];
+}
+
+/**
+ * The Check item, which passes a `"checks": []` the config names, since that
+ * is a Target running with no Check command on purpose, as a Run does with a
+ * warning.
+ */
+function checksReported(config: Config): Reported {
+  if (config.checks.length > 0) {
+    return { ok: true, line: `a Check is configured or inferable: ${config.checks.join(", ")}` };
+  }
+  if (config.checksNamed) {
+    return { ok: true, line: `\`checks\` is \`[]\` in ${CONFIG_FILENAME}: a Run starts with no Check command` };
+  }
+  return {
+    ok: false,
+    line: `no Check is configured or inferable — name one in \`checks\` in ${CONFIG_FILENAME}, or add \`test\` and \`typecheck\` scripts to package.json`,
+  };
 }
 
 /** The `gh` item, which fails two ways and names the fix for each. */
@@ -393,13 +399,4 @@ function ghReported(authentication: Authentication): Reported {
 
 function report(ok: boolean, passed: string, failed: string): Reported {
   return { ok, line: ok ? passed : failed };
-}
-
-/** Any workflow file at all; what it runs is the Target's business. */
-function hasCiWorkflow(repoRoot: string): boolean {
-  try {
-    return readdirSync(join(repoRoot, WORKFLOWS_DIR)).some((entry) => /\.ya?ml$/i.test(entry));
-  } catch {
-    return false;
-  }
 }

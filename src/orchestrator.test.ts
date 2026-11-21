@@ -34,7 +34,7 @@ function config(overrides: Partial<Config> = {}): Config {
     lanes: 1,
     checks: ["npm test", "npm run typecheck"],
     merge: true,
-    gates: { checks: true, ci: true },
+    checksNamed: false,
     stages: {
       implement: {
         model: "claude-opus-5-5",
@@ -608,7 +608,7 @@ describe("the pull request title and the squash commit", () => {
   });
 
   it("leaves the title of a pull request that was already open when the hand-off came", async () => {
-    tracker.ci = { state: "none" };
+    tracker.ci = { state: "timed-out" };
 
     await run();
 
@@ -1277,7 +1277,7 @@ describe("CI", () => {
   it("waits for the pull request checks up to the configured timeout", async () => {
     await run({ ciTimeoutMinutes: 5 });
 
-    expect(tracker.ciWaits).toEqual([{ pullRequest: 100, timeoutMs: 5 * 60_000 }]);
+    expect(tracker.ciWaits).toEqual([{ pullRequest: 100, timeoutMs: 5 * 60_000, workflowsCanRun: true }]);
   });
 
   it("hands off when a check fails", async () => {
@@ -1311,13 +1311,16 @@ describe("CI", () => {
     expect(handoffBody()).not.toContain("<details><summary>Evidence</summary>");
   });
 
-  it("hands off when the pull request has no checks at all", async () => {
+  it("merges a pull request with no checks once the wait ends, with a warning row", async () => {
     tracker.ci = { state: "none" };
 
     const outcome = await run();
 
-    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "ci" });
-    expect(handoffBody()).toMatch(/no checks/i);
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(tracker.calls).toContain("squashMerge:100");
+    expect(tracker.ciWaits).toEqual([expect.objectContaining({ workflowsCanRun: true })]);
+    expect(progressTable()).toMatch(/^\| ci \| ⚠️ no checks \|/m);
+    expect(tracker.comments.some((comment) => /handed off/i.test(comment.body))).toBe(false);
   });
 
   it("hands off a pull request that conflicts with the base branch as a conflict, not as no checks", async () => {
@@ -1326,50 +1329,106 @@ describe("CI", () => {
     const outcome = await run();
 
     expect(outcome).toMatchObject({ outcome: "handed-off", stage: "ci" });
+    expect(tracker.calls).not.toContain("squashMerge:100");
     expect(handoffBody()).toContain("the pull request conflicts with `main`");
     expect(handoffBody()).not.toMatch(/no checks/i);
     expect(progressTable()).toMatch(/\| ci \| ❌ conflicting \|/);
-  });
-
-  it("hands off a conflicting pull request when the CI gate is off, without trying the merge", async () => {
-    tracker.ci = { state: "conflicting" };
-
-    const outcome = await run({ gates: { checks: true, ci: false } });
-
-    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "ci" });
-    expect(tracker.calls).not.toContain("squashMerge:100");
-    expect(handoffBody()).toContain("the pull request conflicts with `main`");
   });
 
   it("hands off when CI does not finish in time", async () => {
     tracker.ci = { state: "timed-out" };
 
     expect(await run()).toMatchObject({ outcome: "handed-off", stage: "ci" });
+    expect(progressTable()).toMatch(/\| ci \| ❌ timed out \|/);
   });
 
-  it("merges a pull request with no checks when the CI gate is off", async () => {
-    tracker.ci = { state: "none" };
+  describe("when no workflow can run on the pull request", () => {
+    const ONLY_ELSEWHERE = [
+      "on:",
+      "  schedule:",
+      "    - cron: '0 3 * * *'",
+      "  workflow_dispatch:",
+      "  pull_request:",
+      "    paths: ['src/**']",
+    ].join("\n");
 
-    expect(await run({ gates: { checks: true, ci: false } })).toMatchObject({
-      outcome: "merged",
+    it("answers the wait at once and merges a pull request with no checks, saying no workflow runs", async () => {
+      workspace.workflows = [{ path: ".github/workflows/ci.yml", contents: ONLY_ELSEWHERE }];
+      workspace.changed = ["docs/guide.md"];
+      tracker.ci = { state: "none" };
+
+      expect(await run()).toMatchObject({ outcome: "merged" });
+      expect(tracker.ciWaits).toEqual([expect.objectContaining({ workflowsCanRun: false })]);
+      expect(progressTable()).toMatch(/^\| ci \| ⚠️ no workflow runs \|/m);
+    });
+
+    it("does the same on a Target with no workflow file", async () => {
+      workspace.workflows = [];
+      tracker.ci = { state: "none" };
+
+      expect(await run()).toMatchObject({ outcome: "merged" });
+      expect(tracker.ciWaits).toEqual([expect.objectContaining({ workflowsCanRun: false })]);
+      expect(progressTable()).toMatch(/^\| ci \| ⚠️ no workflow runs \|/m);
+    });
+
+    it("still grades the checks the pull request does have", async () => {
+      workspace.workflows = [];
+      tracker.ci = { state: "failed", summary: "status/app failed", excerpt: "" };
+
+      expect(await run()).toMatchObject({ outcome: "handed-off", stage: "ci" });
+      expect(tracker.calls).not.toContain("squashMerge:100");
+    });
+
+    it.each([
+      ["a push branches filter that excludes the pull request's branch", "on:\n  push:\n    branches: [main]", ["src/a.ts"]],
+      ["a pull_request branches filter that excludes the base branch", "on:\n  pull_request:\n    branches: [develop]", ["src/a.ts"]],
+      ["a paths-ignore filter every changed file matches", "on:\n  pull_request:\n    paths-ignore: ['docs/**', '*.md']", ["docs/a.md", "README.md"]],
+    ])("rules out a workflow by %s", async (_, contents, changed) => {
+      workspace.workflows = [{ path: ".github/workflows/ci.yml", contents }];
+      workspace.changed = changed;
+
+      await run();
+
+      expect(tracker.ciWaits).toEqual([expect.objectContaining({ workflowsCanRun: false })]);
+    });
+
+    it("reads the base branch the Run resolved and the Ticket's own branch", async () => {
+      workspace.workflows = [{ path: ".github/workflows/ci.yml", contents: `on:\n  push:\n    branches: ['${BRANCH}']` }];
+
+      await run();
+
+      expect(tracker.ciWaits).toEqual([expect.objectContaining({ workflowsCanRun: true })]);
     });
   });
 
-  it("still refuses a red pull request when the CI gate is off", async () => {
-    tracker.ci = { state: "failed", summary: "checks/build failed", excerpt: "" };
+  describe("when a workflow can run on the pull request, or the reader cannot rule one out", () => {
+    it.each([
+      ["a pull_request with no filter", "on: pull_request", ["docs/a.md"]],
+      ["a paths filter that matches a changed file", "on:\n  pull_request:\n    paths: ['docs/**']", ["docs/a.md"]],
+      ["a push with no branch filter", "on: push", ["docs/a.md"]],
+      ["a `**.js` pattern and a changed `src/js/app.js`", "on:\n  pull_request:\n    paths: ['**.js']", ["src/js/app.js"]],
+      ["a pattern with `?`", "on:\n  pull_request:\n    paths: ['src/?.ts']", ["docs/a.md"]],
+      ["a file that does not parse", "on: [pull_request", ["docs/a.md"]],
+      ["an event the reader does not rule out", "on: [schedule, pull_request_target]", ["docs/a.md"]],
+    ])("gives the wait its grace on %s", async (_, contents, changed) => {
+      workspace.workflows = [{ path: ".github/workflows/ci.yml", contents }];
+      workspace.changed = changed;
+      tracker.ci = { state: "none" };
 
-    expect(await run({ gates: { checks: true, ci: false } })).toMatchObject({
-      outcome: "handed-off",
-      stage: "ci",
+      expect(await run()).toMatchObject({ outcome: "merged" });
+      expect(tracker.ciWaits).toEqual([expect.objectContaining({ workflowsCanRun: true })]);
+      expect(progressTable()).toMatch(/^\| ci \| ⚠️ no checks \|/m);
     });
-  });
 
-  it("still refuses a pull request whose checks never finished when the CI gate is off", async () => {
-    tracker.ci = { state: "timed-out" };
+    it("gives it its grace when the workflow files cannot be read at all", async () => {
+      workspace.workflows = [];
+      workspace.workflowFiles = async () => {
+        throw new Error("git ls-tree failed");
+      };
 
-    expect(await run({ gates: { checks: true, ci: false } })).toMatchObject({
-      outcome: "handed-off",
-      stage: "ci",
+      await run();
+
+      expect(tracker.ciWaits).toEqual([expect.objectContaining({ workflowsCanRun: true })]);
     });
   });
 });
@@ -2375,12 +2434,6 @@ describe("failures no fix Stage is offered", () => {
     await expectNoFix("ci");
   });
 
-  it("refuses to retry a pull request that has no checks at all", async () => {
-    tracker.ci = { state: "none" };
-
-    await expectNoFix("ci");
-  });
-
   it("refuses to retry a pull request that conflicts with the base branch", async () => {
     tracker.ci = { state: "conflicting" };
 
@@ -3265,9 +3318,9 @@ describe("the state file a claimed Ticket keeps", () => {
   it("names the pull request once it is open", async () => {
     let atCi: TicketState | undefined;
     const waitForCi = tracker.waitForCi.bind(tracker);
-    tracker.waitForCi = async (number, timeoutMs) => {
+    tracker.waitForCi = async (number, timeoutMs, wait) => {
       atCi = workspace.state(TICKET);
-      return waitForCi(number, timeoutMs);
+      return waitForCi(number, timeoutMs, wait);
     };
 
     await run();
@@ -4996,7 +5049,7 @@ describe("the progress comment", () => {
   });
 
   it("says the checks row found no checks when no Check command ran", async () => {
-    await run({ checks: [], gates: { checks: false, ci: true } });
+    await run({ checks: [], checksNamed: true });
 
     expect(progressTable()).toContain("| checks | ⚠️ no checks | – | 0s |");
     expect(progressTable()).not.toContain("| checks | ✅ passed |");
@@ -5005,7 +5058,7 @@ describe("the progress comment", () => {
   it("says so again on the Checks that re-grade a resolved conflict", async () => {
     workspace.conflictOnce(CONFLICT);
 
-    await run({ checks: [], gates: { checks: false, ci: true } });
+    await run({ checks: [], checksNamed: true });
 
     expect(progressTable().match(/^\| checks \| ⚠️ no checks \|/gm)).toHaveLength(2);
     expect(progressTable()).not.toContain("| checks | ✅ passed |");

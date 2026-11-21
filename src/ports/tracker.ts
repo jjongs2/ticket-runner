@@ -125,17 +125,30 @@ export interface CreatePullRequest {
 }
 
 /**
+ * What the wait for CI is told about the pull request before it starts.
+ *
+ * `workflowsCanRun` is whether any of the Target's workflows can run on it, as
+ * the workflow files on its branch say. When none can, no check run is coming,
+ * so the wait answers at its first reading rather than giving the grace a
+ * check run that registers slowly is given.
+ */
+export interface CiWait {
+  workflowsCanRun: boolean;
+}
+
+/**
  * The outcome of waiting for a pull request's CI checks. Distinct from a Check,
  * which is a command the pipeline runs itself (GLOSSARY.md).
  *
- * `none` means the pull request has no checks at all, which `gates.ci` treats
- * as a failure rather than a silent bypass.
+ * `none` means GitHub listed no checks for the pull request once the wait
+ * ended. Not a failure: a Target that needs CI before a merge says so with
+ * required status checks, and GitHub then refuses the merge. A reading GitHub
+ * would not list the checks of is no answer, and is asked again.
  *
  * `conflicting` means the pull request has no checks because GitHub reports it
  * as conflicting with the base branch: GitHub runs no `pull_request` workflow
  * for such a pull request, so it would otherwise read as `none`. It cannot be
- * merged, so no gate lets it through, and it has nothing a fix Stage could act
- * on.
+ * merged, and it has nothing a fix Stage could act on.
  */
 export type CiOutcome =
   | { state: "passed" }
@@ -344,6 +357,6 @@ export interface Tracker {
    * pull request would keep the old title while a different subject landed.
    */
   updatePullRequestTitle(number: number, title: string): Promise<void>;
-  waitForCi(number: number, timeoutMs: number): Promise<CiOutcome>;
+  waitForCi(number: number, timeoutMs: number, wait: CiWait): Promise<CiOutcome>;
   squashMerge(number: number, commit: SquashCommit): Promise<void>;
 }

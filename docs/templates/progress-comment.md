@@ -89,7 +89,7 @@ notifies nobody after the first Stage.
 ## Outcome cells
 
 An icon and a handful of words. `✅` passed, `❌` ended the Ticket or spent its
-fix budget, `⚠️` was tolerated by a gate that is switched off, `⏸` released the
+fix budget, `⚠️` let the Ticket go on with nothing graded, `⏸` released the
 Ticket for a later Run to resume, `👤` handed it to a human with nothing failed.
 
 | Stage | Outcome |
@@ -102,7 +102,7 @@ Ticket for a later Run to resume, `👤` handed it to a human with nothing faile
 | conflict | `✅ rebased`, `❌ unresolved`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ unknown` |
 | rebase | `⏸ remote unreachable` |
 | pr | `⏸ GitHub failure`, `⏸ remote unreachable` |
-| ci | `✅ passed`, `❌ failed`, `❌ conflicting`, `❌ no checks`, `⚠️ no checks`, `❌ timed out`, ``⏸ `<command>` fails on the base branch``, `⏸ GitHub failure`, `⏸ remote unreachable` |
+| ci | `✅ passed`, `❌ failed`, `❌ conflicting`, `⚠️ no checks`, `⚠️ no workflow runs`, `❌ timed out`, ``⏸ `<command>` fails on the base branch``, `⏸ GitHub failure`, `⏸ remote unreachable` |
 | merge | `✅ #<pr>`, `👤 left to a human`, `⏸ GitHub failure` |
 
 `<d> defects` counts the defects the verify Stage found this branch made, and
@@ -116,15 +116,20 @@ limit killed: both are the same failure to the fix budget, but a hang is not a
 failing assertion, and a fix Stage is told which it is mending.
 
 `⚠️ no checks` is the `checks` row for Checks that ran with no Check command,
-which only `gates.checks` off allows: nothing graded the branch, so it is not
-`✅ passed`. It is written wherever the Checks run, after a Stage that committed
-and again after the `conflict` Stage, and it is the outcome the `ci` row writes for a
-pull request with no checks; the Stage column tells the two apart.
+which only `"checks": []` in the config allows: nothing graded the branch, so it
+is not `✅ passed`. It is written wherever the Checks run, after a Stage that
+committed and again after the `conflict` Stage. It is also the `ci` row for a
+pull request GitHub listed no checks for once the grace ran out, which merges;
+the Stage column tells the two apart.
+
+`⚠️ no workflow runs` is the `ci` row for a pull request with no checks at the
+wait's first reading when none of the workflow files on its branch can run on
+it, so the wait gave it no grace. It merges too.
 
 `❌ conflicting` is the `ci` row for a pull request GitHub reports as
 conflicting with the base branch, which has moved since the rebase — a human
 merging on GitHub meanwhile, say. GitHub runs no workflow for such a pull
-request, so it is not `❌ no checks`, and it is not the `conflict` Stage: that
+request, so it is not `⚠️ no checks`, and it is not the `conflict` Stage: that
 row is the rebase before the pull request, and this one comes after it.
 
 ``⏸ `<command>` fails on the base branch`` is a failing Check, or a red CI, that

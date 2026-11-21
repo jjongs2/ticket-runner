@@ -77,7 +77,6 @@ Failure 줄은 무엇이 Ticket을 멈췄는지 말합니다. 그에 따라 할 
 | fix 뒤에도 Check, 기준, CI가 여전히 실패 | 코멘트의 근거를 읽고 branch에서 코드를 손으로 고치기. 기준이라면 다음 행처럼 다시 쓰기 |
 | fix 뒤에도 기준이 충족되지 않음, 또는 근거 없음 | 코드를 손으로 고치거나, 세션이 코드를 돌려 보거나 읽어서 확인할 수 있게 기준을 다시 쓰기([Acceptance Criteria](./planning.md#acceptance-criteria)) |
 | CI 시간 초과 | [`ciTimeoutMinutes`](./configuration.md#ci)를 늘리기 |
-| check 없음 | CI 워크플로를 추가하거나, check가 늦게 등록되면 `ciGraceMinutes`를 늘리거나, [`gates.ci`](./configuration.md#gates)를 끄기 |
 | pull request가 충돌 상태 | 할 일 없음. 다음 Run이 다시 rebase하고, 충돌은 conflict Stage가 맡음 |
 | base branch를 pull하지 못함 | main checkout에서 걸리는 것을 치우기([실행하기](./running.md#run)) |
 | merge 실패 | GitHub가 거절하며 가리킨 저장소 설정을 바로잡기. branch protection rule 같은 것 |

@@ -39,10 +39,6 @@ const configSchema = z
     lanes: z.number().int().positive().optional(),
     checks: z.array(z.string().min(1)).optional(),
     merge: z.boolean().optional(),
-    gates: z
-      .object({ checks: z.boolean().optional(), ci: z.boolean().optional() })
-      .strict()
-      .optional(),
     stages: z
       .object({
         implement: stageSchema.optional(),
@@ -103,13 +99,17 @@ export interface Config {
   lanes: number;
   checks: string[];
   /**
+   * Whether the config file names `checks`. An empty list named there is a
+   * Target that runs with no Check command on purpose, and one inferred from
+   * nothing is a Target nobody set up, which a Run refuses.
+   */
+  checksNamed: boolean;
+  /**
    * Whether a Run merges a Ticket whose CI is green. A Target that merges by
    * hand sets it to `false`, and its green Tickets are handed off with their
-   * pull requests as published. Not a gate: a gate switched off loosens what
-   * reaches a merge, and this tightens it.
+   * pull requests as published.
    */
   merge: boolean;
-  gates: { checks: boolean; ci: boolean };
   stages: {
     implement: StageConfig;
     verify: StageConfig;
@@ -120,9 +120,9 @@ export interface Config {
   ciTimeoutMinutes: number;
   /**
    * How long a pull request GitHub has registered no check run for still counts
-   * as pending. A Target whose Actions queue slowly raises it; a Target with no
-   * CI sets it to zero, or else pays it once per Landing, so it is not the CI
-   * timeout.
+   * as pending. A Target whose Actions register slowly raises it. Not given at
+   * all to a pull request no workflow can run on, so a Target with no CI does
+   * not pay it, and short, so it is not the CI timeout.
    */
   ciGraceMinutes: number;
   /**
@@ -159,7 +159,8 @@ const DEFAULT_CHECK_TIMEOUT_MINUTES = 15;
  * How long "no checks yet" is given when the config names nothing. GitHub has
  * taken over three minutes to register a check run (#119), and the Landing is
  * serialized, so this is long enough to cover that and short enough that a
- * Target with no CI workflow does not hold the other Lanes up for a CI timeout.
+ * pull request whose workflows register nothing does not hold the other Lanes
+ * up for a CI timeout.
  *
  * Exported because the tracker falls back to it too, for a caller that hands it
  * no grace: one number, so the documented default cannot drift from the real one.
@@ -204,11 +205,8 @@ export function loadConfig(repoRoot: string, version: string): Config {
     ...(file.baseBranch === undefined ? {} : { baseBranch: file.baseBranch }),
     lanes: file.lanes ?? DEFAULT_LANES,
     checks: file.checks ?? inferChecks(repoRoot),
+    checksNamed: file.checks !== undefined,
     merge: file.merge ?? true,
-    gates: {
-      checks: file.gates?.checks ?? true,
-      ci: file.gates?.ci ?? true,
-    },
     stages: {
       implement: stage(STAGE_DEFAULTS.implement, file.stages?.implement),
       verify: stage(STAGE_DEFAULTS.verify, file.stages?.verify),
@@ -230,9 +228,9 @@ export function loadConfig(repoRoot: string, version: string): Config {
  *
  * The schema is strict, so a key this install has never heard of is refused by
  * name. That is the right answer to a typo and a confusing one to a key a newer
- * version added, and on a machine running a stale install the two look exactly
- * the same. So the version is said out loud, and the config file itself is left
- * without one to carry (ADR-0007).
+ * version added or an older one took, and on a machine running a stale install
+ * the first looks exactly like a typo. So the version is said out loud, and the
+ * config file itself is left without one to carry (ADR-0007).
  */
 function refusal(error: z.ZodError, version: string): string {
   const detail = error.issues
@@ -240,7 +238,7 @@ function refusal(error: z.ZodError, version: string): string {
     .join("; ");
   const said = `Invalid ${CONFIG_FILENAME}: ${detail}`;
   if (!error.issues.some((issue) => issue.code === "unrecognized_keys")) return said;
-  return `${said}. Refused by ticket-runner ${version}, so the key may be newer than this install.`;
+  return `${said}. Refused by ticket-runner ${version}, so the key may be newer than this install or one it no longer takes.`;
 }
 
 /** Config label overrides win, but only where the file actually names one. */

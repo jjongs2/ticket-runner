@@ -21,6 +21,7 @@ import type {
   Authentication,
   Candidate,
   CiOutcome,
+  CiWait,
   CreateIssue,
   CreatePullRequest,
   Issue,
@@ -51,6 +52,7 @@ import type {
   Workspace,
   WorktreeFromRemote,
 } from "../ports/workspace.js";
+import type { WorkflowFile } from "../workflows.js";
 import { Hold } from "./hold.js";
 
 export interface FakePullRequest extends CreatePullRequest {
@@ -127,7 +129,7 @@ export class FakeTracker implements Tracker {
   closed = new Set<number>();
   /** Fires after a squash merge, for tests where merging unblocks something. */
   onSquashMerge: ((pullRequest: number) => void) | undefined;
-  ciWaits: { pullRequest: number; timeoutMs: number }[] = [];
+  ciWaits: { pullRequest: number; timeoutMs: number; workflowsCanRun: boolean }[] = [];
   calls: string[] = [];
   private nextCommentId = 1;
   /** Where {@link waitForCi} parks, once a test has asked it to; see {@link holdsCi}. */
@@ -383,9 +385,9 @@ export class FakeTracker implements Tracker {
     return hold;
   }
 
-  async waitForCi(number: number, timeoutMs: number): Promise<CiOutcome> {
+  async waitForCi(number: number, timeoutMs: number, { workflowsCanRun }: CiWait): Promise<CiOutcome> {
     this.calls.push(`waitForCi:${number}`);
-    this.ciWaits.push({ pullRequest: number, timeoutMs });
+    this.ciWaits.push({ pullRequest: number, timeoutMs, workflowsCanRun });
     await this.ciHold?.reached();
     return this.ciQueue.shift() ?? this.ci;
   }
@@ -559,6 +561,13 @@ export class FakeWorkspace implements Workspace {
   mergeBaseCommit = "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d";
   /** The merge-base of the branch checked out at a worktree path, where it differs. */
   mergeBases = new Map<string, string>();
+  /** The files every branch changes, as its pull request lists them. */
+  changed = ["src/thing.ts"];
+  /**
+   * The workflow files every branch carries: by default one that runs on any
+   * pull request, so a wait for CI is given its grace unless a test says not.
+   */
+  workflows: WorkflowFile[] = [{ path: ".github/workflows/ci.yml", contents: "on: pull_request\n" }];
   rebaseOutcome: RebaseOutcome = { ok: true };
   /** Outcomes for the next rebases, oldest first; `rebaseOutcome` answers once they run out. */
   rebaseQueue: RebaseOutcome[] = [];
@@ -795,6 +804,17 @@ export class FakeWorkspace implements Workspace {
     this.failing.delete(call);
     throw failure;
   }
+  /** Not in `calls`: a read, asked before every wait for CI. */
+  async changedPaths(cwd: string, base: string): Promise<string[]> {
+    this.basesGiven.push(base);
+    return [...this.changed];
+  }
+
+  /** Not in `calls`: a read, asked before every wait for CI. */
+  async workflowFiles(_cwd: string): Promise<WorkflowFile[]> {
+    return [...this.workflows];
+  }
+
   /** Not in `calls`: a read, asked only of a Check or a CI that failed. */
   async mergeBase(cwd: string, base: string): Promise<string> {
     this.basesGiven.push(base);

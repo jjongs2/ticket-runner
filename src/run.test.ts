@@ -19,7 +19,7 @@ function config(): Config {
     lanes: 1,
     checks: ["npm test"],
     merge: true,
-    gates: { checks: true, ci: true },
+    checksNamed: false,
     stages: {
       implement: {
         model: "claude-opus-5-5",

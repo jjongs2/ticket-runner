@@ -19,7 +19,7 @@ After Planning, every Ticket still needs an attended session: open it, paste the
 It fits when:
 
 - Planning has produced agent-sized Tickets, with checkbox criteria and native blockers.
-- The repository has CI, and a test or typecheck command the pipeline can run itself.
+- The repository has a test or typecheck command the pipeline can run itself.
 - You want the work merged while you are away: overnight, or started from the Claude app.
 
 It does not fit when:
@@ -27,7 +27,7 @@ It does not fit when:
 - **The work needs a human's judgement midway.** A Run asks nobody anything; a Ticket it cannot finish reaches a human only as a Hand-off.
 - **No checkbox can grade the criteria.** The verify Stage grades the `- [ ]` lines and any defect the branch itself made, and a verdict of nothing but `unverifiable` fails: it is no evidence to merge on.
 - **Nothing may merge without a person's review, and you want the pipeline to merge anyway.** A pull request is squash-merged as soon as its CI passes; nobody approves it first. A Target that sets [`merge`](./guide/configuration.md#merge) to `false` gets each green Ticket as a Hand-off instead, its pull request ready for a human to review and merge.
-- **The repository has no CI or tests.** A Run refuses to start without a Check and hands off a pull request with no CI checks, unless [`gates`](./guide/configuration.md#gates) is switched off, and then it merges unchecked code.
+- **The repository has no tests.** A Run refuses to start without a Check, unless the config says [`"checks": []`](./guide/configuration.md#checks), and then only CI, where there is any, grades the code before it merges.
 
 ## Quick Start
 
