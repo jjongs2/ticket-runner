@@ -15,8 +15,6 @@ Target은 설정 없이도 돌아가야 하므로 모든 필드는 선택이고,
 | [`lanes`](#lanes) | `1` | Run이 동시에 맡는 Ticket 수 |
 | [`checks`](#checks) | `package.json`에서 추론 | 파이프라인이 Ticket을 거르려고 직접 돌리는 명령 |
 | [`checkTimeoutMinutes`](#checks) | `15` | Check 명령 하나당 wall-clock 한도 |
-| [`gates.checks`](#gates) | `true` | Check가 하나도 없어도 Run을 시작할지 |
-| [`gates.ci`](#gates) | `true` | CI check가 없는 pull request를 merge할지 |
 | [`merge`](#merge) | `true` | CI가 초록인 Ticket을 Run이 merge할지, merge를 사람에게 맡길지 |
 | [`stages`](#stages) | 아래 참고 | Stage별 모델, effort, 한도, 추가 지시 |
 | [`permissionMode`](#permissionmode) | `"auto"` | 모든 Stage 세션이 묻지 않고 할 수 있는 일 |
@@ -47,10 +45,10 @@ Target은 설정 없이도 돌아가야 하므로 모든 필드는 선택이고,
 스키마는 엄격합니다. 모르는 키, 잘못된 타입, 범위를 벗어난 값은 이름을 짚어 거절하고, JSON이 아닌 파일도 마찬가지입니다. 파일을 읽는 명령(`init`, `run`, `remove`)은 이런 파일을 만나면 모두 종료 코드 `2`로 끝납니다. `stop`은 파일을 아예 읽지 않습니다.
 
 ```text
-Invalid ticket-runner.json: stages: Unrecognized key: "implment". Refused by ticket-runner 0.5.2, so the key may be newer than this install.
+Invalid ticket-runner.json: stages: Unrecognized key: "implment". Refused by ticket-runner 0.5.2, so the key may be newer than this install or one it no longer takes.
 ```
 
-두 번째 문장은 모르는 키일 때만 붙습니다. 설치가 오래된 머신에서는 새 버전이 추가한 키와 오타가 똑같아 보이니, 철자를 확인하고 그다음 업그레이드하세요.
+두 번째 문장은 모르는 키일 때만 붙습니다. 설치가 오래된 머신에서는 새 버전이 추가한 키와 오타가 똑같아 보이고, 이 버전이 없앤 키도 같은 식으로 거절됩니다. 철자를 확인하고, 그다음 버전 노트를 보세요.
 
 ## `baseBranch` {#basebranch}
 
@@ -71,27 +69,15 @@ Run이 동시에 맡는 Ticket 수입니다. [Lane](https://github.com/jjongs2/t
 
 [Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 파이프라인이 직접 돌리는 명령입니다. 각 명령은 Ticket의 worktree에서 셸을 통해 돌고, implement Stage 뒤, fix Stage 뒤, rebase 충돌을 해결한 뒤에 실행됩니다. 0이 아닌 코드로 끝나면 게이트를 통과하지 못하고, Ticket은 [fix 기회](./ticket-to-merge.md#the-fix-stage-and-the-fix-budget)를 씁니다. 단, base branch도 같은 명령에 실패하면 예외입니다([base branch도 함께 실패할 때](./ticket-to-merge.md#a-failure-the-base-branch-shares)). CI가 실패했을 때도 base branch가 함께 실패하는지 이 명령들로 따지므로, CI가 돌리는 명령과 같은 것을 적어 두세요.
 
-이 필드가 없으면 `package.json`에 `test`, `typecheck` 스크립트 중 정의된 것을 보고 `npm test`와 `npm run typecheck`를 추론합니다.
-
-`checkTimeoutMinutes`는 모든 명령에 하나로 적용되는 한도이고, 명령마다 이 시간을 통째로 받습니다. merge-base에서 돌릴 때도 같습니다. 한도에서 kill된 명령은 실패한 Check이고 다른 실패처럼 fix 기회를 씁니다.
-
-## `gates` {#gates}
-
-- `gates.checks`: 불리언
-- `gates.ci`: 불리언
-
-| 설정 | 켜져 있을 때(기본) | `false`일 때 |
-|---|---|---|
-| `gates.checks` | 설정하거나 추론한 Check 명령이 하나도 없으면 Run이 시작을 거절 | 경고와 함께 그대로 시작. 있는 Check 명령은 그대로 실행되고, 하나도 없으면 Ticket의 checks 줄이 `⚠️ no checks` |
-| `gates.ci` | CI check가 하나도 없는 pull request는 Hand-off | 시작할 때 경고하고, merge하면서 Ticket에 `⚠️ no checks` 줄을 남김 |
-
-`gates.ci`를 꺼도 봐주는 것은 check가 *하나도 없는* pull request뿐입니다. CI 실패, CI 시간 초과, base branch와 충돌하는 pull request는 `gates` 설정과 상관없이 Ticket을 끝냅니다.
-
-`gates.checks`가 켜져 있으면 Run은 이렇게 거절합니다.
+이 필드가 없으면 `package.json`에 `test`, `typecheck` 스크립트 중 정의된 것을 보고 `npm test`와 `npm run typecheck`를 추론합니다. 둘 다 없으면 Run은 이렇게 시작을 거절합니다.
 
 ```text
-No Check commands are configured and none could be inferred from package.json. Add them to `checks` in ticket-runner.json, add `test` and `typecheck` scripts to package.json, or set `gates.checks` to false in ticket-runner.json to run without a net.
+No Check commands are configured and none could be inferred from package.json. Add them to `checks` in ticket-runner.json, add `test` and `typecheck` scripts to package.json, or write `"checks": []` in ticket-runner.json to run with no Check command.
 ```
+
+Check 명령이 없는 Target은 `"checks": []`를 적습니다. 그러면 Run은 경고와 함께 시작하고, Ticket마다 checks 줄이 `⚠️ no checks`가 됩니다.
+
+`checkTimeoutMinutes`는 모든 명령에 하나로 적용되는 한도이고, 명령마다 이 시간을 통째로 받습니다. merge-base에서 돌릴 때도 같습니다. 한도에서 kill된 명령은 실패한 Check이고 다른 실패처럼 fix 기회를 씁니다.
 
 ## `merge` {#merge}
 
@@ -99,7 +85,7 @@ No Check commands are configured and none could be inferred from package.json. A
 
 기본값인 `true`이면 Run은 CI가 초록인 Ticket마다 squash-merge합니다. 사람이 모든 pull request를 리뷰하고 merge하는 Target은 `false`로 두세요. GitHub에서 승인을 필수로 걸어도 같은 효과는 나지 않습니다. 파이프라인은 여러분의 계정으로 움직이고, 이 계정은 자기 pull request를 승인할 수 없으니 여러분이 직접 하는 merge까지 막힙니다.
 
-`false`이면 CI가 초록인 Ticket은 merge되지 않고 [Hand-off됩니다](./stopping-and-resuming.md#when-nothing-failed). pull request는 Run이 게시한 제목과 본문 그대로 리뷰를 기다리는 ready 상태로 남고, verify가 확인하지 못한 기준이 있으면 Hand-off 코멘트에 근거와 함께 적힙니다. 그런 기준이 없으면 코멘트를 달지 않습니다. 이렇게 Ticket을 넘긴 Run은 종료 코드 `1`로 끝납니다. 이 설정이 `gates` 밖에 있는 이유는, 게이트를 끄면 merge까지 가는 길이 느슨해지지만 이 설정은 오히려 조이기 때문입니다.
+`false`이면 CI가 초록인 Ticket은 merge되지 않고 [Hand-off됩니다](./stopping-and-resuming.md#when-nothing-failed). pull request는 Run이 게시한 제목과 본문 그대로 리뷰를 기다리는 ready 상태로 남고, verify가 확인하지 못한 기준이 있으면 Hand-off 코멘트에 근거와 함께 적힙니다. 그런 기준이 없으면 코멘트를 달지 않습니다. 이렇게 Ticket을 넘긴 Run은 종료 코드 `1`로 끝납니다.
 
 이때 파이프라인이 직접 merge하면서 보장하던 두 가지가 Target에 달리게 됩니다.
 
@@ -142,7 +128,17 @@ Stage 하나는 `claude -p` 세션 하나입니다. `stages`는 Stage마다 객�
 
 Landing이 pull request를 연 뒤, Run은 최대 `ciTimeoutMinutes` 동안 check를 기다립니다. 시간 안에 끝나지 않는 CI는 fix 기회를 쓰지 않는 Hand-off입니다.
 
-`ciGraceMinutes`는 GitHub가 check run을 등록하기 전의 틈을 메웁니다. 이 틈이 3분을 넘긴 적도 있습니다. 이 시간이 지나기 전까지는 check가 아직 없는 pull request를 "없음"이 아니라 대기 중으로 봅니다. `ciTimeoutMinutes`보다 길어지지는 않습니다. Actions 대기열이 느린 Target이라면 늘리세요. CI가 아예 없는 Target은 `0`으로 두세요. 그러면 첫 확인에서 바로 답이 나옵니다. 기본값 그대로면 merge할 때마다 이 시간을 한 번씩 기다리고, Landing에는 한 번에 Lane 하나만 들어가니 그동안 다른 Lane의 merge도 함께 기다립니다. CI가 있는 Target은 유예 시간을 남겨 두세요. GitHub의 답으로는 CI가 없는 것과 아직 등록되지 않은 것을 구별할 수 없어서, `0`이면 늦게 뜨는 check run도 없는 것으로 읽힙니다.
+기다림이 끝났을 때 check가 하나도 없는 pull request는 merge하고, ci 줄에 `⚠️ no checks`를 남깁니다. CI가 도는지는 Target이 아니라 pull request마다 다른 사실이기 때문입니다. `paths` 필터가 있는 워크플로는 코드 변경에서는 돌고 문서만 바꾼 변경은 건너뛰는데, 그런 변경은 merge만 하면 됩니다. merge마다 CI가 꼭 필요한 Target은 GitHub에서 그렇게 설정합니다([아래](#requiring-ci-before-a-merge)).
+
+`ciGraceMinutes`는 GitHub가 check run을 등록하기 전의 틈을 메웁니다. 이 틈이 3분을 넘긴 적도 있습니다. 이 시간이 지나기 전까지는 check가 아직 없는 pull request를 "없음"이 아니라 대기 중으로 봅니다. `ciTimeoutMinutes`보다 길어지지는 않습니다. Actions가 늦게 등록되는 Target이라면 늘리세요. `0`이면 늦게 등록되는 check run을 기다리지 않고 pull request를 merge합니다.
+
+pull request의 branch에 있는 워크플로 파일을 읽어 그 pull request에서 돌 수 있는 워크플로가 없으면 `ciGraceMinutes`를 건너뜁니다. 그래서 CI가 없는 Target은 따로 설정할 것이 없습니다. 첫 확인에서 check가 없는 pull request는 곧바로 merge하고 `⚠️ no workflow runs` 줄을 남깁니다. 어떤 워크플로를 돌 수 없다고 보는지는 [Ticket에서 merge까지](./ticket-to-merge.md#ci-wait-and-grace-period)에 있습니다.
+
+### merge 전에 CI 요구하기 {#requiring-ci-before-a-merge}
+
+merge마다 CI나 외부 앱이 보고하는 status가 꼭 필요한 Target은 base branch에 required status check를 설정합니다. 그러면 GitHub가 그 check 없이는 merge를 거절하고, Ticket은 검사 없이 merge되는 대신 `merge`에서 Hand-off됩니다. 이 규칙은 Run이 merge할 때 쓰는 계정, 곧 여러분의 계정에도 걸려야 합니다. 그 계정에 bypass를 주지 않은 ruleset을 쓰거나, branch protection에서 "Do not allow bypassing the above settings"를 켜세요. branch protection은 기본적으로 admin이 required check를 건너뛰고 merge하게 둡니다.
+
+이때 `paths` 필터가 있는 워크플로는 필터를 워크플로의 job 안으로 옮깁니다. 건너뛸 변경이면 job을 일찍 끝내는 step 같은 식입니다. 필터 때문에 워크플로가 건너뛰어지면 GitHub는 required check를 영원히 대기 중으로 두어, pull request가 끝내 merge되지 않습니다.
 
 ## `keepTranscripts` {#keeptranscripts}
 

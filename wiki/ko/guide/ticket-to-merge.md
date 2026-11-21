@@ -128,7 +128,7 @@ implement 스킬이 Ticket을 읽고, 만들고, 리뷰합니다. 리뷰에서 �
 1. **commit 안 된 변경 없음.** 어떤 commit에도 없는 변경이 worktree에 있으면 실패이고, 해당 경로를 전부 알려 줍니다. 설치한 의존성 같은 gitignore 파일은 세지 않습니다.
 2. **Check 명령**을 순서대로, worktree의 셸에서, 각각 `checkTimeoutMinutes`(기본 15분) 안에 실행합니다. 처음 실패한 곳에서 멈춥니다. 한도에서 kill된 명령은 timed out으로 보고되고, 실패가 아니라 멈춰 있었다는 한 줄이 출력 뒤에 붙습니다.
 
-명령은 [`checks`](./configuration.md#checks)에 적은 것입니다. 두 실패 모두 fix 기회를 씁니다. [`gates.checks`](./configuration.md#gates)를 껐을 때만 `checks`가 빌 수 있는데, 이때는 아무것도 돌지 않으니 `✅ passed`가 아니라 `⚠️ no checks` 줄을 남깁니다. conflict Stage 뒤에 다시 돌 때도 같습니다.
+명령은 [`checks`](./configuration.md#checks)에 적은 것입니다. 두 실패 모두 fix 기회를 씁니다. 설정에 `"checks": []`를 적었을 때만 `checks`가 빌 수 있는데, 이때는 아무것도 돌지 않으니 `✅ passed`가 아니라 `⚠️ no checks` 줄을 남깁니다. conflict Stage 뒤에 다시 돌 때도 같습니다.
 
 ### base branch도 함께 실패할 때 {#a-failure-the-base-branch-shares}
 
@@ -191,7 +191,7 @@ fix 기회는 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사�
 | conflict Stage를 띄우지 못했거나 git에 상태를 물을 수 없음 | rebase | 아니요, Hand-off |
 | base branch를 pull하지 못함 | rebase | 아니요, Hand-off |
 | push나 pull request 열기가 실패 | pr | 아니요, Hand-off |
-| CI 시간 초과, 충돌, check 없음 | ci | 아니요, Hand-off |
+| CI 시간 초과, 충돌 | ci | 아니요, Hand-off |
 | merge 실패 | merge | 아니요, Hand-off |
 | 어디서든 rate limit, 일시적인 API 장애, API 키의 예산 소진 | 어디든 | 아니요, Release |
 | 어디서든 GitHub 쪽 장애, 또는 git이 remote에 닿거나 로그인하지 못함 | 어디든 | 아니요, [Release](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) |
@@ -271,14 +271,26 @@ rebase로 branch가 다시 쓰였으니 `--force-with-lease`로 push합니다. b
 | check가 실패, 취소, 시간 초과, 조치 필요, 시작 실패 중 하나 | `❌ failed` | fix 기회를 씀 |
 | 위와 같고, merge-base도 Check 명령에 실패 | ``⏸ `<command>` fails on the base branch`` | Release([위](#a-failure-the-base-branch-shares) 참고) |
 | 1분가량 다시 시도해도 GitHub 쪽 장애가 이어짐 | `⏸ GitHub failure` | [Release](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) |
-| 시간 초과 시점에 check가 아직 대기 중 | `❌ timed out` | Hand-off |
+| 시간 초과 시점에 check가 아직 대기 중이거나, 끝내 목록을 받지 못함 | `❌ timed out` | Hand-off |
 | check가 없고 GitHub가 pull request를 충돌로 판단 | `❌ conflicting` | 곧바로 Hand-off |
-| 유예 시간이 지나도 check 없음, `gates.ci` 켬 | `❌ no checks` | Hand-off |
-| 유예 시간이 지나도 check 없음, `gates.ci` 끔 | `⚠️ no checks` | 경고 행과 함께 merge |
+| 유예 시간이 지나도 check 없음 | `⚠️ no checks` | 경고 행과 함께 merge |
+| 첫 확인에서 check가 없고, pull request에서 돌 수 있는 워크플로도 없음 | `⚠️ no workflow runs` | 경고 행과 함께 곧바로 merge |
 
-check가 실패하면 실패한 Actions job들의 로그 끝부분을 근거로 fix Stage에 넘깁니다. 충돌 난 pull request는 기다리지 않고 바로 Hand-off합니다. GitHub는 이런 pull request에 check를 돌리지 않기 때문입니다. 이런 충돌은 그사이 사람이 merge했을 때만 생깁니다.
+check가 실패하면 실패한 Actions job들의 로그 끝부분을 근거로 fix Stage에 넘깁니다. 충돌 난 pull request는 기다리지 않고 바로 Hand-off합니다. GitHub는 이런 pull request에 check를 돌리지 않기 때문입니다. 이런 충돌은 그사이 사람이 merge했을 때만 생깁니다. GitHub가 check run이나 status 목록을 주지 않은 확인은 답이 아니므로, 대기 중일 때처럼 다시 묻습니다.
 
-**유예 시간.** pull request가 막 열린 직후에는 GitHub가 한동안 check가 없다고 답합니다. 그래서 "no checks"는 [`ciGraceMinutes`](./configuration.md#ci)가 지난 뒤에야 인정합니다.
+check가 없는 pull request는 merge합니다. CI가 도는지는 pull request마다 다른 사실이고(`paths` 필터가 건너뛰는 문서만 바꾼 변경처럼), merge 전에 CI가 꼭 필요한 Target은 GitHub에서 그렇게 설정합니다([merge 전에 CI 요구하기](./configuration.md#requiring-ci-before-a-merge)).
+
+**유예 시간.** pull request가 막 열린 직후에는 GitHub가 한동안 check가 없다고 답합니다. 그래서 "no checks"는 [`ciGraceMinutes`](./configuration.md#ci)가 지난 뒤에야 인정합니다. `ciGraceMinutes: 0`이면 늦게 등록되는 check run을 기다리지 않고 pull request를 merge합니다.
+
+**돌 수 있는 워크플로가 없으면 유예 시간도 없습니다.** 기다리기 전에 Run은 pull request의 branch에 있는 `.github/workflows/`의 워크플로 파일을 읽고, 그중 어느 것도 이 pull request에서 돌 수 없으면 `ciGraceMinutes`를 건너뜁니다. 첫 확인에 이미 등록된 check는 그대로 기다립니다. 워크플로 파일이 없는 Target은 돌 수 있는 워크플로가 없는 Target입니다. 워크플로의 이벤트가 모두 아래 중 하나이면 그 워크플로는 돌 수 없습니다.
+
+| 이벤트 | pull request에서 돌 수 없는 경우 |
+|---|---|
+| `schedule`, `workflow_dispatch`, `repository_dispatch`, `workflow_call` | 언제나 |
+| `pull_request` | `branches`나 `branches-ignore`가 base branch를 제외하거나, `paths`나 `paths-ignore`가 바뀐 파일을 모두 제외할 때. 이름이 바뀐 파일은 옛 경로와 새 경로를 모두 셈 |
+| `push` | `branches`나 `branches-ignore`가 pull request의 branch를 제외할 때 |
+
+패턴은 셸 glob이 아니라 GitHub의 filter pattern cheat sheet대로 읽습니다. `**.js`는 `src/js/app.js`와 맞습니다. 확실히 제외할 수 없는 것은 모두 돌 수 있는 워크플로로 치고 유예 시간을 줍니다. 파싱되지 않는 파일, 그 밖의 이벤트, 읽지 않는 필터(`types`, `push`의 `paths`, `tags`)가 있는데 읽는 필터가 이벤트를 제외하지 않을 때, `?`, `+`, `[]`, 맨 앞의 `!`가 든 패턴, `.`으로 시작하는 이름에 맞아야 하는 wildcard가 그렇습니다. 이쪽으로 틀리면 유예 시간만 쓰지만, 반대로 틀리면 CI가 등록되기 전에 pull request가 merge되기 때문입니다.
 
 ### squash merge와 commit 메시지 {#squash-merge-and-its-commit}
 
@@ -352,7 +364,7 @@ Note 안의 줄 머리 `- [ ]`는 escape되므로, Note가 Acceptance Criteria�
 
 - [일 계획하기](./planning.md): claim 전에 도는 guard, verify가 판정할 수 있는 Acceptance Criteria 쓰는 법
 - [실행하기](./running.md): Run 시작, `--lanes`, `--api-key`, 범위를 좁힌 Run, 요약, 종료 코드, transcript
-- [설정](./configuration.md): `checks`, `gates`, Stage 한도, `ciTimeoutMinutes`, `ciGraceMinutes`
+- [설정](./configuration.md): `checks`, Stage 한도, `ciTimeoutMinutes`, `ciGraceMinutes`, merge 전에 CI 요구하기
 - [Hand-off, 멈추고 이어 하기](./stopping-and-resuming.md): Hand-off, Release, Stop, Stranded Ticket, Ticket 돌려주기
 - [내부 구조](./internals.md): 각 단계 뒤의 port와 adapter
 
@@ -360,6 +372,7 @@ Note 안의 줄 머리 `- [ ]`는 escape되므로, Note가 Acceptance Criteria�
 
 - [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `processTicket`, `takeTicket`, `verify`, `fix`, `resolveConflict`, `requireGreenCi`
 - [`src/failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts): merge-base에서 Run마다 한 번 돌리는 Check
+- [`src/workflows.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/workflows.ts): pull request에서 돌 수 있는 워크플로가 있는지
 - [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts), [`src/frontier.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts), [`src/landing.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/landing.ts)
 - [`src/prompts.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/prompts.ts), [`src/self-hosting.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/self-hosting.ts), [`src/verdict.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/verdict.ts), [`src/title.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/title.ts), [`src/note-schema.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/note-schema.ts), [`src/lifecycle.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lifecycle.ts)
 - [`src/progress.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/progress.ts), [`src/acceptance-criteria.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/acceptance-criteria.ts), [`src/criteria.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/criteria.ts), [`src/notes.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/notes.ts), [`src/templates.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts), [`src/handoff.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/handoff.ts)

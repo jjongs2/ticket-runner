@@ -15,8 +15,6 @@ The file is `ticket-runner.json` at the Target's root. It is plain JSON, so it c
 | [`lanes`](#lanes) | `1` | How many Tickets a Run holds at once |
 | [`checks`](#checks) | inferred from `package.json` | The commands the pipeline runs itself to gate a Ticket |
 | [`checkTimeoutMinutes`](#checks) | `15` | Wall-clock limit for each Check command |
-| [`gates.checks`](#gates) | `true` | Whether a Run may start with no Check at all |
-| [`gates.ci`](#gates) | `true` | Whether a pull request with no CI checks may merge |
 | [`merge`](#merge) | `true` | Whether a Run merges a green Ticket or leaves the merge to a human |
 | [`stages`](#stages) | see below | Model, effort, limits and extra instructions per Stage |
 | [`permissionMode`](#permissionmode) | `"auto"` | What every Stage session may do without asking |
@@ -47,10 +45,10 @@ A file that sets several of them:
 The schema is strict. An unknown key, a wrong type or an out-of-range value is refused by name, and so is a file that is not JSON. Every command that reads the file (`init`, `run`, `remove`) exits `2` over it; `stop` never reads it.
 
 ```text
-Invalid ticket-runner.json: stages: Unrecognized key: "implment". Refused by ticket-runner 0.5.2, so the key may be newer than this install.
+Invalid ticket-runner.json: stages: Unrecognized key: "implment". Refused by ticket-runner 0.5.2, so the key may be newer than this install or one it no longer takes.
 ```
 
-The second sentence is added only for an unknown key: on a stale install, a key a newer version added looks exactly like a typo, so check the spelling, then upgrade.
+The second sentence is added only for an unknown key: on a stale install, a key a newer version added looks exactly like a typo, and a key this version dropped is refused the same way. Check the spelling, then the version notes.
 
 ## `baseBranch`
 
@@ -71,27 +69,15 @@ How many Tickets a Run holds at once, one per [Lane](https://github.com/jjongs2/
 
 A [Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is a command the pipeline runs itself. Each one runs through the shell in the Ticket's worktree, after the implement Stage, after a fix Stage and after a resolved rebase conflict. A non-zero exit fails the gate, and the Ticket spends its [fix budget](./ticket-to-merge.md#the-fix-stage-and-the-fix-budget), unless the base branch fails the same command ([A failure the base branch shares](./ticket-to-merge.md#a-failure-the-base-branch-shares)). That question is asked of a red CI by running these commands too, so they should be ones CI runs.
 
-Without this field the pipeline infers `npm test` and `npm run typecheck` from whichever of the `test` and `typecheck` scripts `package.json` defines.
-
-`checkTimeoutMinutes` is one limit for every command, and each command gets the whole of it, at the merge-base too. A command killed at the limit is a failed Check and spends the fix budget like any other.
-
-## `gates`
-
-- `gates.checks`: boolean
-- `gates.ci`: boolean
-
-| Setting | When on (the default) | When `false` |
-|---|---|---|
-| `gates.checks` | A Run with no Check command, configured or inferred, refuses to start | The Run starts anyway, with a warning. Check commands that do exist still run; with none, the Ticket's checks row reads `⚠️ no checks` |
-| `gates.ci` | A pull request with no CI checks at all is a Hand-off | It merges, with a warning at start and a `⚠️ no checks` row on the Ticket |
-
-Turning `gates.ci` off tolerates only a pull request that has *no* checks. Red CI, CI that times out, and a pull request that conflicts with the base branch still end the Ticket whatever the gates say.
-
-The refusal `gates.checks` guards against reads:
+Without this field the pipeline infers `npm test` and `npm run typecheck` from whichever of the `test` and `typecheck` scripts `package.json` defines. With neither, a Run refuses to start:
 
 ```text
-No Check commands are configured and none could be inferred from package.json. Add them to `checks` in ticket-runner.json, add `test` and `typecheck` scripts to package.json, or set `gates.checks` to false in ticket-runner.json to run without a net.
+No Check commands are configured and none could be inferred from package.json. Add them to `checks` in ticket-runner.json, add `test` and `typecheck` scripts to package.json, or write `"checks": []` in ticket-runner.json to run with no Check command.
 ```
+
+A Target with no Check command writes `"checks": []`. The Run then starts with a warning, and each Ticket's checks row reads `⚠️ no checks`.
+
+`checkTimeoutMinutes` is one limit for every command, and each command gets the whole of it, at the merge-base too. A command killed at the limit is a failed Check and spends the fix budget like any other.
 
 ## `merge`
 
@@ -99,7 +85,7 @@ No Check commands are configured and none could be inferred from package.json. A
 
 With `true`, the default, a Run squash-merges each Ticket whose CI is green. A Target where a human reviews and merges every pull request sets it to `false`. Requiring an approval on GitHub does not get you that: the pipeline acts as your account, which cannot approve its own pull request, so your own merges would be blocked too.
 
-With `false`, a green Ticket is [handed off](./stopping-and-resuming.md#when-nothing-failed) rather than merged. Its pull request stays ready for review with the title and body the Run published, and a hand-off comment lists the criteria verify could not check, with their evidence; when there are none, no comment is posted. A Run that hands one off this way exits `1`. The setting sits outside `gates` because a gate switched off loosens what reaches a merge, and this tightens it.
+With `false`, a green Ticket is [handed off](./stopping-and-resuming.md#when-nothing-failed) rather than merged. Its pull request stays ready for review with the title and body the Run published, and a hand-off comment lists the criteria verify could not check, with their evidence; when there are none, no comment is posted. A Run that hands one off this way exits `1`.
 
 Two things the pipeline's own merge gives you then depend on the Target:
 
@@ -142,7 +128,17 @@ Passed to every Stage as `--permission-mode`. Every Stage also runs with `--perm
 
 After the Landing opens a pull request, the Run waits up to `ciTimeoutMinutes` for its checks. CI that does not finish in time is a Hand-off that spends no fix budget.
 
-`ciGraceMinutes` covers the gap before GitHub registers a check run, which has taken over three minutes. Until it passes, a pull request with no checks yet counts as pending rather than as having none. It never outlasts `ciTimeoutMinutes`. Raise it on a Target whose Actions queue slowly. A Target with no CI at all sets it to `0`, so the wait answers at its first reading; left at the default, it waits the grace out once per merge, and since only one Lane is in the Landing at a time, that wait holds the other Lanes' merges too. A Target with CI keeps a grace: GitHub's answer cannot tell no CI from CI not registered yet, so under `0` a slow check run reads as none.
+A pull request with no checks once the wait ends merges, and its ci row reads `⚠️ no checks`. Whether a pull request runs CI is a fact about that pull request, not about the Target: a workflow with a `paths` filter runs on code and skips a docs-only change, which needs nothing but a merge. A Target that needs CI before every merge says so on GitHub ([below](#requiring-ci-before-a-merge)).
+
+`ciGraceMinutes` covers the gap before GitHub registers a check run, which has taken over three minutes. Until it passes, a pull request with no checks yet counts as pending rather than as having none. It never outlasts `ciTimeoutMinutes`. Raise it on a Target whose Actions register slowly. Under `0`, a pull request merges before a slow check run registers.
+
+The wait skips `ciGraceMinutes` when no workflow can run on the pull request, as the workflow files on its branch say, so a Target with no CI needs no setting: a pull request with no checks at the first reading merges at once, with a `⚠️ no workflow runs` row. Which workflows count as unable to run is on [From Ticket to merge](./ticket-to-merge.md#ci-wait-and-grace-period).
+
+### Requiring CI before a merge
+
+A Target that needs CI, or a status a third-party app reports, before every merge sets required status checks on its base branch. GitHub then refuses a merge without them, and the Ticket is handed off at `merge` instead of merging unchecked. The rule has to bind the account the Run merges as, which is yours: a ruleset with no bypass for it, or branch protection with "Do not allow bypassing the above settings" ticked, since branch protection lets an admin merge past its required checks by default.
+
+A workflow with a `paths` filter then filters inside its job instead, such as a step that ends the job early when the changes are ones it skips. GitHub leaves a required check pending for good when a filter skipped its workflow, so the pull request could never merge.
 
 ## `keepTranscripts`
 

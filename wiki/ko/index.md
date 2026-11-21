@@ -27,7 +27,7 @@ Planning이 끝나도 Ticket마다 사람이 붙어 있는 세션이 하나씩 �
 - **중간에 사람의 판단이 필요한 일.** Run은 누구에게도 묻지 않습니다. 끝내지 못한 Ticket은 Hand-off가 되어서야 사람에게 갑니다.
 - **체크박스로 판정할 수 없는 기준.** verify Stage는 `- [ ]` 줄과 branch 스스로 만든 결함을 판정하고, 기준이 모두 `unverifiable`인 판정은 실패로 칩니다. merge할 근거가 없다는 뜻이니까요.
 - **사람의 리뷰 없이는 아무것도 merge되면 안 되는데, merge도 파이프라인이 하기를 바라는 저장소.** pull request는 CI를 통과하는 즉시 squash-merge되고, 그 전에 승인하는 사람은 없습니다. [`merge`](./guide/configuration.md#merge)를 `false`로 둔 Target은 CI가 초록인 Ticket을 대신 Hand-off로 받고, 그 pull request는 사람이 리뷰하고 merge할 수 있는 ready 상태로 남습니다.
-- **CI도 테스트도 없는 저장소.** Check가 없으면 Run이 시작을 거절하고, CI check가 없는 pull request는 Hand-off합니다. [`gates`](./guide/configuration.md#gates)를 끄면 그렇게 하지 않는 대신, 검사받지 않은 코드를 merge합니다.
+- **테스트가 없는 저장소.** Check가 없으면 Run이 시작을 거절합니다. 설정에 [`"checks": []`](./guide/configuration.md#checks)를 적으면 시작하지만, 그때는 CI가 있다면 CI만이 merge 전에 코드를 검사합니다.
 
 ## 빠르게 시작하기 {#quick-start}
 

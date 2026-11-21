@@ -36,8 +36,7 @@ It fits a repository where:
 
 - you plan with `mattpocock-skills`, set up once with `/setup-matt-pocock-skills` and GitHub
   Issues as the tracker, and each Ticket is small enough for one session
-- a CI workflow runs on pull requests, and there is a test or typecheck command the pipeline can
-  run itself
+- there is a test or typecheck command the pipeline can run itself
 - the machine running it has Node 22 or newer, `git`, an authenticated
   [`gh`](https://cli.github.com/), and `claude` with the
   [`mattpocock-skills`](https://github.com/mattpocock/skills) plugin, version 1.3.0 or later

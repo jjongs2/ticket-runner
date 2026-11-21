@@ -128,7 +128,7 @@ Two gates, run by the pipeline itself rather than by an agent:
 1. **Nothing uncommitted.** A worktree holding changes no commit carries fails, naming every path. Gitignored files, such as installed dependencies, do not count.
 2. **The Check commands**, in order, each through a shell in the worktree, each under `checkTimeoutMinutes` (default 15). The first failure stops the rest. A command killed at the limit is reported as timed out, with a line appended to its output saying it hung rather than failed.
 
-The commands are [`checks`](./configuration.md#checks). Both failures spend the fix budget. An empty `checks`, which only [`gates.checks`](./configuration.md#gates) off allows, runs nothing, so the row reads `⚠️ no checks` rather than `✅ passed`, here and after a conflict Stage alike.
+The commands are [`checks`](./configuration.md#checks). Both failures spend the fix budget. An empty `checks`, which only `"checks": []` written in the config allows, runs nothing, so the row reads `⚠️ no checks` rather than `✅ passed`, here and after a conflict Stage alike.
 
 ### A failure the base branch shares
 
@@ -191,7 +191,7 @@ Only a defect a fresh session could mend spends the budget:
 | The conflict Stage could not be run, or git could not be asked | rebase | No, Hand-off |
 | The base branch could not be pulled | rebase | No, Hand-off |
 | Pushing or opening the pull request failed | pr | No, Hand-off |
-| CI timed out, found conflicting, or had no checks | ci | No, Hand-off |
+| CI timed out or found conflicting | ci | No, Hand-off |
 | The merge failed | merge | No, Hand-off |
 | A rate limit, a transient API failure or an API key out of budget, anywhere | any | No, a Release |
 | GitHub failing on its own side, or git unable to reach or log in to the remote, anywhere | any | No, a [Release](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) |
@@ -271,14 +271,26 @@ The pipeline polls the head commit's check runs and commit statuses until they s
 | A check failed, was cancelled, timed out, needs action or could not start | `❌ failed` | Spends the fix budget |
 | The same, and the merge-base fails a Check command | ``⏸ `<command>` fails on the base branch`` | A Release ([above](#a-failure-the-base-branch-shares)) |
 | GitHub still failing on its own side after a minute of tries | `⏸ GitHub failure` | A [Release](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) |
-| Checks still pending at the timeout | `❌ timed out` | Hand-off |
+| Checks still pending at the timeout, or never listed | `❌ timed out` | Hand-off |
 | No checks, and GitHub finds the pull request conflicting | `❌ conflicting` | Hand-off at once |
-| No checks after the grace period, `gates.ci` on | `❌ no checks` | Hand-off |
-| No checks after the grace period, `gates.ci` off | `⚠️ no checks` | Merge, with the warning row |
+| No checks after the grace period | `⚠️ no checks` | Merge, with the warning row |
+| No checks at the first reading, and no workflow can run on the pull request | `⚠️ no workflow runs` | Merge at once, with the warning row |
 
-A failed check hands the fix Stage the tail of the failing Actions jobs' logs. A conflicting pull request is handed off without waiting, because GitHub runs no checks on it; only a human merging meanwhile can cause it.
+A failed check hands the fix Stage the tail of the failing Actions jobs' logs. A conflicting pull request is handed off without waiting, because GitHub runs no checks on it; only a human merging meanwhile can cause it. A reading where GitHub would not list the check runs or statuses is no answer, and is asked again like a pending one.
 
-**The grace period.** Right after a pull request opens, GitHub reports no checks for a while, so "no checks" counts only after [`ciGraceMinutes`](./configuration.md#ci).
+A pull request with no checks merges: whether one runs CI is a fact about it, such as a docs-only change a `paths` filter skips, and a Target that needs CI before a merge says so on GitHub ([Requiring CI before a merge](./configuration.md#requiring-ci-before-a-merge)).
+
+**The grace period.** Right after a pull request opens, GitHub reports no checks for a while, so "no checks" counts only after [`ciGraceMinutes`](./configuration.md#ci). Under `ciGraceMinutes: 0`, a pull request merges before a slow check run registers.
+
+**No grace when no workflow can run.** Before the wait, the Run reads the workflow files in `.github/workflows/` as the pull request's branch has them, and the wait skips `ciGraceMinutes` when none of them can run on the pull request. Checks already registered at the first reading are still waited for. A Target with no workflow file is one where none can run. A workflow cannot run when each of its events is one of these:
+
+| Event | Cannot run on the pull request when |
+|---|---|
+| `schedule`, `workflow_dispatch`, `repository_dispatch`, `workflow_call` | always |
+| `pull_request` | `branches` or `branches-ignore` excludes the base branch, or `paths` or `paths-ignore` excludes every changed file, a renamed file counting under both paths |
+| `push` | `branches` or `branches-ignore` excludes the pull request's branch |
+
+Patterns are read as GitHub's filter pattern cheat sheet reads them, not as shell globs: `**.js` matches `src/js/app.js`. Anything the Run cannot rule out for certain counts as a workflow that can run, and the grace applies: a file that does not parse, any other event, a filter it does not read (`types`, a `push` `paths`, `tags`) unless one it reads rules the event out, a pattern with `?`, `+`, `[]` or a leading `!`, and a wildcard that would have to match a name starting with `.`. Wrong that way, it costs the grace; wrong the other way, a pull request would merge before its CI registers.
 
 ### Squash merge and its commit
 
@@ -352,13 +364,14 @@ A `- [ ]` at the head of a line in a Note is escaped, so a Note is never read as
 
 - [Planning](./planning.md): the guards that run before the claim, and how to write Acceptance Criteria verify can grade.
 - [Running](./running.md): starting a Run, `--lanes`, `--api-key`, a narrowed Run, the summary, exit codes and transcripts.
-- [Configuration](./configuration.md): `checks`, `gates`, the Stage limits, `ciTimeoutMinutes`, `ciGraceMinutes`.
+- [Configuration](./configuration.md): `checks`, the Stage limits, `ciTimeoutMinutes`, `ciGraceMinutes`, and requiring CI before a merge.
 - [Hand-offs, stopping and resuming](./stopping-and-resuming.md): Hand-off, Release, Stop, Stranded Tickets and handing a Ticket back.
 - [Internals](./internals.md): the ports and adapters behind each step.
 
 ## References
 
 - [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `processTicket`, `takeTicket`, `verify`, `fix`, `resolveConflict`, `requireGreenCi`
+- [`src/workflows.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/workflows.ts): whether any workflow can run on a pull request
 - [`src/failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts): the Checks run at a merge-base, once per Run
 - [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts), [`src/frontier.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts), [`src/landing.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/landing.ts)
 - [`src/prompts.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/prompts.ts), [`src/self-hosting.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/self-hosting.ts), [`src/verdict.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/verdict.ts), [`src/title.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/title.ts), [`src/note-schema.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/note-schema.ts), [`src/lifecycle.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lifecycle.ts)

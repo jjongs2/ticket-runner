@@ -1951,7 +1951,7 @@ interface PullRequestSubject {
  * one released over the failure. It is the Ticket's, and used as one it had
  * recorded, rather than refused a second beside it. Here rather than at the merge: a draft pull request
  * often runs no workflows at all, so the wait for CI below would read it as
- * "no checks" and end the Ticket before the merge was ever asked for.
+ * "no checks" and ask GitHub to merge a draft, which it refuses.
  */
 async function publishPullRequest(
   pipeline: Pipeline,

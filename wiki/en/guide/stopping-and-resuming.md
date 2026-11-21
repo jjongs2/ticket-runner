@@ -77,7 +77,6 @@ The Failure line says what stopped the Ticket. What it asks of you:
 | A Check, a criterion or CI still failing after the fix | Read the evidence in the comment, then mend the code by hand on the branch, or, for a criterion, rewrite it as the next row says |
 | Criteria unmet after the fix, or no evidence | Mend the code by hand, or rewrite the criteria so a session can check them by running or reading code ([Acceptance Criteria](./planning.md#acceptance-criteria)) |
 | CI timed out | Raise [`ciTimeoutMinutes`](./configuration.md#ci) |
-| No checks | Add a CI workflow, raise `ciGraceMinutes` if checks register slowly, or turn [`gates.ci`](./configuration.md#gates) off |
 | The pull request is conflicting | Nothing: the next Run rebases it again, and the conflict Stage takes the conflict |
 | The base branch could not be pulled | Clear what is in the way in the main checkout ([Running](./running.md#run)) |
 | The merge failed | Put right the repository setting GitHub's refusal names, such as a branch protection rule |

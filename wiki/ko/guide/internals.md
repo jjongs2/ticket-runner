@@ -132,7 +132,7 @@ sequenceDiagram
 | [`command-line.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/command-line.ts) | 아무것도 보기 전에 인자를 해석함. 사용법 문구도 여기 있음 |
 | [`stage-guard.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stage-guard.ts) | Stage의 셸 안에서는 모든 명령을 거절(Stage 표시) |
 | [`start.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts) | 거절, Run lock, Stop 수신, 요약과 종료 코드 |
-| [`startup.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts) | merge를 막을 게이트가 없는 Run을 거절하고, 꺼 둔 게이트를 경고 |
+| [`startup.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts) | 설정하거나 추론한 Check 명령이 없는 Run을 거절하고, `"checks": []`를 경고 |
 
 **Run과 Ticket**
 
@@ -145,6 +145,7 @@ sequenceDiagram
 | [`landing.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/landing.ts) | Landing: rebase부터 pull까지 한 번에 한 Lane, 도착 순서대로 |
 | [`lifecycle.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lifecycle.ts) | Ticket이 어디서 실패했는지, fix Stage가 고칠 수 있는 실패는 무엇인지 |
 | [`failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts) | 실패한 Check를 merge-base에서 Run마다 commit마다 한 번 돌리고, 그 Note를 한 번 올림 |
+| [`workflows.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/workflows.ts) | pull request의 branch에 있는 워크플로 중 그 pull request에서 돌 수 있는 것이 있는지. CI 유예 시간을 정함 |
 | [`base-branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/base-branch.ts) | Run마다 한 번 base branch를 정함 |
 | [`branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/branch.ts) | `agent/<n>-<slug>`, `.worktrees/ticket-<n>`, `.worktrees/base-<commit>` |
 | [`stranded.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stranded.ts) | Stranded Ticket을 찾는 sweep |
