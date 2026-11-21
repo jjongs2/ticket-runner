@@ -19,7 +19,7 @@ After Planning, every Ticket still needs an attended session: open it, paste the
 It fits when:
 
 - Planning has produced agent-sized Tickets, with checkbox criteria and native blockers.
-- The repository has CI, and a test or typecheck command the pipeline can run itself.
+- The repository has a test or typecheck command the pipeline can run itself.
 - You want the work merged while you are away: overnight, or started from the Claude app.
 
 It does not fit when:
