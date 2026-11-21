@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Host } from "../host.js";
 import { LOCK_BRANCH, LOCK_FILE, lockFileContents, readLockFile } from "../lock.js";
@@ -24,6 +24,7 @@ function git(cwd: string, ...args: string[]): string {
 }
 
 function commit(cwd: string, file: string, contents: string, message: string): void {
+  mkdirSync(dirname(join(cwd, file)), { recursive: true });
   writeFileSync(join(cwd, file), contents);
   git(cwd, "add", "-A");
   git(cwd, "commit", "-m", message);
@@ -419,6 +420,42 @@ describe("commitSubjects", () => {
     git(path, "commit", "-m", "feat: a (#2)", "-m", "A body\n\nwith blank lines.");
 
     expect(await workspace.commitSubjects("agent/2-x", "main")).toEqual(["feat: a (#2)"]);
+  });
+});
+
+describe("what a pull request's workflows are filtered on", () => {
+  it("lists the files the branch changes since the base branch, a rename under both paths", async () => {
+    commit(repo, "docs/old.md", "old\n", "docs: old (#1)");
+    git(repo, "push", "origin", "main");
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
+    git(path, "mv", "docs/old.md", "docs/new.md");
+    git(path, "commit", "-m", "docs: rename (#2)");
+    commit(path, "src/a b.ts", "a\n", "feat: a (#2)");
+
+    expect((await workspace.changedPaths(path, "main")).sort()).toEqual([
+      "docs/new.md",
+      "docs/old.md",
+      "src/a b.ts",
+    ]);
+  });
+
+  it("reads the workflow files the branch's tip carries, and none below the directory or beside it", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");
+
+    expect(await workspace.workflowFiles(path)).toEqual([]);
+
+    commit(path, ".github/workflows/ci.yml", "on: pull_request\n", "ci: add (#2)");
+    commit(path, ".github/workflows/nested/x.yml", "on: push\n", "ci: nested (#2)");
+    commit(path, ".github/workflows/README.md", "read me\n", "docs: readme (#2)");
+    commit(path, ".github/dependabot.yml", "version: 2\n", "ci: dependabot (#2)");
+    // Not committed, so not what was pushed.
+    writeFileSync(join(path, ".github", "workflows", "local.yml"), "on: push\n");
+
+    expect(await workspace.workflowFiles(path)).toEqual([
+      { path: ".github/workflows/ci.yml", contents: "on: pull_request\n" },
+    ]);
   });
 });
 

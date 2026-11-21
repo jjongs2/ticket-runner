@@ -38,6 +38,7 @@ import {
 } from "../resume.js";
 import { stageLogDir, transcriptFiles } from "../run-log.js";
 import { exec, execOrThrow, throwOnFailure } from "./exec.js";
+import { type WorkflowFile, WORKFLOWS_DIR, isWorkflowPath } from "../workflows.js";
 
 /**
  * The start of a line git only writes when it cannot merge two hunks itself.
@@ -423,6 +424,44 @@ export class GitWorkspace implements Workspace {
       if (value !== "") seen.add(value);
     }
     return [...seen];
+  }
+
+  /**
+   * `--no-renames`, so a rename is the deletion of its old path and the
+   * addition of its new one, which names both. NUL-separated, so a path git
+   * would otherwise quote comes back as it is spelt.
+   */
+  async changedPaths(cwd: string, base: string): Promise<string[]> {
+    const from = await this.mergeBase(cwd, base);
+    const { stdout } = await execOrThrow(
+      "git",
+      ["diff", "--name-only", "--no-renames", "-z", from, "HEAD"],
+      { cwd },
+    );
+    return stdout.split("\0").filter((path) => path !== "");
+  }
+
+  /**
+   * Read from the commit, not the working tree: the tip is what was pushed,
+   * and what GitHub runs.
+   */
+  async workflowFiles(cwd: string): Promise<WorkflowFile[]> {
+    const { stdout } = await execOrThrow(
+      "git",
+      ["ls-tree", "-z", "--full-tree", "HEAD", "--", `${WORKFLOWS_DIR}/`],
+      { cwd },
+    );
+    const files: WorkflowFile[] = [];
+    for (const entry of stdout.split("\0")) {
+      const tab = entry.indexOf("\t");
+      if (tab === -1) continue;
+      const [, type, object] = entry.slice(0, tab).split(" ");
+      const path = entry.slice(tab + 1);
+      if (type !== "blob" || object === undefined || !isWorkflowPath(path)) continue;
+      const { stdout: contents } = await execOrThrow("git", ["cat-file", "blob", object], { cwd });
+      files.push({ path, contents });
+    }
+    return files;
   }
 
   /**

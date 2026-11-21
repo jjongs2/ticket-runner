@@ -491,11 +491,10 @@ describe("what init only reports", () => {
 
     const { code, out } = await init();
 
-    expect(marks(out)).toEqual(["✓", "✓", "✓", "✓", "✓"]);
+    expect(marks(out)).toEqual(["✓", "✓", "✓", "✓"]);
     expect(out).toMatch(/✓ `gh` is authenticated/);
     expect(out).toMatch(/✓ `claude` runs/);
     expect(out).toMatch(/✓ the `mattpocock-skills` plugin is installed/);
-    expect(out).toMatch(/✓ a CI workflow is present/);
     expect(out).toMatch(/✓ a Check is configured or inferable: npm test/);
     expect(code).toBe(0);
   });
@@ -544,14 +543,25 @@ describe("what init only reports", () => {
     expect(code).toBe(1);
   });
 
-  it("fails the CI line and exits 1 when the Actions directory holds no workflow", async () => {
+  it("reports nothing to put right for a Target with no CI workflow", async () => {
     readyToReport(repoRoot);
     rmSync(join(repoRoot, ".github", "workflows", "ci.yml"));
 
     const { code, out } = await init();
 
-    expect(out).toMatch(/✗ no CI workflow in/);
-    expect(code).toBe(1);
+    expect(marks(out)).toEqual(["✓", "✓", "✓", "✓"]);
+    expect(out).not.toMatch(/workflow/i);
+    expect(code).toBe(0);
+  });
+
+  it("passes the Check line for a config that names `\"checks\": []`", async () => {
+    readyToReport(repoRoot);
+    write(repoRoot, "ticket-runner.json", JSON.stringify({ checks: [] }));
+
+    const { code, out } = await init();
+
+    expect(out).toMatch(/✓ `checks` is `\[\]` in ticket-runner\.json: a Run starts with no Check command/);
+    expect(code).toBe(0);
   });
 
   it("fails the Check line and exits 1 when nothing could gate a merge", async () => {

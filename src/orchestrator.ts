@@ -91,6 +91,7 @@ import {
   passes,
   unmetCriteria,
 } from "./verdict.js";
+import { anyWorkflowCanRun } from "./workflows.js";
 
 export type TicketOutcome =
   | {
@@ -634,7 +635,7 @@ async function takeTicket(
         );
         await record.advance({ pullRequest });
         point = "ci";
-        await requireGreenCi(pipeline, worktree, pullRequest, progress, landing);
+        await requireGreenCi(pipeline, { worktree, branch, pullRequest }, progress, landing);
         break;
       } catch (error) {
         // A rate limit, an API failure or a fault of GitHub's or the remote's
@@ -1490,8 +1491,8 @@ async function runChecks(
       );
     }
   }
-  // No command is not a pass: only `gates.checks` off lets a Run start with
-  // none, and the row says so as the ci row does for a pull request with none.
+  // No command is not a pass: only `"checks": []` lets a Run start with none,
+  // and the row says so as the ci row does for a pull request with none.
   await progress.record({
     point: "checks",
     outcome: pipeline.config.checks.length === 0 ? "⚠️ no checks" : "✅ passed",
@@ -1989,22 +1990,30 @@ async function openPullRequestOn(pipeline: Pipeline, branch: string): Promise<nu
   return open.find((pull) => pull.head === branch)?.number;
 }
 
+/** The pull request the wait for CI is on, and the worktree its branch is checked out in. */
+interface CiSubject {
+  worktree: string;
+  branch: string;
+  pullRequest: number;
+}
+
 /**
- * A red, unfinished or conflicting pull request is a failure whatever the
- * gates say. Turning `gates.ci` off only tolerates a pull request that has no
- * checks at all.
+ * A red, unfinished or conflicting pull request is a failure. One with no
+ * checks at all merges: a Target that needs CI before a merge says so with
+ * required status checks, and GitHub then refuses the merge.
  */
 async function requireGreenCi(
   pipeline: Pipeline,
-  worktree: string,
-  pullRequest: number,
+  { worktree, branch, pullRequest }: CiSubject,
   progress: Progress,
   landing: LandingTurn,
 ): Promise<void> {
   const startedAt = Date.now();
+  const workflowsCanRun = await anyWorkflowCanRunOn(pipeline, worktree, branch);
   const outcome = await pipeline.tracker.waitForCi(
     pullRequest,
     pipeline.config.ciTimeoutMinutes * 60_000,
+    { workflowsCanRun },
   );
   const record = (cell: string) =>
     progress.record({ point: "ci", outcome: cell, durationMs: Date.now() - startedAt });
@@ -2050,14 +2059,28 @@ async function requireGreenCi(
         `the pull request conflicts with \`${pipeline.baseBranch}\`, so GitHub will neither run its checks nor merge it`,
       );
     case "none":
-      // A gate switched off is worth a row of its own: the Ticket merged on
-      // nobody's word but the pipeline's own Checks.
-      await record(pipeline.config.gates.ci ? "❌ no checks" : "⚠️ no checks");
-      if (!pipeline.config.gates.ci) return;
-      throw new TicketFailure(
-        "ci",
-        "the pull request has no checks, so CI cannot gate the merge",
-      );
+      // Worth a row of its own: the Ticket merges on nobody's word but the
+      // pipeline's own Checks, and the row says whether a check was ever coming.
+      await record(workflowsCanRun ? "⚠️ no checks" : "⚠️ no workflow runs");
+      return;
+  }
+}
+
+/**
+ * Whether any of the Target's workflows can run on the pull request from
+ * `branch`, as the workflow files on the branch say. Yes when they cannot be
+ * read: being wrong that way costs the grace, and being wrong the other way
+ * merges a pull request before its CI registers.
+ */
+async function anyWorkflowCanRunOn(pipeline: Pipeline, worktree: string, branch: string): Promise<boolean> {
+  try {
+    const [workflows, changed] = await Promise.all([
+      pipeline.workspace.workflowFiles(worktree),
+      pipeline.workspace.changedPaths(worktree, pipeline.baseBranch),
+    ]);
+    return anyWorkflowCanRun(workflows, { base: pipeline.baseBranch, head: branch, changed });
+  } catch {
+    return true;
   }
 }
 

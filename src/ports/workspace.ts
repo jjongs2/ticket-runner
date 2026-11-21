@@ -1,4 +1,5 @@
 import type { Host } from "../host.js";
+import type { WorkflowFile } from "../workflows.js";
 
 /**
  * The git working copy a Ticket is implemented in.
@@ -333,6 +334,20 @@ export interface Workspace {
    * pipeline composes its own, so it has to carry them itself.
    */
   coAuthors(branch: string, base: string): Promise<string[]>;
+  /**
+   * The files the branch checked out at `cwd` changes since its
+   * {@link mergeBase} with `base`, as its pull request lists them: a renamed
+   * file under both its old and its new path, since GitHub matches a path
+   * filter against both. Asked before the wait for CI, of a branch just
+   * rebased and pushed.
+   */
+  changedPaths(cwd: string, base: string): Promise<string[]>;
+  /**
+   * The workflow files the branch checked out at `cwd` carries at its tip, in
+   * the one directory GitHub reads them from: what its pull request runs, and
+   * none for a branch with no such directory.
+   */
+  workflowFiles(cwd: string): Promise<WorkflowFile[]>;
   /**
    * Run one Check command in `cwd`, killing it after `timeoutMs`.
    *

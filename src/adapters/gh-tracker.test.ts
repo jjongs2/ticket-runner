@@ -61,6 +61,9 @@ function ghTracker(options: GhTrackerOptions, ...queued: Execution[]) {
   });
 }
 
+/** A wait for CI on a pull request a workflow can run on, which is given its grace. */
+const CAN_RUN = { workflowsCanRun: true };
+
 beforeEach(() => {
   calls = [];
 });
@@ -961,7 +964,7 @@ describe("pull requests", () => {
     await gh.updatePullRequestTitle(12, "t");
     await gh.convertPullRequestToDraft(12);
     await gh.markPullRequestReady(12);
-    expect(await gh.waitForCi(12, 60_000)).toEqual({ state: "passed" });
+    expect(await gh.waitForCi(12, 60_000, CAN_RUN)).toEqual({ state: "passed" });
     await gh.squashMerge(12, { subject: "s", body: "b" });
     await gh.latestVersionTag("acme/repo");
     expect(calls).toHaveLength(12);
@@ -1097,7 +1100,7 @@ describe("waiting for CI", () => {
   const excerptOf = (outcome: unknown) => (outcome as { excerpt: string }).excerpt;
 
   it("reads the head commit's check runs and status through REST", async () => {
-    await ci({}, [checks("pass")]).waitForCi(12, 60_000);
+    await ci({}, [checks("pass")]).waitForCi(12, 60_000, CAN_RUN);
 
     expect(calls).toEqual([
       ["api", "repos/{owner}/{repo}/pulls/12"],
@@ -1127,7 +1130,7 @@ describe("waiting for CI", () => {
   });
 
   it("passes once every check is in the pass bucket", async () => {
-    expect(await ci({}, [checks("pass", "skipping")]).waitForCi(12, 60_000)).toEqual({
+    expect(await ci({}, [checks("pass", "skipping")]).waitForCi(12, 60_000, CAN_RUN)).toEqual({
       state: "passed",
     });
   });
@@ -1135,20 +1138,31 @@ describe("waiting for CI", () => {
   it("counts a neutral check run as skipped, not as pending", async () => {
     const neutral = { ...run("pass"), conclusion: "neutral" };
 
-    expect(await ci({}, [{ runs: [neutral] }]).waitForCi(12, 60_000)).toEqual({ state: "passed" });
+    expect(await ci({}, [{ runs: [neutral] }]).waitForCi(12, 60_000, CAN_RUN)).toEqual({ state: "passed" });
   });
 
   it("polls while checks are pending and passes when they finish", async () => {
-    const outcome = await ci({}, [checks("pending"), checks("pass")]).waitForCi(12, 60_000);
+    const outcome = await ci({}, [checks("pending"), checks("pass")]).waitForCi(12, 60_000, CAN_RUN);
 
     expect(outcome).toEqual({ state: "passed" });
     expect(readingsTaken()).toBe(2);
   });
 
-  it("reads a head commit GitHub would not report as no checks, not as a failed wait", async () => {
-    const gh = trackerWith({}, failedExecution("gh: Not Found (HTTP 404)"));
+  it("asks again of a head commit GitHub would not report, and times out when it never does", async () => {
+    let now = 0;
+    const gh = new GhTracker({
+      run: async (_command: string, args: string[]) => {
+        calls.push(args);
+        return failedExecution("gh: Not Found (HTTP 404)");
+      },
+      now: () => now,
+      sleep: async (ms) => void (now += ms),
+      pollIntervalMs: 60_000,
+      checksGraceMs: 0,
+    });
 
-    expect(await gh.waitForCi(12, 60_000)).toEqual({ state: "none" });
+    expect(await gh.waitForCi(12, 5 * 60_000, CAN_RUN)).toEqual({ state: "timed-out" });
+    expect(calls.length).toBe(6);
   });
 
   it.each([
@@ -1157,7 +1171,7 @@ describe("waiting for CI", () => {
     ["startup_failure", "failed"],
     ["cancelled", "cancelled"],
   ])("reports a check run that concluded %s as %s", async (conclusion, word) => {
-    const outcome = await ci({}, [{ runs: [{ ...run("fail"), conclusion }] }]).waitForCi(12, 60_000);
+    const outcome = await ci({}, [{ runs: [{ ...run("fail"), conclusion }] }]).waitForCi(12, 60_000, CAN_RUN);
 
     expect(outcome).toMatchObject({ state: "failed", summary: `check-0 ${word}` });
   });
@@ -1169,13 +1183,13 @@ describe("waiting for CI", () => {
       target_url: "https://ci.example.com/build/1",
     });
 
-    expect(await ci({}, [{ statuses: [status("success")] }]).waitForCi(12, 60_000)).toEqual({
+    expect(await ci({}, [{ statuses: [status("success")] }]).waitForCi(12, 60_000, CAN_RUN)).toEqual({
       state: "passed",
     });
     expect(
       await ci({}, [{ statuses: [status("pending")] }, { statuses: [status("error")] }]).waitForCi(
         12,
-        60_000,
+        60_000, CAN_RUN,
       ),
     ).toEqual({ state: "failed", summary: "ci/legacy failed", excerpt: "" });
   });
@@ -1183,7 +1197,7 @@ describe("waiting for CI", () => {
   it("names the failing checks", async () => {
     const outcome = await ci({}, [checks("pass", "fail")], {
       "101": ok("Run tests\n##[error]assertion failed"),
-    }).waitForCi(12, 60_000);
+    }).waitForCi(12, 60_000, CAN_RUN);
 
     expect(outcome).toEqual({
       state: "failed",
@@ -1193,7 +1207,7 @@ describe("waiting for CI", () => {
   });
 
   it("fetches the failing check's Actions job log through REST", async () => {
-    await ci({}, [checks("pass", "fail")], { "101": ok("boom") }).waitForCi(12, 60_000);
+    await ci({}, [checks("pass", "fail")], { "101": ok("boom") }).waitForCi(12, 60_000, CAN_RUN);
 
     expect(calls.at(-1)).toEqual(["api", "repos/{owner}/{repo}/actions/jobs/101/logs"]);
   });
@@ -1209,7 +1223,7 @@ describe("waiting for CI", () => {
           "Cleaning up orphan processes",
         ].join("\n"),
       ),
-    }).waitForCi(12, 60_000);
+    }).waitForCi(12, 60_000, CAN_RUN);
 
     expect(excerptOf(outcome)).toBe(
       "check-0\nRun npm test\nassertion failed\n##[error]Process completed with exit code 1.",
@@ -1217,7 +1231,7 @@ describe("waiting for CI", () => {
   });
 
   it("keeps the tail of a long log and says how much it dropped", async () => {
-    const outcome = await ci({}, [checks("fail")], { "100": ok(log(60)) }).waitForCi(12, 60_000);
+    const outcome = await ci({}, [checks("fail")], { "100": ok(log(60)) }).waitForCi(12, 60_000, CAN_RUN);
 
     const excerpt = excerptOf(outcome);
     expect(excerpt).toContain("(20 earlier lines omitted)");
@@ -1227,7 +1241,7 @@ describe("waiting for CI", () => {
   });
 
   it("does not say it dropped anything from a log that fits", async () => {
-    const outcome = await ci({}, [checks("fail")], { "100": ok(log(3)) }).waitForCi(12, 60_000);
+    const outcome = await ci({}, [checks("fail")], { "100": ok(log(3)) }).waitForCi(12, 60_000, CAN_RUN);
 
     expect(excerptOf(outcome)).toBe(`check-0\n${log(3)}`);
   });
@@ -1239,7 +1253,7 @@ describe("waiting for CI", () => {
       conclusion: "failure",
       details_url: "https://vercel.com/x/y",
     };
-    const outcome = await ci({}, [{ runs: [vercel] }]).waitForCi(12, 60_000);
+    const outcome = await ci({}, [{ runs: [vercel] }]).waitForCi(12, 60_000, CAN_RUN);
 
     expect(outcome).toEqual({ state: "failed", summary: "vercel failed", excerpt: "" });
     expect(calls.some((args) => args.some((arg) => arg.includes("/logs")))).toBe(false);
@@ -1248,7 +1262,7 @@ describe("waiting for CI", () => {
   it("carries on without the log when it cannot be fetched, naming where the job is", async () => {
     const outcome = await ci({}, [checks("fail")], {
       "100": failedExecution("HTTP 403: host not allowed"),
-    }).waitForCi(12, 60_000);
+    }).waitForCi(12, 60_000, CAN_RUN);
 
     expect(outcome).toEqual({
       state: "failed",
@@ -1260,14 +1274,14 @@ describe("waiting for CI", () => {
   it("carries on without the log when fetching it throws", async () => {
     const outcome = await ci({}, [checks("fail")], { "100": new Error("spawn gh ENOENT") }).waitForCi(
       12,
-      60_000,
+      60_000, CAN_RUN,
     );
 
     expect(excerptOf(outcome)).toContain("the log was unavailable");
   });
 
   it("calls an empty log unavailable too", async () => {
-    const outcome = await ci({}, [checks("cancel")], { "100": ok("") }).waitForCi(12, 60_000);
+    const outcome = await ci({}, [checks("cancel")], { "100": ok("") }).waitForCi(12, 60_000, CAN_RUN);
 
     expect(outcome).toEqual({
       state: "failed",
@@ -1300,7 +1314,7 @@ describe("waiting for CI", () => {
         },
       ],
       { "7": ok("boom") },
-    ).waitForCi(12, 60_000);
+    ).waitForCi(12, 60_000, CAN_RUN);
 
     expect(excerptOf(outcome)).toBe("build\nboom");
   });
@@ -1308,7 +1322,7 @@ describe("waiting for CI", () => {
   it("keeps the tail of one line too long to carry whole", async () => {
     const outcome = await ci({}, [checks("fail")], {
       "100": ok(`${"x".repeat(5_000)}assertion failed`),
-    }).waitForCi(12, 60_000);
+    }).waitForCi(12, 60_000, CAN_RUN);
 
     const excerpt = excerptOf(outcome);
     expect(excerpt).toContain("(the start of this line omitted)");
@@ -1326,7 +1340,7 @@ describe("waiting for CI", () => {
     ["starts indented", "   indented first line\nsecond"],
     ["has cleanup after an Actions error", "Run npm test\n##[error]Process completed with exit code 1.\nPost job cleanup."],
   ])("keeps the tail a failing base branch's Note quotes, for a log that %s", async (_, output) => {
-    const outcome = await ci({}, [checks("fail")], { "100": ok(output) }).waitForCi(12, 60_000);
+    const outcome = await ci({}, [checks("fail")], { "100": ok(output) }).waitForCi(12, 60_000, CAN_RUN);
     const note = failingBaseNote({
       origin: 6,
       baseBranch: "main",
@@ -1348,14 +1362,14 @@ describe("waiting for CI", () => {
       "101": ok("second"),
       "102": ok("third"),
       "103": ok("fourth"),
-    }).waitForCi(12, 60_000);
+    }).waitForCi(12, 60_000, CAN_RUN);
 
     expect(excerptOf(outcome)).not.toContain("fourth");
     expect(calls.filter((args) => args.some((arg) => arg.endsWith("/logs")))).toHaveLength(3);
   });
 
   it("never fetches a log while the checks are still pending", async () => {
-    await ci({}, [checks("pending"), checks("fail")], { "100": ok("boom") }).waitForCi(12, 60_000);
+    await ci({}, [checks("pending"), checks("fail")], { "100": ok("boom") }).waitForCi(12, 60_000, CAN_RUN);
 
     const logFetches = calls.flatMap((args, i) => (args.some((arg) => arg.endsWith("/logs")) ? [i] : []));
     expect(logFetches).toEqual([calls.length - 1]);
@@ -1363,11 +1377,45 @@ describe("waiting for CI", () => {
   });
 
   it("reports a pull request with no checks rather than treating it as green", async () => {
-    expect(await ci({}, [{}]).waitForCi(12, 60_000)).toEqual({ state: "none" });
+    expect(await ci({}, [{}]).waitForCi(12, 60_000, CAN_RUN)).toEqual({ state: "none" });
   });
 
-  it("reads checks GitHub would not report as none", async () => {
-    expect(await ci({}, [UNANSWERED]).waitForCi(12, 60_000)).toEqual({ state: "none" });
+  it("asks again of checks GitHub would not list, as of pending ones, and reads the list once it comes", async () => {
+    const outcome = await ci({}, [UNANSWERED, UNANSWERED, {}]).waitForCi(12, 60_000, CAN_RUN);
+
+    expect(outcome).toEqual({ state: "none" });
+    expect(readingsTaken()).toBe(3);
+  });
+
+  it("times out on checks GitHub never lists rather than reading them as none", async () => {
+    const outcome = await ci({ ...waitingClock(), pollIntervalMs: 60_000 }, [UNANSWERED]).waitForCi(
+      12,
+      5 * 60_000,
+      CAN_RUN,
+    );
+
+    expect(outcome).toEqual({ state: "timed-out" });
+  });
+
+  it("times out on checks GitHub never lists even when no workflow can run", async () => {
+    const outcome = await ci({ ...waitingClock(), pollIntervalMs: 60_000 }, [UNANSWERED]).waitForCi(
+      12,
+      5 * 60_000,
+      { workflowsCanRun: false },
+    );
+
+    expect(outcome).toEqual({ state: "timed-out" });
+  });
+
+  it("asks again of checks GitHub would not list on a pull request it finds conflicting", async () => {
+    const outcome = await ci({}, [UNANSWERED, { mergeable: false, mergeable_state: "dirty" }]).waitForCi(
+      12,
+      60_000,
+      CAN_RUN,
+    );
+
+    expect(outcome).toEqual({ state: "conflicting" });
+    expect(readingsTaken()).toBe(2);
   });
 
   it("reads checks again that came back unreadable once", async () => {
@@ -1379,7 +1427,7 @@ describe("waiting for CI", () => {
       ok(""),
     );
 
-    expect(await gh.waitForCi(12, 60_000)).toEqual({ state: "passed" });
+    expect(await gh.waitForCi(12, 60_000, CAN_RUN)).toEqual({ state: "passed" });
   });
 
   it("refuses check output that stays unreadable as GitHub's fault", async () => {
@@ -1389,7 +1437,7 @@ describe("waiting for CI", () => {
       ...Array.from({ length: GITHUB_RETRY_DELAYS_MS.length + 1 }, () => ok("not json")),
     );
 
-    const waiting = gh.waitForCi(12, 60_000);
+    const waiting = gh.waitForCi(12, 60_000, CAN_RUN);
 
     await expect(waiting).rejects.toBeInstanceOf(OutsideFault);
     await expect(waiting).rejects.toThrow("not complete JSON");
@@ -1403,7 +1451,7 @@ describe("waiting for CI", () => {
       ),
     );
 
-    await expect(gh.waitForCi(12, 60_000)).rejects.toMatchObject({
+    await expect(gh.waitForCi(12, 60_000, CAN_RUN)).rejects.toMatchObject({
       side: "github",
       line: "gh: Bad Gateway (HTTP 502)",
     });
@@ -1420,7 +1468,7 @@ describe("waiting for CI", () => {
       {},
       {},
       checks("pass"),
-    ]).waitForCi(12, 60_000 * 30);
+    ]).waitForCi(12, 60_000 * 30, CAN_RUN);
 
     expect(outcome).toEqual({ state: "passed" });
     expect(readingsTaken()).toBe(3);
@@ -1429,7 +1477,7 @@ describe("waiting for CI", () => {
   it("reports no checks once the grace period has passed", async () => {
     const outcome = await ci({ now: ticking(50_000), checksGraceMs: 120_000 }, [{}]).waitForCi(
       12,
-      60_000 * 30,
+      60_000 * 30, CAN_RUN,
     );
 
     expect(outcome).toEqual({ state: "none" });
@@ -1437,10 +1485,31 @@ describe("waiting for CI", () => {
     expect(readingsTaken()).toBeLessThan(4);
   });
 
+  it("reports no checks at the first reading when no workflow can run, whatever the grace", async () => {
+    const outcome = await ci({ now: ticking(1_000), checksGraceMs: 120_000 }, [
+      {},
+      checks("pass"),
+    ]).waitForCi(12, 60_000 * 30, { workflowsCanRun: false });
+
+    expect(outcome).toEqual({ state: "none" });
+    expect(readingsTaken()).toBe(1);
+  });
+
+  it("waits for checks already registered at the first reading when no workflow can run", async () => {
+    const outcome = await ci({ now: ticking(1_000), checksGraceMs: 120_000 }, [
+      checks("pending"),
+      checks("pending"),
+      checks("pass"),
+    ]).waitForCi(12, 60_000 * 30, { workflowsCanRun: false });
+
+    expect(outcome).toEqual({ state: "passed" });
+    expect(readingsTaken()).toBe(3);
+  });
+
   it("reports no checks at the first reading when the grace is zero", async () => {
     const outcome = await ci({ now: () => 0, checksGraceMs: 0 }, [{}, checks("pass")]).waitForCi(
       12,
-      60_000 * 30,
+      60_000 * 30, CAN_RUN,
     );
 
     expect(outcome).toEqual({ state: "none" });
@@ -1456,7 +1525,7 @@ describe("waiting for CI", () => {
   it("reports a pull request GitHub finds conflicting without waiting out the grace period", async () => {
     const outcome = await ci({ now: ticking(1_000), checksGraceMs: 120_000 }, [
       CONFLICTING,
-    ]).waitForCi(12, 60_000 * 30);
+    ]).waitForCi(12, 60_000 * 30, CAN_RUN);
 
     expect(outcome).toEqual({ state: "conflicting" });
     expect(readingsTaken()).toBe(1);
@@ -1467,7 +1536,7 @@ describe("waiting for CI", () => {
       UNSETTLED,
       UNSETTLED,
       CONFLICTING,
-    ]).waitForCi(12, 60_000 * 30);
+    ]).waitForCi(12, 60_000 * 30, CAN_RUN);
 
     expect(outcome).toEqual({ state: "conflicting" });
     expect(readingsTaken()).toBe(3);
@@ -1476,7 +1545,7 @@ describe("waiting for CI", () => {
   it("reports no checks for a pull request GitHub never settled on, once the grace period has passed", async () => {
     const outcome = await ci({ now: ticking(50_000), checksGraceMs: 120_000 }, [
       UNSETTLED,
-    ]).waitForCi(12, 60_000 * 30);
+    ]).waitForCi(12, 60_000 * 30, CAN_RUN);
 
     expect(outcome).toEqual({ state: "none" });
   });
@@ -1484,14 +1553,14 @@ describe("waiting for CI", () => {
   it("reports no checks for a pull request that merges cleanly", async () => {
     const outcome = await ci({ now: ticking(50_000), checksGraceMs: 120_000 }, [
       { mergeable: true, mergeable_state: "clean" },
-    ]).waitForCi(12, 60_000 * 30);
+    ]).waitForCi(12, 60_000 * 30, CAN_RUN);
 
     expect(outcome).toEqual({ state: "none" });
     expect(readingsTaken()).toBeGreaterThan(1);
   });
 
   it("reads the checks of a pull request that has them, conflicting or not", async () => {
-    expect(await ci({}, [{ ...checks("pass"), ...CONFLICTING }]).waitForCi(12, 60_000)).toEqual({
+    expect(await ci({}, [{ ...checks("pass"), ...CONFLICTING }]).waitForCi(12, 60_000, CAN_RUN)).toEqual({
       state: "passed",
     });
   });
@@ -1511,7 +1580,7 @@ describe("waiting for CI", () => {
     const outcome = await ci(
       { ...waitingClock(), pollIntervalMs: 60_000, checksGraceMs: 5 * 60_000 },
       [{}, {}, {}, {}, checks("pass")],
-    ).waitForCi(12, 60_000 * 30);
+    ).waitForCi(12, 60_000 * 30, CAN_RUN);
 
     expect(outcome).toEqual({ state: "passed" });
     expect(readingsTaken()).toBe(5);
@@ -1522,7 +1591,7 @@ describe("waiting for CI", () => {
       run: answering([{}]),
       ...waitingClock(),
       pollIntervalMs: 120_000,
-    }).waitForCi(12, 60_000 * 30);
+    }).waitForCi(12, 60_000 * 30, CAN_RUN);
 
     // The sixth minute is past the grace; the fourth reading is the first to be
     // taken there, so it is the one reported rather than waited out.
@@ -1533,14 +1602,14 @@ describe("waiting for CI", () => {
   it("never lets the grace period outlive the CI timeout", async () => {
     const outcome = await ci({ now: ticking(1_000), checksGraceMs: 120_000 }, [{}]).waitForCi(
       12,
-      1_500,
+      1_500, CAN_RUN,
     );
 
     expect(outcome).toEqual({ state: "none" });
   });
 
   it("gives up when the checks stay pending past the timeout", async () => {
-    const outcome = await ci({}, [checks("pending")]).waitForCi(12, 0);
+    const outcome = await ci({}, [checks("pending")]).waitForCi(12, 0, CAN_RUN);
 
     expect(outcome).toEqual({ state: "timed-out" });
     expect(readingsTaken()).toBe(1);

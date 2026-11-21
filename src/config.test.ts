@@ -19,7 +19,7 @@ describe("loadConfig", () => {
   it("applies the documented defaults when no config file exists", () => {
     const config = loadConfig(repoWith({}), VERSION);
 
-    expect(config.gates).toEqual({ checks: true, ci: true });
+    expect(config.checksNamed).toBe(false);
     expect(config.permissionMode).toBe("auto");
     expect(config.ciTimeoutMinutes).toBe(30);
     expect(config.ciGraceMinutes).toBe(5);
@@ -112,20 +112,24 @@ describe("loadConfig", () => {
     expect(loadConfig(root, VERSION).checks).toEqual(["make check"]);
   });
 
-  it("lets a configured empty Check list opt out of inference", () => {
+  it("lets a configured empty Check list opt out of inference, and says the config named it", () => {
     const root = repoWith({
       "package.json": JSON.stringify({ scripts: { test: "vitest run" } }),
-      [CONFIG_FILENAME]: JSON.stringify({ checks: [], gates: { checks: false } }),
+      [CONFIG_FILENAME]: JSON.stringify({ checks: [] }),
     });
 
-    expect(loadConfig(root, VERSION).checks).toEqual([]);
+    expect(loadConfig(root, VERSION)).toMatchObject({ checks: [], checksNamed: true });
+  });
+
+  it("tells a Check list inferred from nothing from one the config named empty", () => {
+    expect(loadConfig(repoWith({}), VERSION)).toMatchObject({ checks: [], checksNamed: false });
   });
 
   it("merges a partial config over the defaults field by field", () => {
     const root = repoWith({
       [CONFIG_FILENAME]: JSON.stringify({
         stages: { verify: { maxMinutes: 5 } },
-        gates: { ci: false },
+        merge: false,
       }),
     });
     const config = loadConfig(root, VERSION);
@@ -137,7 +141,8 @@ describe("loadConfig", () => {
       maxMinutes: 5,
       extraPrompt: "",
     });
-    expect(config.gates).toEqual({ checks: true, ci: false });
+    expect(config.merge).toBe(false);
+    expect(config.lanes).toBe(1);
   });
 
   it("takes limits for the conflict Stage like any other", () => {
@@ -323,13 +328,20 @@ describe("a key this install does not know", () => {
     expect(message).toContain("retries");
     expect(
       message.endsWith(
-        `Refused by ticket-runner ${VERSION}, so the key may be newer than this install.`,
+        `Refused by ticket-runner ${VERSION}, so the key may be newer than this install or one it no longer takes.`,
       ),
     ).toBe(true);
   });
 
+  it("refuses `gates`, which it no longer takes, as any unknown key", () => {
+    const message = refusal({ gates: { ci: false } });
+
+    expect(message).toContain("gates");
+    expect(message).toContain("or one it no longer takes");
+  });
+
   it("says the same of a key nested inside one the schema knows", () => {
-    expect(refusal({ gates: { flakes: true } })).toContain(
+    expect(refusal({ stages: { verify: { flakes: true } } })).toContain(
       `Refused by ticket-runner ${VERSION}`,
     );
   });
