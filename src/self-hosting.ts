@@ -1,9 +1,11 @@
 /**
- * Whether a Run's Target is the pipeline's own repository.
+ * The Target's GitHub repository, read once per Run, and whether it is the
+ * pipeline's own; the same name is what a terminal's links point at
+ * (`terminal-links.ts`).
  *
- * Only there is the checkout a Stage stands in the pipeline itself, with tests
- * and fakes to exercise it through and spellings of its commands that name no
- * installed `ticket-runner` (`prompts.ts`). The pipeline decides this rather
+ * Only in the pipeline's own is the checkout a Stage stands in the pipeline
+ * itself, with tests and fakes to exercise it through and spellings of its
+ * commands that name no installed `ticket-runner` (`prompts.ts`). The pipeline decides this rather
  * than leaving a Stage to judge it from the files around it, and it decides it
  * once per Run, before the first Ticket.
  */

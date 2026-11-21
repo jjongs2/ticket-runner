@@ -208,7 +208,7 @@ ticket-runner run 2026-09-17T09-00-00-000 · 1 lane
 
 Stage가 도는 동안이나 CI를 기다리는 동안에는 아무것도 출력하지 않고, 이 시간은 한 시간이 될 수도 있습니다. Stage 자신의 출력은 아래의 `.stdout` 파일에 있습니다. 좁힌 Run이면 첫 줄에 지정한 Ticket이 덧붙고, 재개한 Ticket은 `claimed` 대신 `resumed from <state>`라고 출력합니다. Run과 다른 곳에 과금된 Stage는 끝나는 즉시 알려 줍니다. `#4 implement ran on apiKeySource apiKeyHelper, not the subscription (none)`. 경고와 거절은 stderr로 갑니다.
 
-터미널에서는 이 줄들과 요약의 `#4`, `PR #12`가 GitHub의 해당 issue나 pull request로 가는 링크가 됩니다. 링크를 지원하는 터미널에서만 그렇습니다. 로그 파일이나 파이프에는 링크 없이 같은 텍스트가 갑니다.
+터미널에서는 이 줄들과 요약의 `#4`, `PR #12`가 GitHub의 해당 이슈나 pull request로 가는 링크가 됩니다. 링크를 지원하는 터미널에서만 그렇습니다. 로그 파일이나 파이프에는 링크 없이 같은 텍스트가 갑니다.
 
 Stage가 한 일은 모두 Target의 gitignore된 `.ticket-runner/` 아래 디스크에 남습니다. run id는 `2026-09-17T09-00-00-000`처럼 UTC 시작 시각입니다.
 

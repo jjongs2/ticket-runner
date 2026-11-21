@@ -216,11 +216,11 @@ async function execute(
   // summary that says the same thing is a terminal these files outlive.
   // Logged and nothing more when it fails — a directory that will not take a
   // one-line file is no reason to take no Ticket at all.
-  let unrecorded: string | undefined;
+  let versionUnrecorded: string | undefined;
   try {
     writeRunVersion(repoRoot, runId, version);
   } catch (error) {
-    unrecorded = `could not record the version beside the transcripts: ${(error as Error).message}`;
+    versionUnrecorded = `could not record the version beside the transcripts: ${(error as Error).message}`;
   }
 
   // Read before the first line is printed, since every line of the Run, its
@@ -235,7 +235,7 @@ async function execute(
   // several of them with the same output, so each output is printed once. The
   // summary is printed as it is: it is one block, written once.
   const log = printEachOutputOnce(print);
-  if (unrecorded !== undefined) log(unrecorded);
+  if (versionUnrecorded !== undefined) log(versionUnrecorded);
 
   // Asked once, and said twice: at the top of the log a human watches, and
   // again at the head of the summary they scroll back to hours later.

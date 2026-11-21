@@ -15,7 +15,7 @@
  * cut short by the ellipsis a trimmed `noted` row ends with, since `#1…` may
  * have been `#12`.
  */
-const NUMBER = /(?<![\p{L}\p{N}/])#(\d+)(?![\d…])/gu;
+const LINKABLE_NUMBER = /(?<![\p{L}\p{N}/])#(\d+)(?![\d…])/gu;
 
 /** OSC 8's opening and closing halves, each ended by the string terminator. */
 const OSC8 = "\x1b]8;;";
@@ -28,7 +28,7 @@ const ST = "\x1b\\";
 export function linkNumbers(line: string, repository: string | undefined): string {
   if (repository === undefined) return line;
   return line.replace(
-    NUMBER,
+    LINKABLE_NUMBER,
     (text, number: string) =>
       `${OSC8}https://github.com/${repository}/issues/${number}${ST}${text}${OSC8}${ST}`,
   );
