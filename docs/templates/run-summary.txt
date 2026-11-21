@@ -12,6 +12,18 @@ Frontier empty.
 The verb is padded to nine columns so the Ticket numbers line up. A Run that
 took no Ticket prints `  nothing to do` in place of the rows.
 
+Where standard output is a terminal, every `#<n>` the Run prints there, in
+these rows, the header, the last line and every line before the summary, is a
+link: an OSC 8 hyperlink to `https://github.com/<owner>/<name>/issues/<n>`,
+which GitHub redirects to the pull request when `<n>` is one, with `#<n>` as
+its visible text. A number quoted from a title, a Note or a command's output is
+linked too, except one straight after a letter, a digit or a `/`
+(`owner/repo#12`), and one the ellipsis of a trimmed `noted` row cut short. The
+Run reads `<owner>/<name>` from GitHub once at its start; where GitHub could
+not name the Target, the numbers stay plain. A terminal that ignores OSC 8
+shows the text above as it is, and with standard output anything else, such as
+the log file an Operator watches or a pipe, nothing is linked.
+
 `<credential>` is what the Run's Stages were billed to: `subscription`, the
 Claude login, or `API key`, the `ANTHROPIC_API_KEY` the Host exports, for a Run
 started with `--api-key`. A subscription Run starts its Stages without that

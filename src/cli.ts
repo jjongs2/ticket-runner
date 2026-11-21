@@ -113,6 +113,8 @@ async function main(argv: string[]): Promise<number> {
     // Every argument, `--lanes` included, so whoever meets the lock sees how
     // the Run was started.
     command: ["ticket-runner", ...argv].join(" "),
+    // Where the Run's lines go, since only a terminal is handed links.
+    terminal: process.stdout.isTTY === true,
   });
 }
 

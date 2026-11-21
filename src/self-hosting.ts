@@ -11,23 +11,32 @@
 import type { Tracker } from "./ports/tracker.js";
 
 /**
- * True where the Target's GitHub repository is `pipeline`, the pipeline's own
- * as its package names it, and false wherever either side cannot be read.
- *
- * GitHub reads `owner/name` without regard to case, so this does too. Nothing
- * here may stop a Run: a tracker that fails is a Target that is not the
- * pipeline's own, which gives its Stages the guidance that holds anywhere.
+ * The Target's GitHub repository as `owner/name`, read once per Run, or
+ * nothing wherever GitHub could not name it. Nothing here may stop a Run: a
+ * tracker that fails is a Target nobody could name.
  */
-export async function isPipelineRepository(
-  tracker: Tracker,
-  pipeline: string | undefined,
-): Promise<boolean> {
-  if (pipeline === undefined) return false;
-  let target: string | undefined;
+export async function targetRepository(
+  tracker: Pick<Tracker, "repository">,
+): Promise<string | undefined> {
   try {
-    target = await tracker.repository();
+    return await tracker.repository();
   } catch {
-    return false;
+    return undefined;
   }
-  return target !== undefined && target.toLowerCase() === pipeline.toLowerCase();
+}
+
+/**
+ * True where the Target's GitHub repository, `target`, is `pipeline`, the
+ * pipeline's own as its package names it, and false wherever either side could
+ * not be read, which gives the Target's Stages the guidance that holds anywhere.
+ *
+ * GitHub reads `owner/name` without regard to case, so this does too.
+ */
+export function isPipelineRepository(
+  target: string | undefined,
+  pipeline: string | undefined,
+): boolean {
+  return (
+    pipeline !== undefined && target !== undefined && target.toLowerCase() === pipeline.toLowerCase()
+  );
 }
