@@ -172,6 +172,11 @@ export interface Pipeline {
    */
   credential: Credential;
   /**
+   * Where the Host keeps the plugin every Stage of this Run loads, as the
+   * Run's preflight found it before it started.
+   */
+  pluginDir: string;
+  /**
    * What every Stage of this Run said it was billed, shared by every Ticket so
    * the Run summary can name each Stage that ran on something other than
    * {@link credential}, and say what the Run spent.
@@ -1100,6 +1105,7 @@ async function runStage(
     logDir: request.logDir,
     permissionMode: pipeline.config.permissionMode,
     credential: pipeline.credential,
+    pluginDir: pipeline.pluginDir,
     model: limits.model,
     effort: limits.effort,
     maxTurns: limits.maxTurns,

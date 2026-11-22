@@ -22,7 +22,7 @@ Run은 무인으로 돌기 때문에, 빠진 게 있다면 Ticket 도중이 아�
 | Node 22 이상 | 패키지의 `engines` 필드 | 설치할 때 npm |
 | `git` | Ticket마다 worktree와 branch를 따로 만듦 | – |
 | Target에 인증된 [`gh`](https://cli.github.com/) | GitHub 호출은 모두 `gh api`로 감 | `init`이 알려 주고, `gh`가 없는 Host에서는 `run`이 거절 |
-| `mattpocock-skills` 플러그인 1.3.0 이상 버전이 설치된 `claude` | Stage 하나하나가 `claude -p` 세션이고, implement Stage가 이 플러그인의 스킬을 실행하며, implement Stage와 fix Stage가 1.3.0에 추가된 `pr` 스킬로 pull request 본문을 씀 ([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)) | 둘 다 `init`이 알려 줌. 플러그인은 이름만 확인 |
+| `mattpocock-skills` 플러그인 1.3.0 이상 버전이 설치된 `claude` | Stage 하나하나가 `claude -p` 세션이고, implement Stage가 이 플러그인의 스킬을 실행하며, implement Stage와 fix Stage가 1.3.0에 추가된 `pr` 스킬로 pull request 본문을 씀 ([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)) | 둘 다 `init`이 알려 주고, `claude plugin list --json`이 플러그인의 `installPath`를 주지 않는 Host에서는 `run`이 거절. 플러그인 버전은 어느 쪽도 확인하지 않음 |
 | Claude 요금제로 로그인한 `claude` | Run을 [`--api-key`](./running.md#api-key)로 시작하지 않는 한, Stage는 그 로그인으로 돌고 셸이 export한 `ANTHROPIC_API_KEY`를 보지 못함 | – |
 | Ticket이 계획되어 있는 GitHub 저장소 | Ticket은 보드에서 옴. [Planning](./planning.md) 참고 | – |
 | 이슈 트래커로 GitHub Issues를 골라 저장소에서 한 번 실행해 둔 `/setup-matt-pocock-skills` | 이 설정이 있어야 계획용 스킬이 Spec과 Ticket을 GitHub 이슈로 만듦. 실행하면 묻고 나서 `docs/agents/issue-tracker.md`와 `CLAUDE.md`의 `## Agent skills` 블록을 쓰므로, 이 둘이 있으면 돌린 것 | – |
@@ -183,7 +183,10 @@ This Target is not set up: `.gitignore` does not ignore `.worktrees/`. Run `tick
 warning: This Target's `docs/agents/pipeline-conventions.md` was left by 0.4.0, and this Run is 0.5.2 — run `ticket-runner init` here to bring it up to date.
 ```
 
-준비 상태 확인보다 먼저 오는 거절이 하나 있습니다. 클라우드 Host에서, 또는 `ANTHROPIC_API_KEY`를 export하지 않고 [`--api-key`](./running.md#api-key)를 준 경우입니다.
+준비 상태 확인보다 먼저 오는 거절이 둘 있습니다.
+
+- 클라우드 Host에서, 또는 `ANTHROPIC_API_KEY`를 export하지 않고 [`--api-key`](./running.md#api-key)를 준 경우.
+- **불러올 플러그인이 없는 경우.** Stage는 모두 `claude plugin list --json`이 알려 주는 `installPath`에서 `mattpocock-skills`를 불러옵니다. 그래서 이 목록에 `installPath`가 있는 `mattpocock-skills@…` 항목이 없으면 Run이 거절하고, 설치하는 명령 두 개를 알려 줍니다. `claude`를 아예 실행할 수 없으면 그렇다고 거절합니다.
 
 준비 상태 확인 다음에 거절이 두 가지 더 있습니다.
 
@@ -273,7 +276,7 @@ Target마다 먼저 `ticket-runner remove`를 실행하세요. 명령을 지운 
 ## 참고 자료 {#references}
 
 - [`src/init.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/init.ts), [`src/labels.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/labels.ts), [`src/conventions.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/conventions.ts), [`src/operator-skill.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/operator-skill.ts)
-- [`src/readiness.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/readiness.ts), [`src/start.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts), [`src/startup.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts), [`src/staleness.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/staleness.ts), [`.github/workflows/version-tag.yml`](https://github.com/jjongs2/ticket-runner/blob/main/.github/workflows/version-tag.yml)
+- [`src/readiness.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/readiness.ts), [`src/start.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts), [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts), [`src/startup.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts), [`src/staleness.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/staleness.ts), [`.github/workflows/version-tag.yml`](https://github.com/jjongs2/ticket-runner/blob/main/.github/workflows/version-tag.yml)
 - [`src/remove.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/remove.ts), [`src/command-line.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/command-line.ts), [`src/cli.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/cli.ts)
 - [`docs/templates/init-report.txt`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/init-report.txt), [`docs/templates/remove-report.txt`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/remove-report.txt)
 - [ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md), [ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md), [ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)

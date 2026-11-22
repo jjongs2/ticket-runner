@@ -60,16 +60,29 @@ adapter를 만드는 곳은 CLI 하나뿐입니다. `start.ts`부터 아래는 �
 claude --print <prompt> --output-format stream-json --verbose \
   --permission-prompts none --permission-mode … \
   --strict-mcp-config \
+  --setting-sources project,local \
+  --settings '{"claudeMdExcludes":["<home>/.claude/CLAUDE.md"]}' \
+  --plugin-dir <installPath of mattpocock-skills> \
   --disallowedTools CronCreate CronDelete RemoteTrigger PushNotification ScheduleWakeup Workflow \
   --model … --effort … --max-turns … [--json-schema …]
 ```
 
 - `--strict-mcp-config`로 세션에 MCP 서버를 하나도 주지 않습니다. Host 사용자 계정의 claude.ai connector도 빠집니다. `--disallowedTools`는 worktree와 세션 밖에서 일하는 도구를 막습니다.
+- 세션은 Host 사용자 자신의 scope에서 아무것도 불러오지 않습니다. Target 자체의 설정, 스킬, hook, `CLAUDE.md`와 CLI에 내장된 플러그인은 그대로 불러옵니다.
+
+  | 플래그 | 빼는 것 | 다시 불러오는 것 |
+  |---|---|---|
+  | `--setting-sources project,local` | Host 사용자의 설정과 hook, 응답 `language`, 스킬, `CLAUDE.md`, user scope에 설치된 모든 플러그인 | – |
+  | `claudeMdExcludes`를 담은 `--settings` | Host 사용자의 `CLAUDE.md`. Target을 그 사람의 홈 아래에 checkout했다면, CLI가 위쪽 디렉터리의 `.claude/CLAUDE.md`로 여전히 읽어 들임 | – |
+  | `--plugin-dir` | – | `mattpocock-skills`. Run이 lock을 잡기 전에 Host에서 `claude plugin list --json`이 알려 준 `installPath`에서 불러옴 |
+
+  Claude Code를 user 설정으로 구성하는 Host, 예컨대 `apiKeyHelper`나 `env`의 provider 변수를 쓰는 Host는 그 구성을 Run의 환경 변수로 export해야 합니다. 그 설정은 어느 Stage도 읽지 않습니다.
 - 자식의 환경을 이렇게 설정합니다.
 
   | 변수 | 값 | 이유 |
   |---|---|---|
   | `ANTHROPIC_API_KEY` | Run을 `--api-key`로 시작하지 않았으면 뺌 | `-p`에서는 키가 묻지도 않고 Claude 로그인보다 앞서니, 남은 키가 그대로 과금됨 |
+  | `CLAUDE_CODE_PLUGIN_DIRS` | 뺌 | Claude Code 세션에서 시작한 Run은 user 설정의 `env`에서 이 변수를 물려받고, 그대로 두면 Host 사용자의 플러그인을 불러옴 |
   | `TICKET_RUNNER_STAGE` | Stage 이름 | Stage 표시. Stage 안에서는 CLI가 거절하게 함 |
   | `TICKET_RUNNER_SESSION` | Stage 세션마다 다른 UUID | [`maxMinutes`의 kill](#smaller-adapters)이 찾는 session 표시 |
   | `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | `1` | Host 사용자의 memory는 Target이 아닌 그 사람의 프로젝트에 관한 것 |

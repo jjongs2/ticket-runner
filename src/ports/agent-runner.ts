@@ -59,6 +59,12 @@ export interface StageRequest {
   credential: Credential;
   /** Where the command line, stdout, stderr and transcript are written. */
   logDir: string;
+  /**
+   * Where {@link SKILLS_PLUGIN} is installed on the Host, as the Run's
+   * {@link AgentPreflight} found it. The session loads nothing else from the
+   * Host user's own scope, so this is how the plugin reaches it.
+   */
+  pluginDir: string;
   /** When set, the Stage is asked for structured output matching this schema. */
   jsonSchema?: unknown;
   /**
@@ -125,18 +131,20 @@ export interface StageResult {
 export const SKILLS_PLUGIN = "mattpocock-skills";
 
 /**
- * What `init` can find out about the agent side of a Target's machine without
- * starting a Stage. Both are reported to the human and neither is repaired:
- * installing a CLI and a plugin is the one part of setup only they can do.
+ * What `init` and a Run can find out about the agent side of a Target's machine
+ * without starting a Stage. `init` reports both to the human and a Run refuses
+ * to start without the plugin; neither is repaired: installing a CLI and a
+ * plugin is the one part of setup only they can do.
  */
 export interface AgentPreflight {
   /** Whether the agent CLI could be run at all. */
   runs: boolean;
   /**
-   * Whether {@link SKILLS_PLUGIN} is installed. False whenever the CLI could
-   * not be asked, since an answer nobody could get is not a yes.
+   * Where {@link SKILLS_PLUGIN} is installed, which a Stage loads it from.
+   * Absent where it is not installed, and whenever the CLI could not be asked,
+   * since an answer nobody could get is not a yes.
    */
-  plugin: boolean;
+  pluginDir?: string;
 }
 
 export interface AgentRunner {
@@ -144,7 +152,7 @@ export interface AgentRunner {
   /**
    * Ask the agent CLI about itself. Reports rather than throws: every way it
    * can go wrong — no binary, a CLI that cannot list its plugins — is a line
-   * in the `init` report and never an error that stops setup.
+   * in the `init` report or a Run's refusal, never an error.
    */
   preflight(): Promise<AgentPreflight>;
 }

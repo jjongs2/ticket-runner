@@ -60,16 +60,29 @@ The CLI is the only place that constructs adapters. Everything under `start.ts` 
 claude --print <prompt> --output-format stream-json --verbose \
   --permission-prompts none --permission-mode … \
   --strict-mcp-config \
+  --setting-sources project,local \
+  --settings '{"claudeMdExcludes":["<home>/.claude/CLAUDE.md"]}' \
+  --plugin-dir <installPath of mattpocock-skills> \
   --disallowedTools CronCreate CronDelete RemoteTrigger PushNotification ScheduleWakeup Workflow \
   --model … --effort … --max-turns … [--json-schema …]
 ```
 
 - `--strict-mcp-config` leaves the session no MCP server, the claude.ai connectors of the Host user's account included. `--disallowedTools` takes away the tools that act beyond the worktree and the session.
+- The session loads nothing from the Host user's own scope. The Target's own settings, skills, hooks and `CLAUDE.md` still load, and so do the CLI's built-in plugins.
+
+  | Flag | Leaves out | Loads back |
+  |---|---|---|
+  | `--setting-sources project,local` | The Host user's settings and hooks, their reply `language`, their skills, their `CLAUDE.md` and every plugin installed at user scope | – |
+  | `--settings` with `claudeMdExcludes` | The Host user's `CLAUDE.md`, which the CLI would still read as the `.claude/CLAUDE.md` above a Target checked out under their home | – |
+  | `--plugin-dir` | – | `mattpocock-skills`, from the `installPath` that `claude plugin list --json` gives on the Host before the Run takes its lock |
+
+  A Host that configures Claude Code through its user settings, such as an `apiKeyHelper` or provider variables in `env`, must export that configuration into the Run's environment instead: no Stage reads those settings.
 - It sets the child's environment:
 
   | Variable | Value | Why |
   |---|---|---|
   | `ANTHROPIC_API_KEY` | removed, unless the Run was started with `--api-key` | under `-p` a key outranks the Claude login without asking, so a stray one would be billed |
+  | `CLAUDE_CODE_PLUGIN_DIRS` | removed | a Run started from a Claude Code session inherits it from the user settings' `env`, and it would load the Host user's own plugins |
   | `TICKET_RUNNER_STAGE` | the Stage | the Stage mark, which makes the CLI refuse inside a Stage |
   | `TICKET_RUNNER_SESSION` | a UUID per Stage session | the session mark the [kill at `maxMinutes`](#smaller-adapters) looks for |
   | `CLAUDE_CODE_DISABLE_AUTO_MEMORY` | `1` | the Host user's memory is about their projects, not the Target |

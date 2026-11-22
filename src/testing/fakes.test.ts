@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StageName, StageRequest } from "../ports/agent-runner.js";
-import { FakeAgentRunner, FakeTracker, stageResult } from "./fakes.js";
+import { FAKE_PLUGIN_DIR, FakeAgentRunner, FakeTracker, stageResult } from "./fakes.js";
 import { settle } from "./settle.js";
 
 function request(stage: StageName): StageRequest {
@@ -14,6 +14,7 @@ function request(stage: StageName): StageRequest {
     maxMinutes: 5,
     permissionMode: "auto",
     credential: "subscription",
+    pluginDir: FAKE_PLUGIN_DIR,
     logDir: "/repo/.ticket-runner/logs",
   };
 }

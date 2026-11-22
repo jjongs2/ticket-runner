@@ -8,7 +8,7 @@ import { Landing } from "./landing.js";
 import { StandingNotes } from "./notes.js";
 import { lockHeldMessage, unreleasedLockMessage } from "./lock.js";
 import type { Pipeline, TicketOutcome } from "./orchestrator.js";
-import type { AgentRunner } from "./ports/agent-runner.js";
+import { type AgentPreflight, type AgentRunner, SKILLS_PLUGIN } from "./ports/agent-runner.js";
 import type { Tracker } from "./ports/tracker.js";
 import type { Workspace } from "./ports/workspace.js";
 import { readinessRefusal, unpushedRefusal } from "./readiness.js";
@@ -93,9 +93,9 @@ export interface StartOptions {
  * Start a Run, and answer with the exit code it earned.
  *
  * Every refusal comes before the lock: an `--api-key` the Host cannot honour,
- * a Target `init` has not set up, one whose remote lacks what `init` wrote,
- * one holding state files an earlier pipeline left in the checkout, and one
- * with nothing to gate a merge. None is a Run that went wrong, so none should
+ * a Host without the plugin the Stages drive, a Target `init` has not set up,
+ * one whose remote lacks what `init` wrote, one holding state files an earlier
+ * pipeline left in the checkout, and one with nothing to gate a merge. None is a Run that went wrong, so none should
  * leave a lock behind for the next one to reclaim.
  */
 export async function startRun(given: StartOptions): Promise<number> {
@@ -118,6 +118,15 @@ export async function startRun(given: StartOptions): Promise<number> {
     error(refusedCredential);
     return 2;
   }
+
+  // Asks nothing of the Target either: every Stage loads the plugin from where
+  // the Host keeps it, and nothing else from the Host user's own scope.
+  const preflight = await options.runner.preflight();
+  if (preflight.pluginDir === undefined) {
+    error(missingPluginMessage(preflight));
+    return 2;
+  }
+  const { pluginDir } = preflight;
 
   const notReady = await readinessRefusal({ repoRoot, labels: config.labels, tracker });
   if (notReady !== undefined) {
@@ -183,7 +192,7 @@ export async function startRun(given: StartOptions): Promise<number> {
   const stopping = new StopSignal();
   const deafen = listenForStop(stopping, options.signals);
   try {
-    return await execute(options, { credential, baseBranch, host }, log, stopping);
+    return await execute(options, { credential, pluginDir, baseBranch, host }, log, stopping);
   } finally {
     // The lock goes first: SIGTERM between the two is a kill again, and a kill
     // that leaves the lock behind costs the next Run a stale holder to reclaim,
@@ -204,9 +213,10 @@ async function execute(
   options: StartOptions,
   {
     credential,
+    pluginDir,
     baseBranch,
     host,
-  }: { credential: Credential; baseBranch: string; host: HostKind },
+  }: { credential: Credential; pluginDir: string; baseBranch: string; host: HostKind },
   write: (line: string) => void,
   stopping: StopSignal,
 ): Promise<number> {
@@ -262,6 +272,7 @@ async function execute(
     runId,
     version,
     credential,
+    pluginDir,
     billing: emptyBilling(),
     baseBranch,
     // Once per Run as well, and for the same reason: the Tickets of one Run
@@ -302,6 +313,23 @@ async function execute(
   const { outcomes, stop } = await processRun(pipeline, stopping, work.tickets);
   write(`\n${summary(outcomes, stop)}`);
   return exitCode(outcomes, work.tickets !== undefined);
+}
+
+/**
+ * Why a Run will not start on a Host whose preflight found no plugin to load,
+ * and what the human does about it. A `claude` that cannot be run at all is
+ * named as that, since installing the plugin would fail on it too.
+ */
+function missingPluginMessage(preflight: AgentPreflight): string {
+  if (!preflight.runs) {
+    return `\`claude\` could not be run: install the Claude Code CLI, then the \`${SKILLS_PLUGIN}\` plugin, and start again.`;
+  }
+  return (
+    `The \`${SKILLS_PLUGIN}\` plugin is not installed: \`claude plugin list --json\` lists no ` +
+    `\`${SKILLS_PLUGIN}@…\` entry with an \`installPath\`, and every Stage loads the plugin from ` +
+    "there. Install it with `claude plugin marketplace add anthropics/claude-plugins-official` " +
+    `and \`claude plugin install ${SKILLS_PLUGIN}@claude-plugins-official\`, and start again.`
+  );
 }
 
 /**

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { API_KEY_ENV_VAR, type Credential } from "../credential.js";
 import {
@@ -19,6 +20,8 @@ export interface ClaudeAgentRunnerOptions {
   run?: RunProcess;
   /** Whether a file is on the Host, asked of the Stage's shell. */
   exists?: (path: string) => boolean;
+  /** The Host user's home directory, whose `CLAUDE.md` no Stage reads. */
+  home?: string;
 }
 
 /**
@@ -49,6 +52,13 @@ const DISALLOWED_TOOLS = [
   "ScheduleWakeup",
   "Workflow",
 ];
+
+/**
+ * The variable that names plugin directories the CLI loads on top of the ones
+ * installed. A Run started from a Claude Code session inherits it from that
+ * session's settings, so a Stage would load the Host user's own plugins.
+ */
+const PLUGIN_DIRS_ENV_VAR = "CLAUDE_CODE_PLUGIN_DIRS";
 
 /**
  * How long one preflight question may take. Generous for a CLI printing its
@@ -115,28 +125,31 @@ export class ClaudeAgentRunner implements AgentRunner {
   private readonly binary: string;
   private readonly runProcess: RunProcess;
   private readonly exists: (path: string) => boolean;
+  private readonly home: string;
 
   constructor(options: ClaudeAgentRunnerOptions = {}) {
     this.binary = options.binary ?? "claude";
     this.runProcess = options.run ?? exec;
     this.exists = options.exists ?? existsSync;
+    this.home = options.home ?? homedir();
   }
 
   /**
-   * What `claude` says about itself: that it can be run at all, and that the
+   * What `claude` says about itself: that it can be run at all, and where the
    * plugin the Stages drive is installed.
    *
    * Every failure is an answer rather than an error — no binary, a CLI too old
-   * to list its plugins, a non-zero exit — because the whole point of asking is
-   * to put a line in the `init` report for the human who has to fix it.
+   * to list its plugins as JSON, a non-zero exit — because the whole point of
+   * asking is to tell the human who has to fix it, in the `init` report or in
+   * a Run's refusal.
    */
   async preflight(): Promise<AgentPreflight> {
     const version = await this.ask(["--version"]);
-    if (version?.exitCode !== 0) return { runs: false, plugin: false };
+    if (version?.exitCode !== 0) return { runs: false };
 
-    const plugins = await this.ask(["plugin", "list"]);
-    const listed = plugins?.exitCode === 0 && plugins.stdout.includes(SKILLS_PLUGIN);
-    return { runs: true, plugin: listed };
+    const plugins = await this.ask(["plugin", "list", "--json"]);
+    const pluginDir = plugins?.exitCode === 0 ? pluginInstallPath(plugins.stdout) : undefined;
+    return pluginDir === undefined ? { runs: true } : { runs: true, pluginDir };
   }
 
   /** One preflight question, or nothing when `claude` could not be started. */
@@ -160,7 +173,7 @@ export class ClaudeAgentRunner implements AgentRunner {
         cwd: request.cwd,
         timeoutMs: request.maxMinutes * 60_000,
         extraEnv: env,
-        ...(request.credential === "subscription" ? { unsetEnv: [API_KEY_ENV_VAR] } : {}),
+        unsetEnv: unsetEnv(request.credential),
         mark: session,
         onStdout: log.appendStdout,
         onStderr: log.appendStderr,
@@ -171,7 +184,7 @@ export class ClaudeAgentRunner implements AgentRunner {
   }
 
   async run(request: StageRequest): Promise<StageResult> {
-    const args = buildArgs(request);
+    const args = buildArgs(request, join(this.home, ".claude", "CLAUDE.md"));
     const session = { name: SESSION_ENV_VAR, value: randomUUID() };
     const env = this.stageEnv(request, session);
     const commandLine = quoteCommand(request.credential, env, this.binary, args);
@@ -277,7 +290,44 @@ async function spawnFailure(error: unknown): Promise<Execution> {
   return { exitCode: 1, stdout: "", stderr: message, output: message, timedOut: false };
 }
 
-function buildArgs(request: StageRequest): string[] {
+/**
+ * Where {@link SKILLS_PLUGIN} is installed, as `claude plugin list --json`
+ * gives it: the `installPath` of the entry whose `id` is the plugin's at some
+ * marketplace. Nothing for output that is not that list, or lists no such
+ * entry with a path.
+ */
+function pluginInstallPath(stdout: string): string | undefined {
+  let listed: unknown;
+  try {
+    listed = JSON.parse(stdout);
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(listed)) return undefined;
+  for (const entry of listed) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const { id, installPath: path } = entry as { id?: unknown; installPath?: unknown };
+    if (typeof id !== "string" || !id.startsWith(`${SKILLS_PLUGIN}@`)) continue;
+    if (typeof path === "string" && path !== "") return path;
+  }
+  return undefined;
+}
+
+/**
+ * What a Stage's environment drops from the Run's: the plugin directories
+ * always, and the Host's key unless the Stage is billed to it.
+ */
+function unsetEnv(credential: Credential): string[] {
+  return credential === "subscription"
+    ? [API_KEY_ENV_VAR, PLUGIN_DIRS_ENV_VAR]
+    : [PLUGIN_DIRS_ENV_VAR];
+}
+
+function buildArgs(
+  request: StageRequest,
+  /** The Host user's own `CLAUDE.md`, by its absolute path. */
+  userClaudeMd: string,
+): string[] {
   const args = [
     "--print",
     request.prompt,
@@ -292,6 +342,18 @@ function buildArgs(request: StageRequest): string[] {
     // Without `--mcp-config`, this leaves the session no MCP server at all,
     // the claude.ai connectors of the Host user's account included.
     "--strict-mcp-config",
+    // Nothing from the Host user's own scope: their settings, hooks, skills,
+    // `CLAUDE.md` and plugins are about their own projects, not the Target, and
+    // their reply language outranks what the prompt asks a Stage to write in.
+    "--setting-sources",
+    "project,local",
+    // The CLI also reads a `.claude/CLAUDE.md` in every directory above the
+    // worktree, which on a Target under the Host user's home is theirs again.
+    "--settings",
+    JSON.stringify({ claudeMdExcludes: [userClaudeMd] }),
+    // The one plugin from that scope a Stage needs, loaded back by its path.
+    "--plugin-dir",
+    request.pluginDir,
     "--disallowedTools",
     ...DISALLOWED_TOOLS,
     "--model",
@@ -594,10 +656,11 @@ function structuredOutputOf(result: ResultEvent): unknown {
  * Shell-quote the command so a human can paste it back into a terminal, with
  * the Stage's environment in front of it so the reproduction is exact.
  *
- * How the environment differed from the Host's leads it: a subscription Stage
- * ran without the Host's key, which `env -u` removes again, and an API-key
- * Stage ran on it, which is named and left for the shell to fill in. Its value
- * is never written: a hand-off may keep command files on the Target's remote.
+ * How the environment differed from the Host's leads it: `env -u` removes
+ * again what the Stage ran without, the plugin directories always and the
+ * Host's key on a subscription Stage, and an API-key Stage ran on that key,
+ * which is named and left for the shell to fill in. Its value is never
+ * written: a hand-off may keep command files on the Target's remote.
  */
 function quoteCommand(
   credential: Credential,
@@ -606,10 +669,9 @@ function quoteCommand(
   args: string[],
 ): string {
   const assignments = Object.entries(extraEnv).map(([name, value]) => `${name}=${value}`);
-  const differed =
-    credential === "subscription"
-      ? `env -u ${API_KEY_ENV_VAR}`
-      : `${API_KEY_ENV_VAR}="$${API_KEY_ENV_VAR}"`;
+  const removed = unsetEnv(credential).map((name) => `-u ${name}`);
+  const kept = credential === "api-key" ? [`${API_KEY_ENV_VAR}="$${API_KEY_ENV_VAR}"`] : [];
+  const differed = ["env", ...removed, ...kept].join(" ");
   const quoted = [...assignments, binary, ...args]
     .map((part) => (/^[\w./:=-]+$/.test(part) ? part : `'${part.replaceAll("'", `'\\''`)}'`))
     .join(" ");

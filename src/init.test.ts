@@ -523,7 +523,7 @@ describe("what init only reports", () => {
 
   it("fails both agent lines and exits 1 when claude cannot be run", async () => {
     readyToReport(repoRoot);
-    runner.preflightAnswer = { runs: false, plugin: false };
+    runner.preflightAnswer = { runs: false };
 
     const { code, out } = await init();
 
@@ -534,7 +534,7 @@ describe("what init only reports", () => {
 
   it("fails the plugin line and exits 1 when only the plugin is missing", async () => {
     readyToReport(repoRoot);
-    runner.preflightAnswer = { runs: true, plugin: false };
+    runner.preflightAnswer = { runs: true };
 
     const { code, out } = await init();
 

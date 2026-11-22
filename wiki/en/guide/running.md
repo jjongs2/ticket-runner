@@ -215,7 +215,7 @@ Everything a Stage did goes to disk, under the Target's gitignored `.ticket-runn
 | Path under `.ticket-runner/runs/<runId>/` | Holds |
 |---|---|
 | `version.txt` | The version that ran, written before the first Stage |
-| `<n>/<stage>.command` | The exact command line, environment included, to rerun the Stage by hand: `env -u ANTHROPIC_API_KEY …` for a Stage run without the key, `ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" …` for one run on it, never its value |
+| `<n>/<stage>.command` | The exact command line, environment included, to rerun the Stage by hand: `env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_PLUGIN_DIRS …` for a Stage run without the key, `env -u CLAUDE_CODE_PLUGIN_DIRS ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" …` for one run on it, never its value |
 | `<n>/<stage>.stdout`, `<n>/<stage>.stderr` | Output as the Stage printed it, appended live |
 | `<n>/<stage>.transcript.jsonl` | The session's stream-json events |
 | `<n>/retry/` | The fix Stage and the pass it bought, so the failing pass's files survive beside them |

@@ -22,7 +22,7 @@ A Run works unattended, so anything missing has to be caught before it starts, n
 | Node 22 or newer | The package's `engines` field | npm, at install |
 | `git` | Every Ticket gets its own worktree and branch | – |
 | [`gh`](https://cli.github.com/), authenticated for the Target | Every GitHub call goes through `gh api` | `init` reports it; `run` refuses a Host without `gh` |
-| `claude`, with the `mattpocock-skills` plugin, version 1.3.0 or later | Each Stage is a `claude -p` session, the implement Stage drives the plugin's skills, and the implement and fix Stages write the pull request body with its `pr` skill, which 1.3.0 added ([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)) | `init` reports both, the plugin by name only |
+| `claude`, with the `mattpocock-skills` plugin, version 1.3.0 or later | Each Stage is a `claude -p` session, the implement Stage drives the plugin's skills, and the implement and fix Stages write the pull request body with its `pr` skill, which 1.3.0 added ([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)) | `init` reports both; `run` refuses a Host where `claude plugin list --json` gives the plugin no `installPath`. Neither checks its version |
 | `claude` logged in with your Claude plan | A Stage runs on that login and never sees the `ANTHROPIC_API_KEY` your shell exports, unless the Run is started with [`--api-key`](./running.md#api-key) | – |
 | A GitHub repository with Tickets planned for it | The board is where Tickets come from; see [Planning](./planning.md) | – |
 | `/setup-matt-pocock-skills`, run once in the repository with GitHub Issues as the tracker | The planning skills file Specs and Tickets as GitHub issues because of it. It asks before it writes `docs/agents/issue-tracker.md` and an `## Agent skills` block in `CLAUDE.md`, which show it ran | – |
@@ -183,7 +183,10 @@ Readiness asks for presence and the version mark, never content. A conventions d
 warning: This Target's `docs/agents/pipeline-conventions.md` was left by 0.4.0, and this Run is 0.5.2 — run `ticket-runner init` here to bring it up to date.
 ```
 
-One refusal comes before readiness: [`--api-key`](./running.md#api-key) on a cloud Host, or with no `ANTHROPIC_API_KEY` exported.
+Two refusals come before readiness:
+
+- [`--api-key`](./running.md#api-key) on a cloud Host, or with no `ANTHROPIC_API_KEY` exported.
+- **No plugin to load.** Every Stage loads `mattpocock-skills` from the `installPath` that `claude plugin list --json` gives it, so a Run refuses when that lists no `mattpocock-skills@…` entry with one, and names the two commands that install it. A `claude` that cannot be run at all is refused as that.
 
 Two more come after it:
 
@@ -273,7 +276,7 @@ Run `ticket-runner remove` in each Target first; the uninstalled command cannot 
 ## References
 
 - [`src/init.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/init.ts), [`src/labels.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/labels.ts), [`src/conventions.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/conventions.ts), [`src/operator-skill.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/operator-skill.ts)
-- [`src/readiness.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/readiness.ts), [`src/start.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts), [`src/startup.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts), [`src/staleness.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/staleness.ts), [`.github/workflows/version-tag.yml`](https://github.com/jjongs2/ticket-runner/blob/main/.github/workflows/version-tag.yml)
+- [`src/readiness.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/readiness.ts), [`src/start.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts), [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts), [`src/startup.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts), [`src/staleness.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/staleness.ts), [`.github/workflows/version-tag.yml`](https://github.com/jjongs2/ticket-runner/blob/main/.github/workflows/version-tag.yml)
 - [`src/remove.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/remove.ts), [`src/command-line.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/command-line.ts), [`src/cli.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/cli.ts)
 - [`docs/templates/init-report.txt`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/init-report.txt), [`docs/templates/remove-report.txt`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/remove-report.txt)
 - [ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md), [ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md), [ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)

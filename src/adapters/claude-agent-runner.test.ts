@@ -43,6 +43,7 @@ function runner(
 ) {
   return new ClaudeAgentRunner({
     exists,
+    home: HOME,
     run: async (command, args, options) => {
       calls.push({ command, args, options });
       const recorded = typeof result === "function" ? result(args) : result;
@@ -53,6 +54,12 @@ function runner(
     },
   });
 }
+
+/** Where the Host keeps the plugin, as its preflight found it. */
+const PLUGIN_DIR = "/home/host/.claude/plugins/cache/claude-plugins-official/mattpocock-skills/1.3.1";
+
+/** The Host user's home directory, whose own `CLAUDE.md` no Stage reads. */
+const HOME = "/home/host";
 
 function request(overrides: Partial<StageRequest> = {}): StageRequest {
   return {
@@ -66,6 +73,7 @@ function request(overrides: Partial<StageRequest> = {}): StageRequest {
     permissionMode: "auto",
     credential: "subscription",
     logDir,
+    pluginDir: PLUGIN_DIR,
     ...overrides,
   };
 }
@@ -77,31 +85,64 @@ beforeEach(() => {
 
 describe("the preflight", () => {
   const VERSION = "2.0.31 (Claude Code)\n";
-  const PLUGINS = "mattpocock-skills@1.2.3 (enabled)\nother-plugin@0.1.0 (enabled)\n";
+  /** What `claude plugin list --json` prints, in the shape CLI 2.1.330 gives it. */
+  const PLUGINS = JSON.stringify([
+    {
+      id: "other-plugin@somewhere",
+      version: "0.1.0",
+      scope: "user",
+      enabled: true,
+      installPath: "/home/host/.claude/plugins/cache/somewhere/other-plugin/0.1.0",
+    },
+    {
+      id: "mattpocock-skills@claude-plugins-official",
+      version: "1.3.1",
+      scope: "user",
+      enabled: true,
+      installPath: PLUGIN_DIR,
+    },
+  ]);
 
   /** A runner that answers each preflight question with its own output. */
   function asked(version: Execution, plugins: Execution) {
     return runner((args) => (args[0] === "--version" ? version : plugins));
   }
 
-  it("asks claude for its version and then for its plugins", async () => {
+  it("asks claude for its version and then for its plugins as JSON", async () => {
     const preflight = await asked(
       execution({ stdout: VERSION }),
       execution({ stdout: PLUGINS }),
     ).preflight();
 
-    expect(calls.map((call) => call.args)).toEqual([["--version"], ["plugin", "list"]]);
+    expect(calls.map((call) => call.args)).toEqual([["--version"], ["plugin", "list", "--json"]]);
     expect(calls[0]?.command).toBe("claude");
-    expect(preflight).toEqual({ runs: true, plugin: true });
+    expect(preflight).toEqual({ runs: true, pluginDir: PLUGIN_DIR });
   });
 
-  it("reports the plugin as missing when claude lists other plugins", async () => {
+  it("takes the plugin from whichever marketplace installed it", async () => {
+    const plugins = JSON.stringify([{ id: "mattpocock-skills@a-mirror", installPath: "/opt/skills" }]);
+
     const preflight = await asked(
       execution({ stdout: VERSION }),
-      execution({ stdout: "other-plugin@0.1.0 (enabled)\n" }),
+      execution({ stdout: plugins }),
     ).preflight();
 
-    expect(preflight).toEqual({ runs: true, plugin: false });
+    expect(preflight).toEqual({ runs: true, pluginDir: "/opt/skills" });
+  });
+
+  it.each([
+    ["lists other plugins", JSON.stringify([{ id: "other-plugin@x", installPath: "/opt/other" }])],
+    ["lists the plugin without an install path", JSON.stringify([{ id: "mattpocock-skills@x" }])],
+    ["lists a plugin whose name only starts with it", JSON.stringify([{ id: "mattpocock-skills-fork@x", installPath: "/opt/fork" }])],
+    ["prints the plain list, not JSON", "mattpocock-skills@1.2.3 (enabled)\n"],
+    ["prints JSON that is no list", JSON.stringify({ id: "mattpocock-skills@x", installPath: "/opt/skills" })],
+  ])("reports the plugin as missing when claude %s", async (_, plugins) => {
+    const preflight = await asked(
+      execution({ stdout: VERSION }),
+      execution({ stdout: plugins }),
+    ).preflight();
+
+    expect(preflight).toEqual({ runs: true });
   });
 
   it("reports the plugin as missing when claude cannot list its plugins", async () => {
@@ -110,7 +151,7 @@ describe("the preflight", () => {
       failedExecution("unknown command `plugin`"),
     ).preflight();
 
-    expect(preflight).toEqual({ runs: true, plugin: false });
+    expect(preflight).toEqual({ runs: true });
   });
 
   it("asks nothing further when claude cannot be run at all", async () => {
@@ -121,7 +162,7 @@ describe("the preflight", () => {
       },
     });
 
-    expect(await missing.preflight()).toEqual({ runs: false, plugin: false });
+    expect(await missing.preflight()).toEqual({ runs: false });
     expect(calls.map((call) => call.args)).toEqual([["--version"]]);
   });
 
@@ -131,7 +172,7 @@ describe("the preflight", () => {
       execution({ stdout: PLUGINS }),
     ).preflight();
 
-    expect(preflight).toEqual({ runs: false, plugin: false });
+    expect(preflight).toEqual({ runs: false });
   });
 });
 
@@ -207,6 +248,34 @@ describe("the command line", () => {
     expect(calls[0]?.args).not.toContain("--mcp-config");
   });
 
+  it("loads nothing from the Host user's own scope but the plugin, by its install path", async () => {
+    await runner(execution({ stdout: SUCCESS })).run(request());
+    const args = calls[0]?.args ?? [];
+    const after = (flag: string) => args[args.indexOf(flag) + 1];
+
+    expect(after("--setting-sources")).toBe("project,local");
+    expect(JSON.parse(after("--settings") ?? "")).toEqual({
+      claudeMdExcludes: ["/home/host/.claude/CLAUDE.md"],
+    });
+    expect(after("--plugin-dir")).toBe(PLUGIN_DIR);
+  });
+
+  it("starts every Stage without the plugin directories the Run inherited", async () => {
+    vi.stubEnv("CLAUDE_CODE_PLUGIN_DIRS", "/home/host/plugins/own");
+    try {
+      for (const credential of ["subscription", "api-key"] as const) {
+        await runner(execution({ stdout: SUCCESS })).run(request({ credential }));
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
+
+    for (const call of calls) {
+      expect(call.options.unsetEnv).toContain("CLAUDE_CODE_PLUGIN_DIRS");
+      expect(call.options.extraEnv).not.toHaveProperty("CLAUDE_CODE_PLUGIN_DIRS");
+    }
+  });
+
   it("denies the tools that act beyond the worktree and the session", async () => {
     await runner(execution({ stdout: SUCCESS })).run(request());
 
@@ -257,9 +326,12 @@ describe("the command line", () => {
     const result = await runner(execution({ stdout: SUCCESS })).run(request());
 
     expect(result.commandLine).toMatch(
-      /^env -u ANTHROPIC_API_KEY TICKET_RUNNER_STAGE=implement TICKET_RUNNER_SESSION=[0-9a-f-]{36} CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 CLAUDE_CODE_SHELL=\/bin\/bash claude --print/,
+      /^env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_PLUGIN_DIRS TICKET_RUNNER_STAGE=implement TICKET_RUNNER_SESSION=[0-9a-f-]{36} CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 CLAUDE_CODE_SHELL=\/bin\/bash claude --print/,
     );
     expect(result.commandLine).toContain("'/mattpocock-skills:implement https://example.com/issues/2'");
+    expect(result.commandLine).toContain(
+      ` --setting-sources 'project,local' --settings '{"claudeMdExcludes":["/home/host/.claude/CLAUDE.md"]}' --plugin-dir ${PLUGIN_DIR} `,
+    );
   });
 });
 
@@ -279,7 +351,7 @@ describe("what a Stage is billed to", () => {
   it("starts a subscription Stage without the Host's key, and with its auth token", async () => {
     await runner(execution({ stdout: SUCCESS })).run(request({ credential: "subscription" }));
 
-    expect(calls[0]?.options.unsetEnv).toEqual(["ANTHROPIC_API_KEY"]);
+    expect(calls[0]?.options.unsetEnv).toEqual(["ANTHROPIC_API_KEY", "CLAUDE_CODE_PLUGIN_DIRS"]);
     expect(calls[0]?.options.extraEnv).not.toHaveProperty("ANTHROPIC_API_KEY");
     expect(calls[0]?.options.unsetEnv).not.toContain("ANTHROPIC_AUTH_TOKEN");
     expect(calls[0]?.options.extraEnv).not.toHaveProperty("ANTHROPIC_AUTH_TOKEN");
@@ -288,7 +360,7 @@ describe("what a Stage is billed to", () => {
   it("starts an API-key Stage on the Host's key, which it inherits rather than is handed", async () => {
     await runner(execution({ stdout: SUCCESS })).run(request({ credential: "api-key" }));
 
-    expect(calls[0]?.options.unsetEnv ?? []).toEqual([]);
+    expect(calls[0]?.options.unsetEnv).not.toContain("ANTHROPIC_API_KEY");
     expect(calls[0]?.options.extraEnv).not.toHaveProperty("ANTHROPIC_API_KEY");
   });
 
@@ -296,7 +368,7 @@ describe("what a Stage is billed to", () => {
     await runner(execution({ stdout: SUCCESS })).run(request({ credential: "subscription" }));
 
     const command = readFileSync(stageFile("command"), "utf8");
-    expect(command).toMatch(/^env -u ANTHROPIC_API_KEY TICKET_RUNNER_STAGE=implement /);
+    expect(command).toMatch(/^env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_PLUGIN_DIRS TICKET_RUNNER_STAGE=implement /);
     expect(command).not.toContain(KEY);
   });
 
@@ -306,7 +378,9 @@ describe("what a Stage is billed to", () => {
     );
 
     const command = readFileSync(stageFile("command"), "utf8");
-    expect(command).toMatch(/^ANTHROPIC_API_KEY="\$ANTHROPIC_API_KEY" TICKET_RUNNER_STAGE=implement /);
+    expect(command).toMatch(
+      /^env -u CLAUDE_CODE_PLUGIN_DIRS ANTHROPIC_API_KEY="\$ANTHROPIC_API_KEY" TICKET_RUNNER_STAGE=implement /,
+    );
     expect(result.commandLine).toBe(command.trimEnd());
     for (const file of readdirSync(logDir)) {
       expect(readFileSync(join(logDir, file), "utf8")).not.toContain(KEY);
