@@ -364,7 +364,7 @@ function reportedItems(
     ghReported(authentication),
     report(preflight.runs, "`claude` runs", "`claude` could not be run — install the Claude Code CLI"),
     report(
-      preflight.plugin,
+      preflight.pluginDir !== undefined,
       `the \`${SKILLS_PLUGIN}\` plugin is installed`,
       `the \`${SKILLS_PLUGIN}\` plugin is not installed — an implement Stage has no skill without it`,
     ),

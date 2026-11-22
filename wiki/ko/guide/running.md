@@ -215,7 +215,7 @@ Stage가 한 일은 모두 Target의 gitignore된 `.ticket-runner/` 아래 디�
 | `.ticket-runner/runs/<runId>/` 아래 경로 | 담는 것 |
 |---|---|
 | `version.txt` | 돌린 버전. 첫 Stage 전에 씀 |
-| `<n>/<stage>.command` | 환경 변수까지 포함한 정확한 명령줄. 그대로 붙여 넣으면 Stage를 다시 돌릴 수 있음. 키 없이 실행한 Stage는 `env -u ANTHROPIC_API_KEY …`, 키로 실행한 Stage는 `ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" …`로 시작하고, 키 값은 적지 않음 |
+| `<n>/<stage>.command` | 환경 변수까지 포함한 정확한 명령줄. 그대로 붙여 넣으면 Stage를 다시 돌릴 수 있음. 키 없이 실행한 Stage는 `env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_PLUGIN_DIRS …`, 키로 실행한 Stage는 `env -u CLAUDE_CODE_PLUGIN_DIRS ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" …`로 시작하고, 키 값은 적지 않음 |
 | `<n>/<stage>.stdout`, `<n>/<stage>.stderr` | Stage가 출력하는 대로 실시간으로 덧붙인 출력 |
 | `<n>/<stage>.transcript.jsonl` | 세션의 stream-json 이벤트 |
 | `<n>/retry/` | fix Stage와, 그 덕에 한 번 더 도는 시도. 실패한 시도의 파일은 옆에 그대로 남음 |

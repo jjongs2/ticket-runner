@@ -16,7 +16,13 @@ import { HANDOFF_MARKER, HANDOFF_TAKEN_LINE, handoffComment } from "./templates.
 import type { Pipeline, TicketOutcome } from "./orchestrator.js";
 import type { StageName } from "./ports/agent-runner.js";
 import type { TicketState } from "./ports/workspace.js";
-import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./testing/fakes.js";
+import {
+  FAKE_PLUGIN_DIR,
+  FakeAgentRunner,
+  FakeTracker,
+  FakeWorkspace,
+  stageResult,
+} from "./testing/fakes.js";
 import { settle } from "./testing/settle.js";
 import type { TranscriptHome } from "./transcript-home.js";
 
@@ -226,6 +232,7 @@ async function run(
       runId,
       version: VERSION,
       credential,
+      pluginDir: FAKE_PLUGIN_DIR,
       billing,
       baseBranch: await resolveBaseBranch(tracker, settings),
       landing: new Landing(),
@@ -3040,6 +3047,7 @@ describe("a Check the base branch fails too", () => {
         runId: "run-1",
         version: VERSION,
         credential: "subscription",
+        pluginDir: FAKE_PLUGIN_DIR,
         billing: emptyBilling(),
         baseBranch: "main",
         landing,
@@ -3081,6 +3089,7 @@ describe("Tickets in several Lanes failing against one merge-base", () => {
       runId: "run-1",
       version: VERSION,
       credential: "subscription",
+      pluginDir: FAKE_PLUGIN_DIR,
       billing: emptyBilling(),
       baseBranch: "main",
       landing: new Landing(),
@@ -4245,6 +4254,7 @@ describe("releasing a Ticket GitHub or the remote failed on its own side", () =>
         runId: "run-1",
         version: VERSION,
         credential: "subscription",
+        pluginDir: FAKE_PLUGIN_DIR,
         billing,
         baseBranch: "main",
         landing: new Landing(),
@@ -5351,6 +5361,7 @@ describe("a Target that merges by hand", () => {
       runId: "run-1",
       version: VERSION,
       credential: "subscription",
+      pluginDir: FAKE_PLUGIN_DIR,
       billing,
       baseBranch: await resolveBaseBranch(tracker, settings),
       landing: new Landing(),
@@ -5851,6 +5862,7 @@ describe("the Landing", () => {
       runId: "run-1",
       version: VERSION,
       credential: "subscription",
+      pluginDir: FAKE_PLUGIN_DIR,
       billing: emptyBilling(),
       baseBranch: await resolveBaseBranch(tracker, settings),
       landing: new Landing(),

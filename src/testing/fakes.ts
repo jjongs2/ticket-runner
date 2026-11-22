@@ -411,11 +411,14 @@ export class FakeTracker implements Tracker {
   }
 }
 
+/** Where the fake Host keeps the plugin, as its preflight answers by default. */
+export const FAKE_PLUGIN_DIR = "/home/host/.claude/plugins/cache/official/mattpocock-skills/1.3.1";
+
 export class FakeAgentRunner implements AgentRunner {
   requests: StageRequest[] = [];
   /** What the preflight answers; a Target with everything installed by default. */
-  preflightAnswer: AgentPreflight = { runs: true, plugin: true };
-  /** How many times `init` asked, so a test can say it asked once. */
+  preflightAnswer: AgentPreflight = { runs: true, pluginDir: FAKE_PLUGIN_DIR };
+  /** How many times `init` or a Run asked, so a test can say how often. */
   preflights = 0;
   /** Queued results per Stage; the last one is reused once the queue drains. */
   private queued = new Map<StageName, StageResult[]>();

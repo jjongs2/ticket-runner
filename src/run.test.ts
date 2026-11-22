@@ -11,7 +11,13 @@ import type { TicketState } from "./ports/workspace.js";
 import { type RunResult, processRun } from "./run.js";
 import { StopSignal } from "./stop.js";
 import { FakeClock } from "./testing/clock.js";
-import { FakeAgentRunner, FakeTracker, FakeWorkspace, stageResult } from "./testing/fakes.js";
+import {
+  FAKE_PLUGIN_DIR,
+  FakeAgentRunner,
+  FakeTracker,
+  FakeWorkspace,
+  stageResult,
+} from "./testing/fakes.js";
 import { settle } from "./testing/settle.js";
 
 function config(): Config {
@@ -101,6 +107,7 @@ function pipeline(lanes = 1, credential: Credential = "subscription"): Pipeline 
     runId: "run-1",
     version: VERSION,
     credential,
+    pluginDir: FAKE_PLUGIN_DIR,
     billing: emptyBilling(),
     baseBranch: "main",
     landing: new Landing(),

@@ -722,6 +722,63 @@ describe("what a Run's Stages are billed to", () => {
   });
 });
 
+describe("the plugin the Stages drive", () => {
+  it("refuses a Host that lists no install path for it, naming it and its install, before the lock", async () => {
+    tracker.addIssue({ number: 4 });
+    runner.preflightAnswer = { runs: true };
+
+    const { code, err } = await start();
+
+    expect(code).toBe(2);
+    expect(err).toBe(
+      "The `mattpocock-skills` plugin is not installed: `claude plugin list --json` lists no `mattpocock-skills@…` entry with an `installPath`, and every Stage loads the plugin from there. Install it with `claude plugin marketplace add anthropics/claude-plugins-official` and `claude plugin install mattpocock-skills@claude-plugins-official`, and start again.",
+    );
+    expect(lockTaken()).toBe(false);
+    expect(runner.requests).toEqual([]);
+    expect(tracker.calls).toEqual([]);
+  });
+
+  it("refuses a narrowed Run on that Host too", async () => {
+    tracker.addIssue({ number: 4 });
+    runner.preflightAnswer = { runs: true };
+
+    const { code, err } = await start({ command: "run", tickets: [4] });
+
+    expect(code).toBe(2);
+    expect(err).toContain("The `mattpocock-skills` plugin is not installed");
+    expect(lockTaken()).toBe(false);
+    expect(runner.requests).toEqual([]);
+  });
+
+  it("names a `claude` that cannot be run as that, before the lock", async () => {
+    tracker.addIssue({ number: 4 });
+    runner.preflightAnswer = { runs: false };
+
+    const { code, err } = await start();
+
+    expect(code).toBe(2);
+    expect(err).toBe(
+      "`claude` could not be run: install the Claude Code CLI, then the `mattpocock-skills` plugin, and start again.",
+    );
+    expect(lockTaken()).toBe(false);
+    expect(runner.requests).toEqual([]);
+  });
+
+  it("asks once per Run, and hands every Stage the install path it found", async () => {
+    tracker.addIssue({ number: 4 });
+    runner.preflightAnswer = { runs: true, pluginDir: "/opt/plugins/mattpocock-skills" };
+
+    const { code } = await start();
+
+    expect(code).toBe(0);
+    expect(runner.preflights).toBe(1);
+    expect(runner.requests.map((request) => request.pluginDir)).toEqual([
+      "/opt/plugins/mattpocock-skills",
+      "/opt/plugins/mattpocock-skills",
+    ]);
+  });
+});
+
 describe("the Run lock", () => {
   const holder = {
     host: THIS_HOST,
