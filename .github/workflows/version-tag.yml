@@ -10,6 +10,12 @@ permissions:
   # publish, so no npm token is stored or read anywhere.
   id-token: write
 
+# One run at a time: two pushes in quick succession would otherwise both find
+# the tag missing, and the later push's run could tag its own commit instead.
+concurrency:
+  group: version-tag
+  cancel-in-progress: false
+
 jobs:
   version-tag:
     runs-on: ubuntu-latest
