@@ -183,7 +183,10 @@ Readiness asks for presence and the version mark, never content. A conventions d
 warning: This Target's `docs/agents/pipeline-conventions.md` was left by 0.4.0, and this Run is 0.5.2 — run `ticket-runner init` here to bring it up to date.
 ```
 
-One refusal comes before readiness: [`--api-key`](./running.md#api-key) on a cloud Host, or with no `ANTHROPIC_API_KEY` exported.
+Two refusals come before readiness:
+
+- [`--api-key`](./running.md#api-key) on a cloud Host, or with no `ANTHROPIC_API_KEY` exported.
+- **No plugin to load.** Every Stage loads `mattpocock-skills` from the `installPath` that `claude plugin list --json` gives it, so a Run refuses when that lists no `mattpocock-skills@…` entry with one, and names the two commands that install it. A `claude` that cannot be run at all is refused as that.
 
 Two more come after it:
 

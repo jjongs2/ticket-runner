@@ -183,7 +183,10 @@ This Target is not set up: `.gitignore` does not ignore `.worktrees/`. Run `tick
 warning: This Target's `docs/agents/pipeline-conventions.md` was left by 0.4.0, and this Run is 0.5.2 — run `ticket-runner init` here to bring it up to date.
 ```
 
-준비 상태 확인보다 먼저 오는 거절이 하나 있습니다. 클라우드 Host에서, 또는 `ANTHROPIC_API_KEY`를 export하지 않고 [`--api-key`](./running.md#api-key)를 준 경우입니다.
+준비 상태 확인보다 먼저 오는 거절이 둘 있습니다.
+
+- 클라우드 Host에서, 또는 `ANTHROPIC_API_KEY`를 export하지 않고 [`--api-key`](./running.md#api-key)를 준 경우.
+- **불러올 플러그인이 없는 경우.** Stage는 모두 `claude plugin list --json`이 알려 주는 `installPath`에서 `mattpocock-skills`를 불러옵니다. 그래서 이 목록에 `installPath`가 있는 `mattpocock-skills@…` 항목이 없으면 Run이 거절하고, 설치하는 명령 두 개를 알려 줍니다. `claude`를 아예 실행할 수 없으면 그렇다고 거절합니다.
 
 준비 상태 확인 다음에 거절이 두 가지 더 있습니다.
 

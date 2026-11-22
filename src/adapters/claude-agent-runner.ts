@@ -148,7 +148,7 @@ export class ClaudeAgentRunner implements AgentRunner {
     if (version?.exitCode !== 0) return { runs: false };
 
     const plugins = await this.ask(["plugin", "list", "--json"]);
-    const pluginDir = plugins?.exitCode === 0 ? installPath(plugins.stdout) : undefined;
+    const pluginDir = plugins?.exitCode === 0 ? pluginInstallPath(plugins.stdout) : undefined;
     return pluginDir === undefined ? { runs: true } : { runs: true, pluginDir };
   }
 
@@ -296,7 +296,7 @@ async function spawnFailure(error: unknown): Promise<Execution> {
  * marketplace. Nothing for output that is not that list, or lists no such
  * entry with a path.
  */
-function installPath(stdout: string): string | undefined {
+function pluginInstallPath(stdout: string): string | undefined {
   let listed: unknown;
   try {
     listed = JSON.parse(stdout);
