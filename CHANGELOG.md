@@ -4,6 +4,43 @@ One section per Version, newest first, written in the Version PR that cut it and
 published as the body of that Version's GitHub Release (ADR-0007). The shape is
 `docs/templates/version-notes.md`.
 
+## 0.6.7 (2026-11-22)
+
+A pull request with no checks merges instead of being handed off, and a Stage loads nothing from the Host user's scope but the plugin.
+
+### Stages
+
+- A Stage loads the Target's own settings and `mattpocock-skills`, nothing else of the Host user's ([#345])
+- Code Stages follow the Target's own title and commit rules, the scope optional ([#336])
+- A fix Stage keeps the pull request title unless its fix changes what it says ([#336])
+
+### Runs
+
+- A pull request with no checks merges, its ci row reading `⚠️ no checks` ([#343])
+- The wait for CI is skipped when no workflow can run on the pull request ([#343])
+- The `gates` config key is gone; `"checks": []` runs a Target with no Check command ([#343])
+- A Run refuses to start unless `mattpocock-skills` is installed with an install path ([#345])
+- In a terminal, the Ticket and pull request numbers a Run prints link to GitHub ([#342])
+- A green Ticket left to a human with every criterion met gets no hand-off comment ([#337])
+
+### Docs
+
+- The install page runs an unreleased commit from a clone, and no longer installs from GitHub's tags ([#339])
+
+### After upgrading
+
+1. In each Target's `ticket-runner.json`, delete `gates`, and write `"checks": []` where `gates.checks` was `false`: a Run refuses to start while `gates` is there. A `ciGraceMinutes` of `0` set only for want of CI can go too
+2. In a Target that needs CI before a merge, set required status checks on GitHub that bind the account the Run merges as: a pull request with no checks now merges. A workflow with a `paths` filter then filters inside its job
+3. On a Host that sets up Claude Code through its user settings (an `apiKeyHelper`, provider variables in `env`, hooks), export that setup into the Run's environment: a Stage no longer reads the user settings
+4. Run `ticket-runner init` in each Target, then commit and push what it writes: the conventions document now marks the scope of a commit subject optional
+
+[#336]: https://github.com/jjongs2/ticket-runner/pull/336
+[#337]: https://github.com/jjongs2/ticket-runner/pull/337
+[#339]: https://github.com/jjongs2/ticket-runner/pull/339
+[#342]: https://github.com/jjongs2/ticket-runner/pull/342
+[#343]: https://github.com/jjongs2/ticket-runner/pull/343
+[#345]: https://github.com/jjongs2/ticket-runner/pull/345
+
 ## 0.6.6 (2026-11-15)
 
 A Target can leave the merge to a human, a public Target's hand-off transcripts stay off its remote, and a Run releases a Ticket that GitHub or the remote failed.
