@@ -1,7 +1,7 @@
 /**
  * The version plumbing of this repository, as its two workflows call it.
  *
- * `.github/workflows/version-pr.yml` runs `check` on every pull request and
+ * `.github/workflows/ci.yml` runs `check` on every pull request and
  * `.github/workflows/version-tag.yml` runs `notes` on the push that cuts a
  * version. All this does is read — two package files, the tags, the changelog
  * — and hand what it read to the pure functions in `src/version-pr.ts`, which
