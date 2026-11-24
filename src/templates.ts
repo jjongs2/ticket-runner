@@ -777,9 +777,9 @@ export interface RunSummary {
 /**
  * What a Release is put down to, in the words the Run summary, the log and
  * the progress comment share: the rate limit, a transient API failure, an API
- * key out of credit or past its spend limit, a base branch that fails the
- * Check the Ticket's branch failed, or GitHub or the git remote failing on its
- * own side.
+ * key out of credit or past its spend limit, a base branch that fails a Check
+ * at the merge-base when CI on the Ticket's pull request goes red, or GitHub or
+ * the git remote failing on its own side.
  */
 export const RELEASE_WORDS: Record<ReleaseCause, string> = {
   "rate-limited": "rate limit",

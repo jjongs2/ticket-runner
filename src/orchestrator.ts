@@ -269,8 +269,9 @@ class LeftToHuman extends TicketFailure {
  * What stops a Ticket that says nothing about it: the rate limit, a transient
  * API failure — the API overloaded, broken or silent on its own side after the
  * CLI had already retried it — the API key of an `--api-key` Run out of credit
- * or past its workspace's spend limit, a base branch that fails the Check the
- * Ticket's branch failed, and GitHub or the git remote failing on its own side
+ * or past its workspace's spend limit, a base branch that fails a Check at the
+ * merge-base when CI on the Ticket's pull request goes red, and GitHub or the
+ * git remote failing on its own side
  * ({@link OutsideFault}).
  */
 export type ReleaseCause = StageReleaseCause | "failing-base" | FaultSide;

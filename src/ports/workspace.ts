@@ -21,7 +21,7 @@ import type { WorkflowFile } from "../workflows.js";
 /**
  * How one Check command ended. A failed Check says whether the wall-clock limit
  * killed it, because that is the difference between a Check that hung and one
- * that failed, and a fix Stage is told which it is mending.
+ * that failed, and the Note about a failing base branch says which it was.
  */
 export type CheckOutcome =
   /** stdout and stderr combined, as a human would see them in a terminal. */
