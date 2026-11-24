@@ -374,7 +374,8 @@ A `- [ ]` at the head of a line in a Note is escaped, so a Note is never read as
 
 ## References
 
-- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `processTicket`, `takeTicket`, `verify`, `fix`, `resolveConflict`, `requireGreenCi`
+- [`src/branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/branch.ts)
+- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `processTicket`, `takeTicket`, `nameBranch`, `verify`, `fix`, `resolveConflict`, `requireGreenCi`
 - [`src/workflows.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/workflows.ts): whether any workflow can run on a pull request
 - [`src/failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts): the Checks run at a merge-base, once per Run
 - [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts), [`src/frontier.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts), [`src/landing.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/landing.ts)

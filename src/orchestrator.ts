@@ -1046,7 +1046,7 @@ class ResumeRecord {
    * Host never renamed leaves that Host's next Run a branch in the way, which
    * hands the Ticket to a human with the worktree it is in.
    */
-  async name(branch: string): Promise<void> {
+  async recordBranch(branch: string): Promise<void> {
     const before = this.reached.branch;
     this.reached.branch = branch;
     try {
@@ -1450,7 +1450,7 @@ async function implement(
 
   const named = await nameBranch(pipeline, issue.number, worktree, branch, result, record);
   await pushCommitted(pipeline, issue.number, worktree, named);
-  progress.renameBranch(named);
+  progress.followBranch(named);
   await progress.record(stageRow("implement", result, "✅ committed"));
   pipeline.log?.(`#${issue.number} implemented · ${named}`);
   return named;
@@ -1501,7 +1501,7 @@ async function nameBranch(
   }
 
   try {
-    await record.name(named);
+    await record.recordBranch(named);
   } catch (error) {
     return keep(`the state file could not record ${named}: ${(error as Error).message}`);
   }

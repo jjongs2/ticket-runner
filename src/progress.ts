@@ -229,7 +229,7 @@ export class Progress {
    * Name the branch the implement Stage named, before the row that reports it:
    * every write from here on names the branch the work is on.
    */
-  renameBranch(branch: string): void {
+  followBranch(branch: string): void {
     this.options = { ...this.options, branch };
   }
 

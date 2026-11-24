@@ -853,12 +853,12 @@ export function runSummary({
       ...ticketRows(outcome, credential, paint),
       ...billing.strays
         .filter((stray) => stray.ticket === outcome.ticket)
-        .map((stray) => painted(billedRow(stray), paint)),
+        .map((stray) => printedRow(billedRow(stray), paint)),
     ]),
     // Only a Run that reached the end of the Frontier can name what was held
     // back all Run, so only that stop carries candidates to skip.
     ...(stop.reason === "frontier"
-      ? stop.blocked.map((ticket) => painted(row("skipped", ticket, "blocked"), paint))
+      ? stop.blocked.map((ticket) => printedRow(row("skipped", ticket, "blocked"), paint))
       : []),
   ];
 
@@ -971,7 +971,7 @@ function holding(busy: number[]): string {
  */
 function ticketRows(outcome: TicketOutcome, credential: Credential, paint: Paint): string[] {
   return [
-    painted(ticketRow(outcome, credential), paint),
+    printedRow(ticketRow(outcome, credential), paint),
     ...(outcome.outcome === "skipped" ? [] : outcome.notes.map((note) => noteRow(note, paint))),
   ];
 }
@@ -1010,9 +1010,9 @@ function noteRow({ origin, stage, issue, opened, summary }: RoutedNote, paint: P
   const kept = truncate(text, NOTE_WIDTH);
   const noted = row("noted", issue, `${destination} · from #${origin} ${stage} · ${kept}`);
   const cut = cutNumber(text, kept);
-  if (cut === "") return painted(noted, paint);
+  if (cut === "") return printedRow(noted, paint);
   const shown = { ...noted, rest: noted.rest.slice(0, noted.rest.length - cut.length - 1) };
-  return `${painted(shown, paint)}${cut}\u2026`;
+  return `${printedRow(shown, paint)}${cut}\u2026`;
 }
 
 /** What a `handed` row says of a hand-off a fault outside the Ticket cut short. */
@@ -1064,6 +1064,6 @@ function row(verb: string, ticket: number, detail: string): Row {
 }
 
 /** `  <verb>` padded to its column, then the rest, each through `paint`. */
-function painted({ verb, rest }: Row, paint: Paint): string {
+function printedRow({ verb, rest }: Row, paint: Paint): string {
   return `  ${paint(verb, VERB_COLOURS[verb])}${" ".repeat(VERB_WIDTH - verb.length)}${paint(rest)}`;
 }

@@ -374,7 +374,8 @@ Note 안의 줄 머리 `- [ ]`는 escape되므로, Note가 Acceptance Criteria�
 
 ## 참고 자료 {#references}
 
-- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `processTicket`, `takeTicket`, `verify`, `fix`, `resolveConflict`, `requireGreenCi`
+- [`src/branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/branch.ts)
+- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `processTicket`, `takeTicket`, `nameBranch`, `verify`, `fix`, `resolveConflict`, `requireGreenCi`
 - [`src/failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts): merge-base에서 Run마다 한 번 돌리는 Check
 - [`src/workflows.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/workflows.ts): pull request에서 돌 수 있는 워크플로가 있는지
 - [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts), [`src/frontier.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts), [`src/landing.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/landing.ts)
