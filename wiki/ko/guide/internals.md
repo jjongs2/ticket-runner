@@ -160,7 +160,7 @@ sequenceDiagram
 | [`failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts) | 실패한 Check를 merge-base에서 Run마다 commit마다 한 번 돌리고, 그 Note를 한 번 올림 |
 | [`workflows.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/workflows.ts) | pull request의 branch에 있는 워크플로 중 그 pull request에서 돌 수 있는 것이 있는지. CI 유예 시간을 정함 |
 | [`base-branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/base-branch.ts) | Run마다 한 번 base branch를 정함 |
-| [`branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/branch.ts) | `agent/<n>-<slug>`, `.worktrees/ticket-<n>`, `.worktrees/base-<commit>` |
+| [`branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/branch.ts) | `agent/<n>`, implement Stage의 slug로 이름 붙인 `agent/<n>-<slug>`, `.worktrees/ticket-<n>`, `.worktrees/base-<commit>` |
 | [`stranded.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stranded.ts) | Stranded Ticket을 찾는 sweep |
 | [`resume.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/resume.ts) | state file의 모양과 이름 |
 | [`handoff.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/handoff.ts) | Ticket을 다시 가져갈 때 예전 hand-off 코멘트를 지난 일로 표시 |
@@ -232,7 +232,7 @@ sequenceDiagram
 
 | 어디 | 왜 |
 |---|---|
-| Run 요약의 머리, `init` 보고의 첫 줄 | 어떤 파이프라인이 돌았는지 터미널이 말하도록 |
+| Run의 첫 줄, Run 요약의 머리, `init` 보고의 첫 줄 | 어떤 파이프라인이 돌았는지 터미널과, 요약 전에 kill된 Run의 로그가 말하도록 |
 | 진행 상황 코멘트의 Run별 섹션 | 누가 썼는지 보드가 말하도록 |
 | 각 state file의 `version` | 읽지 못하는 파일도 누가 썼는지 알 수 있도록 |
 | Run 디렉터리의 `version.txt` | transcript가 그걸 쓴 파이프라인 곁에 있도록 |

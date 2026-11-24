@@ -5,7 +5,7 @@ Conventions for humans and agents working in this repo. Vocabulary is defined in
 ## Branches
 
 - `main` receives squash merges from pull requests only. Nobody commits to it directly. Bootstrap exception: Planning documents written before the first Ticket merged landed on `main` directly, because no CI existed to gate a pull request.
-- `agent/<n>-<slug>` belongs to the pipeline, as the conventions document states. `<slug>` is the Ticket title in lowercase kebab-case, at most 40 characters.
+- `agent/<n>` and `agent/<n>-<slug>` belong to the pipeline, as the conventions document states. A Run claims a Ticket on `agent/<n>`, and `<slug>` is the one the implement Stage answers in English, at most 40 characters of lowercase kebab-case, which the Run renames the branch with before its first push. Nothing is cut from the Ticket title.
 - `version/<number>` carries a release PR and nothing else.
 - `dependabot/…` belongs to Dependabot, which `.github/dependabot.yml` configures and which rebases the branch itself. Nobody commits to it: a commit by hand stops Dependabot from rebasing it.
   - One exception: when the lock file diff changes the version of a package an `allowScripts` field names (today `esbuild`, in both `package.json` and `wiki/package.json`), the same pull request updates that entry, for example with `npm install-scripts approve <package>`. CI's npm ignores `allowScripts`, so CI passes either way, and a local npm 12 or later then blocks that package's install script with only a warning, so nothing else catches it.

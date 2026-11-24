@@ -147,9 +147,11 @@ Target 하나에는 한 번에 Run 하나뿐입니다. 어느 Host에서 돌든 
 
 ## 요약 {#the-summary}
 
-Run이 끝나면 Ticket마다 한 줄씩, Ticket이 끝난 순서대로 출력하고, 왜 멈췄는지 한 줄로 마무리합니다.
+Run이 끝나면 위의 줄들과 요약을 가르는 `---`를 빈 줄 사이에 출력하고, Ticket마다 한 줄씩, Ticket이 끝난 순서대로 출력하고, 왜 멈췄는지 한 줄로 마무리합니다.
 
 ```text
+---
+
 ticket-runner 0.5.2 run 2026-09-17T09-00-00-000 · 84m · subscription
 
   merged   #4 Planning guards (PR #12)
@@ -200,15 +202,26 @@ Stop이나 Release, 또는 장애로 끊긴 Hand-off로 끝난 Run은 Frontier �
 Run 자신의 출력은 터미널로 갑니다. Ticket에 관한 줄은 모두 그 번호로 시작하니, Lane들의 출력이 섞여 있어도 Ticket 하나씩 따라 읽을 수 있습니다.
 
 ```text
-ticket-runner run 2026-09-17T09-00-00-000 · 1 lane
-#4 claimed · agent/4-planning-guards
+ticket-runner 0.5.2 run 2026-09-17T09-00-00-000 · 1 lane
+
+#4 claimed
+#4 implemented · agent/4-planning-guards
 #4 verified · 6 met · 1 unverifiable
 #4 merged · PR #12
 ```
 
-Stage가 도는 동안이나 CI를 기다리는 동안에는 아무것도 출력하지 않고, 이 시간은 한 시간이 될 수도 있습니다. Stage 자신의 출력은 아래의 `.stdout` 파일에 있습니다. 좁힌 Run이면 첫 줄에 지정한 Ticket이 덧붙고, 재개한 Ticket은 `claimed` 대신 `resumed from <state>`라고 출력합니다. Run과 다른 곳에 과금된 Stage는 끝나는 즉시 알려 줍니다. `#4 implement ran on apiKeySource apiKeyHelper, not the subscription (none)`. 경고와 거절은 stderr로 갑니다.
+첫 줄은 요약의 머리처럼 버전을 적습니다. 그래서 요약을 내기 전에 kill된 Run의 로그도 어느 버전이 돌았는지 말해 줍니다. 새 버전이 나왔다는 알림처럼 첫 줄에 딸린 알림은 그 바로 뒤에 오고, 첫 Ticket 줄 앞에는 빈 줄이 하나 옵니다. Stage가 도는 동안이나 CI를 기다리는 동안에는 아무것도 출력하지 않고, 이 시간은 한 시간이 될 수도 있습니다. Stage 자신의 출력은 아래의 `.stdout` 파일에 있습니다. 좁힌 Run이면 첫 줄에 지정한 Ticket이 덧붙습니다. Ticket은 `agent/<n>`에서 claim되므로 `claimed`는 branch를 적지 않고, implement Stage가 branch 이름을 지은 뒤 `implemented`가 그 이름을 적습니다([worktree와 branch](./ticket-to-merge.md#the-worktree-and-branch)). branch가 `agent/<n>`로 남는 Ticket은 그 앞에 이유를 적습니다. `#4 keeps agent/4 · …`. 재개한 Ticket은 `claimed` 대신 `resumed from <state>`라고 출력하고, implement Stage 뒤에서 재개하면 그 뒤에 branch를 적습니다. Run과 다른 곳에 과금된 Stage는 끝나는 즉시 알려 줍니다. `#4 implement ran on apiKeySource apiKeyHelper, not the subscription (none)`. 경고와 거절은 stderr로 갑니다.
 
-터미널에서는 이 줄들과 요약의 `#4`, `PR #12`가 GitHub의 해당 이슈나 pull request로 가는 링크가 됩니다. 링크를 지원하는 터미널에서만 그렇습니다. 로그 파일이나 파이프에는 링크 없이 같은 텍스트가 갑니다.
+터미널에서는 이 줄들과 요약의 `#4`, `PR #12`가 GitHub의 해당 이슈나 pull request로 가는 링크가 됩니다. 링크를 지원하는 터미널에서만 그렇습니다. 그리고 줄마다 읽는 사람에게 바라는 바에 따라 색이 붙습니다.
+
+| 색 | 줄이 바라는 것 | 줄 |
+|---|---|---|
+| 빨강 | 지금 이 Ticket을 처리할 것 | `handed off at`, `failed outside the hand-off path`, `has a state file this version cannot use`, 요약의 `handed` |
+| 초록 | 아무것도 없음, merge됨 | `merged ·`, 요약의 `merged` |
+| 기본색 | 읽을 것 | 그 밖의 모든 줄. `implemented ·`, `verified ·` 같은 Stage 줄, `released at`, `stopped the Run`, `skipped`, 요약의 머리, 나머지 줄과 마지막 줄 |
+| 흐리게 | 건너뛰어도 됨, Run 자신의 기록 | 첫 줄, `claimed`, `resumed from`, `taken from the top`, `keeps agent/`, `noted on`, `---`, 요약의 `noted` 줄 |
+
+요약의 줄은 동사에만 색을 칠해 제목은 그대로 두고, 링크가 걸린 번호는 흐린 줄에서도 모두 밝은 파랑입니다. `NO_COLOR`를 아무 값으로나 설정하면 색은 꺼지고 링크는 남습니다. 로그 파일이나 파이프에는 링크도 색도 없이 같은 텍스트가 가고, stderr에는 색을 칠하지 않습니다.
 
 Stage가 한 일은 모두 Target의 gitignore된 `.ticket-runner/` 아래 디스크에 남습니다. run id는 `2026-09-17T09-00-00-000`처럼 UTC 시작 시각입니다.
 
@@ -283,6 +296,6 @@ Target을 잡은 Run이 없을 때, 곧 lock이 비어 있거나 Operator 자신
 - [`src/cli.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/cli.ts), [`src/command-line.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/command-line.ts), [`src/start.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts), [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts)
 - [`src/credential.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/credential.ts), [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts), [`src/adapters/gh-tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts)
 - [`src/stop.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stop.ts), [`src/lock.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lock.ts), [`src/stage-guard.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stage-guard.ts), [`src/host.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/host.ts)
-- [`src/templates.ts` · `runSummary`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts), [`src/run-log.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run-log.ts), [`src/adapters/version.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts), [`src/terminal-links.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/terminal-links.ts)
+- [`src/templates.ts` · `runSummary`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts), [`src/run-log.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run-log.ts), [`src/adapters/version.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts), [`src/terminal-links.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/terminal-links.ts), [`src/terminal-colour.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/terminal-colour.ts)
 - [`docs/templates/run-summary.txt`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/run-summary.txt), [`docs/templates/stop-report.txt`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/stop-report.txt), [`docs/templates/operator-skill.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/operator-skill.md)
 - [ADR-0006](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md), [ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md), [ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)

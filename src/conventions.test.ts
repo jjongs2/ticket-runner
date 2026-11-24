@@ -56,7 +56,10 @@ describe("the conventions document", () => {
 
     expect(doc).not.toContain("## What a Stage does not do");
     expect(doc).not.toMatch(/commits only to the branch already checked out/);
-    expect(section(doc, "Branches")).toContain("`agent/<n>-<slug>` belongs to the pipeline");
+    expect(section(doc, "Branches")).toContain(
+      "`agent/<n>` and `agent/<n>-<slug>` belong to the pipeline",
+    );
+    expect(section(doc, "Branches")).toContain("before it first pushes it");
     expect(section(doc, "Branches")).toContain("`ticket-runner/lock` and `ticket-runner/state`");
   });
 

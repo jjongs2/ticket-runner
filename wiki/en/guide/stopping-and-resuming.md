@@ -125,7 +125,7 @@ The Host a Ticket was worked on may be gone by the time a human looks, for examp
 
 | What | Where | Lasts until |
 |---|---|---|
-| The Ticket's commits | branch `agent/<n>-<slug>` on the remote | the merge deletes it |
+| The Ticket's commits | branch `agent/<n>-<slug>` on the remote, or `agent/<n>` where it was never named | the merge deletes it |
 | State file | `ticket-<n>.json` on `ticket-runner/state` | the work merges or leaves the pipeline ([below](#the-state-file)) |
 | Handed-off Stages' transcripts, kept on the remote | `ticket-<n>/<runId>/` on `ticket-runner/state` | the state file goes |
 | Handed-off Stages' transcripts, kept off it | `.ticket-runner/runs/<runId>/<n>/` on that Host | a human deletes it, or the cloud Host's VM goes |

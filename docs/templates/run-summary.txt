@@ -1,3 +1,5 @@
+---
+
 ticket-runner <version> run <runId> · <duration> · <credential>
 
   merged   #3 Run: drain the Frontier (PR #12)
@@ -12,6 +14,37 @@ Frontier empty.
 The verb is padded to nine columns so the Ticket numbers line up. A Run that
 took no Ticket prints `  nothing to do` in place of the rows.
 
+The summary opens with `---` on a line of its own, a blank line on either side
+of it, so it stands apart from the Run's lines above it and an Operator's watch
+finds it by that line. The examples below start at the header and leave it out.
+
+The Run's first line looks like the header, with the Lane count where the header
+has the duration and the credential, and the Tickets a narrowed Run was given
+after it:
+
+ticket-runner <version> run <runId> · 2 lanes · #12 #13
+
+so the log of a Run killed before its summary still says which version ran.
+Every notice that goes with it follows it: a newer version, where transcripts
+are kept when the Target's visibility could not be read, a shallow clone
+fetched, and a version that could not be recorded beside the transcripts. A
+blank line comes before the first Ticket line. A Ticket's branch is named on the
+line its implement Stage earns, not on its claim:
+
+#4 claimed
+#4 implemented · agent/4-planning-guards
+#4 verified · 4 met · 0 unverifiable
+#4 merged · PR #12
+
+A Ticket resumed past its implement Stage names its branch on the line it is
+resumed with, `#4 resumed from implemented · agent/4-planning-guards`; one
+resumed from `claimed`, or taken from the top, names none. A Ticket whose branch
+keeps `agent/<n>`, where the slug is out of shape, the state file will not take
+the new name, a branch of that name is on the Host or the remote, or `agent/<n>`
+already reached the remote, says so before its implemented line:
+
+#4 keeps agent/4 · agent/4 is already on the remote
+
 Where standard output is a terminal, every `#<n>` the Run prints there, in
 these rows, the header, the last line and every line before the summary, is a
 link: an OSC 8 hyperlink to `https://github.com/<owner>/<name>/issues/<n>`,
@@ -24,6 +57,37 @@ Run reads `<owner>/<name>` from GitHub once at its start; where GitHub could
 not name the Target, the numbers stay plain. A terminal that ignores OSC 8
 shows the text above as it is, and with standard output anything else, such as
 the log file an Operator watches or a pipe, nothing is linked.
+
+Where standard output is a terminal and `NO_COLOR` is unset or empty, each line
+takes the colour of what it asks of its reader. A line before the summary takes
+its colour whole; a summary row colours its verb alone, so the titles stay
+plain:
+
+  red (SGR 31)    act on this Ticket now: `handed off at`, a cut-short one
+                  included; `failed outside the hand-off path`; `has a state
+                  file this version cannot use`; the summary's `handed`
+  green (SGR 32)  nothing, it merged: `merged ·`; the summary's `merged`
+  default         read it: every other line, such as the Stage lines
+                  (`implemented ·`, `verified ·`, `fixing ·`, `rebased onto`,
+                  `resolving a rebase conflict`), `released at`, `stopped the
+                  Run`, `could not push`, `could not be handed off at`, `left
+                  to finish`, `skipped`, the newer-version and transcript
+                  notices, the summary's header, its `released`, `skipped` and
+                  `billed` rows, and its last line
+  dim (SGR 2)     skip it, the Run's own bookkeeping: the opening line, the
+                  shallow-clone notice, `claimed`, `resumed from`, `taken from
+                  the top`, `keeps agent/`, `noted on`, `opened … to gather
+                  Notes`, `was resumable, but`, `---`, the summary's `noted`
+                  rows
+
+Every `#<n>` the link rule links is bright blue (SGR 94) at full intensity, in a
+dim line too, as Claude Code colours a link. The Run links the plain line first
+and colours each stretch between the links, so no colour code stops a `#<n>`
+being linked. A non-empty `NO_COLOR` turns colour off and leaves the links, as
+no-color.org asks, and taking the colour codes out of a coloured Run gives back
+byte for byte what it prints with `NO_COLOR` set. Nothing else is coloured: not
+standard output that is not a terminal, not standard error, and not `init`,
+`stop` or `remove`.
 
 `<credential>` is what the Run's Stages were billed to: `subscription`, the
 Claude login, or `API key`, the `ANTHROPIC_API_KEY` the Host exports, for a Run
@@ -56,11 +120,14 @@ Ticket, not in the Run's log, and not in the progress comment.
 `<version>` is the version the Run ran (ADR-0007): the number alone from an
 installed copy, and the number, the commit and a `dirty` mark from a development
 checkout — `0.4.0`, `0.4.0+331d79c`, `0.4.0+331d79c.dirty`. Every stamp of one
-Run says the same thing, and `.ticket-runner/runs/<runId>/version.txt` says it
-again beside the transcripts.
+Run says the same thing, the Run's opening line among them, and
+`.ticket-runner/runs/<runId>/version.txt` says it again beside the transcripts.
 
 A Run whose version is below the highest one published on GitHub gains a line
-above that header, which is also the first thing it logged hours earlier:
+between the `---` line and that header, which it also logged hours earlier,
+straight after its opening line:
+
+---
 
 A newer version is out: 0.5.0, and this is 0.4.0 — upgrade with `npm install -g ticket-runner`.
 ticket-runner <version> run <runId> · <duration> · <credential>

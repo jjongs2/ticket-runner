@@ -125,7 +125,7 @@ Failure 줄은 무엇이 Ticket을 멈췄는지 말합니다. 그에 따라 할 
 
 | 무엇 | 어디 | 언제까지 |
 |---|---|---|
-| Ticket의 commit | remote의 `agent/<n>-<slug>` branch | merge되며 삭제될 때까지 |
+| Ticket의 commit | remote의 `agent/<n>-<slug>` branch, 이름이 붙지 않았다면 `agent/<n>` | merge되며 삭제될 때까지 |
 | state file | `ticket-runner/state`의 `ticket-<n>.json` | 작업이 merge되거나 파이프라인의 몫이 아니게 될 때까지([아래](#the-state-file)) |
 | Hand-off된 Stage의 transcript, remote에 남길 때 | `ticket-runner/state`의 `ticket-<n>/<runId>/` | state file이 사라질 때까지 |
 | Hand-off된 Stage의 transcript, remote에 남기지 않을 때 | 그 Host의 `.ticket-runner/runs/<runId>/<n>/` | 사람이 지우거나, 클라우드 Host의 VM이 사라질 때까지 |
