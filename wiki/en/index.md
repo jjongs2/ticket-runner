@@ -8,7 +8,7 @@ description: "ticket-runner runs the unattended half of the mattpocock-skills ch
 
 Humans plan, the pipeline executes.
 
-ticket-runner runs the unattended half of the [`mattpocock-skills`](https://github.com/mattpocock/skills) chain. Planning a feature takes judgement, so it stays with humans, in their own sessions: `/grilling`, `/to-spec` and `/to-tickets` (or `/triage`) turn it into GitHub issues, each with checkbox [Acceptance Criteria](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), its blockers linked and the `ready-for-agent` label. Carrying an issue from there to a merge is repetitive, so the pipeline does it unattended, driving `/implement` where a human would have typed it. For each [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) it has a headless Claude Code session implement the work, runs the repository's own tests, has a second session try to prove the criteria are not met, opens a pull request, waits for CI and squash-merges, or, on a Target that [merges by hand](./guide/configuration.md#merge), hands the green pull request to a human to merge. Whatever it cannot finish goes back to a human with a draft pull request and a comment.
+ticket-runner runs the unattended half of the [`mattpocock-skills`](https://github.com/mattpocock/skills) chain. Planning a feature takes judgement, so it stays with humans, in their own sessions: `/grilling`, `/to-spec` and `/to-tickets` (or `/triage`) turn it into GitHub issues, each with checkbox [Acceptance Criteria](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), its blockers linked and the `ready-for-agent` label. Carrying an issue from there to a merge is repetitive, so the pipeline does it unattended, driving `/implement` where a human would have typed it. For each [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) it has a headless Claude Code session implement the work, has a second session try to prove the criteria are not met, opens a pull request, waits for the CI the repository runs on it and squash-merges, or, on a Target that [merges by hand](./guide/configuration.md#merge), hands the green pull request to a human to merge. Whatever it cannot finish goes back to a human with a draft pull request and a comment.
 
 ## Why it exists
 
@@ -19,7 +19,7 @@ After Planning, every Ticket still needs an attended session: open it, paste the
 It fits when:
 
 - Planning has produced agent-sized Tickets, with checkbox criteria and native blockers.
-- The repository has a test or typecheck command the pipeline can run itself.
+- The repository has a test or typecheck command, and its pull requests run it in CI: the pipeline runs no Check on a Ticket's branch, so the CI you set up is what gates the merge.
 - You want the work merged while you are away: overnight, or started from the Claude app.
 
 It does not fit when:
@@ -27,7 +27,7 @@ It does not fit when:
 - **The work needs a human's judgement midway.** A Run asks nobody anything; a Ticket it cannot finish reaches a human only as a Hand-off.
 - **No checkbox can grade the criteria.** The verify Stage grades the `- [ ]` lines and any defect the branch itself made, and a verdict of nothing but `unverifiable` fails: it is no evidence to merge on.
 - **Nothing may merge without a person's review, and you want the pipeline to merge anyway.** A pull request is squash-merged as soon as its CI passes; nobody approves it first. A Target that sets [`merge`](./guide/configuration.md#merge) to `false` gets each green Ticket as a Hand-off instead, its pull request ready for a human to review and merge.
-- **The repository has no tests.** A Run refuses to start without a Check, unless the config says [`"checks": []`](./guide/configuration.md#checks), and then only CI, where there is any, grades the code before it merges.
+- **The repository has no tests, or no CI on its pull requests.** A Run refuses to start without a Check command, unless the config says [`"checks": []`](./guide/configuration.md#checks), and the pipeline runs none on a Ticket's branch either way: a pull request with no CI merges code nothing ran.
 
 ## Quick Start
 
@@ -63,18 +63,16 @@ flowchart LR
     direction TB
     F[Frontier] --> C[claim]
     C --> I[implement Stage]
-    I --> K[Checks]
-    K --> V[verify Stage]
+    I --> V[verify Stage]
     V --> L["Landing: rebase, pull request, CI"]
     L --> M[squash-merge]
     L -. "green, merge off" .-> H
-    K -. fails .-> X[fix Stage, once]
-    V -. unmet .-> X
+    V -. unmet .-> X[fix Stage, once]
     L -. red CI .-> X
-    X --> K
+    X --> V
     X -. fails again .-> H["Hand-off: ready-for-human"]
     I -. "any Stage: rate limit, API failure, API budget" .-> RL["Release: ready-for-agent"]
-    K -. base branch fails too .-> RL
+    L -. "red CI, base branch fails too" .-> RL
     L -. "any step: GitHub or the remote failing" .-> RL
   end
   R --> F

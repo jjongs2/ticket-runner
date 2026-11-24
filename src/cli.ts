@@ -65,7 +65,7 @@ async function main(argv: string[]): Promise<number> {
   if (commandLine.kind === "init") {
     const root = await findRepoRoot();
     // No Run lock, because no Ticket is claimed, and no startup refusal: the
-    // missing Checks it would refuse over are one of the things `init` reports.
+    // missing Check commands it would refuse over are one of the things `init` reports.
     return initTarget({
       repoRoot: root,
       version,

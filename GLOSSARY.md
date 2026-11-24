@@ -53,7 +53,7 @@ One Claude Code session inside a Run with a single purpose: implement, verify, f
 _Avoid_: step, phase, task
 
 **Check**:
-A deterministic command the pipeline runs itself on a Ticket's code to gate it, such as its tests or typecheck. Never an agent's opinion, and never the CI on a pull request, which the pipeline only waits for.
+A deterministic command the Target names, such as its tests or typecheck. Never an agent's opinion, never run by the pipeline on a Ticket's branch, and never the CI on a pull request, which the Target sets up and which gates the merge.
 _Avoid_: validation, test run
 
 **Landing**:

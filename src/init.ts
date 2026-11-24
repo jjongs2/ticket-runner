@@ -386,7 +386,7 @@ function checksReported(config: Config): Reported {
   }
   return {
     ok: false,
-    line: `no Check is configured or inferable — name one in \`checks\` in ${CONFIG_FILENAME}, or add \`test\` and \`typecheck\` scripts to package.json`,
+    line: `no Check is configured or inferable — the Stage prompts name the Check commands and a red CI is graded with them at a merge-base; name one in \`checks\` in ${CONFIG_FILENAME}, or add \`test\` and \`typecheck\` scripts to package.json`,
   };
 }
 

@@ -74,17 +74,17 @@ function checkList(checks: readonly string[]): string {
  * How the two Stages that write code are told about the Checks, where the
  * config names any; nothing where it names none.
  *
- * The pipeline runs them as soon as the Stage finishes, so a Stage that runs the
- * whole suite while it works, and again after each change, pays for runs the
- * pipeline is about to make anyway: in the logged Runs that was half of an
- * implement Stage's wall clock. One run after its last commit still catches a
- * failure before it spends the fix budget. implement's comes after the review,
- * because the review changes code in nearly every Stage.
+ * The pipeline runs none of them on the branch, so the one run after the
+ * Stage's last commit is the only run before the pull request's CI. A Stage
+ * that runs the whole suite while it works, and again after each change, pays
+ * for runs that one makes anyway: in the logged Runs that was half of an
+ * implement Stage's wall clock. implement's comes after the review, because
+ * the review changes code in nearly every Stage.
  */
 function codeChecksLine(checks: readonly string[], afterReview: boolean): string {
   if (checks.length === 0) return "";
   const review = afterReview ? " That one run comes after the review's fixes are committed." : "";
-  return `\n- The pipeline runs its Checks as soon as you finish: ${checkList(checks)}. While you work, run only the tests your change touches. Commit, then run the full Checks once, in the foreground, and commit whatever that run makes you change.${review}`;
+  return `\n- This repository's Checks are ${checkList(checks)}. While you work, run only the tests your change touches. Commit, then run the full Checks once, in the foreground, and commit whatever that run makes you change.${review}`;
 }
 
 /** The title a code Stage answers, what it is and what it is for, wherever it is told to answer one. */
@@ -268,10 +268,16 @@ const NEEDS_A_HUMAN =
   "cannot be met without overturning a documented decision or another criterion";
 
 /**
- * The verify Stage's brief. It grades a commit the Checks have just passed, so
- * where the config names any it is told so and told not to run them again: in
- * the logged Runs re-running them was about two fifths of a verify Stage's wall
- * clock, spent proving what the pipeline had already proved.
+ * The verify Stage's brief. The pipeline runs no Check on the branch, and the
+ * Stage before it was told to run them once, so where the config names any it
+ * is told not to run them to grade the branch: in the logged Runs running them
+ * was about two fifths of a verify Stage's wall clock, spent on a tree whose
+ * suite had already run.
+ *
+ * A criterion that asks for nothing but CI, or some commands, to pass is left
+ * to CI where a workflow that runs on the pull request runs them all: grading
+ * it here would be the duplicate run over again. The pipeline ticks it once CI
+ * passes.
  *
  * A criterion that collides with a documented decision or another criterion is
  * `unmet` with a human's decision as its evidence, rather than met on a
@@ -298,6 +304,7 @@ const verifyInstructions = (checks: readonly string[]) => `You are the verify St
 - The pipeline lists the Ticket's Acceptance Criteria below, numbered, each with the indented lines under its checkbox. Read the Ticket for their context, and grade the criteria as listed: answer each by its number, every listed number once and no other.
 - Work in the checked-out branch, which already contains the implementation.
 - Attempt to falsify every criterion: run the code, run the tests that bear on it, and write throwaway tests where that is the only way to tell.${verifyChecksLine(checks)}
+- ${CI_CRITERION_LINE}
 - Judge the code as it is. Do not fix anything, and never commit, stage or push. Scratch files are fine; the pipeline discards them.
 - Mark a criterion \`unverifiable\` only when no evidence can be gathered, never as a substitute for looking.
 - When a criterion ${NEEDS_A_HUMAN}, mark it \`unmet\` and say in its evidence that a human decision is needed, naming what it collides with. A workaround that sidesteps the collision does not meet it.
@@ -306,11 +313,15 @@ const verifyInstructions = (checks: readonly string[]) => `You are the verify St
 - End by emitting the verdict: one entry per listed criterion, by its number, with its status and the evidence you actually gathered, and one entry in \`defects\` per defect of this branch you showed.
 ${languageLine("your Notes and the verdict's evidence")}`;
 
-/** The Checks as the verify Stage is told about them: passed, and not its to run. */
+/** The Checks as the verify Stage is told about them: run by nobody since the Stage before it, and not its to run. */
 function verifyChecksLine(checks: readonly string[]): string {
   if (checks.length === 0) return "";
-  return `\n- The pipeline's Checks passed on this commit: ${checkList(checks)}. Do not re-run them: grade a criterion that asks only for them from that fact, and spend your turns on targeted tests and probes.`;
+  return `\n- The pipeline does not run its Checks (${checkList(checks)}), and the Stage before you was told to run them once. Do not run them to grade the branch: spend your turns on targeted tests and probes.`;
 }
+
+/** How the verify Stage grades a criterion that asks for nothing but CI, or some commands, to pass. */
+const CI_CRITERION_LINE =
+  "For a criterion that asks for nothing but the pull request's CI, or some commands, to pass: if a workflow under `.github/workflows/` runs on this pull request, its triggers and `paths` filters admitting the branch's changes, and runs every command the criterion names, whole or split across jobs, answer `ci`, with evidence naming the workflow and its steps; the pipeline ticks it once CI passes. Otherwise grade the criterion yourself, running the commands it names.";
 
 /**
  * The fix Stage's brief. Sent in for unmet criteria, it is told what to do when
@@ -337,7 +348,7 @@ const fixInstructions = (
 - Where the failure is an unmet Acceptance Criterion or a defect this branch made, add the regression test that would have caught it and commit it with the fix.${kind === "unmet-criteria" ? `${UNMET_CAUSE_LINES}${HUMAN_DECISION_LINE}` : ""}
 - Stay inside this Ticket's Acceptance Criteria and the defects this branch introduced. Anything else you find belongs to another Ticket, not to this session; record it as a Note rather than mending it.${codeChecksLine(checks, false)}
 ${FINISH_GUIDANCE}
-- Write commit subjects ${SUBJECT_RULE}. The pipeline re-runs the Checks and the verify Stage as soon as you finish.
+- Write commit subjects ${SUBJECT_RULE}. The pipeline re-runs the verify Stage as soon as you finish.
 ${fixTitleGuidance(base)}
 ${FIX_PROSE_GUIDANCE}
 ${CODE_STAGE_LANGUAGE}
@@ -377,7 +388,8 @@ const HUMAN_DECISION_LINE = `
 /**
  * The conflict Stage's brief. It may reach past the conflicted files only to
  * repair what the merge broke there, such as a name the base branch renamed:
- * a Stage that left those red would spend the fix budget on them. Nothing it
+ * a Stage that left those red would turn CI red, which spends the fix budget
+ * on them. Nothing it
  * does may change behaviour the criteria cover, because verify does not run
  * again after it.
  */
@@ -392,17 +404,19 @@ const conflictInstructions = (
 - Leave no conflict marker behind in any file, committed or not.
 - ${NO_OTHER_BRANCH} Do not push, do not open pull requests, and do not close the Ticket.${conflictChecksLine(checks)}`;
 
-/** The Checks as the conflict Stage is told about them: the pipeline's to run in full. */
+/**
+ * The Checks as the conflict Stage is told about them: only the part covering
+ * what it resolved, since it holds the Landing and CI grades the resolution next.
+ */
 function conflictChecksLine(checks: readonly string[]): string {
   if (checks.length === 0) return "";
-  return `\n- The pipeline runs its Checks as soon as you finish, and a failure there spends this Ticket's fix budget: ${checkList(checks)}. Run the type checker and the tests covering the files you resolved, not the whole suite.`;
+  return `\n- This repository's Checks are ${checkList(checks)}. Run the type checker and the tests covering the files you resolved, not the whole suite.`;
 }
 
 /** How the fix prompt announces each kind of failure. */
 const failureSentences = (base: string): Record<FailureKind, string> => ({
   "uncommitted-work":
     "the Stage before you left changes in this worktree it never committed, listed below; commit what belongs to this Ticket and discard the rest",
-  "failed-check": "a Check the pipeline runs itself failed",
   "unmet-criteria": "the verify Stage found unmet Acceptance Criteria, or defects this branch made",
   "failed-ci": "a pull request check failed after the branch was pushed",
   "unresolved-conflict": `the branch conflicts with ${base}, and the session sent in to resolve the rebase did not finish it`,
@@ -413,7 +427,7 @@ export interface FixFailure {
   kind: FailureKind;
   /** The one line a human would have read in a notification. */
   summary: string;
-  /** Failing Check output, the unmet criteria with their evidence, or a CI excerpt. */
+  /** The uncommitted paths, the unmet criteria with their evidence, a CI excerpt or the conflict. */
   evidence: string;
 }
 

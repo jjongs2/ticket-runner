@@ -87,7 +87,8 @@ logged in:
 
 `Checked:` is one line per item only the human can put right, each marked `✓` or
 `✗`, in a fixed order: `gh`, `claude`, the plugin, a Check. A Target with no CI
-workflow is not an item: a pull request with no checks merges.
+workflow is not an item: a pull request with no checks merges, on code nothing
+ran, since the pipeline runs no Check on a Ticket's branch.
 
 The `gh` line has two ways to fail, the same two, and only a `gh` that runs is
 sent to log in:
@@ -101,7 +102,7 @@ one:
 
   ✓ a Check is configured or inferable: npm test, npm run typecheck
   ✓ `checks` is `[]` in ticket-runner.json: a Run starts with no Check command
-  ✗ no Check is configured or inferable — name one in `checks` in ticket-runner.json, or add `test` and `typecheck` scripts to package.json
+  ✗ no Check is configured or inferable — the Stage prompts name the Check commands and a red CI is graded with them at a merge-base; name one in `checks` in ticket-runner.json, or add `test` and `typecheck` scripts to package.json
 
 The last line is the exit code in words: `Ready: everything a Run expects of
 this Target is in place.` for 0, and `Not ready: <n> items are yours to put

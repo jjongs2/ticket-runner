@@ -66,6 +66,7 @@ describe("startupMessages", () => {
     expect(refusal).toMatch(/no check commands/i);
     expect(refusal).toContain("ticket-runner.json");
     expect(refusal).toContain('`"checks": []`');
+    expect(refusal).toContain("The Stage prompts name them, and a red CI is graded with them at the branch's merge-base");
     expect(refusal).not.toMatch(/gates/);
     expect(warnings).toEqual([]);
   });
@@ -75,7 +76,7 @@ describe("startupMessages", () => {
 
     expect(refusal).toBeUndefined();
     expect(warnings).toEqual([
-      "No Check command: `checks` is `[]` in ticket-runner.json, so nothing deterministic grades a Ticket before it merges.",
+      "No Check command: `checks` is `[]` in ticket-runner.json, so the Stage prompts name none and a red CI is not graded at the branch's merge-base.",
     ]);
   });
 });

@@ -13,8 +13,8 @@ The file is `ticket-runner.json` at the Target's root. It is plain JSON, so it c
 |---|---|---|
 | [`baseBranch`](#basebranch) | GitHub's default branch | The branch Tickets are branched from, rebased onto and merged into |
 | [`lanes`](#lanes) | `1` | How many Tickets a Run holds at once |
-| [`checks`](#checks) | inferred from `package.json` | The commands the pipeline runs itself to gate a Ticket |
-| [`checkTimeoutMinutes`](#checks) | `15` | Wall-clock limit for each Check command |
+| [`checks`](#checks) | inferred from `package.json` | The commands the Stage prompts name and a red CI is graded with at the merge-base |
+| [`checkTimeoutMinutes`](#checks) | `15` | Wall-clock limit for each Check command run at a merge-base |
 | [`merge`](#merge) | `true` | Whether a Run merges a green Ticket or leaves the merge to a human |
 | [`stages`](#stages) | see below | Model, effort, limits and extra instructions per Stage |
 | [`permissionMode`](#permissionmode) | `"auto"` | What every Stage session may do without asking |
@@ -60,24 +60,24 @@ The base branch is the one every Ticket starts from and merges into: a Run rebas
 
 - `lanes`: whole number ≥ 1
 
-How many Tickets a Run holds at once, one per [Lane](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md). `run --lanes <n>` overrides it for one Run. Lanes run their Checks at the same time, each in its own worktree, so a Target whose Checks need a port, a database or anything else they would share keeps this at `1`. Only one Lane at a time is in the Landing (rebase to merge), so more Lanes speed up implement and verify, not merging ([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)).
+How many Tickets a Run holds at once, one per [Lane](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md). `run --lanes <n>` overrides it for one Run. Lanes' Stages run the Checks at the same time, each in its own worktree, so a Target whose Checks need a port, a database or anything else they would share keeps this at `1`. Only one Lane at a time is in the Landing (rebase to merge), so more Lanes speed up implement and verify, not merging ([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)).
 
 ## `checks`
 
 - `checks`: array of strings
 - `checkTimeoutMinutes`: number > 0
 
-A [Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is a command the pipeline runs itself. Each one runs through the shell in the Ticket's worktree, after the implement Stage, after a fix Stage and after a resolved rebase conflict. A non-zero exit fails the gate, and the Ticket spends its [fix budget](./ticket-to-merge.md#the-fix-stage-and-the-fix-budget), unless the base branch fails the same command ([A failure the base branch shares](./ticket-to-merge.md#a-failure-the-base-branch-shares)). That question is asked of a red CI by running these commands too, so they should be ones CI runs.
+A [Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is a command the Target names, and the pipeline runs none on a Ticket's branch. The commands are for two things. The Stage prompts name them: the implement and fix Stages are told to run only the tests their change touches while they work and the full Checks once after committing, and the conflict Stage to run the type checker and the tests covering the files it resolved. And when the pull request's CI is red, the pipeline runs them itself at the branch's merge-base with the base branch, to tell a failure the branch inherited from one it brought ([A failure the base branch shares](./ticket-to-merge.md#a-failure-the-base-branch-shares)), so they should be ones CI runs. What gates the merge is the pull request's [CI](#ci), which the Target sets up.
 
 Without this field the pipeline infers `npm test` and `npm run typecheck` from whichever of the `test` and `typecheck` scripts `package.json` defines. With neither, a Run refuses to start:
 
 ```text
-No Check commands are configured and none could be inferred from package.json. Add them to `checks` in ticket-runner.json, add `test` and `typecheck` scripts to package.json, or write `"checks": []` in ticket-runner.json to run with no Check command.
+No Check commands are configured and none could be inferred from package.json. The Stage prompts name them, and a red CI is graded with them at the branch's merge-base with the base branch. Add them to `checks` in ticket-runner.json, add `test` and `typecheck` scripts to package.json, or write `"checks": []` in ticket-runner.json to run with no Check command.
 ```
 
-A Target with no Check command writes `"checks": []`. The Run then starts with a warning, and each Ticket's checks row reads `⚠️ no checks`.
+A Target with no Check command writes `"checks": []`. The Run then starts with a warning, the Stage prompts name no command, and a red CI is charged to the branch with nothing run at the merge-base.
 
-`checkTimeoutMinutes` is one limit for every command, and each command gets the whole of it, at the merge-base too. A command killed at the limit is a failed Check and spends the fix budget like any other.
+`checkTimeoutMinutes` is one limit for every command run at a merge-base, and each command gets the whole of it. A command killed at the limit counts as one the base branch fails.
 
 ## `merge`
 
@@ -128,7 +128,7 @@ Passed to every Stage as `--permission-mode`. Every Stage also runs with `--perm
 
 After the Landing opens a pull request, the Run waits up to `ciTimeoutMinutes` for its checks. CI that does not finish in time is a Hand-off that spends no fix budget.
 
-A pull request with no checks once the wait ends merges, and its ci row reads `⚠️ no checks`. Whether a pull request runs CI is a fact about that pull request, not about the Target: a workflow with a `paths` filter runs on code and skips a docs-only change, which needs nothing but a merge. A Target that needs CI before every merge says so on GitHub ([below](#requiring-ci-before-a-merge)).
+A pull request with no checks once the wait ends merges, and its ci row reads `⚠️ no checks`. The pipeline runs no Check on the branch, so such a pull request merges code nothing ran. Whether a pull request runs CI is a fact about that pull request, not about the Target: a workflow with a `paths` filter runs on code and skips a docs-only change, which needs nothing but a merge. A Target that needs CI before every merge says so on GitHub ([below](#requiring-ci-before-a-merge)).
 
 `ciGraceMinutes` covers the gap before GitHub registers a check run, which has taken over three minutes. Until it passes, a pull request with no checks yet counts as pending rather than as having none. It never outlasts `ciTimeoutMinutes`. Raise it on a Target whose Actions register slowly. Under `0`, a pull request merges before a slow check run registers.
 
@@ -177,12 +177,12 @@ Rename the triage vocabulary when the Target already uses other label strings. O
 ## Related pages
 
 - [Running](./running.md): `--lanes` and the Run that reads this file.
-- [From Ticket to merge](./ticket-to-merge.md): where each Stage, Check and gate sits in a Ticket's life.
+- [From Ticket to merge](./ticket-to-merge.md): where each Stage and gate sits in a Ticket's life, and where the Checks are run.
 - [Planning the work](./planning.md): the labels and what they mean.
 - [Install and remove](./installation.md): `init` writes the empty file; `remove` deletes it last.
 
 ## References
 
 - [`src/config.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts), [`src/transcript-home.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/transcript-home.ts), [`src/ports/agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/ports/agent-runner.ts), [`src/startup.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts), [`src/base-branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/base-branch.ts)
-- [`src/orchestrator.ts` · `runChecks`, `requireGreenCi`, `handOff`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts), [`src/prompts.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/prompts.ts), [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts), [`src/adapters/gh-tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts), [`src/adapters/git-workspace.ts` · `runCheck`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts)
+- [`src/orchestrator.ts` · `requireGreenCi`, `handOff`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts), [`src/failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts), [`src/prompts.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/prompts.ts), [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts), [`src/adapters/gh-tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts), [`src/adapters/git-workspace.ts` · `runCheck`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts)
 - [ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md), [ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md), [ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md), [ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md), [ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)

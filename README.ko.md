@@ -17,10 +17,10 @@ Acceptance Criteria 체크리스트가 달리고, blocker가 연결됩니다. **
 그런 이슈 가운데 blocker가 모두 닫힌 것마다 다음을 합니다.
 
 1. 이슈를 맡고, 그 이슈의 branch와 git worktree를 만듭니다.
-2. headless `claude -p` 세션을 띄워 `/implement`로 구현합니다.
-3. 테스트와 typecheck를 직접 돌립니다.
-4. 새 세션을 하나 더 띄워, Acceptance Criteria가 충족되지 *않았음*을 증명해 보게 합니다.
-5. rebase하고, pull request를 열고, CI를 기다린 뒤 squash merge합니다.
+2. headless `claude -p` 세션을 띄워 `/implement`로 구현하고 테스트를 돌리게 합니다.
+3. 새 세션을 하나 더 띄워, Acceptance Criteria가 충족되지 *않았음*을 증명해 보게 합니다.
+4. rebase하고, pull request를 열고, CI를 기다린 뒤 squash merge합니다. 파이프라인은 branch에서 테스트를
+   직접 돌리지 않으므로, merge를 막는 것은 사람이 pull request에 설정해 둔 CI입니다.
 
 한 번 실패하면 고치는 세션 한 번과 두 번째 검사를 받습니다. 그래도 끝내지 못한 일은 사람에게 돌아옵니다.
 `ready-for-human` 라벨과 draft pull request, 무엇이 실패했는지 적은 코멘트가 함께 남습니다.
@@ -35,7 +35,8 @@ Acceptance Criteria 체크리스트가 달리고, blocker가 연결됩니다. **
 
 - `mattpocock-skills`로 계획합니다. `/setup-matt-pocock-skills`로 GitHub Issues를 tracker로 한 번
   설정해 두었고, Ticket 하나는 세션 하나로 끝낼 만큼 작습니다.
-- 파이프라인이 직접 돌릴 테스트나 typecheck 명령이 있습니다.
+- 세션이 돌릴 테스트나 typecheck 명령이 있고, pull request의 CI가 그 명령을 돌립니다. CI가 없으면
+  아무것도 돌려 보지 않은 코드가 merge됩니다.
 - 돌리는 머신에 Node 22 이상, `git`, 인증된 [`gh`](https://cli.github.com/), 그리고
   [`mattpocock-skills`](https://github.com/mattpocock/skills) 플러그인 1.3.0 이상 버전을 설치한 `claude`가
   있습니다.

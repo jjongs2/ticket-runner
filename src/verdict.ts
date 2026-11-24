@@ -10,7 +10,7 @@ import { z } from "zod";
  */
 const answerSchema = z.object({
   number: z.number().int(),
-  status: z.enum(["met", "unmet", "unverifiable"]),
+  status: z.enum(["met", "unmet", "unverifiable", "ci"]),
   evidence: z.string(),
 });
 
@@ -110,7 +110,12 @@ export const VERDICT_JSON_SCHEMA = {
             type: "integer",
             description: "The criterion's number in the list the prompt gives",
           },
-          status: { type: "string", enum: ["met", "unmet", "unverifiable"] },
+          status: {
+            type: "string",
+            enum: ["met", "unmet", "unverifiable", "ci"],
+            description:
+              "`ci` only for a criterion that asks for nothing but CI, or some commands, to pass, left to a workflow that runs on this pull request",
+          },
           evidence: {
             type: "string",
             description: "What you ran or read, and what it showed. It proposes no fix",
@@ -174,20 +179,57 @@ export function isMisnumbered(graded: Verdict | Misnumbered): graded is Misnumbe
 
 /**
  * The pipeline's own pass decision: no criterion is unmet, the branch made no
- * defect, and at least one criterion is met. A verdict of nothing but
- * `unverifiable` is zero evidence, so it fails.
+ * defect, and at least one criterion is met or left to CI. A verdict of nothing
+ * but `unverifiable` is zero evidence, so it fails. A `ci` criterion is
+ * evidence still to come, which the pull request's CI gives or withholds
+ * ({@link settleCiCriteria}).
  */
 export function passes(verdict: Verdict): boolean {
   const counts = countStatuses(verdict);
-  return counts.unmet === 0 && verdict.defects.length === 0 && counts.met > 0;
+  return counts.unmet === 0 && verdict.defects.length === 0 && counts.met + counts.ci > 0;
 }
 
 export function countStatuses(verdict: Verdict): Record<CriterionStatus, number> {
-  const counts: Record<CriterionStatus, number> = { met: 0, unmet: 0, unverifiable: 0 };
+  const counts: Record<CriterionStatus, number> = { met: 0, unmet: 0, unverifiable: 0, ci: 0 };
   for (const criterion of verdict.criteria) counts[criterion.status] += 1;
   return counts;
 }
 
 export function unmetCriteria(verdict: Verdict): GradedCriterion[] {
   return verdict.criteria.filter((criterion) => criterion.status === "unmet");
+}
+
+/**
+ * The verdict once the wait for CI has ended: a `ci` criterion CI passed is
+ * `met`, and one no CI ran on is `unverifiable`, its evidence saying so, since
+ * the workflow the verify Stage named never graded it.
+ */
+export function settleCiCriteria(verdict: Verdict, ciPassed: boolean): Verdict {
+  return {
+    ...verdict,
+    criteria: verdict.criteria.map((criterion) => {
+      if (criterion.status !== "ci") return criterion;
+      return ciPassed
+        ? { ...criterion, status: "met" }
+        : {
+            ...criterion,
+            status: "unverifiable",
+            evidence: `${criterion.evidence.trimEnd()} (left to CI, which ran no check on the pull request)`,
+          };
+    }),
+  };
+}
+
+/**
+ * The verdict's counts as the verify row and the Run's `verified` line say
+ * them: the met ones always, and the ones left to CI and the unverifiable ones
+ * only when there are any.
+ */
+export function verifiedSummary(verdict: Verdict): string {
+  const counts = countStatuses(verdict);
+  return [
+    `${counts.met} met`,
+    ...(counts.ci === 0 ? [] : [`${counts.ci} to CI`]),
+    ...(counts.unverifiable === 0 ? [] : [`${counts.unverifiable} unverifiable`]),
+  ].join(" · ");
 }

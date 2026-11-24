@@ -26,8 +26,9 @@ A Run works unattended, so anything missing has to be caught before it starts, n
 | `claude` logged in with your Claude plan | A Stage runs on that login and never sees the `ANTHROPIC_API_KEY` your shell exports, unless the Run is started with [`--api-key`](./running.md#api-key) | – |
 | A GitHub repository with Tickets planned for it | The board is where Tickets come from; see [Planning](./planning.md) | – |
 | `/setup-matt-pocock-skills`, run once in the repository with GitHub Issues as the tracker | The planning skills file Specs and Tickets as GitHub issues because of it. It asks before it writes `docs/agents/issue-tracker.md` and an `## Agent skills` block in `CLAUDE.md`, which show it ran | – |
-| A Check the pipeline can run itself | `test` and `typecheck` scripts in `package.json`, or commands in [`checks`](./configuration.md#checks), or `"checks": []` for none | `init` reports it; `run` refuses without one |
-| The Target's own dependencies, installed in the main checkout | A Ticket's worktree finds them there, and nothing installs them for it. Without them every Check fails, at the merge-base too, and the Run ends on a [failing base branch](./stopping-and-resuming.md#release-over-a-failing-base-branch) | – |
+| A Check command: `test` and `typecheck` scripts in `package.json`, or commands in [`checks`](./configuration.md#checks), or `"checks": []` for none | The Stage prompts name the commands, and the pipeline runs them at a branch's merge-base with the base branch to tell a red CI the branch inherited from one it brought | `init` reports it; `run` refuses without one |
+| CI on the Target's pull requests | The pipeline runs no Check on a Ticket's branch: the pull request's CI, which you set up, is what gates the merge, and a pull request with none merges code nothing ran | – |
+| The Target's own dependencies, installed in the main checkout | A Ticket's worktree finds them there, and nothing installs them for it. Without them a Stage cannot run the Checks, and every Check fails at the merge-base, so a red CI ends the Run on a [failing base branch](./stopping-and-resuming.md#release-over-a-failing-base-branch) | – |
 
 A merge only pulls the base branch into the main checkout, so after a Ticket that adds a dependency, install again there before the next Run.
 
@@ -142,7 +143,7 @@ Checked:
   ✓ `gh` is authenticated
   ✓ `claude` runs
   ✓ the `mattpocock-skills` plugin is installed
-  ✗ no Check is configured or inferable — name one in `checks` in ticket-runner.json, or add `test` and `typecheck` scripts to package.json
+  ✗ no Check is configured or inferable — the Stage prompts name the Check commands and a red CI is graded with them at a merge-base; name one in `checks` in ticket-runner.json, or add `test` and `typecheck` scripts to package.json
 
 Not ready: 1 item is yours to put right.
 ```
@@ -191,7 +192,7 @@ Two refusals come before readiness:
 Two more come after it:
 
 - **State files in the checkout.** An early pipeline kept a Ticket's resume state under `.ticket-runner/state/`; it now lives on the Target's remote, and nothing migrates it. A Run refuses while that directory holds state files and names their Tickets. Finish those Tickets with the version that wrote them, or hand them to a human, then delete the directory.
-- **No Check.** With no Check command configured or inferable, a Run refuses rather than merge unchecked code. A Target with none writes [`"checks": []`](./configuration.md#checks), and the Run starts with a warning.
+- **No Check.** With no Check command configured or inferable, a Run refuses: the Stage prompts name the Check commands, and a red CI is graded with them at a merge-base. A Target with none writes [`"checks": []`](./configuration.md#checks), and the Run starts with a warning.
 
 ## Take it out with `remove`
 

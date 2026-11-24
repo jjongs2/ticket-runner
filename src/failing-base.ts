@@ -1,11 +1,11 @@
 /**
- * Whether a Check a Ticket's branch failed is one it inherited.
+ * Whether the red CI on a Ticket's pull request is a failure it inherited.
  *
- * The Checks run on the Ticket's branch, and CI on its pull request, so a
- * failure alone cannot say whether the branch brought it or the base branch
- * did. A test that starts failing on the base branch fails on every branch at
- * once, and a fix Stage per Ticket then mends it differently in each pull
- * request, at the cost of every Ticket's fix budget. So a failure is graded
+ * CI runs on the Ticket's pull request, so a failure alone cannot say whether
+ * the branch brought it or the base branch did. A test that starts failing on
+ * the base branch fails on every branch at once, and a fix Stage per Ticket
+ * then mends it differently in each pull request, at the cost of every
+ * Ticket's fix budget. So a failure is graded
  * once more, at what the branch inherited: its merge-base with the base branch,
  * checked out clean in a worktree of its own. One that fails there too is the
  * base branch's, and the Ticket is released rather than charged for it.
@@ -54,7 +54,7 @@ export class BaseBranchChecks {
 
   /**
    * The first of `commands` that fails at `commit`, run in that order and
-   * stopping there as the Checks do, or nothing when the commit passes them
+   * stopping at the first that fails, or nothing when the commit passes them
    * all. Each command runs at a commit at most once per Run.
    */
   async firstFailing(

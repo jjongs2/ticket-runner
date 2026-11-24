@@ -1271,7 +1271,7 @@ describe("a Run a human stopped", () => {
 
   it("still exits 1 when the Ticket it was finishing was handed off", async () => {
     tracker.addIssue({ number: 4 });
-    workspace.failCheck("npm test", "1 test failed");
+    tracker.ci = { state: "failed", summary: "test failed", excerpt: "test\n1 test failed" };
     const signals = new EventEmitter();
     const implementing = runner.holds("implement");
 
@@ -1475,7 +1475,7 @@ describe("where a Run keeps a handed-off Ticket's transcripts", () => {
 
   function handOff(numbers: number[] = [4]): void {
     for (const number of numbers) tracker.addIssue({ number });
-    workspace.failCheck("npm test", "1 test failed");
+    tracker.ci = { state: "failed", summary: "test failed", excerpt: "test\n1 test failed" };
   }
 
   function handoffComments(): string[] {

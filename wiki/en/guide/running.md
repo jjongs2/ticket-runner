@@ -27,7 +27,7 @@ The plugin's `/implement-spec` also carries a Spec's Tickets to code. It runs in
 |---|---|---|
 | Who watches | You, in your own session, free to steer it | Nobody; you read the summary and the board afterwards |
 | Unit of work | A whole Spec, in one session | A Ticket, with its own branch and pull request |
-| Gates | The skill's own steps, then your review | The Checks, the verify Stage and CI, for every Ticket |
+| Gates | The skill's own steps, then your review | The verify Stage and the pull request's CI, for every Ticket |
 | How it ends | When the session is done, with the Spec's work waiting for your review | With each Ticket merged into the base branch or handed to a human |
 | Resuming | Nothing on the board records how far it got, so what is left is yours to work out | A [Stranded Ticket](./stopping-and-resuming.md) resumes in the next Run, on any Host |
 | Mark on the board | None while it works | `in-progress` and an assignee while a Run holds a Ticket |
@@ -169,7 +169,7 @@ The header ends with what the Stages were billed to: `subscription`, or `API key
 |---|---|
 | `merged` | Merged; the pull request is named |
 | `handed` | Handed off to a human: the Stage it stopped at, and why. `merge · left to a human, as this Target merges by hand` is a green Ticket on a Target that [merges by hand](./configuration.md#merge). A row ending `hand-off cut short · GitHub failure` (or `remote unreachable`) is a Hand-off [that fault stopped partway](./stopping-and-resuming.md#release-over-a-github-or-remote-failure): finish it by hand |
-| `released` | Released at the named Stage by the `rate limit` (`API rate limit` on an `--api-key` Run), an `API failure`, or `out of API budget`, at `checks` or `ci` by a `failing base branch`, or at any step by a `GitHub failure` or the `remote unreachable`. Nobody has to do anything about the Ticket |
+| `released` | Released at the named Stage by the `rate limit` (`API rate limit` on an `--api-key` Run), an `API failure`, or `out of API budget`, at `ci` by a `failing base branch`, or at any step by a `GitHub failure` or the `remote unreachable`. Nobody has to do anything about the Ticket |
 | `skipped` | Passed over, with the reason ([guards](./planning.md#guards), or the table above) |
 | `billed` | A Stage of the Ticket above that said, in its `apiKeySource`, it was billed to something other than what the header names: an `apiKeyHelper` in the Host's settings, say, which no environment variable removes. It ends with that Stage's own amount, `· $4.15`, where it gave one, which the header's leaves out |
 | `noted` | A [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) the row above made, `from #<n> pipeline` when it is the pipeline's own about a failing base branch, and where it went: `comment` on an issue already there, the Notes issue included, or `new` for the one Note that opened the Notes issue |
@@ -206,11 +206,11 @@ ticket-runner 0.5.2 run 2026-09-17T09-00-00-000 · 1 lane
 
 #4 claimed
 #4 implemented · agent/4-planning-guards
-#4 verified · 6 met · 1 unverifiable
+#4 verified · 3 met · 1 to CI
 #4 merged · PR #12
 ```
 
-The first line names the version as the summary's header does, so the log of a Run killed before its summary still says which version ran. The notices that go with it follow it, such as a newer version being out, and a blank line comes before the first Ticket line. Nothing is printed while a Stage runs or CI is awaited, which can take an hour; a Stage's own output is in its `.stdout` file below. A narrowed Run's first line adds the Tickets named. A Ticket is claimed on `agent/<n>`, so `claimed` names no branch, and `implemented` names it once the implement Stage has named it ([The worktree and branch](./ticket-to-merge.md#the-worktree-and-branch)); a Ticket whose branch keeps `agent/<n>` says why first, `#4 keeps agent/4 · …`. A resumed Ticket says `resumed from <state>` in place of `claimed`, with its branch after it when it resumes past the implement Stage. A Stage billed to something other than what the Run bills its Stages to is named as it comes back: `#4 implement ran on apiKeySource apiKeyHelper, not the subscription (none)`. Warnings and refusals go to stderr.
+The first line names the version as the summary's header does, so the log of a Run killed before its summary still says which version ran. The notices that go with it follow it, such as a newer version being out, and a blank line comes before the first Ticket line. Nothing is printed while a Stage runs or CI is awaited, which can take an hour; a Stage's own output is in its `.stdout` file below. A narrowed Run's first line adds the Tickets named. A Ticket is claimed on `agent/<n>`, so `claimed` names no branch, and `implemented` names it once the implement Stage has named it ([The worktree and branch](./ticket-to-merge.md#the-worktree-and-branch)); a Ticket whose branch keeps `agent/<n>` says why first, `#4 keeps agent/4 · …`. `verified` reads as the verify row does: the met criteria, then `· <c> to CI` and `· <u> unverifiable` when there are any. A resumed Ticket says `resumed from <state>` in place of `claimed`, with its branch after it when it resumes past the implement Stage. A Stage billed to something other than what the Run bills its Stages to is named as it comes back: `#4 implement ran on apiKeySource apiKeyHelper, not the subscription (none)`. Warnings and refusals go to stderr.
 
 In a terminal, each `#4` and `PR #12` on these lines and in the summary is a link to it on GitHub, where your terminal supports links, and each line takes the colour of what it asks of you:
 
@@ -261,7 +261,7 @@ Readying the Host installs only what the cloud environment's setup script did no
 1. **The pipeline.** A copy the setup script installed is used as it is, whichever version it is. Otherwise the Operator installs the version stamped on the Target's conventions document; with no stamp, it installs nothing and asks you to run `init` from a workstation.
 2. **The `mattpocock-skills` plugin**, from the official marketplace.
 3. **`gh`**, from apt.
-4. **The Target's own dependencies**, in the main checkout, where every worktree's Checks find them.
+4. **The Target's own dependencies**, in the main checkout, where a Stage running the Checks in any worktree finds them.
 
 It reports each Ticket as the Run ends it, and any refusal or warning, but no progress line. When the Run ends, it gives the summary, what the exit code means and how many Notes the Run posted. If its Run ends without a summary, it offers to start it again rather than asking you to release the lock (below).
 

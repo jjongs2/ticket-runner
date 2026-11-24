@@ -15,7 +15,7 @@ This page is for anyone curious how the pipeline works inside, and links the mod
 |---|---|---|
 | `Tracker` | GitHub: issues, labels, comments, pull requests, CI, merges | `GhTracker` · `FakeTracker` |
 | `AgentRunner` | Claude: one Stage session | `ClaudeAgentRunner` · `FakeAgentRunner` |
-| `Workspace` | git: worktrees, Checks, rebase, push, the state and the Run lock | `GitWorkspace` · `FakeWorkspace` |
+| `Workspace` | git: worktrees, Checks at a merge-base, rebase, push, the state and the Run lock | `GitWorkspace` · `FakeWorkspace` |
 
 ```mermaid
 flowchart LR
@@ -101,7 +101,7 @@ claude --print <prompt> --output-format stream-json --verbose \
 
 ### `GitWorkspace`
 
-[`GitWorkspace`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts) keeps the worktrees under `.worktrees/`, a Ticket's and the detached one at a merge-base a failing Check runs again in, runs the Checks, rebases and pushes, and keeps the `ticket-runner/state` and `ticket-runner/lock` branches ([Hand-offs, stopping and resuming](./stopping-and-resuming.md)).
+[`GitWorkspace`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts) keeps the worktrees under `.worktrees/`, a Ticket's and the detached one at a merge-base the Checks run in when CI is red, runs the Checks there, rebases and pushes, and keeps the `ticket-runner/state` and `ticket-runner/lock` branches ([Hand-offs, stopping and resuming](./stopping-and-resuming.md)).
 
 - Commands in the main checkout run one at a time, because git fails on a held ref or index lock rather than waiting. Commands inside a worktree stay parallel.
 - The state branch is rewritten as one snapshot commit with no parent, built from git objects and a scratch index so the main checkout's tree is never touched. It is pushed unsigned, with `--no-verify` and `--force-with-lease` on the tip it read, and an edit a newer snapshot beat is reapplied, up to three tries. Within one Run, changes take turns, so two Lanes never push snapshots that each miss the other's Ticket.
@@ -157,7 +157,7 @@ Tests sit beside each module as `*.test.ts`.
 | [`guards.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/guards.ts) | why a candidate is skipped: the guards and the refusals |
 | [`landing.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/landing.ts) | the Landing: one Lane between rebase and pull at a time, in arrival order |
 | [`lifecycle.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lifecycle.ts) | where a Ticket failed, and which failures a fix Stage may mend |
-| [`failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts) | runs a failing Check at the merge-base, once per Run per commit, and its Note once |
+| [`failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts) | runs the Checks at the merge-base when CI is red, once per Run per commit, and its Note once |
 | [`workflows.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/workflows.ts) | whether any workflow on a pull request's branch can run on it, which decides the CI grace |
 | [`base-branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/base-branch.ts) | resolves the base branch once per Run |
 | [`branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/branch.ts) | `agent/<n>`, the `agent/<n>-<slug>` the implement Stage's slug names, `.worktrees/ticket-<n>` and `.worktrees/base-<commit>` |
@@ -280,7 +280,7 @@ The full records are in [`docs/adr/`](https://github.com/jjongs2/ticket-runner/t
 - **Decision**: The Landing is a section one Lane is in at a time, not a merge queue.
 - **Why**: What CI graded is exactly what lands, without paying for CI twice. GitHub's merge queue would have made a repository setting part of Target readiness.
 - **Cost**: One slow CI or conflict Stage holds every other Lane's Landing.
-- **Amendment**: A Target that [merges by hand](./configuration.md#merge) hands each green Ticket off and leaves the Landing without a merge, since holding it until a human merges would stop every Lane for hours. There, what lands is what CI graded only when the Target requires a branch to be up to date before merging.
+- **Amendment**: A Target that [merges by hand](./configuration.md#merge) hands each green Ticket off and leaves the Landing without a merge, since holding it until a human merges would stop every Lane for hours. There, what lands is what CI graded only when the Target requires a branch to be up to date before merging. Later, the pipeline stopped running Checks on a Ticket's branch, so the loop is verify, rebase, pull request, CI and merge: the code Stage already runs the suite and the Target's CI runs the same commands, and a Target without CI now merges code nothing ran.
 
 ### [ADR-0006: Stop is a signal, and Ctrl+C stays a kill](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md) {#adr-0006}
 

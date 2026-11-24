@@ -63,12 +63,12 @@ describe("the comment body", () => {
       branch: BRANCH,
       rows: [
         { point: "implement", outcome: "✅ committed", turns: 7, durationMs: 1_200_000 },
-        { point: "checks", outcome: "✅ passed", durationMs: 120_000 },
+        { point: "ci", outcome: "✅ passed", durationMs: 120_000 },
       ],
     });
 
     expect(rendered).toContain("| implement | ✅ committed | 7 | 20m 0s |");
-    expect(rendered).toContain("| checks | ✅ passed | – | 2m 0s |");
+    expect(rendered).toContain("| ci | ✅ passed | – | 2m 0s |");
   });
 
   it.each([
@@ -88,10 +88,10 @@ describe("the comment body", () => {
       version: VERSION,
       runId: "run-1",
       branch: BRANCH,
-      rows: [{ point: "checks", outcome: "✅ passed", durationMs }],
+      rows: [{ point: "ci", outcome: "✅ passed", durationMs }],
     });
 
-    expect(rendered).toContain(`| checks | ✅ passed | – | ${shown} |`);
+    expect(rendered).toContain(`| ci | ✅ passed | – | ${shown} |`);
   });
 
   it("repeats a Stage that ran twice rather than overwriting its row", () => {
@@ -100,13 +100,13 @@ describe("the comment body", () => {
       runId: "run-1",
       branch: BRANCH,
       rows: [
-        { point: "checks", outcome: "❌ `npm test` failed", durationMs: 0 },
+        { point: "ci", outcome: "❌ `npm test` failed", durationMs: 0 },
         { point: "fix", outcome: "✅ committed", turns: 4, durationMs: 0 },
-        { point: "checks", outcome: "✅ passed", durationMs: 0 },
+        { point: "ci", outcome: "✅ passed", durationMs: 0 },
       ],
     });
 
-    expect(rendered.match(/^\| checks \|/gm)).toHaveLength(2);
+    expect(rendered.match(/^\| ci \|/gm)).toHaveLength(2);
   });
 
   it("dashes the cells a row has no answer for", () => {
@@ -125,10 +125,10 @@ describe("the comment body", () => {
       version: VERSION,
       runId: "run-1",
       branch: BRANCH,
-      rows: [{ point: "checks", outcome: "❌ `npm test | tee log` failed", durationMs: 0 }],
+      rows: [{ point: "ci", outcome: "❌ `npm test | tee log` failed", durationMs: 0 }],
     });
 
-    expect(rendered).toContain("| checks | ❌ `npm test \\| tee log` failed | – | 0s |");
+    expect(rendered).toContain("| ci | ❌ `npm test \\| tee log` failed | – | 0s |");
   });
 });
 
@@ -181,12 +181,12 @@ describe("recording a Stage", () => {
     const recorder = progress(tracker);
 
     await recorder.record({ point: "implement", outcome: "✅ committed", turns: 7 });
-    await recorder.record({ point: "checks", outcome: "✅ passed", durationMs: 0 });
+    await recorder.record({ point: "ci", outcome: "✅ passed", durationMs: 0 });
 
     expect(tracker.comments).toHaveLength(1);
     expect(tracker.updatedComments).toHaveLength(1);
     expect(body(tracker)).toContain("| implement | ✅ committed | 7 | – |");
-    expect(body(tracker)).toContain("| checks | ✅ passed | – | 0s |");
+    expect(body(tracker)).toContain("| ci | ✅ passed | – | 0s |");
   });
 
   it("reuses the comment an earlier Run left behind", async () => {
@@ -213,7 +213,7 @@ describe("recording a Stage", () => {
     });
     issue.comments.push({ id: "42", body: earlier });
 
-    await progress(tracker, issue.comments).record({ point: "checks", outcome: "✅ passed" });
+    await progress(tracker, issue.comments).record({ point: "ci", outcome: "✅ passed" });
 
     expect(tracker.updatedComments[0]?.body).toBe(
       [
@@ -222,7 +222,7 @@ describe("recording a Stage", () => {
         "",
         "| Stage | Outcome | Turns | Duration |",
         "|---|---|---|---|",
-        "| checks | ✅ passed | – | – |",
+        "| ci | ✅ passed | – | – |",
         "",
       ].join("\n"),
     );
@@ -237,7 +237,7 @@ describe("recording a Stage", () => {
       point: "implement",
       outcome: "✅ committed",
     });
-    await progress(tracker, issue.comments, "run-3").record({ point: "checks", outcome: "✅ passed" });
+    await progress(tracker, issue.comments, "run-3").record({ point: "ci", outcome: "✅ passed" });
 
     expect(tracker.comments).toHaveLength(1);
     expect([...body(tracker).matchAll(/run `(run-\d)`/g)].map((match) => match[1])).toEqual([
@@ -262,13 +262,13 @@ describe("recording a Stage", () => {
     await progress(tracker, issue.comments).record({ point: "implement", outcome: "✅ committed" });
     // This Run reads the Ticket again, as it does on a second pass of it.
     const again = progress(tracker, issue.comments);
-    await again.record({ point: "checks", outcome: "✅ passed" });
+    await again.record({ point: "ci", outcome: "✅ passed" });
     await again.record({ point: "verify", outcome: "❌ 1 unmet" });
 
     expect(tracker.comments).toEqual([]);
     expect(body(tracker).match(/run `run-1`/g)).toHaveLength(1);
     expect(body(tracker).startsWith(earlier)).toBe(true);
-    expect(body(tracker)).toContain("| checks | ✅ passed | – | – |\n| verify | ❌ 1 unmet | – | – |");
+    expect(body(tracker)).toContain("| ci | ✅ passed | – | – |\n| verify | ❌ 1 unmet | – | – |");
   });
 
   it("keeps a comment an earlier version wrote as the first section, byte for byte", async () => {
@@ -330,7 +330,7 @@ describe("recording a Stage", () => {
     });
     issue.comments.push({ id: "42", body: `${earlier}${CLOUD_FOOTER}` });
 
-    await progress(tracker, issue.comments).record({ point: "checks", outcome: "✅ passed" });
+    await progress(tracker, issue.comments).record({ point: "ci", outcome: "✅ passed" });
 
     expect(tracker.updatedComments[0]?.body).toBe(
       [
@@ -339,7 +339,7 @@ describe("recording a Stage", () => {
         "",
         "| Stage | Outcome | Turns | Duration |",
         "|---|---|---|---|",
-        "| checks | ✅ passed | – | – |",
+        "| ci | ✅ passed | – | – |",
         "",
       ].join("\n"),
     );
@@ -360,7 +360,7 @@ describe("recording a Stage", () => {
     });
     const third = progress(tracker, issue.comments, "run-3");
     await third.record({ point: "implement", outcome: "✅ committed" });
-    await third.record({ point: "checks", outcome: "✅ passed" });
+    await third.record({ point: "ci", outcome: "✅ passed" });
 
     expect(tracker.comments).toHaveLength(1);
     expect([...body(tracker).matchAll(/run `(run-\d)`/g)].map((match) => match[1])).toEqual([
@@ -369,7 +369,7 @@ describe("recording a Stage", () => {
       "run-3",
     ]);
     expect(body(tracker).split(footer)).toHaveLength(2);
-    expect(body(tracker).endsWith(`| checks | ✅ passed | – | – |\n${footer}`)).toBe(true);
+    expect(body(tracker).endsWith(`| ci | ✅ passed | – | – |\n${footer}`)).toBe(true);
   });
 
   it("keeps a comment an earlier version wrote as the first section, without the footer after its table", async () => {
@@ -403,14 +403,14 @@ describe("recording a Stage", () => {
     await progress(tracker, issue.comments).record({ point: "implement", outcome: "✅ committed" });
     // This Run reads the Ticket again, as it does on a second pass of it.
     const again = progress(tracker, issue.comments);
-    await again.record({ point: "checks", outcome: "✅ passed" });
+    await again.record({ point: "ci", outcome: "✅ passed" });
     await again.record({ point: "verify", outcome: "❌ 1 unmet" });
 
     expect(tracker.comments).toHaveLength(1);
     expect(body(tracker).match(/^\*\*ticket-runner\*\*/gm)).toHaveLength(2);
     expect(body(tracker).match(/run `run-1`/g)).toHaveLength(1);
     expect(body(tracker).split(CLOUD_FOOTER)).toHaveLength(2);
-    expect(body(tracker)).toContain("| checks | ✅ passed | – | – |\n| verify | ❌ 1 unmet | – | – |");
+    expect(body(tracker)).toContain("| ci | ✅ passed | – | – |\n| verify | ❌ 1 unmet | – | – |");
   });
 
   it("names no Host in the header it writes", async () => {
@@ -429,7 +429,7 @@ describe("recording a Stage", () => {
     issue.comments.push({ id: "42", body: `${PROGRESS_MARKER}\nwhat the human read` });
     issue.comments.push({ id: "43", body: HANDOFF_MARKER + "\n**Handed off.**" });
 
-    await progress(tracker, issue.comments).record({ point: "checks", outcome: "✅ passed" });
+    await progress(tracker, issue.comments).record({ point: "ci", outcome: "✅ passed" });
 
     // The table the human was handed stays as they read it; this Run reports
     // beside it rather than over it.
@@ -446,7 +446,7 @@ describe("recording a Stage", () => {
       body: `${HANDOFF_MARKER}\n${HANDOFF_TAKEN_LINE}\n\n**Handed off.**`,
     });
 
-    await progress(tracker, issue.comments).record({ point: "checks", outcome: "✅ passed" });
+    await progress(tracker, issue.comments).record({ point: "ci", outcome: "✅ passed" });
 
     // A hand-off a Run already took back is not a human holding the Ticket: this
     // is the same Run's second reading of the Ticket, or a later resume of it.
@@ -485,7 +485,7 @@ describe("recording a Stage", () => {
     });
 
     await recorder.record({ point: "implement", outcome: "✅ committed" });
-    await recorder.record({ point: "checks", outcome: "✅ passed" });
+    await recorder.record({ point: "ci", outcome: "✅ passed" });
 
     expect(posted).toBe(1);
     expect(lines).toEqual([`#${TICKET} posted a progress comment it cannot edit again`]);

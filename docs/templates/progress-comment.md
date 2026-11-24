@@ -4,20 +4,16 @@
 | Stage | Outcome | Turns | Duration |
 |---|---|---|---|
 | implement | ✅ committed | <n> | <duration> |
-| checks | ✅ passed | – | <duration> |
 | verify | ⏸ rate limited | <n> | <duration> |
 
 **ticket-runner** `<version>` · run `<runId>` · `<branch>`
 
 | Stage | Outcome | Turns | Duration |
 |---|---|---|---|
-| checks | ✅ passed | – | <duration> |
 | verify | ❌ <k> unmet | <n> | <duration> |
 | fix | ✅ committed | <n> | <duration> |
-| checks | ✅ passed | – | <duration> |
-| verify | ✅ <k> met · <u> unverifiable | <n> | <duration> |
+| verify | ✅ <k> met · <c> to CI · <u> unverifiable | <n> | <duration> |
 | conflict | ✅ rebased | <n> | <duration> |
-| checks | ✅ passed | – | <duration> |
 | ci | ✅ passed | – | <duration> |
 | merge | ✅ #<pr> | – | – |
 
@@ -26,10 +22,11 @@ that Run's version, runId and branch, a blank line, and that Run's table. A
 Ticket one Run took from the claim to the merge has one section.
 
 One row per Stage or gate, appended as it finishes, in the order it happened.
-Rows are not unique: a fix buys a second pass of the Checks and verify, and each
-rebase conflict adds a `conflict` row and the `checks` row that re-grades what it
-resolved. A Stage that is never reached has no row, which is how the table shows
-where a Ticket stopped.
+Rows are not unique: a fix buys a second pass of verify, and each rebase
+conflict adds a `conflict` row. The pipeline runs no Check on the branch, so no
+row is a Check's: the pull request's CI, which the Target sets up, grades the
+code on the `ci` row. A Stage that is never reached has no row, which is how the
+table shows where a Ticket stopped.
 
 `<version>` is the version that wrote the table (ADR-0007), in the shape
 `run-summary.txt` describes.
@@ -67,20 +64,20 @@ is taken back. Nothing tells the Run a human held it, and nothing failed there:
 the section the human read, ending in `👤 left to a human`, stays exactly as it
 was, above the new Run's.
 
-`–` is what a cell has no answer for: Checks, CI and the merge run no agent, so
-they have no turn count, and the merge takes no measurable time of its own.
+`–` is what a cell has no answer for: CI and the merge run no agent, so they
+have no turn count, and the merge takes no measurable time of its own.
 
 `<duration>` is written as GitHub Actions writes one on a pull request's checks,
 where a human already reads them: `40s` under a minute, `1m 5s` under an hour,
 `3h 15m 35s` from an hour. It is rounded to the nearest second, starts at the
 largest unit that is not zero, and keeps every unit below it even at zero
 (`1m 0s`, `1h 0m 5s`); nothing is zero-padded. Whole minutes said little, since
-most `checks` and `ci` rows take one or two. The Run's length in `run-summary.txt`
+most `ci` rows take one or two. The Run's length in `run-summary.txt`
 stays in whole minutes: seconds change nothing over a whole Run. A section an
 earlier Run wrote is carried forward as written, so one comment can read `2m` in
 an older section and `1m 48s` in a newer one.
 
-Details never go in a cell. The failing Check's output, the unmet criteria and
+Details never go in a cell. The uncommitted paths, the unmet criteria and
 their evidence belong to the hand-off comment, which is a separate comment so it
 notifies the Ticket's watchers, though never the account the Run acts as, since
 GitHub notifies nobody of their own comment; this one is edited in place and
@@ -94,12 +91,11 @@ Ticket for a later Run to resume, `👤` handed it to a human with nothing faile
 
 | Stage | Outcome |
 |---|---|
-| setup | `⏸ remote unreachable` |
-| implement | `✅ committed`, `❌ no commits`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
-| fix | `✅ committed`, `❌ no commits`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
-| checks | `✅ passed`, `⚠️ no checks`, `❌ uncommitted work`, ``❌ `<command>` failed``, ``❌ `<command>` timed out``, ``⏸ `<command>` fails on the base branch``, `⏸ remote unreachable` |
-| verify | `✅ <k> met · <u> unverifiable`, `❌ <k> unmet`, `❌ <d> defects`, `❌ <k> unmet · <d> defects`, `❌ misnumbered`, `❌ no evidence`, `❌ no verdict`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
-| conflict | `✅ rebased`, `❌ unresolved`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ unknown` |
+| setup | `❌ uncommitted work`, `⏸ remote unreachable` |
+| implement | `✅ committed`, `❌ no commits`, `❌ uncommitted work`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
+| fix | `✅ committed`, `❌ no commits`, `❌ uncommitted work`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
+| verify | `✅ <k> met`, `✅ <k> met · <c> to CI`, `✅ <k> met · <u> unverifiable`, `✅ <k> met · <c> to CI · <u> unverifiable`, `❌ <k> unmet`, `❌ <d> defects`, `❌ <k> unmet · <d> defects`, `❌ misnumbered`, `❌ no evidence`, `❌ no verdict`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
+| conflict | `✅ rebased`, `❌ unresolved`, `❌ uncommitted work`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ unknown` |
 | rebase | `⏸ remote unreachable` |
 | pr | `⏸ GitHub failure`, `⏸ remote unreachable` |
 | ci | `✅ passed`, `❌ failed`, `❌ conflicting`, `⚠️ no checks`, `⚠️ no workflow runs`, `❌ timed out`, ``⏸ `<command>` fails on the base branch``, `⏸ GitHub failure`, `⏸ remote unreachable` |
@@ -111,20 +107,21 @@ reads `1 defect` for one; they fail the verdict as unmet criteria do.
 answered one it did not list, or answered one twice, so it graded nothing to
 merge on.
 
-A `checks` row tells a command that exited non-zero from one the wall-clock
-limit killed: both are the same failure to the fix budget, but a hang is not a
-failing assertion, and a fix Stage is told which it is mending.
+`✅ <k> met` is followed by `· <c> to CI` when the verify Stage left `<c>`
+criteria to CI, criteria that ask for nothing but the pull request's CI, or
+some commands, to pass, which a workflow that runs on the pull request runs; and
+by `· <u> unverifiable` when `<u>` criteria were unverifiable. Neither part is
+written at zero. The merge ticks a criterion left to CI once CI passes.
 
-`⚠️ no checks` is the `checks` row for Checks that ran with no Check command,
-which only `"checks": []` in the config allows: nothing graded the branch, so it
-is not `✅ passed`. It is written wherever the Checks run, after a Stage that
-committed and again after the `conflict` Stage. It is also the `ci` row for a
-pull request GitHub listed no checks for once the grace ran out, which merges;
-the Stage column tells the two apart.
+`⚠️ no checks` is the `ci` row for a pull request GitHub listed no checks for
+once the grace ran out, which merges: nothing graded the branch's code, so it is
+not `✅ passed`. The criteria left to CI stay unticked and are named as
+unverifiable are, and a Ticket with no met criterion is then handed off, since
+no criterion has evidence to merge on.
 
 `⚠️ no workflow runs` is the `ci` row for a pull request with no checks at the
 wait's first reading when none of the workflow files on its branch can run on
-it, so the wait gave it no grace. It merges too.
+it, so the wait gave it no grace. It merges too, on the same terms.
 
 `❌ conflicting` is the `ci` row for a pull request GitHub reports as
 conflicting with the base branch, which has moved since the rebase — a human
@@ -132,11 +129,10 @@ merging on GitHub meanwhile, say. GitHub runs no workflow for such a pull
 request, so it is not `⚠️ no checks`, and it is not the `conflict` Stage: that
 row is the rebase before the pull request, and this one comes after it.
 
-``⏸ `<command>` fails on the base branch`` is a failing Check, or a red CI, that
-the branch inherited rather than brought. The pipeline ran the Check commands
-once in a clean worktree at the branch's merge-base with the base branch, and
-`<command>` failed there too: on a `checks` row the command that failed on the
-branch, on a `ci` row the first Check command the merge-base failed. Nothing
+``⏸ `<command>` fails on the base branch`` is a red CI that the branch
+inherited rather than brought. The pipeline ran the Check commands once in a
+clean worktree at the branch's merge-base with the base branch, and
+`<command>`, the first of them the merge-base failed, failed there. Nothing
 about the Ticket is wrong, so the Ticket is released with its fix budget as it
 was, and this is the last row of its Run's table, like the rate limit's. It
 names the command rather than the limit, because what a human does about it is
@@ -159,10 +155,12 @@ Target whose config sets `merge` to `false`: the pipeline merges nothing there,
 so the Ticket is handed off with its pull request as published, and this is the
 last row of its Run's table.
 
-`❌ uncommitted work` is the `checks` row no command wrote: the worktree held
-changes no commit carries, so no Check ran. What lands is the branch, and a
-worktree graded with work the branch lacks would pass on code the pull request
-never carries.
+`❌ uncommitted work` is the row of the Stage that left the worktree holding
+changes no commit carries, in place of its `✅ committed` or `✅ rebased`, and a
+`setup` row on a resumed Ticket, where no Stage of the Run left them. It spends
+the fix budget before anything grades the branch: what lands is the branch, and
+a worktree graded with work the branch lacks would pass on code the pull
+request never carries.
 
 `<why the Stage did not finish>` is the short form of a Stage failure: `timed
 out`, `turn capped`, `exited non-zero`, `invalid result`, or `failed` when the

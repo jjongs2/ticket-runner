@@ -17,10 +17,10 @@ checklist of Acceptance Criteria and its blockers linked. **Execution** is the p
 every such issue whose blockers have closed, it:
 
 1. claims the issue and creates a branch and a git worktree for it
-2. runs a headless `claude -p` session that implements it with `/implement`
-3. runs your tests and typecheck itself
-4. runs a second, fresh session that tries to prove the Acceptance Criteria are *not* met
-5. rebases, opens a pull request, waits for CI and squash-merges
+2. runs a headless `claude -p` session that implements it with `/implement` and runs your tests
+3. runs a second, fresh session that tries to prove the Acceptance Criteria are *not* met
+4. rebases, opens a pull request, waits for CI and squash-merges: the pipeline runs no tests on
+   the branch itself, so the CI you set up on your pull requests is what gates the merge
 
 One failure buys one fix session and a second pass. Anything it still cannot finish goes back
 to you, labelled `ready-for-human`, with a draft pull request and a comment saying what failed.
@@ -36,7 +36,8 @@ It fits a repository where:
 
 - you plan with `mattpocock-skills`, set up once with `/setup-matt-pocock-skills` and GitHub
   Issues as the tracker, and each Ticket is small enough for one session
-- there is a test or typecheck command the pipeline can run itself
+- there is a test or typecheck command for the sessions to run, and your pull requests run it in
+  CI: without CI, a pull request merges code nothing ran
 - the machine running it has Node 22 or newer, `git`, an authenticated
   [`gh`](https://cli.github.com/), and `claude` with the
   [`mattpocock-skills`](https://github.com/mattpocock/skills) plugin, version 1.3.0 or later

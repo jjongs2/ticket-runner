@@ -549,15 +549,11 @@ export class FakeWorkspace implements Workspace {
    * discard empties it, as `git reset --hard && git clean` does.
    */
   uncommitted: string[] = [];
-  /** Check outcomes that stick, per command; a command with none always passes. */
-  checkOutcomes = new Map<string, CheckOutcome>();
-  /** Outcomes for the next runs of a command; `checkOutcomes` answers once they run out. */
-  checkQueue = new Map<string, CheckOutcome[]>();
   ranChecks: { command: string; cwd: string; timeoutMs: number }[] = [];
   /**
    * Check outcomes at a merge-base, per command, where a Check runs in a
-   * `base-<commit>` worktree; a command with none passes there, so a Check a
-   * test fails with {@link failCheck} is one the Ticket's branch brought.
+   * `base-<commit>` worktree; a command with none passes there. The pipeline
+   * runs no Check anywhere else, so a Check outside one passes too.
    */
   baseCheckOutcomes = new Map<string, CheckOutcome>();
   /** The merge-base every branch has with the base branch, unless a test gives one per worktree. */
@@ -682,12 +678,6 @@ export class FakeWorkspace implements Workspace {
     return this;
   }
 
-  /** Fail `command` every time the pipeline runs it. */
-  failCheck(command: string, output: string): this {
-    this.checkOutcomes.set(command, { ok: false, output, timedOut: false });
-    return this;
-  }
-
   /** Fail `command` at every merge-base: a Check the base branch fails too. */
   failBaseCheck(command: string, output: string): this {
     this.baseCheckOutcomes.set(command, { ok: false, output, timedOut: false });
@@ -697,29 +687,6 @@ export class FakeWorkspace implements Workspace {
   /** Conflict on the next rebase only: a conflict the conflict Stage then resolves. */
   conflictOnce(conflict: string): this {
     this.rebaseQueue.push({ ok: false, conflict });
-    return this;
-  }
-
-  /** Fail `command` on its next run only: a Check a fix Stage then mends. */
-  failCheckOnce(command: string, output: string): this {
-    return this.queueCheck(command, { ok: false, output, timedOut: false });
-  }
-
-  /** Time `command` out every time the pipeline runs it. */
-  timeOutCheck(command: string, output: string): this {
-    this.checkOutcomes.set(command, { ok: false, output, timedOut: true });
-    return this;
-  }
-
-  /** Time `command` out on its next run only. */
-  timeOutCheckOnce(command: string, output: string): this {
-    return this.queueCheck(command, { ok: false, output, timedOut: true });
-  }
-
-  private queueCheck(command: string, outcome: CheckOutcome): this {
-    const queued = this.checkQueue.get(command) ?? [];
-    queued.push(outcome);
-    this.checkQueue.set(command, queued);
     return this;
   }
 
@@ -842,10 +809,7 @@ export class FakeWorkspace implements Workspace {
     if (isBaseWorktree(cwd)) {
       return this.baseCheckOutcomes.get(command) ?? { ok: true, output: "" };
     }
-    return (
-      this.checkQueue.get(command)?.shift() ??
-      this.checkOutcomes.get(command) ?? { ok: true, output: "" }
-    );
+    return { ok: true, output: "" };
   }
 
   async uncommittedPaths(cwd: string): Promise<string[]> {
