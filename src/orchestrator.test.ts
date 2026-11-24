@@ -3697,6 +3697,23 @@ describe("resuming a stranded Ticket", () => {
     expect(tracker.calls).not.toContain(`assign:${TICKET}:pipeline-user`);
   });
 
+  it("says it was taken from the top, still claimed, and names no branch", async () => {
+    strandedTicket();
+    workspace.worktrees.delete(worktree);
+    workspace.branches.delete(BRANCH);
+
+    await run();
+
+    // The whole line, and the only one of its kind: the branch is still
+    // `agent/<n>` here, and the implement Stage's line names it once it has its name.
+    expect(logged.filter((line) => line.startsWith(`#${TICKET} taken from the top`))).toEqual([
+      `#${TICKET} taken from the top, still claimed`,
+    ]);
+    expect(logged.indexOf(`#${TICKET} taken from the top, still claimed`)).toBeLessThan(
+      logged.findIndex((line) => line.startsWith(`#${TICKET} implemented · `)),
+    );
+  });
+
   it("is handed off at setup when its branch outlived its worktree", async () => {
     strandedTicket();
     workspace.worktrees.delete(worktree);
