@@ -604,6 +604,11 @@ export class GitWorkspace implements Workspace {
     );
   }
 
+  async renameBranch(cwd: string, from: string, to: string): Promise<void> {
+    // -m and never -M, so a branch already holding the name is not overwritten.
+    await execOrThrow("git", ["branch", "-m", from, to], { cwd });
+  }
+
   async hasRemoteBranch(branch: string): Promise<boolean> {
     const { stdout } = await this.git([
       "ls-remote",

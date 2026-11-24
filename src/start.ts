@@ -20,7 +20,7 @@ import { conventionsWarning, newerVersionLine } from "./staleness.js";
 import { type StopSource, StopSignal, listenForStop } from "./stop.js";
 import { startupMessages } from "./startup.js";
 import { runSummary } from "./templates.js";
-import { linkNumbers } from "./terminal-links.js";
+import { PLAIN, colourWanted, lineColour, terminalPaint } from "./terminal-colour.js";
 import { resolveTranscriptHome } from "./transcript-home.js";
 
 /**
@@ -74,8 +74,9 @@ export interface StartOptions {
   log?: (line: string) => void;
   /**
    * Whether `log` writes to a terminal, where every `#N` it is handed becomes a
-   * link to that issue on GitHub. The CLI says whether standard output is one;
-   * anywhere else nothing is linked.
+   * link to that issue on GitHub, and each line takes the colour of what it
+   * asks of its reader unless `NO_COLOR` is set to anything. The CLI says
+   * whether standard output is one; anywhere else nothing is linked or coloured.
    */
   terminal?: boolean;
   /** Warnings and refusals, which the CLI puts on stderr as it always has. */
@@ -236,17 +237,27 @@ async function execute(
   // Read before the first line is printed, since every line of the Run, its
   // opening included, links its numbers to this repository in a terminal.
   const target = await targetRepository(tracker);
-  // Beneath everything else that prints, so a line is linked once it is
-  // whole and what the log compares is the plain text. The summary links its
-  // own lines, since only it knows which number a `noted` row cut short.
-  const link =
-    options.terminal === true ? (line: string) => linkNumbers(line, target) : undefined;
-  const print = link === undefined ? write : (line: string) => write(link(line));
+  // Beneath everything else that prints, so a line is linked and coloured once
+  // it is whole and what the log compares is the plain text. The summary
+  // paints its own lines, since only it knows which number a `noted` row cut
+  // short and that a row colours its verb alone.
+  const paint =
+    options.terminal === true
+      ? terminalPaint(target, colourWanted(options.env ?? process.env))
+      : PLAIN;
+  const print = (line: string) => write(paint(line, lineColour(line)));
+  // The opening and its notices are one block, and a blank line sets the
+  // first line after it apart: written with that line, so a Run with nothing
+  // to say before its summary has only the summary's own blank line there.
+  let setApart = false;
   // Every event of the Run goes through this, and one cause tends to fail
   // several of them with the same output, so each output is printed once. The
   // summary is printed as it is: it is one block, written once.
-  const log = printEachOutputOnce(print);
-  if (versionUnrecorded !== undefined) log(versionUnrecorded);
+  const log = printEachOutputOnce((line) => {
+    if (!setApart) write("");
+    setApart = true;
+    print(line);
+  });
 
   // Asked once, and said twice: at the top of the log a human watches, and
   // again at the head of the summary they scroll back to hours later.
@@ -291,12 +302,13 @@ async function execute(
   };
 
   const startedAt = Date.now();
-  log(opening(runId, work, config.lanes));
-  if (newer !== undefined) log(newer);
-  if (transcriptHome.said !== undefined) log(transcriptHome.said);
+  print(opening(version, runId, work, config.lanes));
+  if (newer !== undefined) print(newer);
+  if (transcriptHome.said !== undefined) print(transcriptHome.said);
   // Before the first claim, on any Host: a shallow clone refuses every move of
   // its base branch a rebase needs, and would hand off each Ticket there.
-  if (await workspace.unshallow()) log("the clone was shallow, so its full history was fetched");
+  if (await workspace.unshallow()) print("the clone was shallow, so its full history was fetched");
+  if (versionUnrecorded !== undefined) print(versionUnrecorded);
   const summary = (outcomes: TicketOutcome[], stop: RunStop) =>
     runSummary({
       version,
@@ -307,7 +319,7 @@ async function execute(
       billing: pipeline.billing,
       ...(newer === undefined ? {} : { newer }),
       stop,
-      ...(link === undefined ? {} : { link }),
+      paint,
     });
 
   const { outcomes, stop } = await processRun(pipeline, stopping, work.tickets);
@@ -353,6 +365,8 @@ function localStateMessage(tickets: number[]): string {
 
 /**
  * The line a Run opens with, and the only place the Lane count is said out loud.
+ * It carries the version as the summary's header does, so the log of a Run
+ * killed before its summary still says which version ran (ADR-0007).
  *
  * Everything after it that is about a Ticket starts with that Ticket's number,
  * so a transcript of interleaved Lanes can be read one Ticket at a time; the
@@ -361,12 +375,12 @@ function localStateMessage(tickets: number[]): string {
  * A narrowed Run names the Tickets it was given after its Lanes, ascending,
  * which is also the order it takes the ones the Frontier offers in.
  */
-function opening(runId: string, work: Work, lanes: number): string {
+function opening(version: string, runId: string, work: Work, lanes: number): string {
   const subject = [
     `${lanes} ${lanes === 1 ? "lane" : "lanes"}`,
     ...(work.tickets === undefined ? [] : [work.tickets.map((ticket) => `#${ticket}`).join(" ")]),
   ];
-  return `ticket-runner run ${runId} · ${subject.join(" · ")}`;
+  return `ticket-runner ${version} run ${runId} · ${subject.join(" · ")}`;
 }
 
 /**

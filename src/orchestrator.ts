@@ -1,6 +1,6 @@
 import { relative } from "node:path";
 import { type ListedCriterion, listCriteria } from "./acceptance-criteria.js";
-import { branchName, worktreePath } from "./branch.js";
+import { claimBranch, namedBranch, parseBranchSlug, worktreePath } from "./branch.js";
 import type { Config } from "./config.js";
 import {
   type Billing,
@@ -72,6 +72,7 @@ import {
   type BranchAnswers,
   type BranchProse,
   CODE_STAGE_JSON_SCHEMA,
+  IMPLEMENT_STAGE_JSON_SCHEMA,
   parseBranchProse,
   parseNoCommitReason,
   parseTitle,
@@ -421,11 +422,12 @@ async function takeTicket(
 
   const worktree = worktreePath(repoRoot, ticket);
   // Whether the work that state names is still there, on this Host or the
-  // remote. Its branch is the one the work is on, which the Ticket's title may
-  // no longer say anything about.
+  // remote. Its branch is the one the work is on, whatever name it was given.
+  // A Ticket taken afresh is claimed on `agent/<n>`, which the implement Stage
+  // names once it has finished with commits, before the branch is first pushed.
   const found = await resumable(pipeline, ticket, worktree, recorded);
   const resume = found?.state;
-  const branch = resume?.branch ?? branchName(ticket, issue.title);
+  let branch = resume?.branch ?? claimBranch(ticket);
   // Built from the comments the Ticket already has, so a Run that comes back to
   // a Ticket an earlier Run reported on adds its section to that comment rather
   // than opening a second one. Nothing is written until the first Stage finishes.
@@ -464,7 +466,7 @@ async function takeTicket(
   // only risk the Ticket on three tracker calls that change nothing.
   //
   if (!stranded) await writeClaim(pipeline, ticket, user);
-  log(`#${ticket} ${howItWasTaken(resume, stranded)} · ${branch}`);
+  log(`#${ticket} ${howItWasTaken(resume, stranded)}`);
 
   // Whatever hand-off left this Ticket to a human is no longer the last word on
   // it. Marked here because the comments are already in hand, and because one
@@ -558,7 +560,16 @@ async function takeTicket(
     }
     if (resume === undefined || resume.state === "claimed") {
       point = "implement";
-      await implement(pipeline, issue, worktree, branch, logDir, progress, { notes, written }, record);
+      branch = await implement(
+        pipeline,
+        issue,
+        worktree,
+        branch,
+        logDir,
+        progress,
+        { notes, written },
+        record,
+      );
       // The branch now carries work no later Run should pay for again.
       await record.advance({ state: "implemented" });
     }
@@ -929,9 +940,17 @@ function inCheckout(repoRoot: string, path: string): string {
  * from a recorded state, taken from the top, or claimed outright. A stranded
  * Ticket with nothing left to resume into is the middle one — it is started
  * again, but the claim it is started under is the one it already had.
+ *
+ * Only a Ticket resumed past its implement Stage names its branch, the one
+ * its state file recorded: anywhere else the branch is still `agent/<n>`, and
+ * the line the implement Stage earns names it once it has its name.
  */
 function howItWasTaken(resume: TicketState | undefined, stranded: boolean): string {
-  if (resume !== undefined) return `resumed from ${resume.state}`;
+  if (resume !== undefined) {
+    return resume.state === "implemented"
+      ? `resumed from ${resume.state} · ${resume.branch}`
+      : `resumed from ${resume.state}`;
+  }
   return stranded ? "taken from the top, still claimed" : "claimed";
 }
 
@@ -942,7 +961,15 @@ type Reached = Omit<TicketState, "runId" | "updatedAt">;
 type Advance = Partial<
   Pick<
     Reached,
-    "state" | "fixUsed" | "pullRequest" | "title" | "body" | "problem" | "solution" | "rebaseFirst"
+    | "branch"
+    | "state"
+    | "fixUsed"
+    | "pullRequest"
+    | "title"
+    | "body"
+    | "problem"
+    | "solution"
+    | "rebaseFirst"
   >
 >;
 
@@ -1006,6 +1033,28 @@ class ResumeRecord {
   get answers(): BranchAnswers {
     const { title } = this;
     return { ...(title === undefined ? {} : { title }), ...this.prose };
+  }
+
+  /**
+   * Record the name the branch is about to be given, before it is given it,
+   * and fail where the write does not land.
+   *
+   * The one write after the claim that is allowed to fail anything, and what
+   * it fails is the rename alone: a state file naming `agent/<n>` beside a
+   * branch renamed away from it would send the next Run looking for work under
+   * a name nothing has, where one naming the new name beside a branch a dying
+   * Host never renamed leaves that Host's next Run a branch in the way, which
+   * hands the Ticket to a human with the worktree it is in.
+   */
+  async name(branch: string): Promise<void> {
+    const before = this.reached.branch;
+    this.reached.branch = branch;
+    try {
+      await this.pipeline.workspace.writeState(this.file());
+    } catch (error) {
+      this.reached.branch = before;
+      throw error;
+    }
   }
 
   /**
@@ -1341,6 +1390,11 @@ interface CodeStageNotes {
   written: WrittenNote[];
 }
 
+/**
+ * The implement Stage, and the branch's name once it has finished with
+ * commits: the branch it was claimed on, or the one its slug names, which is
+ * what every write after it names.
+ */
 async function implement(
   pipeline: Pipeline,
   issue: Issue,
@@ -1350,7 +1404,7 @@ async function implement(
   progress: Progress,
   { notes, written }: CodeStageNotes,
   record: ResumeRecord,
-): Promise<void> {
+): Promise<string> {
   const stage = pipeline.config.stages.implement;
   const result = await runStage(pipeline, "implement", {
     ticket: issue.number,
@@ -1364,21 +1418,24 @@ async function implement(
     ),
     cwd: worktree,
     logDir,
-    jsonSchema: CODE_STAGE_JSON_SCHEMA,
-    // The title, the Notes and the reason for no commit are side channels,
-    // not the Stage's product: a session that emitted none of them has
-    // implemented the Ticket exactly as it always did.
+    jsonSchema: IMPLEMENT_STAGE_JSON_SCHEMA,
+    // The title, the branch, the Notes and the reason for no commit are side
+    // channels, not the Stage's product: a session that emitted none of them
+    // has implemented the Ticket exactly as it always did.
     resultRequired: false,
   });
   await collectNotes(pipeline, issue.number, "implement", result, notes, written);
   await recordAnswers(result, record);
 
-  // Pushed whatever became of the Stage, like its Notes: a session that
-  // committed and then was stopped by the rate limit or an API failure still
-  // committed, and the Host that resumes the Ticket may be another one.
   const commits = await commitCount(pipeline, branch);
-  if (commits > 0) await pushCommitted(pipeline, issue.number, worktree, branch);
-  if (!result.ok) throw await stageDidNotFinish(pipeline, progress, "implement", result);
+  if (!result.ok) {
+    // Pushed whatever became of the Stage, like its Notes: a session that
+    // committed and then was stopped by the rate limit or an API failure still
+    // committed, and the Host that resumes the Ticket may be another one. Under
+    // the name it was claimed on, since only a Stage that finished names it.
+    if (commits > 0) await pushCommitted(pipeline, issue.number, worktree, branch);
+    throw await stageDidNotFinish(pipeline, progress, "implement", result);
+  }
 
   // An agent that gave up silently leaves a clean branch behind. That is a
   // failure, not something to verify. A resumed Ticket's branch is not clean —
@@ -1391,7 +1448,71 @@ async function implement(
     throw leftNoCommits("implement", "", result);
   }
 
+  const named = await nameBranch(pipeline, issue.number, worktree, branch, result, record);
+  await pushCommitted(pipeline, issue.number, worktree, named);
+  progress.renameBranch(named);
   await progress.record(stageRow("implement", result, "✅ committed"));
+  pipeline.log?.(`#${issue.number} implemented · ${named}`);
+  return named;
+}
+
+/**
+ * Name the branch from the slug the implement Stage answered, before the
+ * branch is first pushed: the state file first, then the branch, so the remote
+ * never holds `agent/<n>` for a Ticket that was renamed.
+ *
+ * The branch keeps its name, and the Run says why, where the slug is out of
+ * shape, where the name is taken here or on the remote, where `agent/<n>`
+ * already reached the remote, which an implement Stage that did not finish
+ * pushed, and where the state file or the rename does not take the new name.
+ * Renaming a pushed branch would leave the work under two names, and a taken
+ * name is somebody's. An empty slug says nothing, so it keeps the name in
+ * silence, and a branch a state file already named something other than
+ * `agent/<n>` is past naming: renamed already, or named by an earlier version.
+ */
+async function nameBranch(
+  pipeline: Pipeline,
+  ticket: number,
+  worktree: string,
+  branch: string,
+  result: StageResult,
+  record: ResumeRecord,
+): Promise<string> {
+  const { workspace } = pipeline;
+  if (branch !== claimBranch(ticket)) return branch;
+  const answer = parseBranchSlug(result.result);
+  if (answer.kind === "empty") return branch;
+
+  const keep = (why: string): string => {
+    pipeline.log?.(`#${ticket} keeps ${branch} · ${why}`);
+    return branch;
+  };
+  if (answer.kind === "out-of-shape") {
+    return keep(`the slug \`${answer.answered}\` is out of shape`);
+  }
+
+  const named = namedBranch(ticket, answer.slug);
+  try {
+    if (await workspace.hasRemoteBranch(branch)) return keep(`${branch} is already on the remote`);
+    if (await workspace.hasBranch(named)) return keep(`${named} is already on this Host`);
+    if (await workspace.hasRemoteBranch(named)) return keep(`${named} is already on the remote`);
+  } catch (error) {
+    return keep(`asking where ${named} is failed: ${(error as Error).message}`);
+  }
+
+  try {
+    await record.name(named);
+  } catch (error) {
+    return keep(`the state file could not record ${named}: ${(error as Error).message}`);
+  }
+  try {
+    await workspace.renameBranch(worktree, branch, named);
+  } catch (error) {
+    // Back to the name the branch still has, so the next Run looks for it there.
+    await record.advance({ branch });
+    return keep(`renaming it to ${named} failed: ${(error as Error).message}`);
+  }
+  return named;
 }
 
 /**

@@ -3,6 +3,7 @@ import { CODE_STAGE_NOTES_LIST_SCHEMA } from "./note-schema.js";
 import { parseNotes } from "./notes.js";
 import {
   CODE_STAGE_JSON_SCHEMA,
+  IMPLEMENT_STAGE_JSON_SCHEMA,
   SUBJECT_SHAPE,
   parseBranchProse,
   parseNoCommitReason,
@@ -40,6 +41,28 @@ describe("CODE_STAGE_JSON_SCHEMA", () => {
     expect(description).toContain("without the `(#<n>)`");
     expect(description).toContain("An empty string keeps the one an earlier Stage answered.");
     expect(description).toContain("using the types, scopes and wording this repository's contributing guide sets");
+  });
+});
+
+describe("IMPLEMENT_STAGE_JSON_SCHEMA", () => {
+  it("is the code Stages' schema with a branch slug required beside the title", () => {
+    expect(IMPLEMENT_STAGE_JSON_SCHEMA.required).toEqual([
+      ...CODE_STAGE_JSON_SCHEMA.required,
+      "branch",
+    ]);
+    expect(IMPLEMENT_STAGE_JSON_SCHEMA.properties.title).toBe(CODE_STAGE_JSON_SCHEMA.properties.title);
+    expect(IMPLEMENT_STAGE_JSON_SCHEMA.properties.branch.type).toBe("string");
+    expect(IMPLEMENT_STAGE_JSON_SCHEMA.additionalProperties).toBe(false);
+    expect("branch" in CODE_STAGE_JSON_SCHEMA.properties).toBe(false);
+  });
+
+  it("asks for the slug's shape, in English, and says an empty one keeps agent/<n>", () => {
+    const { description } = IMPLEMENT_STAGE_JSON_SCHEMA.properties.branch;
+
+    expect(description).toContain("`agent/<n>-<slug>`");
+    expect(description).toContain("at most 40 characters matching `^[a-z0-9]+(-[a-z0-9]+)*$`");
+    expect(description).toContain("in English words");
+    expect(description).toContain("An empty string keeps the branch `agent/<n>`.");
   });
 });
 

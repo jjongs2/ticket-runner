@@ -71,12 +71,12 @@ Watch the log with your tool that streams to you each line a command prints, run
 from=1
 tail -n "+$from" -F --pid="$(cat .ticket-runner/run.pid)" .ticket-runner/run.log 2>/dev/null |
   awk -v n="$from" '
-    /^ticket-runner [0-9][^ ]* run / { summary = 1 }
-    summary || !/^#[0-9]+ (claimed|resumed from|taken from the top|verified ·|fixing ·|rebased onto|resolving a rebase conflict|noted on #)/ { print n ": " $0; fflush() }
+    /^---$/ { summary = 1 }
+    summary || !/^#[0-9]+ (claimed|resumed from|taken from the top|implemented ·|keeps agent\/|verified ·|fixing ·|rebased onto|resolving a rebase conflict|noted on #)/ { print n ": " $0; fflush() }
     { n++ }'
 ```
 
-It shows each line it reads with that line's number in the log, except the progress lines: a Ticket claimed (resumed, or taken from the top), verified, fixing, rebased, resolving a rebase conflict, or noted on. From the summary's header on, it shows every line. It exits by itself once the Run has ended and the exit line has arrived.
+It shows each line it reads with that line's number in the log, except the progress lines: a Ticket claimed (resumed, or taken from the top), implemented, keeping `agent/<n>` as its branch, verified, fixing, rebased, resolving a rebase conflict, or noted on. From the summary's `---` line on, it shows every line. It exits by itself once the Run has ended and the exit line has arrived.
 
 When the watch expires before that, arm it again at once with `from` one past the number of the last line it showed, and say nothing to the human about it. Arm one watch at a time, and none once the exit line has come.
 

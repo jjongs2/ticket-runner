@@ -74,14 +74,16 @@ function range(first: number, last: number): number[] {
 
 /**
  * The lines of the recorded log the skill asks to be reported: the opening and
- * the warning before it, every Ticket that ended, the Release that stopped the
- * Run, the Tickets a Stop left to finish, and the second line of a failure.
- * Every progress line between them is left out.
+ * the warning before it, the blank line after the opening, every Ticket that
+ * ended, the Release that stopped the Run, the Tickets a Stop left to finish,
+ * the second line of a failure and the blank line before the summary. Every
+ * progress line between them is left out, the implemented and keeps lines
+ * included.
  */
-const REPORTED = [1, 2, 3, 11, 14, 17, 18, 19, 21, 22, 23];
+const REPORTED = [1, 2, 3, 4, 13, 18, 21, 22, 23, 25, 26, 27];
 
-/** From the summary's header to the exit line, every line. */
-const SUMMARY_AND_EXIT = range(24, RECORDED_LINES.length);
+/** From the summary's `---` line to the exit line, every line. */
+const SUMMARY_AND_EXIT = range(28, RECORDED_LINES.length);
 
 /**
  * The commands an Operator runs, run here on a recorded log. A cloud Host is
@@ -159,6 +161,18 @@ describe.runIf(process.platform === "linux")("the Operator's commands", () => {
     const { lines, exited } = watch(1);
     expect(lines).toEqual(shown([...REPORTED, ...SUMMARY_AND_EXIT]));
     expect(exited).toBe(true);
+  });
+
+  it("find the summary by its --- line, whose header reads like the opening", () => {
+    expect(RECORDED_LINES[27]).toBe("---");
+    // The opening carries the version as the header does, so it alone says nothing.
+    expect(RECORDED_LINES[1]).toMatch(/^ticket-runner 0\.6\.5 run 2026-11-10T21-04-11-302 · /);
+    expect(RECORDED_LINES[29]).toMatch(/^ticket-runner 0\.6\.5 run 2026-11-10T21-04-11-302 · /);
+    start(fakeRunner());
+    const shownBefore = watch(1).lines.filter((line) => Number(line.split(":")[0]) < 28);
+    for (const line of shownBefore) {
+      expect(line).not.toMatch(/^\d+: #\d+ (claimed|implemented ·|keeps agent\/|verified ·|noted on #)/);
+    }
   });
 
   it("show, re-armed one past the last line shown, only what came after it", () => {

@@ -1,4 +1,4 @@
-import { branchName } from "./branch.js";
+import { claimBranch } from "./branch.js";
 import { selectFrontier } from "./frontier.js";
 import { type Refusal, isGuardReason, skipReason } from "./guards.js";
 import type { RoutedNote } from "./notes.js";
@@ -271,7 +271,7 @@ export async function processRun(
       fillLane({
         number: candidate.number,
         title: candidate.title,
-        branch: branchName(candidate.number, candidate.title),
+        branch: claimBranch(candidate.number),
       });
     }
   }
@@ -495,9 +495,9 @@ async function take(pipeline: Pipeline, ticket: Taken): Promise<TicketOutcome> {
  * nothing comes back.
  *
  * The branch is carried rather than derived, because the two ways a Run reaches
- * a Ticket know it differently: a candidate off the Frontier has whatever its
- * title derives to, and a stranded Ticket has the branch its state file names —
- * which is where the work actually is, whatever the title says now.
+ * a Ticket know it differently: a candidate off the Frontier is claimed on
+ * `agent/<n>`, and a stranded Ticket has the branch its state file names —
+ * which is where the work actually is, whatever its implement Stage named it.
  */
 interface Taken {
   number: number;

@@ -808,3 +808,14 @@ describe("the section init writes", () => {
     expect(read("CLAUDE.md")).toBe(CLAUDE_SECTION);
   });
 });
+
+describe("colour", () => {
+  it("is never printed by remove, with NO_COLOR unset", async () => {
+    await init();
+
+    const { out, err } = await remove({ env: {} });
+
+    expect(out).toContain("remove ·");
+    expect(`${out}${err}`).not.toContain("\x1b");
+  });
+});

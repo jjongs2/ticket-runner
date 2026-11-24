@@ -30,7 +30,7 @@ import type { TranscriptHome } from "./transcript-home.js";
 const VERSION = "0.4.0+331d79c";
 
 const TICKET = 2;
-const BRANCH = "agent/2-skeleton-one-ticket-end-to-end";
+const BRANCH = "agent/2";
 const URL = "https://github.com/acme/repo/issues/2";
 const CONFLICT = "CONFLICT (content): Merge conflict in src/cli.ts";
 const UNRESOLVED = { resolved: false, unresolved: "a rebase is still in progress" } as const;
@@ -777,6 +777,207 @@ describe("implement Stage failures", () => {
 
     expect(outcome).toMatchObject({ outcome: "handed-off", stage: "checks" });
     expect(handoffBody()).not.toContain("Nothing to do here.");
+  });
+});
+
+/**
+ * The branch a Run claims a Ticket on, and the name the implement Stage gives
+ * it once it has finished with commits, before the branch is first pushed.
+ */
+describe("the implement Stage names the branch", () => {
+  const SLUG = "name-the-branch-at-implement";
+  const NAMED = `agent/${TICKET}-${SLUG}`;
+
+  /** What an implement Stage answers when it names the branch `slug`. */
+  const naming = (slug: unknown) =>
+    stageResult({ result: { title: "feat(cli): do the thing", branch: slug, notes: [] } });
+
+  /** Every state file write, as the branch it names, in `workspace.calls` beside the git. */
+  function traceStateWrites(): void {
+    const writeState = workspace.writeState.bind(workspace);
+    workspace.writeState = async (state) => {
+      workspace.calls.push(`writeState:${state.branch}`);
+      await writeState(state);
+    };
+  }
+
+  /** The `keeps agent/<n>` lines the Run logged. */
+  const kept = () => logged.filter((line) => line.startsWith(`#${TICKET} keeps `));
+
+  it("claims on agent/<n>, records the new name, renames, then pushes, and agent/<n> never reaches the remote", async () => {
+    runner.queue("implement", naming(SLUG));
+    traceStateWrites();
+
+    const outcome = await run();
+
+    expect(workspace.calls).toContain(`createWorktree:agent/${TICKET}`);
+    const steps = workspace.calls.filter(
+      (call) => call === `writeState:${NAMED}` || call.startsWith("renameBranch:") || call.startsWith("push:"),
+    );
+    expect(steps.slice(0, 3)).toEqual([
+      `writeState:${NAMED}`,
+      `renameBranch:agent/${TICKET}:${NAMED}`,
+      `push:${NAMED}`,
+    ]);
+    expect(workspace.calls).not.toContain(`push:agent/${TICKET}`);
+    expect(workspace.remoteBranches.has(`agent/${TICKET}`)).toBe(false);
+    expect(outcome).toMatchObject({ outcome: "merged", branch: NAMED });
+    expect(tracker.pullRequest(100).head).toBe(NAMED);
+    expect(workspace.calls.slice(-2)).toEqual([`removeWorktree:${NAMED}`, `deleteRemoteBranch:${NAMED}`]);
+    expect(kept()).toEqual([]);
+  });
+
+  it("names the renamed branch in the progress comment and the hand-off written after the rename", async () => {
+    runner.queue("implement", naming(SLUG));
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", branch: NAMED });
+    const progress = tracker.comments.find(({ body }) => body.startsWith(PROGRESS_MARKER));
+    expect(progress?.body).toContain(`\`${NAMED}\``);
+    expect(progress?.body).not.toContain(`\`agent/${TICKET}\``);
+    expect(tracker.pullRequest(100).head).toBe(NAMED);
+    expect(handoffBody()).toContain(`Branch \`${NAMED}\``);
+    expect(workspace.state(TICKET)?.branch).toBe(NAMED);
+  });
+
+  it("logs the implemented line naming the branch after the rename, and a claim that names none", async () => {
+    runner.queue("implement", naming(SLUG));
+
+    await run();
+
+    expect(logged).toContain(`#${TICKET} claimed`);
+    expect(logged).toContain(`#${TICKET} implemented · ${NAMED}`);
+    expect(logged.indexOf(`#${TICKET} implemented · ${NAMED}`)).toBeLessThan(
+      logged.findIndex((line) => line.startsWith(`#${TICKET} verified`)),
+    );
+  });
+
+  it("keeps agent/<n> in silence when the slug is empty, and still says it implemented", async () => {
+    runner.queue("implement", naming(""));
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged", branch: BRANCH });
+    expect(workspace.calls.some((call) => call.startsWith("renameBranch:"))).toBe(false);
+    expect(kept()).toEqual([]);
+    expect(logged).toContain(`#${TICKET} implemented · ${BRANCH}`);
+  });
+
+  it.each([
+    ["uppercase", "Name-The-Branch"],
+    ["Hangul", "알림-설정-화면"],
+    ["more than 40 characters", `${"a".repeat(20)}-${"b".repeat(20)}`],
+  ])("keeps agent/<n>, and says so, when the slug is out of shape: %s", async (_why, slug) => {
+    runner.queue("implement", naming(slug));
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged", branch: BRANCH });
+    expect(kept()).toEqual([`#${TICKET} keeps ${BRANCH} · the slug \`${slug}\` is out of shape`]);
+    expect(workspace.calls.some((call) => call.startsWith("renameBranch:"))).toBe(false);
+  });
+
+  it("keeps agent/<n>, and says so, when the state file will not take the new name", async () => {
+    runner.queue("implement", naming(SLUG));
+    runner.leaves("implement", () => {
+      workspace.stateWriteFailure = new Error("remote rejected the state branch");
+    });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged", branch: BRANCH });
+    expect(kept()).toEqual([
+      `#${TICKET} keeps ${BRANCH} · the state file could not record ${NAMED}: remote rejected the state branch`,
+    ]);
+    expect(workspace.calls.some((call) => call.startsWith("renameBranch:"))).toBe(false);
+    expect(workspace.pushes.map((push) => push.branch)).toContain(BRANCH);
+  });
+
+  it("keeps agent/<n>, and says so, when a branch of the new name is on this Host", async () => {
+    runner.queue("implement", naming(SLUG));
+    workspace.branches.add(NAMED);
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged", branch: BRANCH });
+    expect(kept()).toEqual([`#${TICKET} keeps ${BRANCH} · ${NAMED} is already on this Host`]);
+    expect(workspace.calls.some((call) => call.startsWith("renameBranch:"))).toBe(false);
+  });
+
+  it("keeps agent/<n>, and says so, when a branch of the new name is on the remote", async () => {
+    runner.queue("implement", naming(SLUG));
+    workspace.remoteBranches.add(NAMED);
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged", branch: BRANCH });
+    expect(kept()).toEqual([`#${TICKET} keeps ${BRANCH} · ${NAMED} is already on the remote`]);
+  });
+
+  it("keeps agent/<n>, and says so, when an implement Stage that did not finish already pushed it", async () => {
+    runner.queue("implement", { ...naming(SLUG), ok: false, failure: "rate-limited" });
+    runner.queue("implement", naming(SLUG));
+
+    expect(await run()).toMatchObject({ outcome: "released", stage: "implement" });
+    expect(workspace.remoteBranches.has(BRANCH)).toBe(true);
+    expect(await run()).toMatchObject({ outcome: "merged", branch: BRANCH });
+
+    expect(kept()).toEqual([`#${TICKET} keeps ${BRANCH} · ${BRANCH} is already on the remote`]);
+    expect(logged).toContain(`#${TICKET} resumed from claimed`);
+  });
+
+  it("pushes an unfinished implement Stage's commits on agent/<n>, renames nothing and says nothing implemented", async () => {
+    runner.queue("implement", { ...naming(SLUG), ok: false, failure: "nonzero-exit" });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "implement", branch: BRANCH });
+    expect(workspace.pushes.map((push) => push.branch)[0]).toBe(BRANCH);
+    expect(workspace.calls.some((call) => call.startsWith("renameBranch:"))).toBe(false);
+    expect(logged.some((line) => line.includes("implemented ·"))).toBe(false);
+    expect(workspace.state(TICKET)?.branch).toBe(BRANCH);
+  });
+
+  it("keeps a branch a state file recorded other than agent/<n>, whatever slug the Stage answers", async () => {
+    const earlier = "agent/2-what-an-earlier-version-cut-from-the-title";
+    workspace.worktrees.set(worktree, earlier);
+    workspace.branches.add(earlier);
+    workspace.recordState({
+      ticket: TICKET,
+      branch: earlier,
+      state: "claimed",
+      fixUsed: false,
+      runId: "run-0",
+      updatedAt: "2026-09-17T09:00:00.000Z",
+    });
+    runner.queue("implement", naming(SLUG));
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged", branch: earlier });
+    expect(workspace.calls.some((call) => call.startsWith("renameBranch:"))).toBe(false);
+    expect(kept()).toEqual([]);
+    expect(logged).toContain(`#${TICKET} implemented · ${earlier}`);
+  });
+
+  it("names the branch after resuming from implemented, as the state file recorded it", async () => {
+    workspace.worktrees.set(worktree, NAMED);
+    workspace.branches.add(NAMED);
+    workspace.recordState({
+      ticket: TICKET,
+      branch: NAMED,
+      state: "implemented",
+      fixUsed: false,
+      runId: "run-0",
+      updatedAt: "2026-09-17T09:00:00.000Z",
+    });
+
+    await run();
+
+    expect(logged[0]).toBe(`#${TICKET} resumed from implemented · ${NAMED}`);
   });
 });
 
@@ -3108,7 +3309,7 @@ describe("Tickets in several Lanes failing against one merge-base", () => {
     expect(notes).toHaveLength(1);
     // It quotes the branch of the Ticket that posted it, the one its provenance names.
     const poster = /releasing #(\d+) at/.exec(notes[0]?.body ?? "")?.[1];
-    expect(notes[0]?.body).toContain(`failed on \`agent/${poster}-`);
+    expect(notes[0]?.body).toContain(`failed on \`agent/${poster}\``);
     expect(notes[0]?.body).toContain("```\nFAIL src/clock.test.ts\n```");
     expect(outcomes.flatMap((outcome) => ("notes" in outcome ? outcome.notes : []))).toHaveLength(1);
   });
@@ -5845,7 +6046,7 @@ describe("a Stage with no Notes", () => {
 
 describe("the Landing", () => {
   const SECOND = 3;
-  const SECOND_BRANCH = "agent/3-the-second-ticket";
+  const SECOND_BRANCH = "agent/3";
 
   /** One Run's Pipeline, which every Ticket driven through it shares. */
   let shared: Pipeline;

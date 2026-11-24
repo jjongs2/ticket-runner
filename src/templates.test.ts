@@ -5,6 +5,7 @@ import { throwOnFailure } from "./adapters/exec.js";
 import { MAX_TAIL_CHARS } from "./log-tail.js";
 import { type Billing, emptyBilling } from "./credential.js";
 import type { RunStop } from "./run.js";
+import { terminalPaint, withoutColour } from "./terminal-colour.js";
 import { linkNumbers } from "./terminal-links.js";
 import {
   HANDOFF_MARKER,
@@ -850,6 +851,91 @@ describe("runSummary", () => {
     notes: [],
   };
 
+  it("opens with --- between blank lines once printed, then the header as it reads", () => {
+    const summary = runSummary({
+      credential: "subscription",
+      version: VERSION,
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [merged],
+      stop: { reason: "frontier", blocked: [] },
+    });
+
+    // The Run prints it after a newline of its own, so `---` has a blank line on both sides.
+    expect(summary.split("\n").slice(0, 3)).toEqual([
+      "---",
+      "",
+      `ticket-runner ${VERSION} run r1 · 0m · subscription`,
+    ]);
+  });
+
+  describe("in colour", () => {
+    const paint = terminalPaint("acme/shop", true);
+    const blue = (number: number) =>
+      `\x1b[94m\x1b]8;;https://github.com/acme/shop/issues/${number}\x1b\\#${number}\x1b]8;;\x1b\\\x1b[0m`;
+    const summary = runSummary({
+      credential: "subscription",
+      version: VERSION,
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [
+        { ...merged, notes: [{ origin: 3, stage: "implement", issue: 8, opened: false, summary: "the help drifts" }] },
+        handed,
+        released,
+      ],
+      stop: { reason: "frontier", blocked: [40] },
+    });
+    const coloured = runSummary({
+      credential: "subscription",
+      version: VERSION,
+      runId: "r1",
+      durationMs: 0,
+      outcomes: [
+        { ...merged, notes: [{ origin: 3, stage: "implement", issue: 8, opened: false, summary: "the help drifts" }] },
+        handed,
+        released,
+      ],
+      stop: { reason: "frontier", blocked: [40] },
+      paint,
+    });
+    const rows = coloured.split("\n");
+
+    it("dims the --- line and leaves the header and last line in the default colour", () => {
+      expect(rows[0]).toBe("\x1b[2m---\x1b[0m");
+      expect(rows[2]).toBe(`ticket-runner ${VERSION} run r1 · 0m · subscription`);
+      expect(rows.at(-2)).toBe("Frontier blocked.");
+    });
+
+    it("colours a row's verb alone, and every #N on it blue", () => {
+      expect(rows).toContain(
+        `  \x1b[32mmerged\x1b[0m   ${blue(3)} Run: drain the Frontier (PR ${blue(12)})`,
+      );
+      expect(rows).toContain(`  \x1b[2mnoted\x1b[0m    ${blue(8)} comment · from ${blue(3)} implement · the help drifts`);
+      expect(rows).toContain(`  \x1b[31mhanded\x1b[0m   ${blue(5)} Fix Stage with a single retry · verify · 1 unmet`);
+      expect(rows).toContain(`  released ${blue(6)} Rebase conflict resolution · rate limit at implement`);
+      expect(rows).toContain(`  skipped  ${blue(40)} blocked`);
+    });
+
+    it("gives back the summary linked and uncoloured once its colour codes are taken out", () => {
+      expect(withoutColour(coloured)).toBe(
+        runSummary({
+          credential: "subscription",
+          version: VERSION,
+          runId: "r1",
+          durationMs: 0,
+          outcomes: [
+            { ...merged, notes: [{ origin: 3, stage: "implement", issue: 8, opened: false, summary: "the help drifts" }] },
+            handed,
+            released,
+          ],
+          stop: { reason: "frontier", blocked: [40] },
+          paint: terminalPaint("acme/shop", false),
+        }),
+      );
+      expect(withoutColour(coloured)).not.toBe(summary);
+    });
+  });
+
   it("heads the summary with the version, the Run and how long it took", () => {
     const summary = runSummary({
       credential: "subscription",
@@ -860,7 +946,7 @@ describe("runSummary", () => {
       stop: { reason: "frontier", blocked: [] },
     });
 
-    expect(summary.split("\n")[0]).toBe(`ticket-runner ${VERSION} run r1 · 42m · subscription`);
+    expect(summary.split("\n")[2]).toBe(`ticket-runner ${VERSION} run r1 · 42m · subscription`);
   });
 
   /**
@@ -880,7 +966,8 @@ describe("runSummary", () => {
       stop: { reason: "frontier", blocked: [] },
     });
 
-    const [first, second] = summary.split("\n");
+    const [rule, blank, first, second] = summary.split("\n");
+    expect([rule, blank]).toEqual(["---", ""]);
     expect(first).toBe(newer);
     expect(second).toBe(`ticket-runner ${VERSION} run r1 · 0m · subscription`);
   });
@@ -895,7 +982,7 @@ describe("runSummary", () => {
       stop: { reason: "frontier", blocked: [] },
     });
 
-    expect(summary.split("\n")[0]).toBe(`ticket-runner ${VERSION} run r1 · 0m · subscription`);
+    expect(summary.split("\n")[2]).toBe(`ticket-runner ${VERSION} run r1 · 0m · subscription`);
   });
 
   it("lists merged, handed-off and skipped Tickets by number", () => {
@@ -1048,7 +1135,7 @@ describe("runSummary", () => {
       },
     });
 
-    expect(summary.split("\n").slice(2, 4)).toEqual([
+    expect(summary.split("\n").slice(4, 6)).toEqual([
       "  released #6 Rebase conflict resolution · failing base branch at checks",
       "  noted    #31 comment · from #6 pipeline · The base branch `main` fails `npm test`.",
     ]);
@@ -1240,7 +1327,7 @@ describe("runSummary", () => {
       stop: { reason: "frontier", blocked: [13] },
     });
 
-    expect(summary.split("\n").slice(2, 6)).toEqual([
+    expect(summary.split("\n").slice(4, 8)).toEqual([
       "  merged   #3 Run: drain the Frontier (PR #12)",
       "  skipped  #57 pull-request",
       "  skipped  #99 no-issue",
@@ -1264,9 +1351,9 @@ describe("runSummary", () => {
 
     it("names the API key in its header, and what the Run spent on it", () => {
       const header = (billing: Partial<Billing>) =>
-        onTheKey({ billing: { ...emptyBilling(), ...billing } }).split("\n")[0];
+        onTheKey({ billing: { ...emptyBilling(), ...billing } }).split("\n")[2];
 
-      expect(onTheKey().split("\n")[0]).toBe(`ticket-runner ${VERSION} run r1 · 0m · API key · $0.00`);
+      expect(onTheKey().split("\n")[2]).toBe(`ticket-runner ${VERSION} run r1 · 0m · API key · $0.00`);
       expect(header({ spendUsd: 12.3449 })).toBe(
         `ticket-runner ${VERSION} run r1 · 0m · API key · $12.34`,
       );
@@ -1275,7 +1362,7 @@ describe("runSummary", () => {
     });
 
     it("never says extra usage, which only a subscription has", () => {
-      expect(onTheKey({ billing: { ...emptyBilling(), extraUsage: true } }).split("\n")[0]).toMatch(
+      expect(onTheKey({ billing: { ...emptyBilling(), extraUsage: true } }).split("\n")[2]).toMatch(
         / · API key · \$0\.00$/,
       );
     });
@@ -1325,8 +1412,8 @@ describe("runSummary", () => {
       stop: { reason: "frontier", blocked: [] },
     });
 
-    expect(summary.split("\n")[0]).toBe(`ticket-runner ${VERSION} run r1 · 0m · subscription`);
-    expect(summary.split("\n").slice(2, 6)).toEqual([
+    expect(summary.split("\n")[2]).toBe(`ticket-runner ${VERSION} run r1 · 0m · subscription`);
+    expect(summary.split("\n").slice(4, 8)).toEqual([
       "  merged   #3 Run: drain the Frontier (PR #12)",
       "  billed   #3 implement · apiKeySource ANTHROPIC_API_KEY · $4.15",
       "  handed   #5 Fix Stage with a single retry · verify · 1 unmet",
@@ -1349,7 +1436,7 @@ describe("runSummary", () => {
       stop: { reason: "frontier", blocked: [] },
     });
 
-    expect(summary.split("\n")[0]).toMatch(/ · API key · \$1\.00$/);
+    expect(summary.split("\n")[2]).toMatch(/ · API key · \$1\.00$/);
     expect(summary).toContain("  billed   #3 verify · apiKeySource apiKeyHelper · $0.50");
   });
 
@@ -1383,7 +1470,7 @@ describe("runSummary", () => {
       stop: { reason: "frontier", blocked: [] },
     });
 
-    expect(summary.split("\n")[0]).toBe(
+    expect(summary.split("\n")[2]).toBe(
       `ticket-runner ${VERSION} run r1 · 0m · subscription · extra usage`,
     );
   });
@@ -1715,7 +1802,7 @@ describe("Notes in a Run summary", () => {
       stop: FRONTIER_EMPTY,
     });
 
-    expect(summary.split("\n").slice(2, 5)).toEqual([
+    expect(summary.split("\n").slice(4, 7)).toEqual([
       "  merged   #3 Run: drain the Frontier (PR #12)",
       "  noted    #8 comment · from #3 implement · the CLI help drifts from the README",
       "  handed   #5 Fix Stage with a single retry · verify · 1 unmet",
@@ -1786,7 +1873,7 @@ describe("Notes in a Run summary", () => {
             durationMs: 0,
             outcomes: [{ ...merged, notes: [{ ...note, summary }] }],
             stop: FRONTIER_EMPTY,
-            ...(linker === undefined ? {} : { link: linker }),
+            ...(linker === undefined ? {} : { paint: linker }),
           })
             .split("\n")
             .find((line) => line.includes("noted")) as string,
@@ -1839,7 +1926,7 @@ describe("Notes in a Run summary", () => {
         outcomes: [merged, handed],
         stop: { ...FRONTIER_EMPTY, blocked: [40] },
         newer: "ticket-runner 9.9.9 is out, see #77",
-        link: (line) => linkNumbers(line, "acme/shop"),
+        paint: (line) => linkNumbers(line, "acme/shop"),
       });
 
       expect(summary).toContain(`see ${link(77)}\n`);

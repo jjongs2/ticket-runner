@@ -14,6 +14,7 @@
  * same way ({@link BranchProse}).
  */
 
+import { MAX_SLUG_LENGTH, SLUG_SHAPE } from "./branch.js";
 import { CODE_STAGE_NOTES_LIST_SCHEMA } from "./note-schema.js";
 
 /**
@@ -103,6 +104,32 @@ export const CODE_STAGE_JSON_SCHEMA = {
   },
   required: ["title", "body", "problem", "solution", "notes", "noCommitReason"],
   additionalProperties: false,
+} as const;
+
+/**
+ * What the implement Stage is told a branch slug is, in the words both its
+ * schema and its prompt use: one declaration, so the two cannot drift apart.
+ * English whatever language the Target writes in, because a branch name is
+ * typed at a shell, and ASCII is all {@link SLUG_SHAPE} lets through.
+ */
+export const BRANCH_SLUG = `at most ${MAX_SLUG_LENGTH} characters matching \`${SLUG_SHAPE}\`, in English words saying what the Ticket does, whatever language your other answers take`;
+
+/**
+ * The `--json-schema` the implement Stage is invoked with: the code Stages'
+ * own, and the slug the branch is named with beside the title. Only the
+ * implement Stage names the branch: by the fix Stage it has already been
+ * pushed under its name, and a pull request may be open on it.
+ */
+export const IMPLEMENT_STAGE_JSON_SCHEMA = {
+  ...CODE_STAGE_JSON_SCHEMA,
+  properties: {
+    ...CODE_STAGE_JSON_SCHEMA.properties,
+    branch: {
+      type: "string",
+      description: `The slug the pipeline names this branch with, as \`agent/<n>-<slug>\`: ${BRANCH_SLUG}. An empty string keeps the branch \`agent/<n>\`.`,
+    },
+  },
+  required: [...CODE_STAGE_JSON_SCHEMA.required, "branch"],
 } as const;
 
 /**

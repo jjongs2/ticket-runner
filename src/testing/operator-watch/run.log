@@ -1,25 +1,31 @@
 warning: This Target's `docs/agents/pipeline-conventions.md` was left by 0.6.4, and this Run is 0.6.5 — run `ticket-runner init` here to bring it up to date.
-ticket-runner run 2026-11-10T21-04-11-302 · 2 lanes
+ticket-runner 0.6.5 run 2026-11-10T21-04-11-302 · 2 lanes
+
 #303 skipped · no-criteria
-#301 claimed · agent/301-the-summary-names-the-version
+#301 claimed
 #297 resumed from implemented · agent/297-a-guard-refuses-a-body-with-no-criteria
+#301 implemented · agent/301-the-summary-names-the-version
 #297 rebased onto main before its Checks
 #301 rebased onto main before its Checks
 #297 verified · 4 met · 0 unverifiable
 #301 fixing · 1 unmet
 #301 noted on #323 for triage
 #297 merged · PR #305
-#299 taken from the top, still claimed · agent/299-stop-reports-the-lanes-it-left
+#299 taken from the top, still claimed
+#299 keeps agent/299 · the slug `Stop-Reports` is out of shape
+#299 implemented · agent/299
 #301 verified · 5 met · 1 unverifiable
 #301 merged · PR #306
-#302 claimed · agent/302-a-released-ticket-keeps-its-branch
+#302 claimed
 #299 resolving a rebase conflict
-#302 released at implement · rate limit · agent/302-a-released-ticket-keeps-its-branch
+#302 released at implement · rate limit · agent/302
 #302 stopped the Run · rate limit
 #299 left to finish · stopped
 #299 noted on #297
 #299 handed off at rebase · `git pull --ff-only origin main` failed
 fatal: Not possible to fast-forward, aborting.
+
+---
 
 ticket-runner 0.6.5 run 2026-11-10T21-04-11-302 · 187m · subscription
 
