@@ -48,8 +48,8 @@ export type RebaseState = { resolved: true } | { resolved: false; unresolved: st
  *
  * A state of the lifecycle, not a Stage — a Stage is a session (GLOSSARY.md), and
  * what the state records is what the Ticket has, not what was running. Only these
- * two, because everything after the implement Stage — the Checks, the rebase,
- * the pull request, CI and the merge — is re-run from the top by a Run that
+ * two, because everything after the implement Stage — verify, the rebase, the
+ * pull request, CI and the merge — is re-run from the top by a Run that
  * resumes at `implemented`, and none of them is worth a state a resume could
  * land on halfway.
  */
@@ -95,7 +95,7 @@ export interface TicketState {
   solution?: string;
   /**
    * Whether the Run that takes the Ticket up rebases its branch onto the Base
-   * branch before its Checks. Set by a Release over a failing base branch, so
+   * branch first. Set by a Release over a failing base branch, so
    * a fix a human has landed there meanwhile reaches the branch; absent
    * otherwise, and in state an earlier pipeline left.
    */
@@ -362,7 +362,8 @@ export interface Workspace {
    * modified or staged, and untracked files git does not ignore. None when the
    * worktree is exactly its branch tip.
    *
-   * Asked before the Checks grade a pass, because the branch is what lands and
+   * Asked after every Stage that commits, before anything grades the branch,
+   * and when a Run resumes a Ticket, because the branch is what lands and
    * a Stage that left its last changes uncommitted would otherwise be graded on
    * code the pull request never carries.
    */

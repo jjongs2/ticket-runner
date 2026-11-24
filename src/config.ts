@@ -92,16 +92,18 @@ export interface Config {
    */
   baseBranch?: string;
   /**
-   * How many Tickets a Run may hold at once, one Lane per Ticket. The Checks of
-   * different Lanes run in different worktrees at the same time, so a Target
-   * whose Checks share a port or a database stays at the default of one.
+   * How many Tickets a Run may hold at once, one Lane per Ticket. The Stages
+   * and the Checks at merge-bases of different Lanes run in different worktrees
+   * at the same time, so a Target whose Checks share a port or a database stays
+   * at the default of one.
    */
   lanes: number;
   checks: string[];
   /**
    * Whether the config file names `checks`. An empty list named there is a
    * Target that runs with no Check command on purpose, and one inferred from
-   * nothing is a Target nobody set up, which a Run refuses.
+   * nothing is a Target nobody set up, which a Run refuses: the Stage prompts
+   * name the commands, and a red CI is graded with them at a merge-base.
    */
   checksNamed: boolean;
   /**
@@ -143,8 +145,8 @@ const STAGE_DEFAULTS = {
   implement: { maxTurns: 300, maxMinutes: 60 },
   verify: { maxTurns: 130, maxMinutes: 30 },
   fix: { maxTurns: 150, maxMinutes: 40 },
-  // Resolving one rebase is narrower work than mending a defect, and the full
-  // Checks are the pipeline's to run once it finishes.
+  // Resolving one rebase is narrower work than mending a defect, and the
+  // pull request's CI grades the whole of it once it finishes.
   conflict: { maxTurns: 120, maxMinutes: 30 },
 } as const;
 

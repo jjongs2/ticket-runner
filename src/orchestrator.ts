@@ -90,7 +90,9 @@ import {
   isMisnumbered,
   parseVerdict,
   passes,
+  settleCiCriteria,
   unmetCriteria,
+  verifiedSummary,
 } from "./verdict.js";
 import { anyWorkflowCanRun } from "./workflows.js";
 
@@ -351,12 +353,13 @@ function asTicketFailure(error: unknown, point: FailurePoint): TicketFailure {
  * Take one Ticket from claimed to merged, hand it to a human, or pass it over.
  *
  * The happy path is: guards → claim → worktree and branch → implement Stage →
- * Checks → verify Stage → rebase → pull request → CI → squash merge → cleanup.
- * Work left uncommitted, a failing Check, an unmet criterion, a red CI or a
- * rebase conflict the conflict Stage could not resolve spends the Ticket's fix
- * budget and starts again at the Checks; every other failure, and every second
- * failure, ends in a hand-off. Nothing ends in a merge that has not been
- * through a green pass of the whole gauntlet.
+ * verify Stage → rebase → pull request → CI → squash merge → cleanup. The
+ * pipeline runs no Check on the branch: the pull request's CI, which the Target
+ * sets up, is what grades the code before it merges. Work left uncommitted, an
+ * unmet criterion, a red CI or a rebase conflict the conflict Stage could not
+ * resolve spends the Ticket's fix budget and starts again at verify; every other
+ * failure, and every second failure, ends in a hand-off. Nothing ends in a
+ * merge that has not been through a green pass of the whole gauntlet.
  *
  * A Stage the subscription rate limit or a transient API failure stopped ends
  * none of that: the Ticket is released, and a Run started once the limit has
@@ -553,14 +556,18 @@ async function takeTicket(
       worktreeOnDisk = { path: worktree, pushable: true };
     } else {
       // A Run that was killed mid-rebase left git stopped in the worktree, with
-      // conflict markers in files the Checks are about to grade. Back to the
-      // branch tip first, then: a no-op on a worktree nothing stopped, so every
-      // resume rebases from the same clean start a released Ticket does.
+      // conflict markers in files verify is about to grade. Back to the branch
+      // tip first, then: a no-op on a worktree nothing stopped, so every resume
+      // rebases from the same clean start a released Ticket does.
       await workspace.abortRebase(worktree);
     }
+    // Work no commit carries, which the first pass below fails on before
+    // anything grades the branch: the fix budget answers for it there, as it
+    // does for every other failure of the branch's.
+    let owed: TicketFailure | undefined;
     if (resume === undefined || resume.state === "claimed") {
       point = "implement";
-      branch = await implement(
+      const implemented = await implement(
         pipeline,
         issue,
         worktree,
@@ -570,8 +577,15 @@ async function takeTicket(
         { notes, written },
         record,
       );
+      branch = implemented.branch;
+      owed = implemented.uncommitted;
       // The branch now carries work no later Run should pay for again.
       await record.advance({ state: "implemented" });
+    } else {
+      // Whatever Stage a Release or a kill stopped may have left the worktree
+      // dirty, and none of them is here to say so: the row is setup's.
+      owed = await uncommittedWork(pipeline, worktree, "setup");
+      if (owed !== undefined) await progress.record({ point: "setup", outcome: UNCOMMITTED_CELL });
     }
 
     let commits: string[];
@@ -582,21 +596,23 @@ async function takeTicket(
     // budget as one at the Landing does.
     let rebaseOwed = resume?.rebaseFirst === true;
 
-    // Checks through CI, run again from the top when the fix budget buys a
+    // verify through CI, run again from the top when the fix budget buys a
     // second pass: a fix earns no shortcut, so every gate grades it afresh.
     for (;;) {
       try {
+        // Before anything grades the worktree, and so before verify discards
+        // what a Stage left uncommitted.
+        if (owed !== undefined) {
+          const failure = owed;
+          owed = undefined;
+          throw failure;
+        }
         if (rebaseOwed) {
           rebaseOwed = false;
           point = "rebase";
           await rebaseFirst(pipeline, issue, worktree, branch, logDir, landing, progress);
           await record.advance({ rebaseFirst: false });
         }
-        point = "checks";
-        // Before anything grades the worktree, and so before verify discards
-        // what a Stage left uncommitted.
-        await requireCommitted(pipeline, worktree, progress);
-        await runChecks(pipeline, worktree, progress);
         point = "verify";
         verdict = await verify(pipeline, issue, worktree, logDir, progress, notes, {
           criteria,
@@ -619,6 +635,9 @@ async function takeTicket(
           // Once per conflict, not once per Ticket: a pass the fix budget
           // bought meets a branch the fix Stage has changed, so the conflict it
           // rebases into is a new one.
+          // The resolution is graded by CI on the pull request next. The
+          // verdict is not asked for again, because the conflict Stage is told
+          // to change no behaviour the Acceptance Criteria are about.
           await resolveConflict(
             pipeline,
             issue,
@@ -628,12 +647,6 @@ async function takeTicket(
             rebase.conflict,
             progress,
           );
-          // The resolution is code nothing has graded: the Checks passed on one
-          // side of the conflict and CI on the other. The verdict is not asked
-          // for again, because the conflict Stage is told to change no
-          // behaviour the Acceptance Criteria are about.
-          point = "checks";
-          await runChecks(pipeline, worktree, progress);
         }
 
         point = "pr";
@@ -651,7 +664,23 @@ async function takeTicket(
         );
         await record.advance({ pullRequest });
         point = "ci";
-        await requireGreenCi(pipeline, { worktree, branch, pullRequest }, progress, landing);
+        const ciPassed = await requireGreenCi(
+          pipeline,
+          { worktree, branch, pullRequest },
+          progress,
+          landing,
+        );
+        // The criteria left to CI are met once it passes, and have nothing to
+        // show for them when no CI ran: a Ticket left with no met criterion
+        // then has no evidence to merge on.
+        verdict = settleCiCriteria(verdict, ciPassed);
+        if (countStatuses(verdict).met === 0) {
+          throw new TicketFailure(
+            "ci",
+            "no CI ran on the pull request, so the criteria left to it are unverified and no criterion has evidence to merge on",
+            verdict.criteria.map(criterionLine).join("\n"),
+          );
+        }
         break;
       } catch (error) {
         // A rate limit, an API failure or a fault of GitHub's or the remote's
@@ -1391,10 +1420,17 @@ interface CodeStageNotes {
 }
 
 /**
- * The implement Stage, and the branch's name once it has finished with
- * commits: the branch it was claimed on, or the one its slug names, which is
- * what every write after it names.
+ * What the implement Stage left: the branch's name once it has finished with
+ * commits, the branch it was claimed on or the one its slug names, which is
+ * what every write after it names; and the failure owed when it left work no
+ * commit carries, which the first pass charges to the fix budget.
  */
+interface Implemented {
+  branch: string;
+  uncommitted?: TicketFailure;
+}
+
+/** The implement Stage. */
 async function implement(
   pipeline: Pipeline,
   issue: Issue,
@@ -1404,7 +1440,7 @@ async function implement(
   progress: Progress,
   { notes, written }: CodeStageNotes,
   record: ResumeRecord,
-): Promise<string> {
+): Promise<Implemented> {
   const stage = pipeline.config.stages.implement;
   const result = await runStage(pipeline, "implement", {
     ticket: issue.number,
@@ -1451,9 +1487,12 @@ async function implement(
   const named = await nameBranch(pipeline, issue.number, worktree, branch, result, record);
   await pushCommitted(pipeline, issue.number, worktree, named);
   progress.followBranch(named);
-  await progress.record(stageRow("implement", result, "✅ committed"));
+  const uncommitted = await uncommittedWork(pipeline, worktree, "implement");
+  await progress.record(
+    stageRow("implement", result, uncommitted === undefined ? "✅ committed" : UNCOMMITTED_CELL),
+  );
   pipeline.log?.(`#${issue.number} implemented · ${named}`);
-  return named;
+  return { branch: named, ...(uncommitted === undefined ? {} : { uncommitted }) };
 }
 
 /**
@@ -1517,7 +1556,7 @@ async function nameBranch(
 
 /**
  * Bring a Ticket released over a failing base branch up to the base branch
- * before its Checks grade it, so a fix a human has landed there meanwhile
+ * before anything grades it again, so a fix a human has landed there meanwhile
  * reaches the branch. Without it the Ticket would meet the same failure with
  * its budget unspent, and spend it.
  *
@@ -1552,79 +1591,35 @@ async function rebaseFirst(
     return;
   }
   await pushCommitted(pipeline, issue.number, worktree, branch);
-  pipeline.log?.(`#${issue.number} rebased onto ${baseBranch} before its Checks`);
+  pipeline.log?.(`#${issue.number} rebased onto ${baseBranch} first`);
 }
 
+/** The cell of the row behind which a worktree held changes no commit carries. */
+const UNCOMMITTED_CELL = "❌ uncommitted work";
+
 /**
- * Refuse a worktree holding changes no commit carries, naming every path.
+ * The failure a worktree holding changes no commit carries earns, naming every
+ * path, or nothing when it holds none. The caller writes the row, which is the
+ * row of whatever left the changes.
  *
  * Nothing is discarded here: a fix Stage sent in for it decides what belongs
  * to the Ticket, and a hand-off leaves the changes where a human can find them.
  * The summary names no Stage, because a resumed Ticket cannot say which one
  * left them: a fix Stage a Release stopped spent no budget.
  */
-async function requireCommitted(
+async function uncommittedWork(
   pipeline: Pipeline,
   worktree: string,
-  progress: Progress,
-): Promise<void> {
+  point: FailurePoint,
+): Promise<TicketFailure | undefined> {
   const paths = await pipeline.workspace.uncommittedPaths(worktree);
-  if (paths.length === 0) return;
-
-  await progress.record({ point: "checks", outcome: "❌ uncommitted work" });
-  throw new TicketFailure(
-    "checks",
+  if (paths.length === 0) return undefined;
+  return new TicketFailure(
+    point,
     "the worktree holds changes no commit carries",
     paths.join("\n"),
     "uncommitted-work",
   );
-}
-
-async function runChecks(
-  pipeline: Pipeline,
-  worktree: string,
-  progress: Progress,
-): Promise<void> {
-  // One row for the whole gate, however many commands it is made of: which
-  // command failed is the outcome, and its output is the hand-off's business.
-  const startedAt = Date.now();
-  const minutes = pipeline.config.checkTimeoutMinutes;
-  for (const command of pipeline.config.checks) {
-    const result = await pipeline.workspace.runCheck(command, worktree, minutes * 60_000);
-    if (!result.ok) {
-      const durationMs = Date.now() - startedAt;
-      // Asked before the row is written, because the row is what differs: a
-      // Check the base branch fails too is nothing the Ticket did.
-      await releaseIfTheBaseFails(pipeline, {
-        onBranch: { point: "checks", command, output: result.output, timedOut: result.timedOut },
-        worktree,
-        commands: [command],
-        progress,
-        durationMs,
-      });
-      // A Check that hung and one that failed are the same failure to the fix
-      // budget and the hand-off; they are told apart only in what they say, so
-      // that a fix Stage knows whether it is mending a hang or an assertion.
-      await progress.record({
-        point: "checks",
-        outcome: `❌ \`${command}\` ${result.timedOut ? "timed out" : "failed"}`,
-        durationMs,
-      });
-      throw new TicketFailure(
-        "checks",
-        `Check \`${command}\` ${result.timedOut ? "timed out" : "failed"}`,
-        result.timedOut ? killedEvidence(command, result.output, minutes) : result.output,
-        "failed-check",
-      );
-    }
-  }
-  // No command is not a pass: only `"checks": []` lets a Run start with none,
-  // and the row says so as the ci row does for a pull request with none.
-  await progress.record({
-    point: "checks",
-    outcome: pipeline.config.checks.length === 0 ? "⚠️ no checks" : "✅ passed",
-    durationMs: Date.now() - startedAt,
-  });
 }
 
 /**
@@ -1669,8 +1664,8 @@ async function inheritedFailure(
  * row that says so; return when it does not, for the caller to charge the
  * failure to the Ticket as it always did.
  *
- * Only a Ticket that reached its Checks gets here, so the implement Stage's
- * work is always on its branch.
+ * Only a Ticket whose pull request CI went red gets here, so the implement
+ * Stage's work is always on its branch.
  */
 async function releaseIfTheBaseFails(
   pipeline: Pipeline,
@@ -1681,7 +1676,7 @@ async function releaseIfTheBaseFails(
     progress,
     durationMs,
   }: {
-    /** How the branch failed, which is also where: its Checks, or CI. */
+    /** How the branch failed: CI on its pull request. */
     onBranch: BranchFailure;
     worktree: string;
     commands: readonly string[];
@@ -1701,18 +1696,6 @@ async function releaseIfTheBaseFails(
     ...inherited,
     onBranch,
   });
-}
-
-/**
- * What the Check printed before the kill, and then a line saying that a kill is
- * what ended it. A fix Stage is given the evidence and little else, so the
- * output alone would read as a suite that simply stopped mid-run.
- */
-function killedEvidence(command: string, output: string, minutes: number): string {
-  const unit = minutes === 1 ? "minute" : "minutes";
-  const trailer = `\`${command}\` was killed after ${minutes} ${unit} at the Check wall-clock limit: it hung rather than failing, and everything above is what it had printed by then.`;
-  const printed = output.trimEnd();
-  return printed === "" ? trailer : `${printed}\n\n${trailer}`;
 }
 
 async function verify(
@@ -1790,7 +1773,6 @@ async function verify(
     );
   }
   const verdict = graded;
-  const counts = countStatuses(verdict);
 
   // The agent's own `pass` is advisory; this is the decision that counts.
   if (!passes(verdict)) {
@@ -1821,7 +1803,7 @@ async function verify(
     );
   }
 
-  const summary = `${counts.met} met · ${counts.unverifiable} unverifiable`;
+  const summary = verifiedSummary(verdict);
   await progress.record(stageRow("verify", result, `✅ ${summary}`));
   pipeline.log?.(`#${issue.number} verified · ${summary}`);
   return verdict;
@@ -1911,7 +1893,7 @@ async function fix(
   if (!result.ok) throw await stageDidNotFinish(pipeline, progress, "fix", result);
 
   // A session that came back clean mended nothing, whatever it says. Believing
-  // it costs the Ticket a whole second pass of the Checks, the verdict and CI
+  // it costs the Ticket a whole second pass of the verdict and CI
   // over a branch nobody touched, which can only fail the way it just did — and
   // a progress row claiming the Stage committed. The budget is already spent,
   // so this ends the Ticket rather than buying another try.
@@ -1930,7 +1912,13 @@ async function fix(
     throw leftNoCommits("fix", failure.evidence, result);
   }
 
-  await progress.record(stageRow("fix", result, "✅ committed"));
+  // The budget is spent, so what the Stage left uncommitted hands the Ticket
+  // off from here, before anything grades the branch.
+  const uncommitted = await uncommittedWork(pipeline, worktree, "fix");
+  await progress.record(
+    stageRow("fix", result, uncommitted === undefined ? "✅ committed" : UNCOMMITTED_CELL),
+  );
+  if (uncommitted !== undefined) throw uncommitted;
 }
 
 /**
@@ -1948,8 +1936,9 @@ async function fix(
  *
  * A Stage the rate limit or an API failure stopped is read the same way, and
  * only then released: one that had already finished the rebase leaves nothing
- * that needs an agent session, so the Ticket carries on to the Checks, the pull
- * request and CI.
+ * that needs an agent session, so the Ticket carries on to the pull request and
+ * CI. One that finished it and left work no commit carries goes no further:
+ * that spends the fix budget, as it does after a code Stage.
  */
 async function resolveConflict(
   pipeline: Pipeline,
@@ -2018,11 +2007,14 @@ async function conflictStage(
       // The worktree decides the row, as it decides the outcome: a Stage that
       // ran out of turns, or into the rate limit or an API failure, after
       // finishing the rebase did the job it was sent to do.
-      await progress.record(stageRow("conflict", result, "✅ rebased"));
+      const uncommitted = await uncommittedWork(pipeline, worktree, "rebase");
+      await progress.record(
+        stageRow("conflict", result, uncommitted === undefined ? "✅ rebased" : UNCOMMITTED_CELL),
+      );
       // The rebase rewrote the branch, and the resolution is a commit of the
       // Stage's like any other.
       await pushCommitted(pipeline, issue.number, worktree, branch);
-      return undefined;
+      return uncommitted;
     }
 
     // A rate limit or an API failure left the conflict exactly as it found it:
@@ -2127,14 +2119,15 @@ interface CiSubject {
 /**
  * A red, unfinished or conflicting pull request is a failure. One with no
  * checks at all merges: a Target that needs CI before a merge says so with
- * required status checks, and GitHub then refuses the merge.
+ * required status checks, and GitHub then refuses the merge. True when CI ran
+ * and passed, false when none ran.
  */
 async function requireGreenCi(
   pipeline: Pipeline,
   { worktree, branch, pullRequest }: CiSubject,
   progress: Progress,
   landing: LandingTurn,
-): Promise<void> {
+): Promise<boolean> {
   const startedAt = Date.now();
   const workflowsCanRun = await workflowsCanRunOn(pipeline, worktree, branch);
   const outcome = await pipeline.tracker.waitForCi(
@@ -2148,16 +2141,17 @@ async function requireGreenCi(
   switch (outcome.state) {
     case "passed":
       await record("✅ passed");
-      return;
+      return true;
     case "failed": {
       // Out of the Landing first: whether the Ticket is released or sent to a
-      // fix Stage, it leaves, and the Checks below take minutes nobody else
-      // should wait behind.
+      // fix Stage, it leaves, and the Checks at the merge-base below take
+      // minutes nobody else should wait behind.
       landing.leave();
       // CI's own runs on the base branch cannot say whether it fails there: a
       // workflow that runs only on pull requests leaves a squash commit with
       // none, and a failure the clock brings starts after its last green run.
-      // So the merge-base is graded with the Checks, which CI runs too.
+      // So the merge-base is graded with the Check commands, which the
+      // pipeline runs nowhere else.
       await releaseIfTheBaseFails(pipeline, {
         onBranch: { point: "ci", summary: outcome.summary, excerpt: outcome.excerpt },
         worktree,
@@ -2186,10 +2180,10 @@ async function requireGreenCi(
         `the pull request conflicts with \`${pipeline.baseBranch}\`, so GitHub will neither run its checks nor merge it`,
       );
     case "none":
-      // Worth a row of its own: the Ticket merges on nobody's word but the
-      // pipeline's own Checks, and the row says whether a check was ever coming.
+      // Worth a row of its own: nothing ran the Ticket's code before it
+      // merges, and the row says whether a check was ever coming.
       await record(workflowsCanRun ? "⚠️ no checks" : "⚠️ no workflow runs");
-      return;
+      return false;
   }
 }
 

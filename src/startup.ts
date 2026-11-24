@@ -18,6 +18,7 @@ export function startupMessages(config: Config): StartupMessages {
     return {
       refusal: [
         "No Check commands are configured and none could be inferred from package.json.",
+        "The Stage prompts name them, and a red CI is graded with them at the branch's merge-base with the base branch.",
         `Add them to \`checks\` in ${CONFIG_FILENAME}, add \`test\` and \`typecheck\` scripts to package.json,`,
         `or write \`"checks": []\` in ${CONFIG_FILENAME} to run with no Check command.`,
       ].join(" "),
@@ -27,7 +28,7 @@ export function startupMessages(config: Config): StartupMessages {
 
   return {
     warnings: [
-      `No Check command: \`checks\` is \`[]\` in ${CONFIG_FILENAME}, so nothing deterministic grades a Ticket before it merges.`,
+      `No Check command: \`checks\` is \`[]\` in ${CONFIG_FILENAME}, so the Stage prompts name none and a red CI is not graded at the branch's merge-base.`,
     ],
   };
 }

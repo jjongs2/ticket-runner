@@ -10,7 +10,7 @@
 <details><summary>Evidence</summary>
 
 ```
-<failing Check output, unmet criteria and defects of the branch with evidence, or CI log excerpt>
+<uncommitted paths, unmet criteria and defects of the branch with evidence, or CI log excerpt>
 ```
 
 </details>
@@ -98,9 +98,12 @@ box, never as the verify Stage wrote it, and each defect of the branch as
 The pull request clause is dropped when no pull request could be opened. The whole
 `<details>` block is dropped when there is no evidence to show. Evidence is
 fenced because it is raw command output, which would otherwise be read as
-Markdown. A Check the wall-clock limit killed is the one evidence the pipeline
-adds a line of its own to, inside the fence: the output stops mid-run, so
-something has to say that a kill is why.
+Markdown.
+
+A Ticket whose CI ran no check, its `ci` row `⚠️ no checks` or `⚠️ no workflow
+runs`, and that has no met criterion beside those the verify Stage left to CI,
+is handed off at `ci`: no criterion has evidence to merge on. Its evidence gives
+every criterion as an unmet one is given, those left to CI as unverifiable.
 
 ## When the Target merges by hand
 
@@ -122,7 +125,8 @@ request is the one the `pr` step published, ready for review and not a draft,
 its title and body unchanged, since that body is what the human reads and what
 GitHub's default squash commit becomes.
 
-The unverifiable criteria are what the pipeline's own squash commit would have
+The unverifiable criteria, with those the verify Stage left to CI when no CI ran
+on the pull request, are what the pipeline's own squash commit would have
 carried, one line each, the criterion as its checkbox line on the Ticket reads
 after the box and its evidence joined into one line. A human merging by hand
 gets GitHub's default message instead, so they are said here.

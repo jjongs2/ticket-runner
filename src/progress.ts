@@ -34,15 +34,15 @@ export const PROGRESS_MARKER = "<!-- ticket-runner:progress -->";
 
 /**
  * What a row is about. Named after the lifecycle step rather than the Stage, for
- * the reason `FailurePoint` in `lifecycle.ts` is: the Checks, CI and the merge
- * each earn a row, and none of them is an agent session. `setup`, `rebase` and
- * `pr` earn one only where GitHub or the remote failing on its own side
- * released the Ticket there.
+ * the reason `FailurePoint` in `lifecycle.ts` is: CI and the merge each earn a
+ * row, and neither is an agent session. `setup` earns one where a resumed
+ * Ticket's worktree holds work no commit carries, and `setup`, `rebase` and
+ * `pr` one where GitHub or the remote failing on its own side released the
+ * Ticket there.
  */
 export type ProgressPoint =
   | "setup"
   | "implement"
-  | "checks"
   | "verify"
   | "fix"
   | "conflict"
@@ -56,7 +56,7 @@ export interface ProgressRow {
   point: ProgressPoint;
   /** An icon and a handful of words; details belong to the hand-off comment. */
   outcome: string;
-  /** Agent turns. Checks, CI and the merge run no agent, so they have none. */
+  /** Agent turns. CI and the merge run no agent, so they have none. */
   turns?: number;
   durationMs?: number;
 }

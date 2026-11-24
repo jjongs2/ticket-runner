@@ -39,7 +39,7 @@ describe("the Operator's skill", () => {
     ["Stage", "a Claude Code session a Run started for a single purpose"],
     ["Operator", "the Claude session a human opened on this repository"],
     ["Target", "the repository a Run takes its work from and merges into"],
-    ["Check", "a command the pipeline runs itself on a Ticket's code"],
+    ["Check", "a command this repository names"],
     ["Hand-off", "handed off (given to a human to carry on)"],
     ["Release", "released (given back for a later Run to take up again)"],
     ["Note", "Notes the Run posted: defects a Stage met that belong to another Ticket or to none yet"],

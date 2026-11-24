@@ -8,7 +8,9 @@ import {
   isMisnumbered,
   parseVerdict,
   passes,
+  settleCiCriteria,
   unmetCriteria,
+  verifiedSummary,
 } from "./verdict.js";
 
 const answer = (number: number, status: string) => ({
@@ -148,6 +150,14 @@ describe("passes", () => {
     expect(passes(graded(["unverifiable", "unverifiable"]))).toBe(false);
   });
 
+  it("passes a verdict whose only evidence is a criterion left to CI", () => {
+    expect(passes(graded(["ci", "unverifiable"]))).toBe(true);
+  });
+
+  it("fails a verdict with a criterion left to CI beside an unmet one", () => {
+    expect(passes(graded(["ci", "unmet"]))).toBe(false);
+  });
+
   it("fails a verdict that reports a defect of the branch, every criterion met", () => {
     expect(passes(graded(["met"], [{ summary: "it crashes", evidence: "ran it" }]))).toBe(false);
   });
@@ -159,7 +169,59 @@ describe("countStatuses", () => {
       met: 2,
       unmet: 1,
       unverifiable: 0,
+      ci: 0,
     });
+  });
+});
+
+describe("parseVerdict's `ci`", () => {
+  it("is a status the schema and the parser both take", () => {
+    const status = VERDICT_JSON_SCHEMA.properties.criteria.items.properties.status;
+
+    expect(status.enum).toContain("ci");
+    expect(parseVerdict({ criteria: [answer(1, "ci")], pass: true }).criteria[0]?.status).toBe("ci");
+  });
+
+  it("is counted on its own", () => {
+    expect(countStatuses(graded(["met", "ci", "ci"]))).toEqual({
+      met: 1,
+      unmet: 0,
+      unverifiable: 0,
+      ci: 2,
+    });
+  });
+});
+
+describe("settleCiCriteria", () => {
+  it("makes every criterion left to CI met once CI passed, and touches no other", () => {
+    const settled = settleCiCriteria(graded(["ci", "unverifiable", "met"]), true);
+
+    expect(settled.criteria.map((criterion) => criterion.status)).toEqual([
+      "met",
+      "unverifiable",
+      "met",
+    ]);
+    expect(settled.criteria[0]?.evidence).toBe("looked at it");
+  });
+
+  it("makes every criterion left to CI unverifiable when no CI ran, its evidence saying so", () => {
+    const settled = settleCiCriteria(graded(["ci", "met"]), false);
+
+    expect(settled.criteria.map((criterion) => criterion.status)).toEqual(["unverifiable", "met"]);
+    expect(settled.criteria[0]?.evidence).toBe(
+      "looked at it (left to CI, which ran no check on the pull request)",
+    );
+  });
+});
+
+describe("verifiedSummary", () => {
+  it.each([
+    [["met", "met"], "2 met"],
+    [["met", "ci"], "1 met · 1 to CI"],
+    [["met", "unverifiable"], "1 met · 1 unverifiable"],
+    [["ci", "ci", "unverifiable"], "0 met · 2 to CI · 1 unverifiable"],
+  ])("reads %j as %s", (statuses, summary) => {
+    expect(verifiedSummary(graded(statuses))).toBe(summary);
   });
 });
 

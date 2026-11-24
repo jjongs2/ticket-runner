@@ -622,18 +622,17 @@ export function noteComment(subject: NoteSubject): string {
 }
 
 /**
- * How the Ticket's own branch failed, before the merge-base was graded: a Check
- * in its worktree, or CI on its pull request.
+ * How the Ticket's own branch failed, before the merge-base was graded: CI on
+ * its pull request, which is the one place the pipeline grades a branch with
+ * the Check commands' help.
  */
-export type BranchFailure =
-  | { point: "checks"; command: string; output: string; timedOut: boolean }
-  | {
-      point: "ci";
-      /** Which checks went red, as CI reported them. */
-      summary: string;
-      /** The tail of the failing jobs' logs, which a fix Stage would be handed; empty when none had one. */
-      excerpt: string;
-    };
+export interface BranchFailure {
+  point: "ci";
+  /** Which checks went red, as CI reported them. */
+  summary: string;
+  /** The tail of the failing jobs' logs, which a fix Stage would be handed; empty when none had one. */
+  excerpt: string;
+}
 
 /** A Check the base branch fails, as the pipeline's own Note reports it. */
 export interface FailingBaseNote {
@@ -657,39 +656,30 @@ export function failingBaseSummary(baseBranch: string, command: string): string 
 }
 
 /**
- * The one Note no Stage writes: a Ticket was released because the base branch
- * fails the Check its branch failed, so the defect is the base branch's and a
- * human has to mend it there.
+ * The one Note no Stage writes: a Ticket was released because CI went red on
+ * its pull request and the base branch fails a Check too, so the defect is the
+ * base branch's and a human has to mend it there.
  *
  * Signed and laid out as a Stage's Note is, so triage reads it the same way,
  * with the provenance naming the pipeline rather than a Stage. The tail of the
  * output is the one a CI log excerpt keeps, so long lines cannot push the Note
  * past what GitHub takes in a comment.
  *
- * The branch's own failure is quoted beside it, because only the command is
- * compared: a branch that fails the command differently is released all the
- * same, and its failure would otherwise be nowhere a human can read it. For CI
- * that is the failing jobs' logs as a fix Stage would be handed them, which are
- * tails already.
+ * The branch's own failure is quoted beside it, because nothing compares the
+ * two: CI that went red over something else is released all the same, and its
+ * failure would otherwise be nowhere a human can read it. That is the failing
+ * jobs' logs as a fix Stage would be handed them, which are tails already.
  */
 export function failingBaseNote(note: FailingBaseNote): string {
   const { baseBranch, branch, commit, command, onBranch } = note;
   const where = `\`${command}\` ${note.timedOut ? "timed out" : "failed"} in a clean worktree at ${commit}, the merge-base of \`${branch}\` with \`${baseBranch}\`.`;
   const opening = "The branch's own failure, which need not be the same:";
-  const branchPart =
-    onBranch.point === "checks"
-      ? quoted(
-          `${opening} \`${onBranch.command}\` ${onBranch.timedOut ? "timed out" : "failed"} on \`${branch}\`.`,
-          "The tail of the branch's output:",
-          logTail(onBranch.output),
-          "It printed nothing.",
-        )
-      : quoted(
-          `${opening} CI on the pull request from \`${branch}\` reported ${onBranch.summary}.`,
-          "The tail of the failing jobs' logs:",
-          onBranch.excerpt.trim(),
-          "No failing job had a log to quote.",
-        );
+  const branchPart = quoted(
+    `${opening} CI on the pull request from \`${branch}\` reported ${onBranch.summary}.`,
+    "The tail of the failing jobs' logs:",
+    onBranch.excerpt.trim(),
+    "No failing job had a log to quote.",
+  );
   return [
     NOTE_MARKER,
     `From the pipeline, releasing #${note.origin} at ${onBranch.point}`,
@@ -699,7 +689,7 @@ export function failingBaseNote(note: FailingBaseNote): string {
       `**Evidence**: ${quoted(where, "The tail of its output:", logTail(note.output), "It printed nothing.")}`,
       branchPart,
       `**Impact**: every Ticket whose branch inherits ${commit} fails the same Check. #${note.origin} was released with its fix budget as it was, and the Run claimed no more Tickets.`,
-      `**Next**: mend \`${command}\` on \`${baseBranch}\`. The next Run takes the released Tickets up again from their state files, rebased onto \`${baseBranch}\` before their Checks.`,
+      `**Next**: mend \`${command}\` on \`${baseBranch}\`. The next Run takes the released Tickets up again from their state files, rebased onto \`${baseBranch}\` first.`,
     ].join("\n\n"),
     "",
   ].join("\n");

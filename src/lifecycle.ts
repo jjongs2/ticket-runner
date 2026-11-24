@@ -1,11 +1,10 @@
 /**
  * Where a Ticket was when it failed. Named after the lifecycle step, not the
- * Stage, because Checks, rebase, pull request and CI are not agent sessions.
+ * Stage, because rebase, pull request and CI are not agent sessions.
  */
 export type FailurePoint =
   | "setup"
   | "implement"
-  | "checks"
   | "verify"
   | "fix"
   | "rebase"
@@ -28,7 +27,6 @@ export type FailurePoint =
  */
 export type FailureKind =
   | "uncommitted-work"
-  | "failed-check"
   | "unmet-criteria"
   | "failed-ci"
   | "unresolved-conflict";

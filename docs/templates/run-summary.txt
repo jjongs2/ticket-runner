@@ -33,8 +33,12 @@ line its implement Stage earns, not on its claim:
 
 #4 claimed
 #4 implemented · agent/4-planning-guards
-#4 verified · 4 met · 0 unverifiable
+#4 verified · 3 met · 1 to CI
 #4 merged · PR #12
+
+The `verified` line counts as the verify row does: `<k> met`, then `· <c> to
+CI` when the verify Stage left criteria to the pull request's CI and
+`· <u> unverifiable` when any were unverifiable, neither written at zero.
 
 A Ticket resumed past its implement Stage names its branch on the line it is
 resumed with, `#4 resumed from implemented · agent/4-planning-guards`; one
@@ -194,15 +198,15 @@ its own last line in place of `API failure.`, with the reset time where a Stage
 was told one, because that is the line that says when the next Run can start.
 Each `released` row keeps its own cause.
 
-A Ticket whose failing Check or red CI the base branch fails too is released
-the same way, its fix budget as it was: the pipeline ran the Check commands at
-the branch's merge-base with the base branch, and one of them failed there. Its
+A Ticket whose red CI the base branch fails too is released the same way, its
+fix budget as it was: the pipeline ran the Check commands at the branch's
+merge-base with the base branch, and one of them failed there. Its
 row says so in place of the rate limit, and the last line names the base
 branch, the command and the merge-base, shortened to seven characters. The Note
 the pipeline posted about it on the standing Notes issue follows the row, as a
 Stage's Note does, from the `pipeline`:
 
-  released #6 Rebase conflict resolution · failing base branch at checks
+  released #6 Rebase conflict resolution · failing base branch at ci
   noted    #31 comment · from #6 pipeline · The base branch `main` fails `npm test`.
 
 Base branch `main` fails `npm test` at 1a2b3c4.

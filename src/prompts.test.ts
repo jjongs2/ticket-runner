@@ -26,9 +26,9 @@ const CHECKS = ["npm test", "npm run typecheck"];
 
 const CONFLICT = "CONFLICT (content): Merge conflict in src/cli.ts";
 
-const FAILED_CHECK = {
-  kind: "failed-check" as const,
-  summary: "Check `npm test` failed",
+const FAILED_CI = {
+  kind: "failed-ci" as const,
+  summary: "test (ubuntu-latest) failed",
   evidence: "FAIL src/a.test.ts",
 };
 
@@ -191,14 +191,14 @@ describe("verifyPrompt", () => {
 
 describe("fixPrompt", () => {
   it("asks for no branch slug: only the implement Stage names the branch", () => {
-    const prompt = fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS);
+    const prompt = fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS);
 
     expect(prompt).not.toContain("`branch`");
     expect(prompt).not.toContain("<slug>");
   });
 
   it("invokes no plugin skill but the pr skill: the implement skill would start over", () => {
-    const prompt = fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS);
+    const prompt = fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS);
     const skills = prompt.match(/\/mattpocock-skills:[a-z-]+/g) ?? [];
 
     expect(new Set(skills)).toEqual(new Set(["/mattpocock-skills:pr"]));
@@ -207,25 +207,24 @@ describe("fixPrompt", () => {
   });
 
   it("names the Ticket, the failure and the evidence that was captured", () => {
-    const prompt = fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS);
+    const prompt = fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS);
 
     expect(prompt).toContain(url);
-    expect(prompt).toContain("Check `npm test` failed");
+    expect(prompt).toContain("test (ubuntu-latest) failed");
     expect(prompt).toContain("FAIL src/a.test.ts");
   });
 
   it("says which kind of failure this is", () => {
-    expect(fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS)).toMatch(/a Check .*failed/i);
-    expect(fixPrompt(url, { ...FAILED_CHECK, kind: "unmet-criteria" }, BASE, "", OTHER_TARGET, NO_CHECKS)).toMatch(
+    expect(fixPrompt(url, { ...FAILED_CI, kind: "unmet-criteria" }, BASE, "", OTHER_TARGET, NO_CHECKS)).toMatch(
       /unmet Acceptance Criteria/i,
     );
-    expect(fixPrompt(url, { ...FAILED_CHECK, kind: "failed-ci" }, BASE, "", OTHER_TARGET, NO_CHECKS)).toMatch(
+    expect(fixPrompt(url, { ...FAILED_CI, kind: "failed-ci" }, BASE, "", OTHER_TARGET, NO_CHECKS)).toMatch(
       /pull request check failed/i,
     );
     expect(
-      fixPrompt(url, { ...FAILED_CHECK, kind: "unresolved-conflict" }, BASE, "", OTHER_TARGET, NO_CHECKS),
+      fixPrompt(url, { ...FAILED_CI, kind: "unresolved-conflict" }, BASE, "", OTHER_TARGET, NO_CHECKS),
     ).toMatch(/conflicts with main/i);
-    expect(fixPrompt(url, { ...FAILED_CHECK, kind: "uncommitted-work" }, BASE, "", OTHER_TARGET, NO_CHECKS)).toMatch(
+    expect(fixPrompt(url, { ...FAILED_CI, kind: "uncommitted-work" }, BASE, "", OTHER_TARGET, NO_CHECKS)).toMatch(
       /the Stage before you left changes .*never committed/i,
     );
   });
@@ -249,16 +248,16 @@ describe("fixPrompt", () => {
   });
 
   it("keeps uncommitted work off a background task", () => {
-    expectsForegroundFinish(fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS));
-    expectsForegroundFinish(fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, CHECKS));
+    expectsForegroundFinish(fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS));
+    expectsForegroundFinish(fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, CHECKS));
   });
 
   it("leaves the worktree clean but keeps the gitignored files it installed", () => {
-    expectsCleanWorktreeKeepingIgnoredFiles(fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS));
+    expectsCleanWorktreeKeepingIgnoredFiles(fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS));
   });
 
   it("states the subject shape itself, for its commits and its title alike", () => {
-    const prompt = fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS);
+    const prompt = fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS);
     const lines = prompt.split("\n");
     const commits = lines.find((line) => line.startsWith("- Write commit subjects"));
     const title = lines.find((line) => /answer a `title`/i.test(line));
@@ -270,20 +269,20 @@ describe("fixPrompt", () => {
   });
 
   it("asks for the regression test a gap the verdict found should have had", () => {
-    expect(fixPrompt(url, { ...FAILED_CHECK, kind: "unmet-criteria" }, BASE, "", OTHER_TARGET, NO_CHECKS)).toMatch(
+    expect(fixPrompt(url, { ...FAILED_CI, kind: "unmet-criteria" }, BASE, "", OTHER_TARGET, NO_CHECKS)).toMatch(
       /regression test/i,
     );
   });
 
   it("tells the session to commit where it is and to open nothing", () => {
-    const prompt = fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS);
+    const prompt = fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS);
 
     expect(prompt).toMatch(/commit .*on the .*branch|branch you are on/i);
     expect(prompt).toMatch(/do not open pull requests/i);
   });
 
   it("appends the configured extra prompt", () => {
-    const prompt = fixPrompt(url, FAILED_CHECK, BASE, "Keep it small.", OTHER_TARGET, NO_CHECKS);
+    const prompt = fixPrompt(url, FAILED_CI, BASE, "Keep it small.", OTHER_TARGET, NO_CHECKS);
 
     expect(prompt.trimEnd().endsWith("Keep it small.")).toBe(true);
   });
@@ -332,7 +331,7 @@ describe("the Stage boundary guidance", () => {
   const everyPrompt = (selfHosted: boolean, extra = "") => [
     implementPrompt(url, BASE, extra, selfHosted, NO_CHECKS),
     verifyPrompt(url, extra, selfHosted, NO_CHECKS),
-    fixPrompt(url, FAILED_CHECK, BASE, extra, selfHosted, NO_CHECKS),
+    fixPrompt(url, FAILED_CI, BASE, extra, selfHosted, NO_CHECKS),
     conflictPrompt(url, CONFLICT, BASE, extra, selfHosted, NO_CHECKS),
   ];
 
@@ -439,7 +438,7 @@ describe("the Notes channel", () => {
   it("tells every Stage with the channel that what the Ticket's own deliverable records is not a Note", () => {
     for (const prompt of [
       implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS),
-      fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS),
+      fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS),
       verifyPrompt(url, "", OTHER_TARGET, NO_CHECKS),
     ]) {
       expect(prompt).toContain("What this Ticket's own deliverable already records is not a Note");
@@ -454,13 +453,13 @@ describe("the Notes channel", () => {
   });
 
   it("tells the fix Stage the same", () => {
-    expect(fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS)).toContain("Notes for other Tickets");
+    expect(fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS)).toContain("Notes for other Tickets");
   });
 
   it("tells every Stage with the channel that a Note is a defect", () => {
     for (const prompt of [
       implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS),
-      fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS),
+      fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS),
       verifyPrompt(url, "", OTHER_TARGET, NO_CHECKS),
     ]) {
       expect(prompt).toContain("A Note is a defect");
@@ -482,7 +481,7 @@ describe("the Notes channel", () => {
   it("asks every Stage with the channel for a Note in its parts, not as one string", () => {
     for (const prompt of [
       implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS),
-      fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS),
+      fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS),
       verifyPrompt(url, "", OTHER_TARGET, NO_CHECKS),
     ]) {
       expect(prompt).toContain("`summary` is one short sentence naming the defect");
@@ -495,7 +494,7 @@ describe("the Notes channel", () => {
 
   it("promises a Stage nothing about issue titles", () => {
     expect(implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS)).not.toContain("issue's title");
-    expect(fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS)).not.toContain("issue's title");
+    expect(fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS)).not.toContain("issue's title");
     expect(implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS, 42)).not.toContain("issue's title");
   });
 
@@ -507,12 +506,12 @@ describe("the Notes channel", () => {
     const prompt = implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS, 42);
 
     expect(prompt).toContain("gathered on #42");
-    expect(fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS, 42)).toContain("gathered on #42");
+    expect(fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS, 42)).toContain("gathered on #42");
   });
 
   it("says nothing about one when none is open", () => {
     expect(implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS)).not.toContain("gathered on");
-    expect(fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS)).not.toContain("gathered on");
+    expect(fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS)).not.toContain("gathered on");
   });
 
   it("asks for what the standing issue does not record, not for another instance of it", () => {
@@ -567,7 +566,7 @@ describe("the branch a Stage works on", () => {
   it("is the only one every Stage that commits is told to use", () => {
     const prompts = [
       implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS),
-      fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS),
+      fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS),
       conflictPrompt(url, CONFLICT, BASE, "", OTHER_TARGET, NO_CHECKS),
     ];
 
@@ -585,8 +584,8 @@ describe("the conventions document", () => {
     const prompts = [
       implementPrompt(url, BASE, "", SELF_HOSTED, CHECKS),
       verifyPrompt(url, "", SELF_HOSTED, CHECKS),
-      fixPrompt(url, FAILED_CHECK, BASE, "", SELF_HOSTED, CHECKS),
-      fixPrompt(url, { ...FAILED_CHECK, kind: "unmet-criteria" }, BASE, "", SELF_HOSTED, CHECKS),
+      fixPrompt(url, FAILED_CI, BASE, "", SELF_HOSTED, CHECKS),
+      fixPrompt(url, { ...FAILED_CI, kind: "unmet-criteria" }, BASE, "", SELF_HOSTED, CHECKS),
       conflictPrompt(url, CONFLICT, BASE, "", SELF_HOSTED, CHECKS),
     ];
 
@@ -597,7 +596,7 @@ describe("the conventions document", () => {
 describe("the title of the branch", () => {
   const prompts = () => [
     implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS),
-    fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS),
+    fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS),
   ];
 
   it("is what both code Stages are asked to answer, for the whole branch", () => {
@@ -619,14 +618,14 @@ describe("the title of the branch", () => {
       const title = prompt.split("\n").find((line) => /answer a `title` beside your Notes/i.test(line));
       expect(title).toContain(rule);
     }
-    const commits = fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS)
+    const commits = fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS)
       .split("\n")
       .find((line) => line.startsWith("- Write commit subjects"));
     expect(commits).toContain(rule);
   });
 
   it("is kept by a fix Stage whose fix leaves it true, and answered by the implement Stage", () => {
-    const fix = fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS);
+    const fix = fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS);
 
     expect(fix).toContain(
       "Answer `title` as an empty string, which keeps it, unless your fix changes what it says.",
@@ -658,7 +657,7 @@ describe("the resolved base branch", () => {
   });
 
   it("is what the fix Stage is told its title lands on", () => {
-    const prompt = fixPrompt(url, FAILED_CHECK, "release", "", OTHER_TARGET, NO_CHECKS);
+    const prompt = fixPrompt(url, FAILED_CI, "release", "", OTHER_TARGET, NO_CHECKS);
 
     expect(prompt).toContain("the squash commit on `release`");
     expect(prompt).not.toContain("`main`");
@@ -675,7 +674,7 @@ describe("the resolved base branch", () => {
   it("is what the fix Stage is told a branch that will not replay conflicts with", () => {
     const prompt = fixPrompt(
       url,
-      { ...FAILED_CHECK, kind: "unresolved-conflict" },
+      { ...FAILED_CI, kind: "unresolved-conflict" },
       "release",
       "",
       OTHER_TARGET,
@@ -687,7 +686,7 @@ describe("the resolved base branch", () => {
   });
 });
 
-describe("the Checks the pipeline runs itself", () => {
+describe("the Checks, which the pipeline runs on no branch", () => {
   const UNMET = {
     kind: "unmet-criteria" as const,
     summary: "1 of 1 criteria unmet",
@@ -697,7 +696,7 @@ describe("the Checks the pipeline runs itself", () => {
   const everyPrompt = (checks: string[]) => [
     implementPrompt(url, BASE, "", OTHER_TARGET, checks),
     verifyPrompt(url, "", OTHER_TARGET, checks),
-    fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, checks),
+    fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, checks),
     conflictPrompt(url, CONFLICT, BASE, "", OTHER_TARGET, checks),
   ];
 
@@ -709,16 +708,33 @@ describe("the Checks the pipeline runs itself", () => {
 
   it("are named to no Stage where it has none", () => {
     for (const prompt of everyPrompt(NO_CHECKS)) {
-      expect(prompt).not.toMatch(/the pipeline runs its Checks|Checks passed on this commit/i);
+      expect(prompt).not.toMatch(/Checks are|does not run its Checks|run the full Checks/i);
     }
   });
 
-  it("are left to the pipeline by both code Stages, who run them once after committing", () => {
+  /**
+   * The pipeline runs none of them, so no prompt may say it does, that a
+   * failure of them spends the fix budget, or that CI runs them: what CI runs
+   * is the Target's to set up, and nothing here knows it.
+   */
+  it("are said by no code or conflict Stage prompt to be run by the pipeline or CI, or to cost the fix budget", () => {
     for (const prompt of [
       implementPrompt(url, BASE, "", OTHER_TARGET, CHECKS),
-      fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, CHECKS),
+      fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, CHECKS),
+      fixPrompt(url, UNMET, BASE, "", OTHER_TARGET, CHECKS),
+      conflictPrompt(url, CONFLICT, BASE, "", OTHER_TARGET, CHECKS),
     ]) {
-      expect(prompt).toMatch(/the pipeline runs its Checks as soon as you finish/i);
+      expect(prompt).not.toMatch(/pipeline (re-)?runs (its|the) Checks/i);
+      expect(prompt).not.toMatch(/Checks[^.\n]*fix budget|fix budget[^.\n]*Checks/i);
+      expect(prompt).not.toMatch(/CI runs (them|the Checks)|Checks[^.\n]*\bCI\b/i);
+    }
+  });
+
+  it("are run once by both code Stages, after committing", () => {
+    for (const prompt of [
+      implementPrompt(url, BASE, "", OTHER_TARGET, CHECKS),
+      fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, CHECKS),
+    ]) {
       expect(prompt).toMatch(/while you work, run only the tests your change touches/i);
       expect(prompt).toMatch(/commit, then run the full Checks once, in the foreground/i);
       expect(prompt).toMatch(/commit whatever that run makes you change/i);
@@ -729,24 +745,37 @@ describe("the Checks the pipeline runs itself", () => {
     expect(implementPrompt(url, BASE, "", OTHER_TARGET, CHECKS)).toMatch(
       /that one run comes after the review's fixes are committed/i,
     );
-    expect(fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, CHECKS)).not.toMatch(
+    expect(fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, CHECKS)).not.toMatch(
       /review's fixes/i,
     );
   });
 
-  it("are not re-run by verify, which grades a criterion asking only for them from their pass", () => {
+  it("are not run by verify to grade the branch, which it is told nobody has done since the Stage before it", () => {
     const prompt = verifyPrompt(url, "", OTHER_TARGET, CHECKS);
 
-    expect(prompt).toMatch(/passed on this commit/i);
-    expect(prompt).toMatch(/do not re-run them/i);
-    expect(prompt).toMatch(/a criterion that asks only for them .*from that fact/i);
-    expect(prompt).toMatch(/targeted tests and probes/i);
+    expect(prompt).toContain(
+      "The pipeline does not run its Checks (`npm test`, `npm run typecheck`), and the Stage before you was told to run them once. Do not run them to grade the branch: spend your turns on targeted tests and probes.",
+    );
+    expect(prompt).not.toMatch(/passed on this commit/i);
+  });
+
+  it("are not mentioned to verify where none are configured", () => {
+    expect(verifyPrompt(url, "", OTHER_TARGET, NO_CHECKS)).not.toContain(
+      "The pipeline does not run its Checks",
+    );
+  });
+
+  it("leave verify to answer `ci` for a criterion asking for nothing but CI, or commands, to pass, whatever is configured", () => {
+    for (const checks of [CHECKS, NO_CHECKS]) {
+      expect(verifyPrompt(url, "", OTHER_TARGET, checks)).toContain(
+        "For a criterion that asks for nothing but the pull request's CI, or some commands, to pass: if a workflow under `.github/workflows/` runs on this pull request, its triggers and `paths` filters admitting the branch's changes, and runs every command the criterion names, whole or split across jobs, answer `ci`, with evidence naming the workflow and its steps; the pipeline ticks it once CI passes. Otherwise grade the criterion yourself, running the commands it names.",
+      );
+    }
   });
 
   it("are narrowed by the conflict Stage to the type checker and the tests of what it resolved", () => {
     const prompt = conflictPrompt(url, CONFLICT, BASE, "", OTHER_TARGET, CHECKS);
 
-    expect(prompt).toMatch(/the pipeline runs its Checks as soon as you finish/i);
     expect(prompt).toMatch(
       /run the type checker and the tests covering the files you resolved, not the whole suite/i,
     );
@@ -763,7 +792,7 @@ describe("a defect the branch introduced", () => {
   it("is the code Stages' to fix, never a Note", () => {
     for (const prompt of [
       implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS),
-      fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS),
+      fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS),
     ]) {
       expect(prompt).toMatch(/a defect this branch introduced\b.* belongs to this Ticket/i);
       expect(prompt).toContain("behaves correctly on the base branch and wrongly here");
@@ -810,7 +839,7 @@ describe("a code Stage that ends without a new commit", () => {
   ] as const;
 
   it.each(KINDS)("is told by the fix prompt, sent in for %s, to say why in `noCommitReason`", (kind) => {
-    const prompt = fixPrompt(url, { ...FAILED_CHECK, kind }, BASE, "", OTHER_TARGET, NO_CHECKS);
+    const prompt = fixPrompt(url, { ...FAILED_CI, kind }, BASE, "", OTHER_TARGET, NO_CHECKS);
 
     expect(prompt).toMatch(/if you end without a new commit, say why in `noCommitReason`/i);
     expect(prompt).not.toMatch(/last message/i);
@@ -854,7 +883,7 @@ describe("a criterion that needs a human decision", () => {
   });
 
   it("is not raised with a fix Stage sent in for anything but unmet criteria", () => {
-    expect(fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS)).not.toMatch(
+    expect(fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS)).not.toMatch(
       /overturning a documented decision/i,
     );
   });
@@ -938,7 +967,7 @@ describe("an unmet criterion's evidence", () => {
 
   it("is not raised with a fix Stage sent in for anything but unmet criteria", () => {
     for (const kind of OTHER_KINDS) {
-      const prompt = fixPrompt(url, { ...FAILED_CHECK, kind }, BASE, "", OTHER_TARGET, NO_CHECKS);
+      const prompt = fixPrompt(url, { ...FAILED_CI, kind }, BASE, "", OTHER_TARGET, NO_CHECKS);
 
       expect(prompt).not.toMatch(/is a lead, not the answer/i);
       expect(prompt).not.toMatch(/find the cause yourself/i);
@@ -983,7 +1012,7 @@ describe("the conflict Stage's reach", () => {
 describe("the body, the problem and the solution", () => {
   const implement = () => implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS);
   const fix = (prose = {}) =>
-    fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS, undefined, prose);
+    fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS, undefined, prose);
 
   it("has the implement Stage answer all three for the whole branch beside title, after the review's fixes", () => {
     expect(implement()).toMatch(
@@ -1053,7 +1082,7 @@ describe("the language a Stage writes in", () => {
   it("covers every answer of the two code Stages", () => {
     for (const prompt of [
       implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS),
-      fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS),
+      fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS),
     ]) {
       expect(prompt).toContain(
         `- Write your Notes, \`title\`, \`body\`, \`problem\`, \`solution\` and \`noCommitReason\` ${RULE}`,
