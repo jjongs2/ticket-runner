@@ -34,6 +34,8 @@ const BRANCH = "agent/2";
 const URL = "https://github.com/acme/repo/issues/2";
 const CONFLICT = "CONFLICT (content): Merge conflict in src/cli.ts";
 const UNRESOLVED = { resolved: false, unresolved: "a rebase is still in progress" } as const;
+/** CI gone red on the pull request, with the log a fix Stage would be handed. */
+const RED_CI = { state: "failed", summary: "checks/test failed", excerpt: "FAIL src/a.test.ts" } as const;
 
 function config(overrides: Partial<Config> = {}): Config {
   return {
@@ -152,8 +154,9 @@ const FIX_REASON =
 const notices = () => tracker.comments.filter(({ body }) => !body.startsWith(PROGRESS_MARKER));
 
 /**
- * The Checks run on the Ticket's branch, in order, leaving out those run at its
- * merge-base to ask whether the base branch fails them too.
+ * Any Check run in the Ticket's worktree, which the pipeline runs none of,
+ * leaving out those run at its merge-base to ask whether the base branch fails
+ * them too.
  */
 const checksOnBranch = () =>
   workspace.ranChecks.filter((check) => check.cwd === worktree).map((check) => check.command);
@@ -594,7 +597,7 @@ describe("the pull request title and the squash commit", () => {
 
   it("titles a draft pull request the hand-off opens with the title the state file holds", async () => {
     runner.queue("implement", titled("feat(cli): do the whole thing"));
-    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+    tracker.ci = RED_CI;
 
     const outcome = await run();
 
@@ -766,7 +769,7 @@ describe("implement Stage failures", () => {
   });
 
   it("shows no reason from an implement Stage that committed, in the hand-off that comes later", async () => {
-    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+    tracker.ci = RED_CI;
     runner.queue(
       "implement",
       stageResult({ result: answer({ noCommitReason: "Nothing to do here." }) }),
@@ -775,7 +778,7 @@ describe("implement Stage failures", () => {
 
     const outcome = await run();
 
-    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "checks" });
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "ci" });
     expect(handoffBody()).not.toContain("Nothing to do here.");
   });
 });
@@ -982,60 +985,43 @@ describe("the implement Stage names the branch", () => {
 });
 
 describe("Checks", () => {
-  it("runs every configured Check in the worktree after implement", async () => {
-    await run();
+  it("runs no Check on the branch after implement: verify grades it next", async () => {
+    const outcome = await run();
 
-    expect(workspace.ranChecks).toEqual([
-      // Each Check gets the whole limit, not a share of it.
-      { command: "npm test", cwd: worktree, timeoutMs: 15 * 60_000 },
-      { command: "npm run typecheck", cwd: worktree, timeoutMs: 15 * 60_000 },
-    ]);
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(workspace.ranChecks).toEqual([]);
+    expect(runner.stages()).toEqual(["implement", "verify"]);
   });
 
-  it("stops at the first failing Check and hands the Ticket off with its output", async () => {
-    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+  it("runs no Check on the branch after a fix Stage, only at the merge-base CI's failure asks about", async () => {
+    tracker.queueCi(RED_CI);
 
     const outcome = await run();
 
-    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "checks" });
-    // Neither the first pass nor the one behind the fix Stage reached the
-    // typecheck: the Checks stop at the first command that fails.
-    expect(checksOnBranch()).toEqual(["npm test", "npm test"]);
-    expect(handoffBody()).toContain("FAIL src/a.test.ts");
-    expect(runner.stages()).toEqual(["implement", "fix"]);
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).toEqual(["implement", "verify", "fix", "verify"]);
+    expect(checksOnBranch()).toEqual([]);
+    expect(workspace.ranChecks.map((check) => check.command)).toEqual(["npm test", "npm run typecheck"]);
+    expect(workspace.ranChecks.every((check) => check.cwd !== worktree)).toBe(true);
   });
 
-  it("spends the fix budget on a Check that timed out and says the limit was the cause", async () => {
-    workspace.timeOutCheckOnce("npm test", "RUN  v3.0.0 /repo");
-
-    await run();
-
-    expect(progressTable()).toContain("| checks | ❌ `npm test` timed out |");
-    expect(runner.stages()).toEqual(["implement", "fix", "verify"]);
-    const prompt = runner.prompts("fix")[0] as string;
-    expect(prompt).toContain("Check `npm test` timed out");
-    expect(prompt).toContain("RUN  v3.0.0 /repo");
-    expect(prompt).toMatch(/killed after 15 minutes/);
-  });
-
-  it("hands a timed-out Check off with the same evidence once the budget is spent", async () => {
-    workspace.timeOutCheck("npm test", "RUN  v3.0.0 /repo");
+  it("runs no Check on the branch after a conflict Stage: the resolution goes on to the pull request", async () => {
+    workspace.rebaseOutcome = { ok: false, conflict: CONFLICT };
 
     const outcome = await run();
 
-    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "checks" });
-    expect(handoffBody()).toContain("Check `npm test` timed out");
-    expect(handoffBody()).toContain("RUN  v3.0.0 /repo");
-    expect(handoffBody()).toMatch(/killed after 15 minutes/);
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(workspace.ranChecks).toEqual([]);
+    expect(runner.stages()).toEqual(["implement", "verify", "conflict"]);
   });
 
-  it("names the configured limit, not the default, when the config moves it", async () => {
-    workspace.timeOutCheck("npm test", "");
+  it("gives a Check at the merge-base the configured limit, not the default", async () => {
+    tracker.ci = RED_CI;
 
     await run({ checkTimeoutMinutes: 2 });
 
     expect(workspace.ranChecks[0]?.timeoutMs).toBe(2 * 60_000);
-    expect(handoffBody()).toMatch(/killed after 2 minutes/);
+    expect(workspace.ranChecks[0]?.cwd).not.toBe(worktree);
   });
 });
 
@@ -1244,7 +1230,7 @@ describe("the Notes a verify Stage is shown", () => {
         },
       }),
     );
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
     runner.queue(
       "fix",
       stageResult({ result: { notes: [{ ticket: 9, summary: "the help drifts", impact: "users" }] } }),
@@ -1252,10 +1238,11 @@ describe("the Notes a verify Stage is shown", () => {
 
     await run();
 
-    const [verify = ""] = runner.prompts("verify");
-    expect(verify).toContain("## Notes this Ticket's implement and fix Stages wrote in this Run");
-    expect(verify).toContain("- From the implement Stage: the flag leaks a file handle\n  evidence: lsof shows it");
-    expect(verify).toContain("- From the fix Stage, for #9: the help drifts\n  impact: users");
+    const [first = "", behindFix = ""] = runner.prompts("verify");
+    expect(first).toContain("## Notes this Ticket's implement and fix Stages wrote in this Run");
+    expect(first).toContain("- From the implement Stage: the flag leaks a file handle\n  evidence: lsof shows it");
+    expect(behindFix).toContain("- From the implement Stage: the flag leaks a file handle\n  evidence: lsof shows it");
+    expect(behindFix).toContain("- From the fix Stage, for #9: the help drifts\n  impact: users");
   });
 
   it("shows no Notes section when the code Stages wrote none", async () => {
@@ -1382,21 +1369,36 @@ describe("rebase", () => {
     expect(request?.prompt).toContain(CONFLICT);
   });
 
-  it("runs the Checks again on the resolution before the pull request", async () => {
+  it("takes the resolution on to the pull request without running a Check on it", async () => {
     workspace.conflictOnce(CONFLICT);
 
-    await run();
+    const outcome = await run();
 
-    expect(workspace.ranChecks.map((check) => check.command)).toEqual([
-      "npm test",
-      "npm run typecheck",
-      "npm test",
-      "npm run typecheck",
-    ]);
-    // The push the pull request is opened from, which is the last one.
-    expect(workspace.calls.lastIndexOf("runCheck:npm run typecheck")).toBeLessThan(
-      workspace.calls.lastIndexOf(`push:${BRANCH}`),
-    );
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(workspace.ranChecks).toEqual([]);
+    expect(tracker.calls).toContain("createPullRequest:100:ready");
+  });
+
+  it("spends the fix budget on work the conflict Stage left uncommitted, before the pull request opens", async () => {
+    workspace.conflictOnce(CONFLICT);
+    runner.leaves("conflict", () => {
+      workspace.uncommitted = ["src/cli.ts.orig"];
+    });
+    let fixAt = -1;
+    runner.leaves("fix", () => {
+      fixAt = tracker.calls.length;
+      workspace.uncommitted = [];
+      workspace.commits.push("fix(cli): mend the thing (#2)");
+    });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "merged" });
+    expect(progressTable()).toContain("| conflict | ❌ uncommitted work |");
+    expect(runner.stages()).toEqual(["implement", "verify", "conflict", "fix", "verify"]);
+    expect(runner.prompts("fix")[0]).toContain("src/cli.ts.orig");
+    expect(fixAt).toBeGreaterThan(-1);
+    expect(tracker.calls.findIndex((call) => call.startsWith("createPullRequest"))).toBeGreaterThanOrEqual(fixAt);
   });
 
   it("takes a Stage that finished the rebase and only then ran out of turns", async () => {
@@ -1430,14 +1432,18 @@ describe("rebase", () => {
     workspace.conflictOnce(CONFLICT);
     workspace.rebaseStateAfterStage = UNRESOLVED;
 
+    let fixAt = -1;
+    runner.leaves("fix", () => {
+      fixAt = workspace.calls.length;
+      workspace.commits.push("fix(cli): mend the thing (#2)");
+    });
+
     await run();
 
-    // The fix Stage runs between the abort and the pass it bought, so a
-    // Check running again after the abort is a worktree it could commit in.
+    // The fix Stage runs after the abort, in a worktree it can commit in.
     expect(runner.stages()).toContain("fix");
-    expect(workspace.calls.indexOf("abortRebase")).toBeLessThan(
-      workspace.calls.lastIndexOf("runCheck:npm test"),
-    );
+    expect(workspace.calls.indexOf("abortRebase")).toBeGreaterThan(-1);
+    expect(workspace.calls.indexOf("abortRebase")).toBeLessThan(fixAt);
     expect(workspace.aborts).toBe(1);
   });
 
@@ -1458,8 +1464,8 @@ describe("rebase", () => {
   });
 
   it("hands off naming the limit when the conflict Stage ran out of turns", async () => {
-    // A Check spends the budget first, so this conflict gets one Stage only.
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    // An unmet verdict spends the budget first, so this conflict gets one Stage only.
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
     workspace.rebaseOutcome = { ok: false, conflict: CONFLICT };
     workspace.rebaseStateAfterStage = UNRESOLVED;
     runner.queue("conflict", { ok: false, failure: "turn-capped" });
@@ -1759,7 +1765,7 @@ describe("the transcripts a hand-off keeps on the remote", () => {
   const KEPT = "- Transcripts: `ticket-2/run-1/` on the `ticket-runner/state` branch";
 
   it("keeps this Run's beside the state, and the comment says where they and the branch are", async () => {
-    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+    tracker.ci = RED_CI;
 
     expect(await run()).toMatchObject({ outcome: "handed-off" });
     expect(workspace.transcripts.get(TICKET)).toEqual(["run-1"]);
@@ -1769,7 +1775,7 @@ describe("the transcripts a hand-off keeps on the remote", () => {
   });
 
   it("keeps them after the rest of the hand-off is written, so the kept state is current", async () => {
-    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+    tracker.ci = RED_CI;
     let stateWhenKept: TicketState | undefined;
     const keep = workspace.keepTranscripts.bind(workspace);
     workspace.keepTranscripts = async (ticket, runId) => {
@@ -1785,7 +1791,7 @@ describe("the transcripts a hand-off keeps on the remote", () => {
   });
 
   it("names them in the draft pull request's body too, and not the directory on this Host", async () => {
-    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+    tracker.ci = RED_CI;
 
     await run({});
 
@@ -1798,7 +1804,7 @@ describe("the transcripts a hand-off keeps on the remote", () => {
   });
 
   it("names none in the draft pull request's body when the remote will not take them", async () => {
-    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+    tracker.ci = RED_CI;
     workspace.keepTranscripts = async () => {
       throw new Error("remote rejected");
     };
@@ -1838,7 +1844,7 @@ describe("the transcripts a hand-off keeps on the remote", () => {
   });
 
   it("still hands the Ticket off when the draft pull request's body cannot be rewritten", async () => {
-    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+    tracker.ci = RED_CI;
     tracker.updatePullRequestBody = async () => {
       throw new Error("gh: 502");
     };
@@ -1855,8 +1861,8 @@ describe("the transcripts a hand-off keeps on the remote", () => {
   });
 
   it("clears those an earlier hand-off kept once the Ticket, handed back, merges", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
+    tracker.queueCi(RED_CI);
     expect(await run()).toMatchObject({ outcome: "handed-off" });
     expect(workspace.transcripts.has(TICKET)).toBe(true);
     tracker.issue(TICKET).labels = ["ready-for-agent"];
@@ -1886,7 +1892,7 @@ describe("the transcripts a hand-off keeps on the remote", () => {
   });
 
   it("still hands the Ticket off, naming none, when the remote will not take them", async () => {
-    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+    tracker.ci = RED_CI;
     workspace.keepTranscripts = async () => {
       throw new Error("remote rejected");
     };
@@ -1921,15 +1927,13 @@ describe("pushing the branch after every committing Stage", () => {
     return seen;
   }
 
-  it("pushes once the implement Stage has committed, before the Checks grade it", async () => {
+  it("pushes once the implement Stage has committed, before verify grades it", async () => {
     const pushed = pushesAfter();
 
     await run();
 
+    // Pushed before any other Stage ran, so before verify.
     expect(pushed[0]).toBe("implement");
-    expect(workspace.calls.indexOf(`push:${BRANCH}`)).toBeLessThan(
-      workspace.calls.indexOf("runCheck:npm test"),
-    );
   });
 
   it("pushes what an implement Stage the rate limit stopped had committed", async () => {
@@ -1955,16 +1959,14 @@ describe("pushing the branch after every committing Stage", () => {
     expect(logged.some((line) => line.includes("could not push"))).toBe(false);
   });
 
-  it("pushes once the fix Stage has committed, before the Checks grade it again", async () => {
+  it("pushes once the fix Stage has committed, before verify grades it again", async () => {
     const pushed = pushesAfter();
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
 
     await run();
 
+    // Pushed before any other Stage ran after it, so before the verify behind it.
     expect(pushed).toContain("fix");
-    const calls = workspace.calls;
-    const fixPush = calls.indexOf(`push:${BRANCH}`, calls.indexOf(`push:${BRANCH}`) + 1);
-    expect(fixPush).toBeLessThan(calls.lastIndexOf("runCheck:npm test"));
   });
 
   it("pushes once the conflict Stage has finished the rebase", async () => {
@@ -1975,8 +1977,9 @@ describe("pushing the branch after every committing Stage", () => {
 
     expect(pushed).toContain("conflict");
     const calls = workspace.calls;
+    // Pushed as soon as the rebase is finished, before the pull request's commits are read.
     expect(calls.indexOf(`push:${BRANCH}`, calls.indexOf("rebaseState"))).toBeLessThan(
-      calls.lastIndexOf("runCheck:npm test"),
+      calls.indexOf(`commitSubjects:${BRANCH}`, calls.indexOf("rebaseState")),
     );
   });
 
@@ -2019,38 +2022,35 @@ describe("the fix Stage", () => {
     return request;
   };
 
-  it("retries a failing Check in the same worktree and merges on the second pass", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+  it("retries a red CI in the same worktree and merges on the second pass", async () => {
+    tracker.queueCi(RED_CI);
 
     const outcome = await run();
 
     expect(outcome).toMatchObject({ outcome: "merged" });
-    expect(runner.stages()).toEqual(["implement", "fix", "verify"]);
+    expect(runner.stages()).toEqual(["implement", "verify", "fix", "verify"]);
     expect(fixRequest().cwd).toBe(worktree);
     expect(workspace.calls.filter((call) => call.startsWith("createWorktree"))).toEqual([
       `createWorktree:${BRANCH}`,
     ]);
   });
 
-  it("resumes at the Checks, running every one of them again", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+  it("starts the pass it bought again at verify, running no Check on the branch", async () => {
+    tracker.queueCi(RED_CI);
 
     await run();
 
-    expect(checksOnBranch()).toEqual([
-      "npm test",
-      "npm test",
-      "npm run typecheck",
-    ]);
+    expect(runner.stages()).toEqual(["implement", "verify", "fix", "verify"]);
+    expect(checksOnBranch()).toEqual([]);
   });
 
-  it("gives the fix Stage the failing Check and its output", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+  it("gives the fix Stage the red CI and its log", async () => {
+    tracker.queueCi(RED_CI);
 
     await run();
 
-    expect(runner.prompts("fix")[0]).toMatch(/a Check .*failed/i);
-    expect(runner.prompts("fix")[0]).toContain("Check `npm test` failed");
+    expect(runner.prompts("fix")[0]).toMatch(/a pull request check failed/i);
+    expect(runner.prompts("fix")[0]).toContain("checks/test failed");
     expect(runner.prompts("fix")[0]).toContain("FAIL src/a.test.ts");
   });
 
@@ -2087,12 +2087,12 @@ describe("the fix Stage", () => {
   });
 
   it("gives the verify behind a fix for anything else no earlier verdict", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
 
     await run();
 
-    expect(runner.prompts("verify")).toHaveLength(1);
-    expect(runner.prompts("verify")[0]).not.toMatch(/judged unmet before the fix/i);
+    expect(runner.prompts("verify")).toHaveLength(2);
+    expect(runner.prompts("verify")[1]).not.toMatch(/judged unmet before the fix/i);
   });
 
   it("retries a red CI without opening a second pull request", async () => {
@@ -2155,7 +2155,7 @@ describe("the fix Stage", () => {
       "implement",
       described({ body: "## Summary", problem: "There was no flag.", solution: "It adds one." }),
     );
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
 
     await run();
 
@@ -2171,7 +2171,7 @@ describe("the fix Stage", () => {
       described({ body: "## Summary", problem: "There was no flag.", solution: "It adds one." }),
     );
     runner.queue("fix", described({ body: "", problem: "", solution: "It adds one, tested." }));
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
 
     await run();
 
@@ -2182,7 +2182,7 @@ describe("the fix Stage", () => {
   });
 
   it("takes its own model, effort, turn and time limits, and its own extra prompt", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
 
     await run({
       stages: {
@@ -2209,7 +2209,7 @@ describe("the fix Stage", () => {
   });
 
   it("asks the fix Stage for structured output it may leave empty", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
 
     await run();
 
@@ -2260,7 +2260,7 @@ describe("a fix Stage that committed nothing", () => {
   });
 
   it("hands the Ticket off at fix, saying the branch never grew", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
 
     const outcome = await run();
 
@@ -2271,22 +2271,21 @@ describe("a fix Stage that committed nothing", () => {
   });
 
   it("stops the pass there, so nothing re-grades a branch nobody touched", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
 
     await run();
 
-    // The Check that bought the fix Stage ran once, not twice, and neither the
-    // verdict nor CI was asked about a branch the fix Stage left alone.
-    expect(checksOnBranch()).toEqual(["npm test"]);
-    expect(runner.stages()).toEqual(["implement", "fix"]);
-    expect(tracker.ciWaits).toEqual([]);
+    // The CI that bought the fix Stage was waited for once, not twice, and the
+    // verdict was not asked about a branch the fix Stage left alone.
+    expect(runner.stages()).toEqual(["implement", "verify", "fix"]);
+    expect(tracker.ciWaits).toHaveLength(1);
   });
 
   it.each([
     [
       "a failed Check",
       () => {
-        workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+        tracker.queueCi(RED_CI);
       },
     ],
     [
@@ -2360,7 +2359,7 @@ describe("a fix Stage that committed nothing", () => {
   });
 
   it("keeps the reason out of the draft pull request body", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
     runner.queue("fix", stageResult({ result: answer({ noCommitReason: FIX_REASON }) }));
 
     await run();
@@ -2374,7 +2373,7 @@ describe("a fix Stage that committed nothing", () => {
     ["gave a blank one", answer({ noCommitReason: "  " })],
     ["answered no object at all", "I committed nothing"],
   ])("shows no reason when the Stage %s", async (_case, result) => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
     runner.queue("fix", stageResult({ result }));
 
     await run();
@@ -2384,7 +2383,7 @@ describe("a fix Stage that committed nothing", () => {
   });
 
   it("shows no reason from a Stage that did not finish", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
     runner.queue("fix", {
       ok: false,
       failure: "turn-capped",
@@ -2400,7 +2399,7 @@ describe("a fix Stage that committed nothing", () => {
   it("routes the Notes it made before its own outcome is judged", async () => {
     const other = 7;
     tracker.addIssue({ number: other, title: "Progress comment" });
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
     runner.queue(
       "fix",
       stageResult({ result: { notes: [{ ticket: other, summary: "found while fixing" }] } }),
@@ -2416,7 +2415,7 @@ describe("a fix Stage that committed nothing", () => {
   });
 
   it("is still released, not blamed, when the rate limit is why it committed nothing", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
     runner.queue("fix", { ok: false, failure: "rate-limited" });
 
     const outcome = await run();
@@ -2429,7 +2428,7 @@ describe("a fix Stage that committed nothing", () => {
 
   it("leaves a Stage that did commit reported as committed", async () => {
     runner.leaves("fix", () => workspace.commits.push("fix(cli): mend the thing (#2)"));
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
 
     const outcome = await run();
 
@@ -2439,32 +2438,32 @@ describe("a fix Stage that committed nothing", () => {
 
   it("shows no reason from a Stage that committed, in the hand-off that comes later", async () => {
     runner.leaves("fix", () => workspace.commits.push("fix(cli): mend the thing (#2)"));
-    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+    tracker.ci = RED_CI;
     runner.queue("fix", stageResult({ result: answer({ noCommitReason: FIX_REASON }) }));
 
     const outcome = await run();
 
-    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "checks" });
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "ci" });
     expect(handoffBody()).not.toContain(FIX_REASON);
     expect(handoffBody()).not.toContain("Stage said");
   });
 });
 
 describe("uncommitted work", () => {
-  /** How many Checks had run by the time the fix Stage started. */
-  let checksBeforeFix: number | undefined;
+  /** How many verify Stages had run by the time the fix Stage started. */
+  let verifiesBeforeFix: number | undefined;
 
   beforeEach(() => {
-    checksBeforeFix = undefined;
+    verifiesBeforeFix = undefined;
     // A fix Stage that commits what it found and leaves the worktree clean.
     runner.leaves("fix", () => {
-      checksBeforeFix = workspace.ranChecks.length;
+      verifiesBeforeFix = runner.stages().filter((stage) => stage === "verify").length;
       workspace.commits.push("fix(cli): commit the review fixes (#2)");
       workspace.uncommitted = [];
     });
   });
 
-  it("sends a fix Stage in with the paths before any Check grades the worktree", async () => {
+  it("sends a fix Stage in with the paths before verify grades the worktree", async () => {
     runner.leaves("implement", () => {
       workspace.uncommitted = ["src/cli.ts", "src/new.test.ts"];
     });
@@ -2473,12 +2472,23 @@ describe("uncommitted work", () => {
 
     expect(outcome).toMatchObject({ outcome: "merged" });
     expect(runner.stages()).toEqual(["implement", "fix", "verify"]);
-    expect(checksBeforeFix).toBe(0);
+    expect(verifiesBeforeFix).toBe(0);
     const prompt = runner.prompts("fix")[0] as string;
     expect(prompt).toMatch(/left changes .*never committed/i);
     expect(prompt).toContain("src/cli.ts");
     expect(prompt).toContain("src/new.test.ts");
-    expect(progressTable()).toContain("| checks | ❌ uncommitted work |");
+  });
+
+  it("reads on the implement Stage's row, in place of committed", async () => {
+    runner.leaves("implement", () => {
+      workspace.uncommitted = ["src/cli.ts"];
+    });
+
+    await run();
+
+    expect(progressTable()).toMatch(/\| implement \| ❌ uncommitted work \|/);
+    expect(progressTable()).not.toMatch(/\| implement \| ✅ committed \|/);
+    expect(progressTable()).not.toContain("| checks |");
   });
 
   it("spends the fix budget on it", async () => {
@@ -2494,7 +2504,7 @@ describe("uncommitted work", () => {
   });
 
   it("hands the Ticket off when the fix Stage leaves some too, keeping the changes", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
     runner.leaves("fix", () => {
       workspace.commits.push("fix(cli): mend the thing (#2)");
       workspace.uncommitted = ["src/cli.ts"];
@@ -2502,24 +2512,22 @@ describe("uncommitted work", () => {
 
     const outcome = await run();
 
-    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "checks" });
-    expect(runner.stages()).toEqual(["implement", "fix"]);
-    expect(checksOnBranch()).toEqual(["npm test"]);
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "fix" });
+    expect(runner.stages()).toEqual(["implement", "verify", "fix"]);
+    expect(progressTable()).toMatch(/\| fix \| ❌ uncommitted work \|/);
     expect(handoffBody()).toContain("the worktree holds changes no commit carries");
     expect(handoffBody()).toContain("src/cli.ts");
     expect(handoffBody()).toContain("after the fix budget was used");
     expect(workspace.uncommitted).toEqual(["src/cli.ts"]);
-    expect(workspace.calls.some((call) => call.startsWith("discardChanges"))).toBe(false);
+    expect(workspace.calls.filter((call) => call.startsWith("discardChanges"))).toHaveLength(1);
   });
 
-  it("reaches the Checks exactly as before from a clean worktree", async () => {
+  it("goes on to verify from a clean worktree, with no row of its own", async () => {
     const outcome = await run();
 
     expect(outcome).toMatchObject({ outcome: "merged" });
     expect(runner.stages()).toEqual(["implement", "verify"]);
-    const calls = workspace.calls;
-    expect(calls).toContain(`uncommittedPaths:${worktree}`);
-    expect(calls.indexOf(`uncommittedPaths:${worktree}`)).toBeLessThan(calls.indexOf("runCheck:npm test"));
+    expect(workspace.calls).toContain(`uncommittedPaths:${worktree}`);
     expect(progressTable()).not.toContain("uncommitted");
   });
 
@@ -2537,25 +2545,26 @@ describe("uncommitted work", () => {
 });
 
 describe("the fix budget", () => {
-  it("is one: a Check that fails twice is handed off", async () => {
-    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+  it("is one: CI that fails twice is handed off", async () => {
+    tracker.ci = RED_CI;
 
     const outcome = await run();
 
-    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "checks" });
-    expect(runner.stages()).toEqual(["implement", "fix"]);
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "ci" });
+    expect(runner.stages()).toEqual(["implement", "verify", "fix", "verify"]);
     expect(handoffBody()).toContain("after the fix budget was used");
     expect(handoffBody()).toContain("FAIL src/a.test.ts");
   });
 
   it("is spent by the first failure, whatever kind the second one is", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
+    runner.queue("verify", stageResult({ result: PASSING_VERDICT }));
     runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
 
     const outcome = await run();
 
     expect(outcome).toMatchObject({ outcome: "handed-off", stage: "verify" });
-    expect(runner.stages()).toEqual(["implement", "fix", "verify"]);
+    expect(runner.stages()).toEqual(["implement", "verify", "fix", "verify"]);
     expect(handoffBody()).toContain("after the fix budget was used");
     expect(handoffBody()).toContain("1 of 1 criteria unmet");
   });
@@ -2572,7 +2581,7 @@ describe("the fix budget", () => {
   });
 
   it("hands the Ticket off at fix when the fix Stage itself fails", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
     runner.queue("fix", { ok: false, failure: "turn-capped" });
 
     const outcome = await run();
@@ -2760,7 +2769,7 @@ describe("releasing a rate-limited Ticket", () => {
   });
 
   it("gives back the fix budget a stopped fix Stage never spent", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
     runner.queue("fix", { ok: false, failure: "rate-limited" });
 
     const outcome = await run();
@@ -2770,13 +2779,14 @@ describe("releasing a rate-limited Ticket", () => {
   });
 
   it("records a fix budget an earlier pass of this Run did spend", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
+    runner.queue("verify", stageResult({ result: PASSING_VERDICT }));
     runner.queue("verify", { ok: false, failure: "rate-limited" });
 
     const outcome = await run();
 
     expect(outcome).toMatchObject({ outcome: "released", stage: "verify" });
-    expect(runner.stages()).toEqual(["implement", "fix", "verify"]);
+    expect(runner.stages()).toEqual(["implement", "verify", "fix", "verify"]);
     expect(state()).toMatchObject({ state: "implemented", fixUsed: true });
   });
 
@@ -2871,7 +2881,7 @@ describe("releasing a Ticket a transient API failure stopped", () => {
   });
 
   it("gives back the fix budget a fix Stage it stopped never spent", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
     runner.queue("fix", apiError);
 
     expect(await run()).toMatchObject({ outcome: "released", stage: "fix", cause: "api-error" });
@@ -2880,7 +2890,8 @@ describe("releasing a Ticket a transient API failure stopped", () => {
   });
 
   it("keeps a fix budget an earlier pass of this Run spent", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
+    runner.queue("verify", stageResult({ result: PASSING_VERDICT }));
     runner.queue("verify", apiError);
 
     expect(await run()).toMatchObject({ outcome: "released", stage: "verify" });
@@ -2935,7 +2946,7 @@ describe("releasing a Ticket whose API key ran out of budget", () => {
   });
 
   it("gives back the fix budget a fix Stage it stopped never spent", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
     runner.queue("fix", outOfBudget);
 
     expect(await run({}, "api-key")).toMatchObject({
@@ -3075,7 +3086,7 @@ describe("what a Run's Stages were billed", () => {
   });
 });
 
-describe("a Check the base branch fails too", () => {
+describe("a red CI the base branch fails a Check of too", () => {
   const state = () => workspace.state(TICKET);
   const MERGE_BASE = "1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d";
   const baseWorktree = join(repoRoot, ".worktrees", "base-1a2b3c4d5e6f");
@@ -3086,8 +3097,8 @@ describe("a Check the base branch fails too", () => {
   const pipelineNotes = () =>
     tracker.comments.filter(({ body }) => body.includes("\nFrom the pipeline, releasing #"));
 
-  it("releases the Ticket with its fix budget unspent when the merge-base fails the same Check", async () => {
-    workspace.failCheck("npm test", "FAIL src/date.test.ts");
+  it("releases the Ticket with its fix budget unspent when the merge-base fails a Check", async () => {
+    tracker.ci = RED_CI;
     workspace.failBaseCheck("npm test", "FAIL src/date.test.ts");
 
     const outcome = await run();
@@ -3097,7 +3108,7 @@ describe("a Check the base branch fails too", () => {
       ticket: TICKET,
       title: "Skeleton: one Ticket end to end",
       branch: BRANCH,
-      stage: "checks",
+      stage: "ci",
       cause: "failing-base",
       failingBase: { commit: MERGE_BASE, command: "npm test" },
       notes: [
@@ -3110,20 +3121,25 @@ describe("a Check the base branch fails too", () => {
         },
       ],
     });
-    expect(runner.stages()).toEqual(["implement"]);
+    expect(runner.stages()).toEqual(["implement", "verify"]);
     expect(atBase()).toEqual(["npm test"]);
+    expect(checksOnBranch()).toEqual([]);
     expect(workspace.calls).toContain(`createDetachedWorktree:${MERGE_BASE}`);
     expect(workspace.calls).toContain(`removeWorktree:${baseWorktree}`);
     expect(workspace.worktrees.has(baseWorktree)).toBe(false);
     expect(tracker.issue(TICKET).labels).toEqual(["ready-for-agent"]);
     expect(tracker.issue(TICKET).assignees).toEqual([]);
     expect(state()).toMatchObject({ state: "implemented", fixUsed: false, rebaseFirst: true });
-    expect(progressTable()).toContain("| checks | ⏸ `npm test` fails on the base branch |");
-    expect(tracker.pullRequests).toEqual([]);
+    expect(progressTable()).toContain("| ci | ⏸ `npm test` fails on the base branch |");
+    expect(tracker.pullRequest(100).merged).toBe(false);
   });
 
-  it("posts one Note on the standing Notes issue, naming the Check and quoting its output there and on the branch", async () => {
-    workspace.failCheck("npm test", "FAIL src/clock.test.ts\n  2246 ms is not below 2000 ms");
+  it("posts one Note on the standing Notes issue, naming the Check and quoting its output there and CI's logs on the branch", async () => {
+    tracker.ci = {
+      state: "failed",
+      summary: "checks/test failed",
+      excerpt: "test\nFAIL src/clock.test.ts\n  2246 ms is not below 2000 ms",
+    };
     workspace.failBaseCheck("npm test", "FAIL src/date.test.ts\n  expected 2026 to be 2025");
 
     await run();
@@ -3135,21 +3151,21 @@ describe("a Check the base branch fails too", () => {
     expect(note?.body).toContain(`at ${MERGE_BASE}, the merge-base of \`${BRANCH}\` with \`main\``);
     expect(note?.body).toContain("```\nFAIL src/date.test.ts\n  expected 2026 to be 2025\n```");
     expect(note?.body).toContain(
-      `\`npm test\` failed on \`${BRANCH}\`. The tail of the branch's output:\n\n\`\`\`\nFAIL src/clock.test.ts\n  2246 ms is not below 2000 ms\n\`\`\``,
+      `CI on the pull request from \`${BRANCH}\` reported checks/test failed. The tail of the failing jobs' logs:\n\n\`\`\`\ntest\nFAIL src/clock.test.ts\n  2246 ms is not below 2000 ms\n\`\`\``,
     );
     // Nobody's Ticket is commented on: the Ticket did nothing wrong.
     expect(notices().filter(({ issue }) => issue === TICKET)).toEqual([]);
   });
 
   it("keeps a fix budget an earlier failure spent, as it was", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
-    workspace.failCheck("npm run typecheck", "error TS2345");
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
+    tracker.ci = RED_CI;
     workspace.failBaseCheck("npm run typecheck", "error TS2345");
 
     const outcome = await run();
 
-    expect(outcome).toMatchObject({ outcome: "released", stage: "checks", cause: "failing-base" });
-    expect(runner.stages()).toEqual(["implement", "fix"]);
+    expect(outcome).toMatchObject({ outcome: "released", stage: "ci", cause: "failing-base" });
+    expect(runner.stages()).toEqual(["implement", "verify", "fix", "verify"]);
     expect(state()).toMatchObject({ fixUsed: true, rebaseFirst: true });
   });
 
@@ -3164,31 +3180,19 @@ describe("a Check the base branch fails too", () => {
     });
     workspace.worktrees.set(worktree, BRANCH);
     workspace.branches.add(BRANCH);
-    workspace.failCheck("npm test", "FAIL src/date.test.ts");
+    tracker.ci = RED_CI;
     workspace.failBaseCheck("npm test", "FAIL src/date.test.ts");
 
     expect(await run()).toMatchObject({ outcome: "released", cause: "failing-base" });
     expect(state()).toMatchObject({ fixUsed: true });
   });
 
-  it("spends the fix budget as it always did when the merge-base passes the Check", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
-
-    const outcome = await run();
-
-    expect(outcome).toMatchObject({ outcome: "merged" });
-    expect(atBase()).toEqual(["npm test"]);
-    expect(runner.stages()).toEqual(["implement", "fix", "verify"]);
-    expect(progressTable()).toContain("| checks | ❌ `npm test` failed |");
-    expect(pipelineNotes()).toEqual([]);
-  });
-
   it("spends the fix budget when the merge-base could not be checked out", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
     workspace.failing.set(`createDetachedWorktree:${MERGE_BASE}`, new Error("disk full"));
 
     expect(await run()).toMatchObject({ outcome: "merged" });
-    expect(runner.stages()).toEqual(["implement", "fix", "verify"]);
+    expect(runner.stages()).toEqual(["implement", "verify", "fix", "verify"]);
     expect(logged.some((line) => line.includes("disk full"))).toBe(true);
   });
 
@@ -3270,6 +3274,8 @@ describe("a Check the base branch fails too", () => {
     expect(await run()).toMatchObject({ outcome: "merged" });
     expect(atBase()).toEqual(["npm test", "npm run typecheck"]);
     expect(runner.stages()).toEqual(["implement", "verify", "fix", "verify"]);
+    expect(progressTable()).toContain("| ci | ❌ failed |");
+    expect(pipelineNotes()).toEqual([]);
   });
 });
 
@@ -3278,7 +3284,7 @@ describe("Tickets in several Lanes failing against one merge-base", () => {
 
   it("run the Check there once between them and post one Note", async () => {
     tracker.addIssue({ number: SECOND, title: "The second Ticket" });
-    workspace.failCheck("npm test", "FAIL src/clock.test.ts");
+    tracker.ci = { state: "failed", summary: "checks/test failed", excerpt: "FAIL src/clock.test.ts" };
     workspace.failBaseCheck("npm test", "FAIL src/date.test.ts");
     const settings = config({ lanes: 2 });
     const shared: Pipeline = {
@@ -3309,7 +3315,7 @@ describe("Tickets in several Lanes failing against one merge-base", () => {
     expect(notes).toHaveLength(1);
     // It quotes the branch of the Ticket that posted it, the one its provenance names.
     const poster = /releasing #(\d+) at/.exec(notes[0]?.body ?? "")?.[1];
-    expect(notes[0]?.body).toContain(`failed on \`agent/${poster}\``);
+    expect(notes[0]?.body).toContain(`CI on the pull request from \`agent/${poster}\``);
     expect(notes[0]?.body).toContain("```\nFAIL src/clock.test.ts\n```");
     expect(outcomes.flatMap((outcome) => ("notes" in outcome ? outcome.notes : []))).toHaveLength(1);
   });
@@ -3330,14 +3336,15 @@ describe("resuming a Ticket released over a failing base branch", () => {
     workspace.branches.add(BRANCH);
   }
 
-  it("rebases onto the base branch, as the remote holds it, before its Checks", async () => {
+  it("rebases onto the base branch, as the remote holds it, before verify grades it", async () => {
     releasedOverBase();
     const seen = stateAtEachStage();
 
     expect(await run()).toMatchObject({ outcome: "merged" });
 
-    const firstCheck = workspace.calls.indexOf("runCheck:npm test");
-    expect(workspace.calls.slice(0, firstCheck)).toEqual(
+    // verify discards its scratch work as soon as it comes back.
+    const verified = workspace.calls.indexOf(`discardChanges:${worktree}`);
+    expect(workspace.calls.slice(0, verified)).toEqual(
       expect.arrayContaining(["pullBase", "rebase", `push:${BRANCH}`]),
     );
     expect(workspace.calls.indexOf("pullBase")).toBeLessThan(workspace.calls.indexOf("rebase"));
@@ -3345,7 +3352,7 @@ describe("resuming a Ticket released over a failing base branch", () => {
     expect(seen[0]?.state).not.toHaveProperty("rebaseFirst");
   });
 
-  it("sends a conflicting rebase to the conflict Stage before its Checks, so it is not released over the same commit again", async () => {
+  it("sends a conflicting rebase to the conflict Stage before verify, so it is not released over the same commit again", async () => {
     releasedOverBase();
     workspace.conflictOnce(CONFLICT);
     const seen = stateAtEachStage();
@@ -3354,8 +3361,10 @@ describe("resuming a Ticket released over a failing base branch", () => {
 
     expect(runner.stages()).toEqual(["conflict", "verify"]);
     expect(workspace.calls.indexOf("rebaseState")).toBeLessThan(
-      workspace.calls.indexOf("runCheck:npm test"),
+      workspace.calls.indexOf(`discardChanges:${worktree}`),
     );
+    // Nor is a Check run on the resolution: verify and CI grade it.
+    expect(checksOnBranch()).toEqual([]);
     expect(seen[0]?.state).toMatchObject({ rebaseFirst: true });
     expect(seen[1]?.state).not.toHaveProperty("rebaseFirst");
   });
@@ -3377,8 +3386,9 @@ describe("resuming a Ticket released over a failing base branch", () => {
 
     await run();
 
-    const firstCheck = workspace.calls.indexOf("runCheck:npm test");
-    expect(workspace.calls.slice(0, firstCheck)).not.toContain("rebase");
+    const verified = workspace.calls.indexOf(`discardChanges:${worktree}`);
+    expect(verified).toBeGreaterThan(-1);
+    expect(workspace.calls.slice(0, verified)).not.toContain("rebase");
   });
 });
 
@@ -3468,7 +3478,7 @@ describe("the state file a claimed Ticket keeps", () => {
 
   it("keeps the recorded title through a hand-off", async () => {
     runner.queue("implement", titled("feat(cli): do the whole thing"));
-    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+    tracker.ci = RED_CI;
 
     const outcome = await run();
 
@@ -3539,13 +3549,14 @@ describe("the state file a claimed Ticket keeps", () => {
   });
 
   it("records the fix budget once the fix Stage has come back, not before it runs", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
     const seen = stateAtEachStage();
 
     expect(await run()).toMatchObject({ outcome: "merged" });
 
     expect(seen.map(({ stage, state }) => [stage, state?.fixUsed])).toEqual([
       ["implement", false],
+      ["verify", false],
       // The budget is committed before the Stage starts and recorded only once it
       // is back, so a fix Stage the rate limit stops still leaves it unspent.
       ["fix", false],
@@ -3559,7 +3570,7 @@ describe("the state file a claimed Ticket keeps", () => {
   });
 
   it("is kept once the Ticket is handed off, with the fix budget given back", async () => {
-    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+    tracker.ci = RED_CI;
 
     // The fix Stage ran and failed the Checks a second time, so the budget was
     // spent — and the file says otherwise, because the Ticket only comes back
@@ -3648,12 +3659,12 @@ describe("resuming a stranded Ticket", () => {
 
   it("is handed off at its next failure when the recorded fix budget is spent", async () => {
     strandedTicket({ fixUsed: true });
-    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+    tracker.ci = RED_CI;
 
     const outcome = await run();
 
-    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "checks" });
-    expect(runner.stages()).toEqual([]);
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "ci" });
+    expect(runner.stages()).toEqual(["verify"]);
     // Kept, and with the budget back: the human this is handed to is the reason
     // the next Run gets to buy a fix Stage again.
     expect(workspace.state(TICKET)).toMatchObject({ fixUsed: false });
@@ -3661,7 +3672,7 @@ describe("resuming a stranded Ticket", () => {
 
   it("still pushes and opens a draft pull request when it is handed off in its own worktree", async () => {
     strandedTicket({ fixUsed: true });
-    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+    tracker.ci = RED_CI;
 
     const outcome = await run();
 
@@ -3672,15 +3683,50 @@ describe("resuming a stranded Ticket", () => {
     expect(handoffBody()).toContain("PR #100 (draft)");
   });
 
-  it("aborts a rebase the killed Run left in the worktree before the Checks run", async () => {
+  it("aborts a rebase the killed Run left in the worktree before verify grades it", async () => {
     strandedTicket();
 
     await run();
 
     expect(workspace.aborts).toBe(1);
     expect(workspace.calls.indexOf("abortRebase")).toBeLessThan(
-      workspace.calls.indexOf("runCheck:npm test"),
+      workspace.calls.indexOf(`discardChanges:${worktree}`),
     );
+  });
+
+  it("runs no Check on the branch it resumes, going on to verify", async () => {
+    strandedTicket();
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(workspace.ranChecks).toEqual([]);
+    expect(runner.stages()).toEqual(["verify"]);
+  });
+
+  it("sends a fix Stage in for work no commit carries in the worktree it resumes, on a setup row", async () => {
+    strandedTicket();
+    workspace.uncommitted = ["src/cli.ts"];
+    runner.leaves("fix", () => {
+      workspace.commits.push("fix(cli): commit what was left (#2)");
+      workspace.uncommitted = [];
+    });
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).toEqual(["fix", "verify"]);
+    expect(runner.prompts("fix")[0]).toContain("src/cli.ts");
+    expect(progressTable()).toContain("| setup | ❌ uncommitted work |");
+    expect(workspace.state(TICKET)).toBeUndefined();
+  });
+
+  it("hands a resumed Ticket off at setup over work no commit carries when its fix budget is spent", async () => {
+    strandedTicket({ fixUsed: true });
+    workspace.uncommitted = ["src/cli.ts"];
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "setup" });
+    expect(runner.stages()).toEqual([]);
+    expect(handoffBody()).toContain("the worktree holds changes no commit carries");
+    expect(progressTable()).toContain("| setup | ❌ uncommitted work |");
   });
 
   it("is taken from the top, in place, when its worktree and branch are gone", async () => {
@@ -3780,7 +3826,7 @@ describe("resuming a released Ticket", () => {
     workspace.recordState(state);
   }
 
-  it("carries on at the Checks rather than implementing the Ticket again", async () => {
+  it("carries on at verify rather than implementing the Ticket again", async () => {
     released();
 
     const outcome = await run();
@@ -3790,7 +3836,8 @@ describe("resuming a released Ticket", () => {
     expect(workspace.calls).not.toContain(`createWorktree:${BRANCH}`);
     // Nothing is branched, so nothing is in the way: the branch is not asked about.
     expect(workspace.calls).not.toContain(`hasBranch:${BRANCH}`);
-    expect(workspace.ranChecks.map((check) => check.cwd)).toEqual([worktree, worktree]);
+    // Nor is a Check run on the branch it resumes.
+    expect(workspace.ranChecks).toEqual([]);
   });
 
   it("runs the implement Stage again when that is what the limit stopped", async () => {
@@ -3829,23 +3876,23 @@ describe("resuming a released Ticket", () => {
 
   it("honours a fix budget an earlier Run had already spent", async () => {
     released({ fixUsed: true });
-    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+    tracker.ci = RED_CI;
 
     const outcome = await run();
 
-    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "checks" });
-    expect(runner.stages()).toEqual([]);
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "ci" });
+    expect(runner.stages()).toEqual(["verify"]);
     expect(handoffBody()).toContain("after the fix budget was used");
   });
 
   it("still buys a fix Stage when the budget came back unspent", async () => {
     released();
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
 
     const outcome = await run();
 
     expect(outcome).toMatchObject({ outcome: "merged" });
-    expect(runner.stages()).toEqual(["fix", "verify"]);
+    expect(runner.stages()).toEqual(["verify", "fix", "verify"]);
   });
 
   it("brings the pull request the earlier Run opened up to date", async () => {
@@ -3916,7 +3963,7 @@ describe("resuming a released Ticket", () => {
 
   it("keeps the state file when the resumed Ticket is handed off", async () => {
     released({ fixUsed: true });
-    workspace.failCheck("npm test", "FAIL src/a.test.ts");
+    tracker.ci = RED_CI;
 
     await run();
 
@@ -3986,7 +4033,7 @@ describe("resuming from the remote branch", () => {
       expect(workspace.calls).toContain(`worktreeFromRemote:${BRANCH}`);
       expect(workspace.calls).not.toContain(`createWorktree:${BRANCH}`);
       expect(runner.stages()).toEqual(["verify"]);
-      expect(workspace.ranChecks.map((check) => check.cwd)).toEqual([worktree, worktree]);
+      expect(workspace.ranChecks).toEqual([]);
     });
 
     it("runs the implement Stage in it when that is where the Ticket stopped", async () => {
@@ -4331,15 +4378,15 @@ describe("a Ticket released and then resumed", () => {
   });
 
   it("finds the failure again when the limit stopped the fix Stage", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
     runner.queue("fix", { ok: false, failure: "rate-limited" });
 
     expect(await run()).toMatchObject({ outcome: "released", stage: "fix" });
-    // The Check passes on the second Run, so the budget it got back is unspent
-    // and the fix Stage the limit stopped is not owed a second one.
+    // CI passes on the second Run, so the budget it got back is unspent and
+    // the fix Stage the limit stopped is not owed a second one.
     expect(await run()).toMatchObject({ outcome: "merged" });
 
-    expect(stages()).toEqual(["implement", "fix", "verify"]);
+    expect(stages()).toEqual(["implement", "verify", "fix", "verify"]);
   });
 
   it("rebases again when the limit stopped the conflict Stage", async () => {
@@ -4445,7 +4492,7 @@ describe("releasing a Ticket GitHub or the remote failed on its own side", () =>
   });
 
   it("spends no fix budget, and keeps one the Ticket's own failure spent", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
     workspace.pullBaseFailure = unreachable();
 
     expect(await run()).toMatchObject({ outcome: "released", stage: "rebase" });
@@ -4453,7 +4500,7 @@ describe("releasing a Ticket GitHub or the remote failed on its own side", () =>
   });
 
   it("gives back the budget of a fix Stage the fault stopped before it ran", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
     tracker.listCandidates = async () => {
       throw badGateway(["api", "repos/{owner}/{repo}/issues"]);
     };
@@ -4503,13 +4550,13 @@ describe("releasing a Ticket GitHub or the remote failed on its own side", () =>
   });
 
   it("releases a Ticket whose merge-base the remote could not be reached for, rather than charging it", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
     workspace.mergeBase = async () => {
       throw failure("git", ["fetch", "origin", "main"], PUBLICKEY);
     };
 
-    expect(await run()).toMatchObject({ outcome: "released", stage: "checks", cause: "remote" });
-    expect(runner.stages()).toEqual(["implement"]);
+    expect(await run()).toMatchObject({ outcome: "released", stage: "ci", cause: "remote" });
+    expect(runner.stages()).toEqual(["implement", "verify"]);
     expect(state()).toMatchObject({ fixUsed: false });
   });
 
@@ -4664,17 +4711,17 @@ describe("releasing a Ticket GitHub or the remote failed on its own side", () =>
   });
 
   it("is resumed by a later Run from the state it recorded, its fix budget as it was", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
     workspace.pullBaseFailure = unreachable();
 
     expect(await run()).toMatchObject({ outcome: "released", stage: "rebase" });
     workspace.pullBaseFailure = undefined;
-    workspace.failCheck("npm test", "FAIL src/b.test.ts");
+    tracker.ci = RED_CI;
 
     // The budget the first Run's own failure spent is still spent, so the
     // second failure is a hand-off rather than a second fix Stage.
-    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "checks" });
-    expect(runner.stages()).toEqual(["implement", "fix", "verify"]);
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "ci" });
+    expect(runner.stages()).toEqual(["implement", "verify", "fix", "verify", "verify"]);
   });
 
   it("is resumed past the Stages it already passed", async () => {
@@ -4912,7 +4959,7 @@ describe("a progress write that failed", () => {
     runner.leaves("fix", () => workspace.commits.push("fix(cli): x (#2)"));
 
     expect(await run()).toMatchObject({ outcome: "handed-off" });
-    expect(progressTable()).toMatch(/\| fix \| ✅ committed \|[^\n]*\n[^\n]*\n\| verify \| ❌ 1 unmet/);
+    expect(progressTable()).toMatch(/\| fix \| ✅ committed \|[^\n]*\n\| verify \| ❌ 1 unmet/);
   });
 
   it("is written once more when the Ticket is released", async () => {
@@ -4927,8 +4974,8 @@ describe("a progress write that failed", () => {
     await run();
 
     const writes = tracker.updatedComments.length + tracker.comments.filter(({ body }) => body.startsWith(PROGRESS_MARKER)).length;
-    // implement, checks, verify, ci, merge: one write each, the first a post.
-    expect(writes).toBe(5);
+    // implement, verify, ci, merge: one write each, the first a post.
+    expect(writes).toBe(4);
   });
 });
 
@@ -4949,12 +4996,12 @@ describe("a Ticket handed off and then handed back", () => {
       .comments.filter(({ body }) => body.startsWith(PROGRESS_MARKER))
       .map(({ body }) => body);
 
-  /** A first Run that spends the fix budget and is handed off at the Checks. */
+  /** A first Run that spends the fix budget and is handed off at CI. */
   async function handedOff(): Promise<void> {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
+    tracker.queueCi(RED_CI);
 
-    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "checks" });
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "ci" });
   }
 
   /** The relabel a human does, which is the whole of handing a Ticket back. */
@@ -4991,22 +5038,23 @@ describe("a Ticket handed off and then handed back", () => {
     expect(await run()).toMatchObject({ outcome: "merged", pullRequest: 100 });
     // One implement Stage across both Runs, which is the whole of what this
     // saves, and the one worktree the first Run made.
-    expect(stages()).toEqual(["implement", "fix", "verify"]);
+    expect(stages()).toEqual(["implement", "verify", "fix", "verify", "verify"]);
     expect(workspace.calls.filter((call) => call === `createWorktree:${BRANCH}`)).toHaveLength(1);
   });
 
   it("takes the pull request out of draft before it waits for CI", async () => {
     await handedOff();
     handedBack();
+    const first = tracker.calls.length;
 
     await run();
 
     // A draft pull request often runs no workflows at all, so waiting first
     // would read as "no checks" and end the Ticket short of the merge.
+    const calls = tracker.calls.slice(first);
     expect(tracker.pullRequest(100).draft).toBe(false);
-    expect(tracker.calls.indexOf("markPullRequestReady:100")).toBeLessThan(
-      tracker.calls.indexOf("waitForCi:100"),
-    );
+    expect(calls).toContain("markPullRequestReady:100");
+    expect(calls.indexOf("markPullRequestReady:100")).toBeLessThan(calls.indexOf("waitForCi:100"));
     expect(tracker.pullRequests).toHaveLength(1);
   });
 
@@ -5025,10 +5073,10 @@ describe("a Ticket handed off and then handed back", () => {
   it("buys a fresh fix Stage, the Ticket having been through a human's hands", async () => {
     await handedOff();
     handedBack();
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
 
     expect(await run()).toMatchObject({ outcome: "merged" });
-    expect(stages()).toEqual(["implement", "fix", "fix", "verify"]);
+    expect(stages()).toEqual(["implement", "verify", "fix", "verify", "verify", "fix", "verify"]);
   });
 
   it("posts a progress comment of its own, leaving the one the human read", async () => {
@@ -5263,7 +5311,7 @@ describe("the progress comment", () => {
     await run();
 
     expect(tracker.comments.filter(({ body }) => body.startsWith(PROGRESS_MARKER))).toHaveLength(1);
-    expect(rows()).toEqual(["implement", "checks", "verify", "ci", "merge"]);
+    expect(rows()).toEqual(["implement", "verify", "ci", "merge"]);
     expect(tracker.updatedComments.length).toBeGreaterThan(0);
   });
 
@@ -5271,25 +5319,22 @@ describe("the progress comment", () => {
     await run();
 
     expect(progressTable()).toContain("| implement | ✅ committed | 7 | 1s |");
-    expect(progressTable()).toContain("| checks | ✅ passed | – | 0s |");
-    expect(progressTable()).toContain("| verify | ✅ 1 met · 0 unverifiable | 7 | 1s |");
+    expect(progressTable()).toContain("| verify | ✅ 1 met | 7 | 1s |");
     expect(progressTable()).toContain("| merge | ✅ #100 | – | – |");
   });
 
-  it("says the checks row found no checks when no Check command ran", async () => {
+  it("has no checks row, whether or not a Check command is configured", async () => {
     await run({ checks: [], checksNamed: true });
-
-    expect(progressTable()).toContain("| checks | ⚠️ no checks | – | 0s |");
-    expect(progressTable()).not.toContain("| checks | ✅ passed |");
+    expect(rows()).toEqual(["implement", "verify", "ci", "merge"]);
   });
 
-  it("says so again on the Checks that re-grade a resolved conflict", async () => {
-    workspace.conflictOnce(CONFLICT);
+  it("names the unverifiable criteria on the verify row only when there are any", async () => {
+    runner.queue("verify", { result: MIXED_VERDICT });
+    ticketReads("it works", "the docs say so");
 
-    await run({ checks: [], checksNamed: true });
+    await run();
 
-    expect(progressTable().match(/^\| checks \| ⚠️ no checks \|/gm)).toHaveLength(2);
-    expect(progressTable()).not.toContain("| checks | ✅ passed |");
+    expect(progressTable()).toContain("| verify | ✅ 1 met · 1 unverifiable | 7 | 1s |");
   });
 
   it("names the Run and the branch it is reporting on", async () => {
@@ -5299,36 +5344,20 @@ describe("the progress comment", () => {
   });
 
   it("adds a row per pass when the fix budget buys a second one", async () => {
-    workspace.failCheckOnce("npm test", "1 failing");
+    tracker.queueCi(RED_CI);
 
     await run();
 
-    expect(rows()).toEqual([
-      "implement",
-      "checks",
-      "fix",
-      "checks",
-      "verify",
-      "ci",
-      "merge",
-    ]);
-    expect(progressTable()).toContain("| checks | ❌ \`npm test\` failed | – | 0s |");
+    expect(rows()).toEqual(["implement", "verify", "ci", "fix", "verify", "ci", "merge"]);
+    expect(progressTable()).toMatch(/\| ci \| ❌ failed \| – \| \d+s \|/);
   });
 
-  it("adds a conflict row and the Checks that re-grade what it resolved", async () => {
+  it("adds a conflict row, and nothing re-grades what it resolved before CI", async () => {
     workspace.conflictOnce(CONFLICT);
 
     await run();
 
-    expect(rows()).toEqual([
-      "implement",
-      "checks",
-      "verify",
-      "conflict",
-      "checks",
-      "ci",
-      "merge",
-    ]);
+    expect(rows()).toEqual(["implement", "verify", "conflict", "ci", "merge"]);
     expect(progressTable()).toContain("| conflict | ✅ rebased | 7 | 1s |");
   });
 
@@ -5362,7 +5391,7 @@ describe("the progress comment", () => {
 
 describe("what stays a separate comment", () => {
   it("posts the hand-off and its evidence beside the table, not inside it", async () => {
-    workspace.failCheck("npm test", "1 failing · expected true to be false");
+    tracker.ci = { state: "failed", summary: "checks/test failed", excerpt: "1 failing · expected true to be false" };
 
     await run();
 
@@ -5375,7 +5404,7 @@ describe("what stays a separate comment", () => {
     const progress = tracker.issue(TICKET).comments.find(({ body }) =>
       body.startsWith(PROGRESS_MARKER),
     );
-    expect(progress?.body).toContain("| checks | ❌ \`npm test\` failed |");
+    expect(progress?.body).toContain("| ci | ❌ failed |");
     expect(progress?.body).not.toContain("expected true to be false");
   });
 
@@ -5446,7 +5475,7 @@ describe("a hand-off the Ticket was already carrying", () => {
 
   it("leaves the hand-off this Run posts reading as the current one", async () => {
     carrying("c9");
-    workspace.failCheck("npm test", "1 failing · expected true to be false");
+    tracker.ci = RED_CI;
 
     const outcome = await run();
 
@@ -5693,6 +5722,93 @@ describe("a Target that merges by hand, with every criterion met", () => {
   });
 });
 
+/**
+ * A criterion that asks for nothing but the pull request's CI, or some
+ * commands, to pass, which verify leaves to CI rather than grading it with a
+ * run of the suite the pipeline no longer makes.
+ */
+describe("criteria left to CI", () => {
+  const BODY = "- [ ] it works\n- [ ] the checks pass\n";
+  const LEFT_TO_CI = verdictResult([
+    { text: "it works", status: "met", evidence: "ran it" },
+    { text: "the checks pass", status: "ci", evidence: "ci.yml runs npm test and npm run typecheck" },
+  ]);
+  const ONLY_CI = verdictResult([
+    { text: "the checks pass", status: "ci", evidence: "ci.yml runs npm test and npm run typecheck" },
+  ]);
+
+  it("pass the verdict, and the verify row and the Run's line count them apart", async () => {
+    tracker.issue(TICKET).body = BODY;
+    runner.queue("verify", { result: LEFT_TO_CI });
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(progressTable()).toContain("| verify | ✅ 1 met · 1 to CI | 7 | 1s |");
+    expect(logged).toContain(`#${TICKET} verified · 1 met · 1 to CI`);
+  });
+
+  it("are ticked by the merge once CI passes, as a met one is", async () => {
+    tracker.issue(TICKET).body = BODY;
+    runner.queue("verify", { result: LEFT_TO_CI });
+
+    await run();
+
+    expect(tracker.issue(TICKET).body).toBe("- [x] it works\n- [x] the checks pass\n");
+    expect(tracker.pullRequest(100).squashCommit?.body).not.toContain("Unverified:");
+  });
+
+  it("merge a Ticket whose every criterion was left to CI once CI passes, ticking them", async () => {
+    ticketReads("the checks pass");
+    runner.queue("verify", { result: ONLY_CI });
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(progressTable()).toContain("| verify | ✅ 0 met · 1 to CI |");
+    expect(tracker.issue(TICKET).body).toBe("- [x] the checks pass");
+  });
+
+  it.each([
+    ["no checks", true, "⚠️ no checks"],
+    ["no workflow runs", false, "⚠️ no workflow runs"],
+  ])("stay unticked and are named unverified when CI ends in %s", async (_, canRun, row) => {
+    if (!canRun) workspace.workflows = [];
+    tracker.ci = { state: "none" };
+    tracker.issue(TICKET).body = BODY;
+    runner.queue("verify", { result: LEFT_TO_CI });
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(progressTable()).toContain(`| ci | ${row} |`);
+    expect(tracker.issue(TICKET).body).toBe("- [x] it works\n- [ ] the checks pass\n");
+    expect(tracker.pullRequest(100).squashCommit?.body).toContain(
+      "Unverified:\n- the checks pass — ci.yml runs npm test and npm run typecheck (left to CI, which ran no check on the pull request)",
+    );
+  });
+
+  it("are named among the unverifiable criteria a Target that merges by hand is told of, when no CI ran", async () => {
+    tracker.ci = { state: "none" };
+    tracker.issue(TICKET).body = BODY;
+    runner.queue("verify", { result: LEFT_TO_CI });
+
+    expect(await run({ merge: false })).toMatchObject({ outcome: "handed-off", stage: "merge" });
+    const [comment] = tracker.comments.filter(({ body }) => body.startsWith(HANDOFF_MARKER));
+    expect(comment?.body).toContain("**Unverifiable criteria:**");
+    expect(comment?.body).toContain("- the checks pass — ci.yml runs npm test and npm run typecheck");
+  });
+
+  it("hand a Ticket with no met criterion off at ci when no CI ran, saying nothing has evidence to merge on", async () => {
+    ticketReads("the checks pass");
+    tracker.ci = { state: "none" };
+    runner.queue("verify", { result: ONLY_CI });
+
+    const outcome = await run();
+
+    expect(outcome).toMatchObject({ outcome: "handed-off", stage: "ci" });
+    expect(tracker.calls).not.toContain("squashMerge:100");
+    expect(runner.stages()).not.toContain("fix");
+    expect(handoffBody()).toMatch(/no criterion has evidence to merge on/);
+    expect(handoffBody()).toContain("the checks pass");
+    expect(tracker.issue(TICKET).body).toBe("- [ ] the checks pass");
+  });
+});
+
 describe("ticking the Acceptance Criteria a merge proved", () => {
   const MIXED_BODY = "- [ ] it works\n- [ ] the docs say so\n";
 
@@ -5733,7 +5849,7 @@ describe("ticking the Acceptance Criteria a merge proved", () => {
   });
 
   it("ticks nothing until the Ticket has actually merged", async () => {
-    workspace.failCheck("npm test", "1 failing");
+    tracker.ci = RED_CI;
 
     await run();
 
@@ -5823,7 +5939,7 @@ describe("Notes a Stage makes", () => {
   });
 
   it("tells the fix Stage the issue this Run's own Notes opened", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
     runner.queue("implement", noteResult([{ summary: "Nothing cleans up worktrees." }]));
 
     await run();
@@ -5877,7 +5993,7 @@ describe("Notes a Stage makes", () => {
   });
 
   it("routes the fix Stage's Notes too", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
     runner.queue("fix", noteResult([{ ticket: OTHER, summary: "found while fixing" }]));
 
     const outcome = await run();
@@ -6011,7 +6127,7 @@ describe("Notes a Stage makes", () => {
   });
 
   it("opens one standing issue for the Notes of both its Stages", async () => {
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
     runner.queue("implement", noteResult([{ summary: "worktrees leak" }]));
     runner.queue("fix", noteResult([{ summary: "so does the lock file" }]));
 
