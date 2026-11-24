@@ -1,11 +1,11 @@
 ---
 title: Ticket 하나가 merge되기까지
-description: Ticket 하나가 Run 안에서 claim부터 Stage, Check, 판정, fix 기회를 거쳐 Landing까지 가는 길과, 그동안 보드에 남기는 기록을 정리했습니다.
+description: Ticket 하나가 Run 안에서 claim부터 Stage, 판정, fix 기회를 거쳐 Landing까지 가는 길과, 그동안 보드에 남기는 기록을 정리했습니다.
 ---
 
 # Ticket 하나가 merge되기까지
 
-Run은 아무도 지켜보지 않으니, 세션 하나의 말만 믿고 merge할 수는 없습니다. 그래서 모든 [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 같은 게이트를 같은 순서로 지납니다. 결과가 늘 같은(결정론적) Check, 작업이 틀렸음을 증명하려 드는 두 번째 세션, 그리고 CI입니다. 새 세션이 고칠 수 있는 실패라면 fix Stage를 딱 한 번 얻고, 그 밖의 실패는 사람에게 넘어갑니다. 한 Run의 Ticket들은 나란히 구현되지만 merge는 하나씩 하므로, CI가 판정한 코드가 그대로 base branch에 들어갑니다. [사람이 직접 merge하는](./configuration.md#merge) Target에서는 CI가 초록인 Ticket이 대신 Hand-off되고, 사람이 merge합니다.
+Run은 아무도 지켜보지 않으니, 세션 하나의 말만 믿고 merge할 수는 없습니다. 그래서 모든 [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 같은 게이트를 같은 순서로 지납니다. 작업이 틀렸음을 증명하려 드는 두 번째 세션, 그리고 Target이 설정해 둔 pull request의 CI입니다. 파이프라인이 branch에서 직접 Check를 돌리지는 않습니다. 새 세션이 고칠 수 있는 실패라면 fix Stage를 딱 한 번 얻고, 그 밖의 실패는 사람에게 넘어갑니다. 한 Run의 Ticket들은 나란히 구현되지만 merge는 하나씩 하므로, CI가 판정한 코드가 그대로 base branch에 들어갑니다. [사람이 직접 merge하는](./configuration.md#merge) Target에서는 CI가 초록인 Ticket이 대신 Hand-off되고, 사람이 merge합니다.
 
 이 페이지는 Ticket 하나를 claim부터 merge까지 따라갑니다. Hand-off, Release, Stop, 돌아오지 못한 Run처럼 중간에 멈추는 경우는 [Hand-off, 멈추고 이어 하기](./stopping-and-resuming.md)에서 다룹니다.
 
@@ -13,8 +13,7 @@ Run은 아무도 지켜보지 않으니, 세션 하나의 말만 믿고 merge할
 |---|---|---|
 | claim | guard, state file, 담당자 지정, `ready-for-agent` → `in-progress` | 파이프라인 |
 | worktree | `.worktrees/ticket-<n>`에 `agent/<n>`, implement Stage 뒤에 `agent/<n>-<slug>`로 이름이 붙음 | git, 그리고 implement Stage의 slug |
-| implement Stage | worktree에서 `/mattpocock-skills:implement` 실행 | 에이전트 |
-| Check | commit 안 된 변경이 없는지 본 뒤 Check 명령을 하나씩 실행 | 종료 코드 |
+| implement Stage | worktree에서 `/mattpocock-skills:implement` 실행, 그다음 commit 안 된 변경이 없는지 확인 | 에이전트 |
 | verify Stage | Acceptance Criteria와 branch가 만든 결함을 적대적으로 판정 | 판정을 읽은 파이프라인 |
 | fix Stage | 실패 내용을 받은 새 세션, Ticket당 한 번 | fix 기회 |
 | Landing | rebase, conflict Stage, pull request, CI, squash merge | 한 번에 Lane 하나 |
@@ -26,21 +25,19 @@ flowchart TD
     G -->|거절| S["건너뜀"]
     C --> W["worktree와 branch"]
     W --> I["implement Stage"]
-    I --> K["Check"]
-    K --> V["verify Stage"]
+    I --> V["verify Stage"]
     V --> R["rebase"]
     R -->|충돌| X["conflict Stage"]
-    X -->|rebase 완료| K2["Check 다시"]
     R -->|깨끗함| P["pull request"]
-    K2 --> P
+    X -->|rebase 완료| P
     P --> CI["CI 대기"]
     CI -->|통과| M["squash merge"]
     CI -->|"통과, merge 끔"| H
-    K -->|"고칠 수 있음, fix 기회 남음"| F["fix Stage"]
+    I -->|"commit 안 된 변경, fix 기회 남음"| F["fix Stage"]
     V -->|"고칠 수 있음, fix 기회 남음"| F
-    X -->|"충돌 남음, fix 기회 남음"| F
+    X -->|"충돌 또는 commit 안 된 변경 남음, fix 기회 남음"| F
     CI -->|"실패, fix 기회 남음"| F
-    F -->|commit함| K
+    F -->|commit함| V
     F -->|commit 없음| H["Hand-off"]
     O["그 밖의 실패, 또는 두 번째 실패"] --> H
 ```
@@ -125,50 +122,30 @@ implement 스킬이 Ticket을 읽고, 만들고, 리뷰합니다. 리뷰에서 �
 - base branch보다 commit이 하나도 늘지 않은 branch도 Hand-off됩니다. 조용히 포기한 에이전트는 판정할 거리를 남기지 않기 때문입니다. Stage가 `noCommitReason`에 이유를 답했다면 hand-off 코멘트가 그 이유를 인용합니다.
 - 그 외에는 branch에 이름을 붙여 push하고, Run이 `#<n> implemented · <branch>`를 출력하고, state file이 `implemented`로 넘어가, 이후 어떤 Run도 이 Stage 비용을 다시 치르지 않습니다.
 
-## Check {#the-checks}
+## commit 안 된 변경 없음 {#nothing-uncommitted}
 
-에이전트가 아니라 파이프라인이 직접 여는 게이트가 둘 있습니다.
+implement나 fix Stage가 끝난 뒤 어떤 commit에도 없는 변경이 worktree에 있으면 실패이고, 해당 경로를 전부 알려 주며, 무엇이 branch를 판정하기도 전에 fix 기회를 씁니다. 그 Stage의 줄은 `✅ committed` 대신 `❌ uncommitted work`가 됩니다. 설치한 의존성 같은 gitignore 파일은 세지 않습니다. 이어 하는 Ticket의 worktree에도 같은 guard가 `setup` 줄로 돌고, conflict Stage 뒤에도 pull request 전에 돕니다.
 
-1. **commit 안 된 변경 없음.** 어떤 commit에도 없는 변경이 worktree에 있으면 실패이고, 해당 경로를 전부 알려 줍니다. 설치한 의존성 같은 gitignore 파일은 세지 않습니다.
-2. **Check 명령**을 순서대로, worktree의 셸에서, 각각 `checkTimeoutMinutes`(기본 15분) 안에 실행합니다. 처음 실패한 곳에서 멈춥니다. 한도에서 kill된 명령은 timed out으로 보고되고, 실패가 아니라 멈춰 있었다는 한 줄이 출력 뒤에 붙습니다.
-
-명령은 [`checks`](./configuration.md#checks)에 적은 것입니다. 두 실패 모두 fix 기회를 씁니다. 설정에 `"checks": []`를 적었을 때만 `checks`가 빌 수 있는데, 이때는 아무것도 돌지 않으니 `✅ passed`가 아니라 `⚠️ no checks` 줄을 남깁니다. conflict Stage 뒤에 다시 돌 때도 같습니다.
-
-### base branch도 함께 실패할 때 {#a-failure-the-base-branch-shares}
-
-base branch의 테스트 하나가 실패하기 시작하면(현재 시각을 읽는 테스트가 그런 예입니다), 모든 branch에서 한꺼번에 실패합니다. 이를 Ticket마다 물리면 모두가 fix 기회를 잃고, fix Stage마다 자기 pull request에서 제각각 고칩니다. 그래서 실패를 물리기 전에, branch가 들여온 실패인지 물려받은 실패인지 확인합니다.
-
-| 실패한 것 | merge-base에서 돌리는 것 |
-|---|---|
-| Check 명령 | 그 명령 |
-| pull request의 CI | 모든 Check 명령. 처음 실패하는 데서 멈춤 |
-
-remote에 있는 그대로의 merge-base를 깨끗하게 checkout하고, 같은 `checkTimeoutMinutes`로 거기서 명령을 돌립니다. 몇 개의 Lane이 거기서 실패하든 Run마다 한 번만 돌립니다. 거기에는 아무것도 설치하지 않습니다. 명령은 Ticket의 worktree처럼 main checkout에서 의존성을 찾으므로, 자기만의 설치나 빌드 단계가 필요한 명령은 거기서도 실패하고, 그 이유는 Note의 출력에 드러납니다.
-
-| merge-base 결과 | 진행 상황 칸 | 결과 |
-|---|---|---|
-| 통과 | ``❌ `<command>` failed``, 또는 CI의 `❌ failed` | 위와 같이 fix 기회를 씀 |
-| 함께 실패 | ``⏸ `<command>` fails on the base branch`` | Release. fix 기회는 썼든 안 썼든 그대로 |
-| checkout하거나 돌리지 못함 | 통과한 것으로 봄 | fix 기회를 쓰고, 이유는 Run 로그에 남김 |
-
-Release는 상설 Notes 이슈에 파이프라인 자신의 Note를 올리고, 거기에 명령 이름과 출력의 끝부분을 담습니다. Release되는 Ticket이 몇 개든 Run 하나에서 merge-base commit 하나당 한 번만 올립니다. 비교하는 것은 명령뿐이라 branch가 그 명령에 다르게 실패해도 똑같이 Release되므로, Note는 merge-base의 출력 옆에 branch 자신의 실패를 branch의 것이라고 밝혀 함께 담습니다. 실패한 Check 출력의 끝부분, CI라면 fix Stage가 받았을 실패한 job들의 로그입니다. Note를 올린 Ticket의 실패이며, 같은 commit에서 나중에 Release되는 Ticket은 아무것도 보태지 않습니다. 다음에 할 일은 [base branch가 실패할 때의 Release](./stopping-and-resuming.md#release-over-a-failing-base-branch)에 있습니다.
+파이프라인은 Stage 뒤에도, Run이 Ticket을 이어 할 때도 branch에서 [Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)를 돌리지 않습니다. 코드 Stage의 작업이 push되면 곧바로 verify가 시작됩니다. implement와 fix Stage는 작업하는 동안에는 바꾼 부분에 닿는 테스트만, commit한 뒤에는 전체 Check를 한 번 돌리라는 지시를 받지만, 그 결과로 branch를 판정하는 것은 없습니다. merge를 막는 것은 Target의 주인이 설정해 둔 pull request의 [CI](#ci-wait-and-grace-period)입니다. 명령인 [`checks`](./configuration.md#checks)는 Stage 프롬프트에 이름이 오르고, CI가 실패했을 때 branch의 merge-base에서 그 실패를 가리는 데 쓰입니다([아래](#a-failure-the-base-branch-shares)). CI가 없는 Target은 `ci` 줄이 `⚠️ no checks`나 `⚠️ no workflow runs`인 채로 merge하므로, 아무것도 돌려 보지 않은 코드가 merge됩니다.
 
 ## verify Stage와 판정 {#the-verify-stage-and-its-verdict}
 
-merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 그 코드가 제대로 도는지 물어보기에 가장 믿기 어려운 상대입니다. 그래서 플러그인 스킬 없이 새로 띄운 세션이 각 Acceptance Criterion이 충족되지 **않았음**을 증명하려고 합니다. 파이프라인은 Ticket의 체크되지 않은 기준에 번호를 매겨, 박스 아래 들여 쓴 줄과 함께 넘깁니다([작업 계획하기](./planning.md#acceptance-criteria)). 세션은 코드를 돌려 보고, 버릴 테스트를 써도 되지만 commit은 하면 안 됩니다. 문서로 남은 결정이나 다른 기준을 뒤집지 않고는 충족할 수 없는 기준은 `unmet`으로 두고, 근거에 사람의 결정이 필요하다고 적습니다. `unmet` 기준의 근거에는 실패가 어디에 있는지, 무엇을 돌리거나 읽었는지, 무엇을 기대했고 무엇이 나왔는지, 그리고 반례를 적습니다. 고칠 방법은 제안하지 않습니다. 다만 Ticket, 문서로 남은 결정, 다른 기준이 정한 한계는 출처를 밝혀 인용할 수 있습니다. 임시 파일은 끝난 뒤 버리므로 pull request에 섞이지 않습니다.
+merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 그 코드가 제대로 도는지 물어보기에 가장 믿기 어려운 상대입니다. 그래서 플러그인 스킬 없이 새로 띄운 세션이 각 Acceptance Criterion이 충족되지 **않았음**을 증명하려고 합니다. 파이프라인은 Ticket의 체크되지 않은 기준에 번호를 매겨, 박스 아래 들여 쓴 줄과 함께 넘깁니다([작업 계획하기](./planning.md#acceptance-criteria)). 세션은 코드를 돌려 보고, 버릴 테스트를 써도 되지만 commit은 하면 안 됩니다. Check 명령이 설정돼 있으면, 파이프라인은 그 명령을 돌리지 않으니 branch를 판정하려고 돌리지 말고 대상을 좁힌 테스트와 탐색에 턴을 쓰라는 말도 듣습니다. 문서로 남은 결정이나 다른 기준을 뒤집지 않고는 충족할 수 없는 기준은 `unmet`으로 두고, 근거에 사람의 결정이 필요하다고 적습니다. `unmet` 기준의 근거에는 실패가 어디에 있는지, 무엇을 돌리거나 읽었는지, 무엇을 기대했고 무엇이 나왔는지, 그리고 반례를 적습니다. 고칠 방법은 제안하지 않습니다. 다만 Ticket, 문서로 남은 결정, 다른 기준이 정한 한계는 출처를 밝혀 인용할 수 있습니다. 임시 파일은 끝난 뒤 버리므로 pull request에 섞이지 않습니다.
 
 이 세션은 branch 자체도 판정합니다. branch가 들여온 결함이나 branch가 더한 코드 안의 결함을 `unmet` 기준에 필요한 만큼의 근거로 보이면, Note가 아니라 판정의 `defects`에 적습니다. Ticket이 범위 밖으로 둔 것이거나 문서로 남은 결정이 받아들인 것은 예외입니다. 세션은 이 Run에서 이 Ticket의 implement와 fix Stage가 쓴 Note도 받으므로, 그 가운데 branch의 결함이 있으면 그것도 판정합니다. 그 밖에 찾은 것은 [Note](#notes)로 세션을 나갑니다.
 
-**판정**은 기준마다 번호로 `met`, `unmet`, `unverifiable` 중 하나를 근거와 함께 매기고, branch의 결함을 적습니다. 에이전트 자신의 통과 여부 판단은 참고일 뿐이고, 파이프라인이 직접 판단합니다. 통과 조건은 **`unmet`이 하나도 없고, branch의 결함이 없고, `met`이 하나 이상**인 것입니다. 그 뒤로 기준을 보여 주는 곳(fix와 재판정 verify의 프롬프트, hand-off, squash commit)은 모두 판정이 옮겨 적은 문구가 아니라 Ticket의 체크박스 줄을 그대로 씁니다.
+**판정**은 기준마다 번호로 `met`, `unmet`, `unverifiable`, `ci` 중 하나를 근거와 함께 매기고, branch의 결함을 적습니다. 에이전트 자신의 통과 여부 판단은 참고일 뿐이고, 파이프라인이 직접 판단합니다. 통과 조건은 **`unmet`이 하나도 없고, branch의 결함이 없고, `met`이나 `ci`가 하나 이상**인 것입니다. 그 뒤로 기준을 보여 주는 곳(fix와 재판정 verify의 프롬프트, hand-off, squash commit)은 모두 판정이 옮겨 적은 문구가 아니라 Ticket의 체크박스 줄을 그대로 씁니다.
 
 | 판정 | 진행 상황 칸 | 결과 |
 |---|---|---|
-| 통과 | `✅ <k> met · <v> unverifiable` | Landing으로 |
+| 통과 | `✅ <k> met`, 있으면 뒤에 `· <c> to CI`와 `· <u> unverifiable` | Landing으로 |
 | `unmet`이 있음 | `❌ <u> unmet` | fix 기회를 씀. fix Stage는 충족되지 않은 기준과 그 근거를 받음 |
 | branch가 만든 결함 | `❌ <d> defects` 또는 `❌ <u> unmet · <d> defects` | `unmet`과 같음. fix 기회를 쓰고, fix Stage는 결함마다 그 근거를 받음 |
 | 받은 번호를 빠뜨리거나, 두 번 답하거나, 받지 않은 번호에 답함 | `❌ misnumbered` | Hand-off. Ticket을 판정하지 않은 것 |
 | 전부 `unverifiable` | `❌ no evidence` | Hand-off. merge할 근거가 없음 |
 | 없거나 형식이 틀림 | `❌ no verdict` | Hand-off |
+
+**CI에 맡기는 기준.** pull request의 CI나 몇몇 명령이 통과하기만을 요구하는 기준("The checks pass." 같은 것)은, `.github/workflows/`의 워크플로가 이 pull request에서 돌고(트리거와 `paths` 필터가 branch의 변경을 받아들이고) 기준이 이름 댄 명령을 모두 돌린다면(통째로든 job 여럿에 나눠서든) `ci`로 답합니다. 근거에는 그 워크플로와 step을 적습니다. GitHub는 건너뛴 job을 통과로 치므로, `paths` 필터가 branch를 건너뛰는 워크플로는 그 명령을 돌리는 워크플로가 아닙니다. 그렇지 않으면 세션이 기준이 이름 댄 명령을 직접 돌려 판정합니다. `ci` 기준은 CI가 통과하면 체크됩니다. CI 대기가 `⚠️ no checks`나 `⚠️ no workflow runs`로 끝나면 체크되지 않고 `unverifiable` 기준이 나오는 곳마다 함께 이름이 오르며, 그때 `met` 기준이 하나도 없는 Ticket은 merge할 근거가 있는 기준이 없으니 Hand-off됩니다.
 
 `unmet` 기준이나 결함 때문에 fix를 거친 뒤의 verify는 첫 판정의 `unmet` 기준과 결함을 그 근거와 함께 받습니다. 그 반례가 사라지고 기준 전체가 성립해야만 충족이라는 말도 함께 듣습니다. 이 verify가 fix의 코드에서 찾은 결함은 다른 두 번째 실패처럼 Hand-off이므로, 이 게이트가 되풀이되지는 않습니다.
 
@@ -180,9 +157,7 @@ fix 기회는 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사�
 
 | 실패 | 위치 | fix 기회를 쓰나? |
 |---|---|---|
-| 어떤 commit에도 없는 변경 | checks | 예 |
-| Check가 실패하거나 시간 초과 | checks | 예 |
-| 실패한 Check가 merge-base에서도 실패 | checks | 아니요, Release |
+| 어떤 commit에도 없는 변경 | implement, fix, conflict Stage 뒤의 rebase, 이어 하는 Ticket의 setup | 예 |
 | `unmet` 기준 | verify | 예 |
 | branch가 만든 결함 | verify | 예 |
 | conflict Stage가 rebase를 끝내지 못함 | rebase | 예 |
@@ -196,11 +171,12 @@ fix 기회는 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사�
 | base branch를 pull하지 못함 | rebase | 아니요, Hand-off |
 | push나 pull request 열기가 실패 | pr | 아니요, Hand-off |
 | CI 시간 초과, 충돌 | ci | 아니요, Hand-off |
+| pull request에서 check가 하나도 돌지 않았고, `met` 기준이 없음 | ci | 아니요, Hand-off |
 | merge 실패 | merge | 아니요, Hand-off |
 | 어디서든 rate limit, 일시적인 API 장애, API 키의 예산 소진 | 어디든 | 아니요, Release |
 | 어디서든 GitHub 쪽 장애, 또는 git이 remote에 닿거나 로그인하지 못함 | 어디든 | 아니요, [Release](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) |
 
-fix Stage가 끝나면 Ticket은 Check부터 다시 시작합니다. verify Stage를 포함해 모든 게이트가 수정본을 다시 판정하므로, 수정본도 처음 구현과 같은 기준을 통과해야 합니다. fix Stage 후 branch가 자라지 않았다면 곧바로 Hand-off입니다. 아무도 건드리지 않은 branch를 다시 판정해 봐야 똑같이 실패할 뿐이기 때문입니다. squash하거나 amend한 branch도 자라지 않은 것으로 봅니다. 이때 hand-off 코멘트에는 fix Stage가 받았던 근거가 실리고, 무엇 때문에 불려 왔든 Stage가 `noCommitReason`에 답한 commit하지 않은 이유도 인용됩니다.
+fix Stage가 끝나면 Ticket은 verify부터 다시 시작합니다. 모든 게이트가 수정본을 다시 판정하므로, 수정본도 처음 구현과 같은 기준을 통과해야 합니다. fix Stage 후 branch가 자라지 않았다면 곧바로 Hand-off입니다. 아무도 건드리지 않은 branch를 다시 판정해 봐야 똑같이 실패할 뿐이기 때문입니다. squash하거나 amend한 branch도 자라지 않은 것으로 봅니다. 이때 hand-off 코멘트에는 fix Stage가 받았던 근거가 실리고, 무엇 때문에 불려 왔든 Stage가 `noCommitReason`에 답한 commit하지 않은 이유도 인용됩니다.
 
 rate limit, API 장애, API 예산으로 멈춘 fix Stage는 fix 기회를 쓰지 않습니다. fix 기회는 파이프라인이 Ticket을 맡을 때마다 fix Stage 한 번입니다. Release는 Ticket에 대해 아무것도 바꾸지 않았으니 이미 쓴 fix 기회를 다음 Run에 그대로 넘깁니다. Hand-off는 fix 기회를 되돌려 줍니다. Ticket은 사람의 손을 거쳐야만 돌아오고, 새 fix 기회는 그 사람이 손본 것을 위한 것이기 때문입니다. 자세한 것은 [Ticket 돌려주기](./stopping-and-resuming.md#handing-a-ticket-back)에 있습니다.
 
@@ -232,7 +208,7 @@ sequenceDiagram
 ```
 <!-- Sources: src/landing.ts, src/orchestrator.ts -->
 
-Ticket은 fix Stage, Hand-off, Release 때도 Landing을 나가므로, 누구도 세션 하나를 기다리며 서 있지 않습니다. fix Stage에서 돌아온 Ticket은 맨 뒤에 다시 줄을 섭니다. [base branch가 함께 실패해서 Release된](#a-failure-the-base-branch-shares) Ticket은 다음 Run이 맡을 때 Check 전에 pull과 rebase만 하러 Landing을 한 번 지나고, 그 뒤로 merge할 것이 없으니 곧바로 나옵니다.
+Ticket은 fix Stage, Hand-off, Release 때도 Landing을 나가므로, 누구도 세션 하나를 기다리며 서 있지 않습니다. fix Stage에서 돌아온 Ticket은 맨 뒤에 다시 줄을 섭니다. [base branch가 함께 실패해서 Release된](#a-failure-the-base-branch-shares) Ticket은 다음 Run이 맡을 때 무엇보다 먼저 pull과 rebase만 하러 Landing을 한 번 지나고, 그 뒤로 merge할 것이 없으니 곧바로 나옵니다.
 
 ### rebase {#rebase}
 
@@ -246,12 +222,13 @@ Ticket은 fix Stage, Hand-off, Release 때도 Landing을 나가므로, 누구도
 
 | worktree 상태 | 결과 |
 |---|---|
-| 해결됨, 세션이 어떻게 끝났든(rate limit이나 API 장애여도) | `✅ rebased`. push한 뒤 **Check를 다시 돌림** |
+| 해결됨, 세션이 어떻게 끝났든(rate limit이나 API 장애여도) | `✅ rebased`. push한 뒤 pull request로 |
+| 해결됐지만 어떤 commit에도 없는 변경이 있음 | `❌ uncommitted work`. fix 기회를 씀 |
 | 해결 안 됨, 세션이 rate limit, API 장애, API 예산으로 멈춤 | rebase를 abort하고 Release |
 | 그 밖의 이유로 해결 안 됨 | `❌ unresolved`. rebase를 abort하고 fix 기회를 씀 |
 | Stage를 띄우지 못했거나 git에 물을 수 없음 | `❌ unknown`. rebase를 abort하고 Hand-off |
 
-Check를 다시 돌리는 건 해결 내용이 어떤 게이트도 본 적 없는 코드이기 때문입니다. verify는 다시 하지 않습니다. 이 Stage는 기준이 다루는 동작을 바꾸지 않도록 지시받기 때문입니다. 해결하지 못한 rebase는 충돌 내용과 남은 문제를 근거로 fix Stage에 넘깁니다. abort는 항상 실행되므로, fix Stage나 사람이 반쯤 끝난 rebase를 물려받는 일은 없습니다.
+파이프라인은 해결 내용에 Check를 돌리지 않습니다. 이 Stage는 전체 테스트가 아니라 type checker와 해결한 파일에 닿는 테스트를 돌리라는 지시를 받고, 그다음은 pull request의 CI가 판정합니다. verify는 다시 하지 않습니다. 이 Stage는 기준이 다루는 동작을 바꾸지 않도록 지시받기 때문입니다. 해결하지 못한 rebase는 충돌 내용과 남은 문제를 근거로 fix Stage에 넘깁니다. abort는 항상 실행되므로, fix Stage나 사람이 반쯤 끝난 rebase를 물려받는 일은 없습니다.
 
 ### pull request {#pull-request}
 
@@ -273,7 +250,7 @@ rebase로 branch가 다시 쓰였으니 `--force-with-lease`로 push합니다. b
 |---|---|---|
 | 모든 check가 통과하거나 건너뜀 | `✅ passed` | merge. [사람이 직접 merge하는](./configuration.md#merge) Target이면 `merge` 줄이 `👤 left to a human`인 Hand-off |
 | check가 실패, 취소, 시간 초과, 조치 필요, 시작 실패 중 하나 | `❌ failed` | fix 기회를 씀 |
-| 위와 같고, merge-base도 Check 명령에 실패 | ``⏸ `<command>` fails on the base branch`` | Release([위](#a-failure-the-base-branch-shares) 참고) |
+| 위와 같고, merge-base도 Check 명령에 실패 | ``⏸ `<command>` fails on the base branch`` | Release([아래](#a-failure-the-base-branch-shares) 참고) |
 | 1분가량 다시 시도해도 GitHub 쪽 장애가 이어짐 | `⏸ GitHub failure` | [Release](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) |
 | 시간 초과 시점에 check가 아직 대기 중이거나, 끝내 목록을 받지 못함 | `❌ timed out` | Hand-off |
 | check가 없고 GitHub가 pull request를 충돌로 판단 | `❌ conflicting` | 곧바로 Hand-off |
@@ -282,7 +259,7 @@ rebase로 branch가 다시 쓰였으니 `--force-with-lease`로 push합니다. b
 
 check가 실패하면 실패한 Actions job들의 로그 끝부분을 근거로 fix Stage에 넘깁니다. 충돌 난 pull request는 기다리지 않고 바로 Hand-off합니다. GitHub는 이런 pull request에 check를 돌리지 않기 때문입니다. 이런 충돌은 그사이 사람이 merge했을 때만 생깁니다. GitHub가 check run이나 status 목록을 주지 않은 확인은 답이 아니므로, 대기 중일 때처럼 다시 묻습니다.
 
-check가 없는 pull request는 merge합니다. CI가 도는지는 pull request마다 다른 사실이고(`paths` 필터가 건너뛰는 문서만 바꾼 변경처럼), merge 전에 CI가 꼭 필요한 Target은 GitHub에서 그렇게 설정합니다([merge 전에 CI 요구하기](./configuration.md#requiring-ci-before-a-merge)).
+check가 없는 pull request는 merge합니다. CI가 도는지는 pull request마다 다른 사실이고(`paths` 필터가 건너뛰는 문서만 바꾼 변경처럼), merge 전에 CI가 꼭 필요한 Target은 GitHub에서 그렇게 설정합니다([merge 전에 CI 요구하기](./configuration.md#requiring-ci-before-a-merge)). 파이프라인은 branch에서 Check를 돌리지 않으므로, 이런 pull request는 아무것도 돌려 보지 않은 코드를 merge합니다.
 
 **유예 시간.** pull request가 막 열린 직후에는 GitHub가 한동안 check가 없다고 답합니다. 그래서 "no checks"는 [`ciGraceMinutes`](./configuration.md#ci)가 지난 뒤에야 인정합니다. `ciGraceMinutes: 0`이면 늦게 등록되는 check run을 기다리지 않고 pull request를 merge합니다.
 
@@ -295,6 +272,20 @@ check가 없는 pull request는 merge합니다. CI가 도는지는 pull request�
 | `push` | `branches`나 `branches-ignore`가 pull request의 branch를 제외할 때 |
 
 패턴은 셸 glob이 아니라 GitHub의 filter pattern cheat sheet대로 읽습니다. `**.js`는 `src/js/app.js`와 맞습니다. 확실히 제외할 수 없는 것은 모두 돌 수 있는 워크플로로 치고 유예 시간을 줍니다. 파싱되지 않는 파일, 그 밖의 이벤트, 읽지 않는 필터(`types`, `push`의 `paths`, `tags`)가 있는데 읽는 필터가 이벤트를 제외하지 않을 때, `?`, `+`, `[]`, 맨 앞의 `!`가 든 패턴, `/`나 `./`로 시작하거나 `/`로 끝나는 경로, `.`으로 시작하는 이름에 맞아야 하는 wildcard가 그렇습니다. 이쪽으로 틀리면 유예 시간만 쓰지만, 반대로 틀리면 CI가 등록되기 전에 pull request가 merge되기 때문입니다.
+
+### base branch도 함께 실패할 때 {#a-failure-the-base-branch-shares}
+
+base branch의 테스트 하나가 실패하기 시작하면(현재 시각을 읽는 테스트가 그런 예입니다), 모든 branch에서 한꺼번에 실패합니다. 이를 Ticket마다 물리면 모두가 fix 기회를 잃고, fix Stage마다 자기 pull request에서 제각각 고칩니다. 그래서 CI 실패를 물리기 전에, branch가 들여온 실패인지 물려받은 실패인지 확인합니다. branch와 base branch의 merge-base에서 모든 Check 명령을 돌리고, 처음 실패하는 데서 멈춥니다.
+
+remote에 있는 그대로의 merge-base를 깨끗하게 checkout하고, 같은 `checkTimeoutMinutes`로 거기서 명령을 돌립니다. 몇 개의 Lane이 거기서 실패하든 Run마다 한 번만 돌립니다. 거기에는 아무것도 설치하지 않습니다. 명령은 Ticket의 worktree처럼 main checkout에서 의존성을 찾으므로, 자기만의 설치나 빌드 단계가 필요한 명령은 거기서도 실패하고, 그 이유는 Note의 출력에 드러납니다.
+
+| merge-base 결과 | 진행 상황 칸 | 결과 |
+|---|---|---|
+| 통과 | `❌ failed` | fix 기회를 씀 |
+| 함께 실패 | ``⏸ `<command>` fails on the base branch`` | Release. fix 기회는 썼든 안 썼든 그대로이고, Run은 Ticket을 더 맡지 않음 |
+| checkout하거나 돌리지 못함 | 통과한 것으로 봄 | fix 기회를 쓰고, 이유는 Run 로그에 남김 |
+
+Release는 상설 Notes 이슈에 파이프라인 자신의 Note를 올리고, 거기에 명령 이름과 출력의 끝부분을 담습니다. Release되는 Ticket이 몇 개든 Run 하나에서 merge-base commit 하나당 한 번만 올립니다. 두 실패를 비교하지 않으므로 CI가 다른 이유로 실패했어도 똑같이 Release되고, 그래서 Note는 merge-base의 출력 옆에 branch 자신의 실패를 branch의 것이라고 밝혀 함께 담습니다. fix Stage가 받았을 실패한 job들의 로그입니다. Note를 올린 Ticket의 실패이며, 같은 commit에서 나중에 Release되는 Ticket은 아무것도 보태지 않습니다. 다음에 할 일은 [base branch가 실패할 때의 Release](./stopping-and-resuming.md#release-over-a-failing-base-branch)에 있습니다.
 
 ### squash merge와 commit 메시지 {#squash-merge-and-its-commit}
 
@@ -315,14 +306,14 @@ Unverified:
 Co-authored-by: <name> <email>
 ```
 
-제목은 pull request 제목입니다. `<problem>`과 `<solution>`은 Stage가 마지막으로 답한 것이고, 72칸이 넘는 줄은 공백에서 끊습니다. 한글 같은 전각 문자는 두 칸으로 셉니다. Stage가 쓴 줄은 그대로 두므로 목록은 목록으로 남습니다. `solution`을 답한 것이 없으면 branch의 commit 제목들이 `- <subject>` 줄로 그 자리를 대신하고, `problem`이 있으면 그 뒤에 옵니다. 빠진 답변을 지어내지는 않습니다. `Unverified:`는 `unverifiable` 기준이 있을 때만 붙고, 기준마다 근거를 한 줄로 이어 씁니다. 그 이유를 남기는 곳이 여기 말고는 없기 때문입니다. commit 제목들과 `Co-authored-by` trailer는 rebase 이후에 읽습니다. rebase한 뒤의 commit이 실제로 들어가기 때문입니다. [사람이 직접 merge하는](./configuration.md#merge) Target에서는 이 메시지를 조립하지 않습니다. merge하는 사람은 Target의 기본 메시지를 받습니다.
+제목은 pull request 제목입니다. `<problem>`과 `<solution>`은 Stage가 마지막으로 답한 것이고, 72칸이 넘는 줄은 공백에서 끊습니다. 한글 같은 전각 문자는 두 칸으로 셉니다. Stage가 쓴 줄은 그대로 두므로 목록은 목록으로 남습니다. `solution`을 답한 것이 없으면 branch의 commit 제목들이 `- <subject>` 줄로 그 자리를 대신하고, `problem`이 있으면 그 뒤에 옵니다. 빠진 답변을 지어내지는 않습니다. `Unverified:`는 `unverifiable` 기준이나, pull request에서 check가 하나도 돌지 않은 `ci` 기준이 있을 때만 붙고, 기준마다 근거를 한 줄로 이어 씁니다. 그 이유를 남기는 곳이 여기 말고는 없기 때문입니다. commit 제목들과 `Co-authored-by` trailer는 rebase 이후에 읽습니다. rebase한 뒤의 commit이 실제로 들어가기 때문입니다. [사람이 직접 merge하는](./configuration.md#merge) Target에서는 이 메시지를 조립하지 않습니다. merge하는 사람은 Target의 기본 메시지를 받습니다.
 
 ### merge 이후 {#after-the-merge}
 
 Ticket은 이미 merge됐으니 여기서부터는 Hand-off될 수 없습니다. 단계마다 실패하면 로그만 남기고 다음 단계로 넘어갑니다.
 
 1. state file을 지웁니다. Ticket이 다시는 재개 가능해 보이지 않게 하려는 것입니다.
-2. 충족된 기준에 체크합니다(아래 참고).
+2. 충족된 기준에, 그리고 CI가 통과했다면 CI에 맡긴 기준에도 체크합니다(아래 참고).
 3. `in-progress`를 뗍니다. 이슈는 merge로 이미 닫혔습니다.
 4. base branch를 pull합니다. 여기서 Landing이 끝나고, 다음 Lane의 Ticket은 이 Ticket이 들어간 base branch 위로 rebase합니다.
 5. worktree와 로컬 branch를 지우고, GitHub가 아직 지우지 않았으면 remote branch도 지웁니다.
@@ -337,17 +328,16 @@ Ticket은 이미 merge됐으니 여기서부터는 Hand-off될 수 없습니다.
 | Stage | Outcome | Turns | Duration |
 |---|---|---|---|
 | implement | ✅ committed | 46 | 21m 14s |
-| checks | ❌ `npm test` failed | – | 1m 48s |
+| verify | ❌ 1 unmet | 11 | 5m 3s |
 | fix | ✅ committed | 12 | 6m 2s |
-| checks | ✅ passed | – | 1m 52s |
-| verify | ✅ 6 met · 1 unverifiable | 9 | 4m 31s |
+| verify | ✅ 5 met · 1 to CI · 1 unverifiable | 9 | 4m 31s |
 | ci | ✅ passed | – | 2m 40s |
 | merge | ✅ #31 | – | – |
 ```
 
 행에는 몇 단어만 적습니다. 사람이 행동해야 하는 것은 알림을 받을 가치가 있으니 따로 코멘트로 올립니다. Hand-off, guard 경고, Note가 그렇습니다. 예외는 [실패한 것 없이 Hand-off된](./stopping-and-resuming.md#when-nothing-failed) 초록 Ticket 가운데 확인할 수 없었던 기준도 없는 경우로, 코멘트를 달지 않습니다.
 
-**충족된 기준에 체크.** merge 뒤에는 판정이 `met`으로 판정한 기준마다 그 번호로, 그것이 적힌 곳이 본문이든 코멘트든(예: triage가 브리프를 올린 코멘트) 찾아서 체크합니다(`- [ ]` → `- [x]`). 체크하는 박스는 본문과 모든 코멘트를 통틀어, verify가 목록을 받을 때 그 번호가 가리키던 줄과 지금도 똑같이 읽히는 체크되지 않은 줄입니다. 그사이 Ticket이 고쳐져서 그런 줄이 없거나 둘 이상이면 아무것도 체크하지 않고, Run 로그에 그 기준을 남깁니다. 엉뚱한 박스에 체크하는 것보다 비워 두는 편이 안전하기 때문입니다. `unverifiable` 기준은 아무도 근거를 모으지 않았으니 체크하지 않습니다.
+**충족된 기준에 체크.** merge 뒤에는 판정이 `met`으로 판정한 기준마다, 그리고 CI가 통과했다면 `ci`로 답한 기준마다 그 번호로, 그것이 적힌 곳이 본문이든 코멘트든(예: triage가 브리프를 올린 코멘트) 찾아서 체크합니다(`- [ ]` → `- [x]`). 체크하는 박스는 본문과 모든 코멘트를 통틀어, verify가 목록을 받을 때 그 번호가 가리키던 줄과 지금도 똑같이 읽히는 체크되지 않은 줄입니다. 그사이 Ticket이 고쳐져서 그런 줄이 없거나 둘 이상이면 아무것도 체크하지 않고, Run 로그에 그 기준을 남깁니다. 엉뚱한 박스에 체크하는 것보다 비워 두는 편이 안전하기 때문입니다. `unverifiable` 기준은 아무도 근거를 모으지 않았으니 체크하지 않고, pull request에서 check가 하나도 돌지 않았다면 `ci` 기준도 마찬가지입니다.
 
 ## Note {#notes}
 

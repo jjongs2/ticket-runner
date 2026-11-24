@@ -74,8 +74,9 @@ The Failure line says what stopped the Ticket. What it asks of you:
 | A Stage ran past its minute limit, or hit its turn limit | Raise that Stage's `maxMinutes` or `maxTurns` in [`stages`](./configuration.md#stages), or split the Ticket |
 | implement left no commits | Read the reason the Stage gave in the hand-off comment, or its transcript when it gave none, then make the Ticket smaller or clearer |
 | fix left no new commits | Read the reason the Stage gave in the hand-off comment, or its transcript when it gave none, then take the decision it asks for or mend the code by hand on the branch |
-| A Check, a criterion or CI still failing after the fix | Read the evidence in the comment, then mend the code by hand on the branch, or, for a criterion, rewrite it as the next row says |
+| Uncommitted work, a criterion or CI still failing after the fix | Read the evidence in the comment, then mend the code by hand on the branch, or, for a criterion, rewrite it as the next row says |
 | Criteria unmet after the fix, or no evidence | Mend the code by hand, or rewrite the criteria so a session can check them by running or reading code ([Acceptance Criteria](./planning.md#acceptance-criteria)) |
+| No CI ran on the pull request, and no criterion is met | Set up CI that runs the commands the criteria left to it name, or rewrite those criteria so a session can check them by running or reading code |
 | CI timed out | Raise [`ciTimeoutMinutes`](./configuration.md#ci) |
 | The pull request is conflicting | Nothing: the next Run rebases it again, and the conflict Stage takes the conflict |
 | The base branch could not be pulled | Clear what is in the way in the main checkout ([Running](./running.md#run)) |
@@ -157,7 +158,7 @@ A handed-off Ticket is yours to end one of four ways:
 gh issue edit 8 --remove-label ready-for-human --add-label ready-for-agent   # hand it back
 ```
 
-To hand a Ticket back, move its label from `ready-for-human` to `ready-for-agent`. The next Run finds it on the Frontier, reads its state file and carries on from what it reached. A Ticket that reached `implemented` goes straight to the Checks, so the implement Stage is not paid for twice.
+To hand a Ticket back, move its label from `ready-for-human` to `ready-for-agent`. The next Run finds it on the Frontier, reads its state file and carries on from what it reached. A Ticket that reached `implemented` goes straight to verify, so the implement Stage is not paid for twice.
 
 A few things differ from the Run that handed it off:
 
@@ -194,17 +195,17 @@ A Stage of a Run started with [`--api-key`](./running.md#api-key) can be refused
 
 ## Release over a failing base branch {#release-over-a-failing-base-branch}
 
-A failing Check or red CI is inherited, not brought, when the pipeline runs the Check commands again in a clean worktree at the branch's merge-base with the base branch and one fails there too ([A failure the base branch shares](./ticket-to-merge.md#a-failure-the-base-branch-shares)). The Ticket is released as on a rate limit, with these differences:
+A red CI is inherited, not brought, when the pipeline runs the Check commands in a clean worktree at the branch's merge-base with the base branch and one fails there too ([A failure the base branch shares](./ticket-to-merge.md#a-failure-the-base-branch-shares)). The Ticket is released as on a rate limit, with these differences:
 
 - the progress row reads ``⏸ `<command>` fails on the base branch``, and the Run's last line names the command and the merge-base
 - the pipeline posts one Note on the standing Notes issue with the tail of the command's output at the merge-base, and beside it the branch's own failure; the Ticket itself gets no comment
-- the next Run rebases the branch onto the base branch before its Checks
+- the next Run rebases the branch onto the base branch first, before verify, and logs `#<n> rebased onto <base> first`
 
 The fix budget stays as it was, spent or not: a Ticket whose budget is already spent is released, not handed off. An open pull request stays open, and the next Run updates it.
 
-Read the branch's part of the Note before mending anything: the merge-base and the branch failed the same command, not necessarily the same way. A branch whose failure is its own is released by every Run until the base branch passes the command, and mending the base branch's failure alone does not free it to merge, only to reach a fix Stage.
+Read the branch's part of the Note before mending anything: the merge-base failed a Check command, and the branch's CI may have gone red over something else. A branch whose failure is its own is released by every Run until the base branch passes the Checks, and mending the base branch's failure alone does not free it to merge, only to reach a fix Stage.
 
-Mend the Check on the base branch, then start a Run. Each released Ticket is rebased onto the mended base branch before its Checks; a rebase that conflicts goes to the conflict Stage, and one it cannot resolve spends the fix budget, as at the Landing. A Run started before the base branch is mended releases the Ticket again.
+Mend the Check on the base branch, then start a Run. Each released Ticket is rebased onto the mended base branch first; a rebase that conflicts goes to the conflict Stage, and one it cannot resolve spends the fix budget, as at the Landing. A Run started before the base branch is mended releases the Ticket again.
 
 ## Release over a GitHub or remote failure {#release-over-a-github-or-remote-failure}
 
@@ -271,7 +272,7 @@ An unreadable state file was probably written by a newer pipeline.
 
 Stranded Tickets fill free Lanes before anything the Frontier offers ([Running](./running.md#run)), each resumed by whichever Host's Run swept it, from the copy [Resuming into a worktree](#resuming-into-a-worktree) picks. A narrowed Run resumes only the Stranded Tickets among those it was given.
 
-A kill still costs more than a Stop. Whatever the Stage had not yet committed and pushed is lost. A worktree left in the middle of a rebase is aborted back to the branch tip before the Checks grade it.
+A kill still costs more than a Stop. Whatever the Stage had not yet committed and pushed is lost. A worktree left in the middle of a rebase is aborted back to the branch tip before anything grades it.
 
 ## The state file
 
@@ -307,10 +308,10 @@ The file is JSON a human can read without the pipeline:
 | `title` | the latest title the implement or fix Stage gave for the whole branch, which names the pull request |
 | `body` | the latest pull request body they gave, written below `Closes #<n>` |
 | `problem`, `solution` | the latest problem and solution they gave, which open the squash commit |
-| `rebaseFirst` | present only after a Release over a failing base branch: rebase onto the base branch before the Checks |
+| `rebaseFirst` | present only after a Release over a failing base branch: rebase onto the base branch first |
 | `runId`, `version`, `updatedAt` | which Run and which [version](./internals.md#versions) wrote it, and when |
 
-There are only two states. Everything after the implement Stage (Checks, verify, rebase, pull request, CI, merge) is run again from the Checks by a Run that resumes at `implemented`.
+There are only two states. Everything after the implement Stage (verify, rebase, pull request, CI, merge) is run again from verify by a Run that resumes at `implemented`.
 
 The file is written as part of the claim and updated as the Ticket advances. It goes when the Ticket merges, its issue closes, or its branch is in neither the worktree here nor on the remote, and at a [Hand-off at setup](#when-a-hand-off-does-less) that leaves no work of the pipeline's.
 

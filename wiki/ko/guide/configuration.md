@@ -13,8 +13,8 @@ Target은 설정 없이도 돌아가야 하므로 모든 필드는 선택이고,
 |---|---|---|
 | [`baseBranch`](#basebranch) | GitHub의 기본 branch | Ticket을 따 오고, rebase하고, merge하는 branch |
 | [`lanes`](#lanes) | `1` | Run이 동시에 맡는 Ticket 수 |
-| [`checks`](#checks) | `package.json`에서 추론 | 파이프라인이 Ticket을 거르려고 직접 돌리는 명령 |
-| [`checkTimeoutMinutes`](#checks) | `15` | Check 명령 하나당 wall-clock 한도 |
+| [`checks`](#checks) | `package.json`에서 추론 | Stage 프롬프트에 이름이 오르고, CI가 실패했을 때 merge-base에서 판정에 쓰는 명령 |
+| [`checkTimeoutMinutes`](#checks) | `15` | merge-base에서 돌리는 Check 명령 하나당 wall-clock 한도 |
 | [`merge`](#merge) | `true` | CI가 초록인 Ticket을 Run이 merge할지, merge를 사람에게 맡길지 |
 | [`stages`](#stages) | 아래 참고 | Stage별 모델, effort, 한도, 추가 지시 |
 | [`permissionMode`](#permissionmode) | `"auto"` | 모든 Stage 세션이 묻지 않고 할 수 있는 일 |
@@ -60,24 +60,24 @@ base branch는 모든 Ticket이 출발하고 merge되어 들어가는 branch입�
 
 - `lanes`: 1 이상의 정수
 
-Run이 동시에 맡는 Ticket 수입니다. [Lane](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 하나에 Ticket 하나. `run --lanes <n>`이 한 Run에 한해 덮어씁니다. Lane들은 각자의 worktree에서 동시에 Check를 돌리니, 포트나 데이터베이스처럼 Check끼리 겹쳐 쓰게 되는 것이 있는 Target은 `1`로 두세요. Landing(rebase부터 merge까지)에는 한 번에 Lane 하나만 들어가므로, Lane을 늘리면 implement와 verify가 빨라질 뿐 merge가 빨라지지는 않습니다([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)).
+Run이 동시에 맡는 Ticket 수입니다. [Lane](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 하나에 Ticket 하나. `run --lanes <n>`이 한 Run에 한해 덮어씁니다. Lane들의 Stage는 각자의 worktree에서 동시에 Check를 돌리니, 포트나 데이터베이스처럼 Check끼리 겹쳐 쓰게 되는 것이 있는 Target은 `1`로 두세요. Landing(rebase부터 merge까지)에는 한 번에 Lane 하나만 들어가므로, Lane을 늘리면 implement와 verify가 빨라질 뿐 merge가 빨라지지는 않습니다([ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md)).
 
 ## `checks` {#checks}
 
 - `checks`: 문자열 배열
 - `checkTimeoutMinutes`: 0보다 큰 수
 
-[Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 파이프라인이 직접 돌리는 명령입니다. 각 명령은 Ticket의 worktree에서 셸을 통해 돌고, implement Stage 뒤, fix Stage 뒤, rebase 충돌을 해결한 뒤에 실행됩니다. 0이 아닌 코드로 끝나면 게이트를 통과하지 못하고, Ticket은 [fix 기회](./ticket-to-merge.md#the-fix-stage-and-the-fix-budget)를 씁니다. 단, base branch도 같은 명령에 실패하면 예외입니다([base branch도 함께 실패할 때](./ticket-to-merge.md#a-failure-the-base-branch-shares)). CI가 실패했을 때도 base branch가 함께 실패하는지 이 명령들로 따지므로, CI가 돌리는 명령과 같은 것을 적어 두세요.
+[Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 Target이 이름 댄 명령이고, 파이프라인은 Ticket의 branch에서 이 명령을 돌리지 않습니다. 이 명령은 두 가지에 쓰입니다. 하나는 Stage 프롬프트가 이름을 대는 것입니다. implement와 fix Stage는 작업하는 동안에는 바꾼 부분에 닿는 테스트만, commit한 뒤에는 전체 Check를 한 번 돌리라는 지시를 받고, conflict Stage는 type checker와 해결한 파일에 닿는 테스트를 돌리라는 지시를 받습니다. 다른 하나는 pull request의 CI가 실패했을 때, 파이프라인이 branch와 base branch의 merge-base에서 이 명령을 직접 돌려 branch가 물려받은 실패인지 들여온 실패인지 가리는 것입니다([base branch도 함께 실패할 때](./ticket-to-merge.md#a-failure-the-base-branch-shares)). 그러니 CI가 돌리는 명령과 같은 것을 적어 두세요. merge를 막는 것은 Target이 설정해 둔 pull request의 [CI](#ci)입니다.
 
 이 필드가 없으면 `package.json`에 `test`, `typecheck` 스크립트 중 정의된 것을 보고 `npm test`와 `npm run typecheck`를 추론합니다. 둘 다 없으면 Run은 이렇게 시작을 거절합니다.
 
 ```text
-No Check commands are configured and none could be inferred from package.json. Add them to `checks` in ticket-runner.json, add `test` and `typecheck` scripts to package.json, or write `"checks": []` in ticket-runner.json to run with no Check command.
+No Check commands are configured and none could be inferred from package.json. The Stage prompts name them, and a red CI is graded with them at the branch's merge-base with the base branch. Add them to `checks` in ticket-runner.json, add `test` and `typecheck` scripts to package.json, or write `"checks": []` in ticket-runner.json to run with no Check command.
 ```
 
-Check 명령이 없는 Target은 `"checks": []`를 적습니다. 그러면 Run은 경고와 함께 시작하고, Ticket마다 checks 줄이 `⚠️ no checks`가 됩니다.
+Check 명령이 없는 Target은 `"checks": []`를 적습니다. 그러면 Run은 경고와 함께 시작하고, Stage 프롬프트는 아무 명령도 이름 대지 않으며, CI가 실패하면 merge-base에서 아무것도 돌리지 않고 branch에 물립니다.
 
-`checkTimeoutMinutes`는 모든 명령에 하나로 적용되는 한도이고, 명령마다 이 시간을 통째로 받습니다. merge-base에서 돌릴 때도 같습니다. 한도에서 kill된 명령은 실패한 Check이고 다른 실패처럼 fix 기회를 씁니다.
+`checkTimeoutMinutes`는 merge-base에서 돌리는 모든 명령에 하나로 적용되는 한도이고, 명령마다 이 시간을 통째로 받습니다. 한도에서 kill된 명령은 base branch가 실패한 명령으로 칩니다.
 
 ## `merge` {#merge}
 
@@ -128,7 +128,7 @@ Stage 하나는 `claude -p` 세션 하나입니다. `stages`는 Stage마다 객�
 
 Landing이 pull request를 연 뒤, Run은 최대 `ciTimeoutMinutes` 동안 check를 기다립니다. 시간 안에 끝나지 않는 CI는 fix 기회를 쓰지 않는 Hand-off입니다.
 
-기다림이 끝났을 때 check가 하나도 없는 pull request는 merge하고, ci 줄에 `⚠️ no checks`를 남깁니다. CI가 도는지는 Target이 아니라 pull request마다 다른 사실이기 때문입니다. `paths` 필터가 있는 워크플로는 코드 변경에서는 돌고 문서만 바꾼 변경은 건너뛰는데, 그런 변경은 merge만 하면 됩니다. merge마다 CI가 꼭 필요한 Target은 GitHub에서 그렇게 설정합니다([아래](#requiring-ci-before-a-merge)).
+기다림이 끝났을 때 check가 하나도 없는 pull request는 merge하고, ci 줄에 `⚠️ no checks`를 남깁니다. 파이프라인은 branch에서 Check를 돌리지 않으므로, 이런 pull request는 아무것도 돌려 보지 않은 코드를 merge합니다. CI가 도는지는 Target이 아니라 pull request마다 다른 사실이기 때문입니다. `paths` 필터가 있는 워크플로는 코드 변경에서는 돌고 문서만 바꾼 변경은 건너뛰는데, 그런 변경은 merge만 하면 됩니다. merge마다 CI가 꼭 필요한 Target은 GitHub에서 그렇게 설정합니다([아래](#requiring-ci-before-a-merge)).
 
 `ciGraceMinutes`는 GitHub가 check run을 등록하기 전의 틈을 메웁니다. 이 틈이 3분을 넘긴 적도 있습니다. 이 시간이 지나기 전까지는 check가 아직 없는 pull request를 "없음"이 아니라 대기 중으로 봅니다. `ciTimeoutMinutes`보다 길어지지는 않습니다. Actions가 늦게 등록되는 Target이라면 늘리세요. `0`이면 늦게 등록되는 check run을 기다리지 않고 pull request를 merge합니다.
 
@@ -177,12 +177,12 @@ Target이 이미 다른 라벨 이름을 쓰고 있다면 triage 어휘의 이�
 ## 관련 페이지 {#related-pages}
 
 - [실행하기](./running.md): `--lanes`, 그리고 이 파일을 읽는 Run
-- [Ticket 하나가 merge되기까지](./ticket-to-merge.md): 각 Stage, Check, 게이트가 Ticket의 생명 주기 어디에 있는지
+- [Ticket 하나가 merge되기까지](./ticket-to-merge.md): 각 Stage와 게이트가 Ticket의 생명 주기 어디에 있는지, Check는 어디서 도는지
 - [일 계획하기](./planning.md): 라벨과 그 뜻
 - [설치와 제거](./installation.md): `init`이 빈 파일을 만들고, `remove`가 맨 마지막에 지움
 
 ## 참고 자료 {#references}
 
 - [`src/config.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/config.ts), [`src/transcript-home.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/transcript-home.ts), [`src/ports/agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/ports/agent-runner.ts), [`src/startup.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/startup.ts), [`src/base-branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/base-branch.ts)
-- [`src/orchestrator.ts` · `runChecks`, `requireGreenCi`, `handOff`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts), [`src/prompts.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/prompts.ts), [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts), [`src/adapters/gh-tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts), [`src/adapters/git-workspace.ts` · `runCheck`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts)
+- [`src/orchestrator.ts` · `requireGreenCi`, `handOff`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts), [`src/failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts), [`src/prompts.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/prompts.ts), [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts), [`src/adapters/gh-tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts), [`src/adapters/git-workspace.ts` · `runCheck`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts)
 - [ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md), [ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md), [ADR-0005](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0005-landing-is-a-serialized-section.md), [ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md), [ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)

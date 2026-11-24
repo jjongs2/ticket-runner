@@ -15,7 +15,7 @@ description: 세 port와 그 adapter, src/ 모듈 구성, 버전을 찍는 방�
 |---|---|---|
 | `Tracker` | GitHub: 이슈, 라벨, 코멘트, pull request, CI, merge | `GhTracker` · `FakeTracker` |
 | `AgentRunner` | Claude: Stage 세션 하나 | `ClaudeAgentRunner` · `FakeAgentRunner` |
-| `Workspace` | git: worktree, Check, rebase, push, state와 Run lock | `GitWorkspace` · `FakeWorkspace` |
+| `Workspace` | git: worktree, merge-base에서의 Check, rebase, push, state와 Run lock | `GitWorkspace` · `FakeWorkspace` |
 
 ```mermaid
 flowchart LR
@@ -101,7 +101,7 @@ claude --print <prompt> --output-format stream-json --verbose \
 
 ### `GitWorkspace` {#gitworkspace}
 
-[`GitWorkspace`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts)는 `.worktrees/` 아래의 worktree(Ticket의 것과, 실패한 Check를 merge-base에서 다시 돌리는 detached worktree)를 맡고, Check를 돌리고, rebase와 push를 하고, `ticket-runner/state`와 `ticket-runner/lock` branch를 관리합니다([Hand-off, 멈추고 이어 하기](./stopping-and-resuming.md)).
+[`GitWorkspace`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/git-workspace.ts)는 `.worktrees/` 아래의 worktree(Ticket의 것과, CI가 실패했을 때 merge-base에서 Check를 돌리는 detached worktree)를 맡고, 거기서 Check를 돌리고, rebase와 push를 하고, `ticket-runner/state`와 `ticket-runner/lock` branch를 관리합니다([Hand-off, 멈추고 이어 하기](./stopping-and-resuming.md)).
 
 - git은 ref나 index lock이 잡혀 있으면 기다리지 않고 실패하므로, main checkout에서의 명령은 한 번에 하나씩 돌립니다. worktree 안의 명령은 병렬로 둡니다.
 - state branch는 부모 없는 snapshot commit 하나로 다시 씁니다. git object와 임시 index만으로 만들기 때문에 main checkout의 tree는 건드리지 않습니다. 서명 없이, `--no-verify`와 읽어 온 tip에 대한 `--force-with-lease`로 push하고, 더 새 snapshot에 밀린 변경은 다시 얹습니다. 최대 세 번 시도합니다. 한 Run 안에서는 변경이 차례를 지키니, 두 Lane이 서로의 Ticket을 빠뜨린 snapshot을 올리는 일이 없습니다.
@@ -157,7 +157,7 @@ sequenceDiagram
 | [`guards.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/guards.ts) | 후보를 건너뛰는 이유: guard와 거절 |
 | [`landing.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/landing.ts) | Landing: rebase부터 pull까지 한 번에 한 Lane, 도착 순서대로 |
 | [`lifecycle.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lifecycle.ts) | Ticket이 어디서 실패했는지, fix Stage가 고칠 수 있는 실패는 무엇인지 |
-| [`failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts) | 실패한 Check를 merge-base에서 Run마다 commit마다 한 번 돌리고, 그 Note를 한 번 올림 |
+| [`failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts) | CI가 실패하면 merge-base에서 Check를 Run마다 commit마다 한 번 돌리고, 그 Note를 한 번 올림 |
 | [`workflows.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/workflows.ts) | pull request의 branch에 있는 워크플로 중 그 pull request에서 돌 수 있는 것이 있는지. CI 유예 시간을 정함 |
 | [`base-branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/base-branch.ts) | Run마다 한 번 base branch를 정함 |
 | [`branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/branch.ts) | `agent/<n>`, implement Stage의 slug로 이름 붙인 `agent/<n>-<slug>`, `.worktrees/ticket-<n>`, `.worktrees/base-<commit>` |
@@ -280,7 +280,7 @@ Run과 `init`은 파이프라인 자신의 저장소에서 공개된 가장 높�
 - **결정**: Landing은 merge queue가 아니라, 한 번에 Lane 하나만 들어가는 구간입니다.
 - **이유**: CI를 두 번 치르지 않고도 CI가 판정한 그대로 merge됩니다. GitHub merge queue는 저장소 설정 하나를 Target 준비 상태의 일부로 만들었을 것입니다.
 - **비용**: 느린 CI나 conflict Stage 하나가 다른 모든 Lane의 Landing을 붙잡습니다.
-- **개정**: [사람이 직접 merge하는](./configuration.md#merge) Target은 CI가 초록인 Ticket을 Hand-off하고, merge 없이 Landing을 나옵니다. 사람이 merge할 때까지 Landing을 붙잡고 있으면 모든 Lane이 몇 시간씩 멈추기 때문입니다. 거기서는 Target이 merge 전에 branch를 최신 상태로 맞추도록 요구할 때만 CI가 판정한 그대로 merge됩니다.
+- **개정**: [사람이 직접 merge하는](./configuration.md#merge) Target은 CI가 초록인 Ticket을 Hand-off하고, merge 없이 Landing을 나옵니다. 사람이 merge할 때까지 Landing을 붙잡고 있으면 모든 Lane이 몇 시간씩 멈추기 때문입니다. 거기서는 Target이 merge 전에 branch를 최신 상태로 맞추도록 요구할 때만 CI가 판정한 그대로 merge됩니다. 나중에 파이프라인은 Ticket의 branch에서 Check를 돌리지 않게 되어, 흐름은 verify, rebase, pull request, CI, merge가 되었습니다. 코드 Stage가 이미 전체 테스트를 돌리고 Target의 CI가 같은 명령을 돌리기 때문이고, 그 대가로 CI가 없는 Target은 이제 아무것도 돌려 보지 않은 코드를 merge합니다.
 
 ### [ADR-0006: Stop is a signal, and Ctrl+C stays a kill](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md) {#adr-0006}
 

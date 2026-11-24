@@ -74,8 +74,9 @@ Failure 줄은 무엇이 Ticket을 멈췄는지 말합니다. 그에 따라 할 
 | Stage가 분 한도를 넘겼거나 턴 한도에 닿음 | [`stages`](./configuration.md#stages)에서 그 Stage의 `maxMinutes`나 `maxTurns`를 늘리거나, Ticket을 나누기 |
 | implement가 commit을 남기지 않음 | hand-off 코멘트에서 Stage가 밝힌 이유를 읽고(없다면 transcript를 읽고), Ticket을 더 작게 또는 더 분명하게 고치기 |
 | fix가 새 commit을 남기지 않음 | hand-off 코멘트에서 Stage가 밝힌 이유를 읽고(없다면 transcript를 읽고), 그 이유가 묻는 결정을 내리거나 branch에서 코드를 손으로 고치기 |
-| fix 뒤에도 Check, 기준, CI가 여전히 실패 | 코멘트의 근거를 읽고 branch에서 코드를 손으로 고치기. 기준이라면 다음 행처럼 다시 쓰기 |
+| fix 뒤에도 commit 안 된 변경, 기준, CI가 여전히 실패 | 코멘트의 근거를 읽고 branch에서 코드를 손으로 고치기. 기준이라면 다음 행처럼 다시 쓰기 |
 | fix 뒤에도 기준이 충족되지 않음, 또는 근거 없음 | 코드를 손으로 고치거나, 세션이 코드를 돌려 보거나 읽어서 확인할 수 있게 기준을 다시 쓰기([Acceptance Criteria](./planning.md#acceptance-criteria)) |
+| pull request에서 CI가 돌지 않았고, 충족된 기준이 없음 | CI에 맡긴 기준이 이름 댄 명령을 돌리는 CI를 설정하거나, 세션이 코드를 돌려 보거나 읽어서 확인할 수 있게 그 기준을 다시 쓰기 |
 | CI 시간 초과 | [`ciTimeoutMinutes`](./configuration.md#ci)를 늘리기 |
 | pull request가 충돌 상태 | 할 일 없음. 다음 Run이 다시 rebase하고, 충돌은 conflict Stage가 맡음 |
 | base branch를 pull하지 못함 | main checkout에서 걸리는 것을 치우기([실행하기](./running.md#run)) |
@@ -157,7 +158,7 @@ Hand-off된 Ticket은 네 가지 중 하나로 끝내면 됩니다.
 gh issue edit 8 --remove-label ready-for-human --add-label ready-for-agent   # 돌려주기
 ```
 
-Ticket을 파이프라인에 돌려주려면 라벨을 `ready-for-human`에서 `ready-for-agent`로 바꾸면 됩니다. 다음 Run이 Frontier에서 그 Ticket을 찾아 state file을 읽고, 도달해 있던 곳에서 이어 갑니다. `implemented`까지 갔던 Ticket은 바로 Check로 가니, implement Stage에 두 번 비용을 치르지 않습니다.
+Ticket을 파이프라인에 돌려주려면 라벨을 `ready-for-human`에서 `ready-for-agent`로 바꾸면 됩니다. 다음 Run이 Frontier에서 그 Ticket을 찾아 state file을 읽고, 도달해 있던 곳에서 이어 갑니다. `implemented`까지 갔던 Ticket은 바로 verify로 가니, implement Stage에 두 번 비용을 치르지 않습니다.
 
 넘겼던 Run 때와 달라지는 점이 몇 가지 있습니다.
 
@@ -194,17 +195,17 @@ Release가 하는 일:
 
 ## base branch가 실패할 때의 Release {#release-over-a-failing-base-branch}
 
-Check나 CI가 실패해 파이프라인이 branch와 base branch의 merge-base에서 깨끗한 worktree로 Check 명령을 다시 돌렸는데 그중 하나가 거기서도 실패하면, branch가 들여온 것이 아니라 물려받은 실패입니다([base branch도 함께 실패할 때](./ticket-to-merge.md#a-failure-the-base-branch-shares)). 이때는 rate limit 때처럼 Ticket을 Release하되, 다른 점은 이렇습니다.
+CI가 실패해 파이프라인이 branch와 base branch의 merge-base에서 깨끗한 worktree로 Check 명령을 돌렸는데 그중 하나가 거기서도 실패하면, branch가 들여온 것이 아니라 물려받은 실패입니다([base branch도 함께 실패할 때](./ticket-to-merge.md#a-failure-the-base-branch-shares)). 이때는 rate limit 때처럼 Ticket을 Release하되, 다른 점은 이렇습니다.
 
 - 진행 상황 줄에 ``⏸ `<command>` fails on the base branch``라고 적고, Run의 마지막 줄은 그 명령과 merge-base를 밝힙니다.
 - 상설 Notes 이슈에 merge-base에서의 명령 출력 끝부분과, 그 옆에 branch 자신의 실패를 담은 Note 하나를 올립니다. Ticket 자체에는 코멘트를 달지 않습니다.
-- 다음 Run은 Check 전에 branch를 base branch 위로 rebase합니다.
+- 다음 Run은 verify보다 먼저 branch를 base branch 위로 rebase하고, `#<n> rebased onto <base> first`를 남깁니다.
 
 fix 기회는 썼든 안 썼든 그대로입니다. fix 기회를 이미 쓴 Ticket도 Hand-off가 아니라 Release됩니다. 열려 있던 pull request는 그대로 두고, 다음 Run이 갱신합니다.
 
-무언가를 고치기 전에 Note에서 branch의 몫을 먼저 읽으세요. merge-base와 branch는 같은 명령에 실패했을 뿐, 같은 방식으로 실패했다는 보장은 없습니다. 자기만의 실패를 가진 branch는 base branch가 그 명령을 통과할 때까지 매 Run마다 Release되고, base branch의 실패만 고쳐서는 merge되지 않고 fix Stage에 이를 뿐입니다.
+무언가를 고치기 전에 Note에서 branch의 몫을 먼저 읽으세요. merge-base는 Check 명령에 실패했지만, branch의 CI는 다른 이유로 실패했을 수 있습니다. 자기만의 실패를 가진 branch는 base branch가 Check를 통과할 때까지 매 Run마다 Release되고, base branch의 실패만 고쳐서는 merge되지 않고 fix Stage에 이를 뿐입니다.
 
-base branch에서 Check를 고친 뒤 Run을 시작하세요. Release된 Ticket은 Check 전에 고친 base branch 위로 rebase됩니다. rebase가 충돌하면 conflict Stage로 가고, 해결하지 못하면 Landing에서처럼 fix 기회를 씁니다. base branch를 고치기 전에 Run을 시작하면 Ticket은 다시 Release됩니다.
+base branch에서 Check를 고친 뒤 Run을 시작하세요. Release된 Ticket은 먼저 고친 base branch 위로 rebase됩니다. rebase가 충돌하면 conflict Stage로 가고, 해결하지 못하면 Landing에서처럼 fix 기회를 씁니다. base branch를 고치기 전에 Run을 시작하면 Ticket은 다시 Release됩니다.
 
 ## GitHub나 remote 장애로 인한 Release {#release-over-a-github-or-remote-failure}
 
@@ -271,7 +272,7 @@ kill된 Run은 아무것도 놓아주지 않습니다. 그 Ticket들은 claim을
 
 Stranded Ticket은 Frontier가 내놓는 것보다 먼저 빈 Lane을 채웁니다([실행하기](./running.md#run)). 어느 Host든 sweep한 Run이 이어받으며, 어느 사본에서 출발할지는 [worktree로 이어받기](#resuming-into-a-worktree)에서 정합니다. 범위를 좁힌 Run은 받은 Ticket 가운데 Stranded Ticket인 것만 이어받습니다.
 
-그래도 kill은 Stop보다 비쌉니다. Stage가 아직 commit하고 push하지 못한 것은 사라집니다. rebase 도중에 멈춘 worktree는 Check가 판정하기 전에 rebase를 abort해 branch tip으로 되돌립니다.
+그래도 kill은 Stop보다 비쌉니다. Stage가 아직 commit하고 push하지 못한 것은 사라집니다. rebase 도중에 멈춘 worktree는 무엇이 판정하기도 전에 rebase를 abort해 branch tip으로 되돌립니다.
 
 ## state file {#the-state-file}
 
@@ -307,10 +308,10 @@ Ticket이 어디까지 갔는지 기록이 없으면, Release되거나 stranded�
 | `title` | implement나 fix Stage가 branch 전체에 대해 마지막으로 준 제목. pull request 제목이 됨 |
 | `body` | 두 Stage가 마지막으로 준 pull request 본문. `Closes #<n>` 아래에 들어감 |
 | `problem`, `solution` | 두 Stage가 마지막으로 준 문제와 해결. squash commit 본문이 이것으로 시작함 |
-| `rebaseFirst` | base branch 실패로 Release된 뒤에만 있음. Check 전에 base branch 위로 rebase할 것 |
+| `rebaseFirst` | base branch 실패로 Release된 뒤에만 있음. 먼저 base branch 위로 rebase할 것 |
 | `runId`, `version`, `updatedAt` | 어느 Run과 어느 [버전](./internals.md#versions)이 언제 썼는지 |
 
-상태는 둘뿐입니다. implement Stage 다음의 모든 것(Check, verify, rebase, pull request, CI, merge)은 `implemented`에서 이어받은 Run이 Check부터 다시 돌립니다.
+상태는 둘뿐입니다. implement Stage 다음의 모든 것(verify, rebase, pull request, CI, merge)은 `implemented`에서 이어받은 Run이 verify부터 다시 돌립니다.
 
 파일은 claim과 함께 쓰이고, Ticket이 나아갈 때마다 갱신됩니다. Ticket이 merge되거나, 이슈가 닫히거나, branch가 여기 worktree에도 remote에도 없을 때, 그리고 파이프라인의 작업이 남지 않는 [setup에서의 Hand-off](#when-a-hand-off-does-less)에서 사라집니다.
 

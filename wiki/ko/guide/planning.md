@@ -54,9 +54,9 @@ The command must refuse bad input.              ← 아님: 산문
 1. [ ] a numbered item                          ← 아님: 불릿이 없음
 ```
 
-파이프라인이 체크되지 않은 박스에 본문부터, 이어서 코멘트 순서대로 번호를 매기고, verify Stage는 그 번호로 기준마다 `met`, `unmet`, `unverifiable` 중 하나로 판정합니다([Ticket 하나가 merge되기까지](./ticket-to-merge.md#the-verify-stage-and-its-verdict)). 박스 아래 들여 쓴 줄 가운데 박스가 아닌 줄은 그 기준에 딸리므로, 하위 목록이나 코드 블록으로 그 줄의 뜻을 풀어 쓸 수 있습니다. 안쪽에 들여 쓴 박스는 따로 번호를 받는 기준입니다.
+파이프라인이 체크되지 않은 박스에 본문부터, 이어서 코멘트 순서대로 번호를 매기고, verify Stage는 그 번호로 기준마다 `met`, `unmet`, `unverifiable`, `ci` 중 하나로 판정합니다([Ticket 하나가 merge되기까지](./ticket-to-merge.md#the-verify-stage-and-its-verdict)). 박스 아래 들여 쓴 줄 가운데 박스가 아닌 줄은 그 기준에 딸리므로, 하위 목록이나 코드 블록으로 그 줄의 뜻을 풀어 쓸 수 있습니다. 안쪽에 들여 쓴 박스는 따로 번호를 받는 기준입니다.
 
-기준은 세션이 코드를 돌려 보거나 읽어서 확인할 수 있게 쓰세요. 사람의 눈이 필요한 기준(스크린샷, 느낌)은 `unverifiable`로 돌아옵니다.
+기준은 세션이 코드를 돌려 보거나 읽어서 확인할 수 있게 쓰세요. 사람의 눈이 필요한 기준(스크린샷, 느낌)은 `unverifiable`로 돌아옵니다. CI나 몇몇 명령이 통과하기만을 요구하는 기준("The checks pass." 같은 것)은 pull request의 워크플로가 그 명령을 돌리면 `ci`로 돌아오고, CI가 통과하면 merge 때 체크됩니다. 그런 워크플로가 없으면 세션이 그 명령을 직접 돌립니다.
 
 ## blocker {#blockers}
 

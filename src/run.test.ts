@@ -18,7 +18,27 @@ import {
   FakeWorkspace,
   stageResult,
 } from "./testing/fakes.js";
+import { Hold } from "./testing/hold.js";
 import { settle } from "./testing/settle.js";
+
+/** CI that went red on a Ticket's pull request, which is what fails a branch now. */
+const RED_CI = { state: "failed", summary: "test failed", excerpt: "test\n1 test failed" } as const;
+
+/**
+ * Park one Ticket's verify Stage, and only that one, until the test lets go,
+ * then answer it with `result`: the other Lanes' verify Stages run as usual.
+ */
+function verifyOf(ticket: number, result: ReturnType<typeof stageResult>): Hold {
+  const hold = new Hold();
+  const run = runner.run.bind(runner);
+  runner.run = async (request) => {
+    if (request.stage !== "verify" || !request.cwd.endsWith(`ticket-${ticket}`)) return run(request);
+    runner.requests.push(request);
+    await hold.reached();
+    return result;
+  };
+  return hold;
+}
 
 function config(): Config {
   return {
@@ -303,7 +323,7 @@ describe("candidates a guard rejected", () => {
 describe("a Ticket that fails", () => {
   beforeEach(() => {
     for (const number of [4, 5]) tracker.addIssue({ number });
-    workspace.failCheck("npm test", "1 test failed");
+    tracker.ci = RED_CI;
   });
 
   it("does not stop the Run", async () => {
@@ -371,8 +391,7 @@ describe("a Ticket another Host left", () => {
 
   it("is resumed through the Frontier from what it reached when handed off there and handed back", async () => {
     tracker.addIssue({ number: 4 });
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
-    workspace.failCheckOnce("npm test", "FAIL src/a.test.ts");
+    tracker.queueCi(RED_CI);
     expect((await processRun(pipeline())).outcomes).toEqual([
       expect.objectContaining({ outcome: "handed-off", ticket: 4 }),
     ]);
@@ -384,7 +403,7 @@ describe("a Ticket another Host left", () => {
     expect(result.outcomes).toEqual([
       expect.objectContaining({ outcome: "merged", ticket: 4, pullRequest: 100 }),
     ]);
-    expect(runner.stages()).toEqual(["implement", "fix", "verify"]);
+    expect(runner.stages()).toEqual(["implement", "verify", "fix", "verify"]);
     expect(workspace.calls).not.toContain("createWorktree:agent/4");
   });
 });
@@ -484,12 +503,11 @@ describe("which Release a Run ends on when its Releases differ", () => {
 
   it("stays on a failing base branch when the rate limit came second", async () => {
     for (const number of [4, 5]) tracker.addIssue({ number });
-    // #4's Check fails on its branch and at the merge-base alike; #5's passes
-    // and waits at verify until #4 has stopped the Run.
-    workspace.failCheckOnce("npm test", "FAIL src/date.test.ts");
+    // #4's CI goes red and its merge-base fails the Check; #5 waits at verify
+    // until #4 has stopped the Run, and the rate limit stops it there.
+    tracker.queueCi(RED_CI);
     workspace.failBaseCheck("npm test", "FAIL src/date.test.ts");
-    runner.queue("verify", { ok: false, failure: "rate-limited", limitResetsAt: RESETS_AT });
-    const verifying = runner.holds("verify");
+    const verifying = verifyOf(5, stageResult({ ok: false, failure: "rate-limited", limitResetsAt: RESETS_AT }));
 
     const run = processRun(pipeline(2));
     await verifying.started();
@@ -585,10 +603,9 @@ describe("a Ticket whose API key ran out of budget", () => {
 
   it("leaves a failing base branch that came first where it is", async () => {
     for (const number of [4, 5]) tracker.addIssue({ number });
-    workspace.failCheckOnce("npm test", "FAIL src/date.test.ts");
+    tracker.queueCi(RED_CI);
     workspace.failBaseCheck("npm test", "FAIL src/date.test.ts");
-    runner.queue("verify", { ok: false, failure: "out-of-budget" });
-    const verifying = runner.holds("verify");
+    const verifying = verifyOf(5, stageResult({ ok: false, failure: "out-of-budget" }));
 
     const run = processRun(pipeline(2, "api-key"));
     await verifying.started();
@@ -618,7 +635,7 @@ describe("a Ticket the rate limit released on a Run on the API key", () => {
 describe("a Ticket released over a failing base branch", () => {
   beforeEach(() => {
     for (const number of [4, 5]) tracker.addIssue({ number });
-    workspace.failCheck("npm test", "FAIL src/date.test.ts");
+    tracker.ci = RED_CI;
     workspace.failBaseCheck("npm test", "FAIL src/date.test.ts");
   });
 
@@ -866,7 +883,7 @@ describe("stranded Tickets", () => {
 
   it("carries on into the Frontier when a resumed Ticket is handed off", async () => {
     stranded(4);
-    workspace.failCheck("npm test", "1 test failed");
+    tracker.ci = RED_CI;
     tracker.addIssue({ number: 6 });
 
     const result = await processRun(pipeline());
@@ -1163,7 +1180,7 @@ describe("Lanes", () => {
 
   it("offers a Ticket it has already taken to no second Lane", async () => {
     for (const number of [4, 5]) tracker.addIssue({ number });
-    workspace.failCheck("npm test", "1 test failed");
+    tracker.ci = RED_CI;
     // A hand-off leaves the Ticket unassigned, so only the relabel keeps it off
     // the next Frontier — and with Lanes there is a Frontier per refill.
     tracker.removeLabel = async () => {};

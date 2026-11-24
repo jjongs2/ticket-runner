@@ -27,7 +27,7 @@ description: Run 시작하기, Lane 주기, API 키로 과금하기, 지정한 T
 |---|---|---|
 | 지켜보는 사람 | 나. 내 세션에서 보면서 방향을 틀 수 있음 | 없음. 끝난 뒤 요약과 보드를 읽음 |
 | 일의 단위 | Spec 하나 전체를 세션 하나에서 | Ticket 하나. branch와 pull request가 Ticket마다 따로 |
-| 게이트 | 스킬이 밟는 단계, 그다음 나의 검토 | Ticket마다 Check, verify Stage, CI |
+| 게이트 | 스킬이 밟는 단계, 그다음 나의 검토 | Ticket마다 verify Stage와 pull request의 CI |
 | 끝나는 모습 | 세션이 끝나면 Spec의 작업이 내 검토를 기다림 | Ticket마다 base branch에 merge되거나 사람에게 넘어감 |
 | 이어 하기 | 어디까지 했는지 보드에 남는 기록이 없어 남은 일은 내가 가려내야 함 | [Stranded Ticket](./stopping-and-resuming.md)을 다음 Run이 어느 Host에서든 이어 감 |
 | 보드에 남는 표시 | 작업하는 동안 없음 | Run이 맡은 동안 `in-progress`와 담당자 |
@@ -169,7 +169,7 @@ Frontier blocked.
 |---|---|
 | `merged` | merge됨. pull request 번호가 붙음 |
 | `handed` | 사람에게 Hand-off됨. 멈춘 Stage와 이유가 붙음. `merge · left to a human, as this Target merges by hand`는 [사람이 직접 merge하는](./configuration.md#merge) Target에서 CI가 초록인 Ticket. 줄 끝이 `hand-off cut short · GitHub failure`(또는 `remote unreachable`)라면 [그 장애로 중간에 끊긴](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) Hand-off이니 손으로 마무리해야 함 |
-| `released` | 해당 Stage에서 `rate limit`(`--api-key` Run이면 `API rate limit`), `API failure`, `out of API budget`으로, `checks`나 `ci`에서 `failing base branch`로, 또는 어느 단계에서든 `GitHub failure`나 `remote unreachable`로 Release됨. 그 Ticket을 두고 사람이 할 일은 없음 |
+| `released` | 해당 Stage에서 `rate limit`(`--api-key` Run이면 `API rate limit`), `API failure`, `out of API budget`으로, `ci`에서 `failing base branch`로, 또는 어느 단계에서든 `GitHub failure`나 `remote unreachable`로 Release됨. 그 Ticket을 두고 사람이 할 일은 없음 |
 | `skipped` | 이유와 함께 넘어감([guard](./planning.md#guards), 또는 위의 표) |
 | `billed` | 위 Ticket의 Stage가 `apiKeySource`로 알린 과금처가 머리 줄과 다름. 예를 들어 Host 설정의 `apiKeyHelper`가 준 키인데, 이것은 환경 변수로 뺄 수 없음. 그 Stage가 금액을 알렸으면 `· $4.15`처럼 끝에 붙고, 머리 줄의 금액에는 들어가지 않음 |
 | `noted` | 바로 윗줄이 남긴 [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)와 간 곳. base branch 실패에 대한 파이프라인 자신의 Note면 `from #<n> pipeline`. 이미 있는 이슈(열려 있던 Notes 이슈 포함)면 `comment`, Notes 이슈를 새로 연 Note 하나만 `new` |
@@ -206,11 +206,11 @@ ticket-runner 0.5.2 run 2026-09-17T09-00-00-000 · 1 lane
 
 #4 claimed
 #4 implemented · agent/4-planning-guards
-#4 verified · 6 met · 1 unverifiable
+#4 verified · 3 met · 1 to CI
 #4 merged · PR #12
 ```
 
-첫 줄은 요약의 머리처럼 버전을 적습니다. 그래서 요약을 내기 전에 kill된 Run의 로그도 어느 버전이 돌았는지 말해 줍니다. 새 버전이 나왔다는 알림처럼 첫 줄에 딸린 알림은 그 바로 뒤에 오고, 첫 Ticket 줄 앞에는 빈 줄이 하나 옵니다. Stage가 도는 동안이나 CI를 기다리는 동안에는 아무것도 출력하지 않고, 이 시간은 한 시간이 될 수도 있습니다. Stage 자신의 출력은 아래의 `.stdout` 파일에 있습니다. 좁힌 Run이면 첫 줄에 지정한 Ticket이 덧붙습니다. Ticket은 `agent/<n>`에서 claim되므로 `claimed`는 branch를 적지 않고, implement Stage가 branch 이름을 지은 뒤 `implemented`가 그 이름을 적습니다([worktree와 branch](./ticket-to-merge.md#the-worktree-and-branch)). branch가 `agent/<n>`로 남는 Ticket은 그 앞에 이유를 적습니다. `#4 keeps agent/4 · …`. 재개한 Ticket은 `claimed` 대신 `resumed from <state>`라고 출력하고, implement Stage 뒤에서 재개하면 그 뒤에 branch를 적습니다. Run과 다른 곳에 과금된 Stage는 끝나는 즉시 알려 줍니다. `#4 implement ran on apiKeySource apiKeyHelper, not the subscription (none)`. 경고와 거절은 stderr로 갑니다.
+첫 줄은 요약의 머리처럼 버전을 적습니다. 그래서 요약을 내기 전에 kill된 Run의 로그도 어느 버전이 돌았는지 말해 줍니다. 새 버전이 나왔다는 알림처럼 첫 줄에 딸린 알림은 그 바로 뒤에 오고, 첫 Ticket 줄 앞에는 빈 줄이 하나 옵니다. Stage가 도는 동안이나 CI를 기다리는 동안에는 아무것도 출력하지 않고, 이 시간은 한 시간이 될 수도 있습니다. Stage 자신의 출력은 아래의 `.stdout` 파일에 있습니다. 좁힌 Run이면 첫 줄에 지정한 Ticket이 덧붙습니다. Ticket은 `agent/<n>`에서 claim되므로 `claimed`는 branch를 적지 않고, implement Stage가 branch 이름을 지은 뒤 `implemented`가 그 이름을 적습니다([worktree와 branch](./ticket-to-merge.md#the-worktree-and-branch)). branch가 `agent/<n>`로 남는 Ticket은 그 앞에 이유를 적습니다. `#4 keeps agent/4 · …`. `verified`는 verify 줄과 같이 읽습니다. 충족된 기준 수, 그리고 있으면 `· <c> to CI`와 `· <u> unverifiable`입니다. 재개한 Ticket은 `claimed` 대신 `resumed from <state>`라고 출력하고, implement Stage 뒤에서 재개하면 그 뒤에 branch를 적습니다. Run과 다른 곳에 과금된 Stage는 끝나는 즉시 알려 줍니다. `#4 implement ran on apiKeySource apiKeyHelper, not the subscription (none)`. 경고와 거절은 stderr로 갑니다.
 
 터미널에서는 이 줄들과 요약의 `#4`, `PR #12`가 GitHub의 해당 이슈나 pull request로 가는 링크가 됩니다. 링크를 지원하는 터미널에서만 그렇습니다. 그리고 줄마다 읽는 사람에게 바라는 바에 따라 색이 붙습니다.
 
@@ -261,7 +261,7 @@ Host 준비는 클라우드 환경의 setup 스크립트가 설치하지 않은 
 1. **파이프라인.** setup 스크립트가 설치한 사본이 있으면 버전과 상관없이 그대로 씁니다. 없으면 Target의 conventions 문서에 찍힌 버전을 설치합니다. 찍힌 버전이 없으면 아무것도 설치하지 않고, 워크스테이션에서 `init`을 실행해 달라고 합니다.
 2. **`mattpocock-skills` 플러그인**, 공식 마켓플레이스에서
 3. **`gh`**, apt에서
-4. **Target 자체의 의존성**, main checkout에. 모든 worktree의 Check가 거기서 찾아 씁니다.
+4. **Target 자체의 의존성**, main checkout에. 어느 worktree에서든 Check를 돌리는 Stage가 거기서 찾아 씁니다.
 
 Run이 Ticket을 끝낼 때마다, 그리고 거절이나 경고가 나올 때마다 보고하고, 진행 상황 줄은 전하지 않습니다. Run이 끝나면 요약, 종료 코드의 뜻, Run이 남긴 Note 수를 전합니다. Run이 요약 없이 끝나면 lock을 풀어 달라고 하지 않고 다시 시작하자고 제안합니다(아래 참고).
 

@@ -26,8 +26,9 @@ Run은 무인으로 돌기 때문에, 빠진 게 있다면 Ticket 도중이 아�
 | Claude 요금제로 로그인한 `claude` | Run을 [`--api-key`](./running.md#api-key)로 시작하지 않는 한, Stage는 그 로그인으로 돌고 셸이 export한 `ANTHROPIC_API_KEY`를 보지 못함 | – |
 | Ticket이 계획되어 있는 GitHub 저장소 | Ticket은 보드에서 옴. [Planning](./planning.md) 참고 | – |
 | 이슈 트래커로 GitHub Issues를 골라 저장소에서 한 번 실행해 둔 `/setup-matt-pocock-skills` | 이 설정이 있어야 계획용 스킬이 Spec과 Ticket을 GitHub 이슈로 만듦. 실행하면 묻고 나서 `docs/agents/issue-tracker.md`와 `CLAUDE.md`의 `## Agent skills` 블록을 쓰므로, 이 둘이 있으면 돌린 것 | – |
-| 파이프라인이 직접 돌릴 Check | `package.json`의 `test`, `typecheck` 스크립트, [`checks`](./configuration.md#checks)에 적은 명령, 또는 하나도 없다는 뜻의 `"checks": []` | `init`이 알려 주고, 없으면 `run`이 거절 |
-| main checkout에 설치된 Target 자체의 의존성 | Ticket의 worktree는 거기 있는 의존성을 쓰고, 따로 설치해 주는 것은 없음. 없으면 merge-base에서도 모든 Check가 실패하고, Run은 [실패하는 base branch](./stopping-and-resuming.md#release-over-a-failing-base-branch)로 끝남 | – |
+| Check 명령: `package.json`의 `test`, `typecheck` 스크립트, [`checks`](./configuration.md#checks)에 적은 명령, 또는 하나도 없다는 뜻의 `"checks": []` | Stage 프롬프트가 이 명령의 이름을 대고, CI가 실패하면 파이프라인이 branch와 base branch의 merge-base에서 이 명령을 돌려 branch가 물려받은 실패인지 들여온 실패인지 가림 | `init`이 알려 주고, 없으면 `run`이 거절 |
+| Target의 pull request에서 도는 CI | 파이프라인은 Ticket의 branch에서 Check를 돌리지 않음. merge를 막는 것은 사람이 설정해 둔 pull request의 CI이고, CI가 없는 pull request는 아무것도 돌려 보지 않은 코드를 merge함 | – |
+| main checkout에 설치된 Target 자체의 의존성 | Ticket의 worktree는 거기 있는 의존성을 쓰고, 따로 설치해 주는 것은 없음. 없으면 Stage가 Check를 돌리지 못하고, merge-base에서도 모든 Check가 실패하므로, CI가 실패하면 Run은 [실패하는 base branch](./stopping-and-resuming.md#release-over-a-failing-base-branch)로 끝남 | – |
 
 merge는 base branch를 main checkout으로 pull하기만 합니다. 그러니 의존성을 추가하는 Ticket이 merge된 뒤에는 다음 Run 전에 거기서 다시 설치하세요.
 
@@ -142,7 +143,7 @@ Checked:
   ✓ `gh` is authenticated
   ✓ `claude` runs
   ✓ the `mattpocock-skills` plugin is installed
-  ✗ no Check is configured or inferable — name one in `checks` in ticket-runner.json, or add `test` and `typecheck` scripts to package.json
+  ✗ no Check is configured or inferable — the Stage prompts name the Check commands and a red CI is graded with them at a merge-base; name one in `checks` in ticket-runner.json, or add `test` and `typecheck` scripts to package.json
 
 Not ready: 1 item is yours to put right.
 ```
@@ -191,7 +192,7 @@ warning: This Target's `docs/agents/pipeline-conventions.md` was left by 0.4.0, 
 준비 상태 확인 다음에 거절이 두 가지 더 있습니다.
 
 - **checkout에 남은 state file.** 초기 파이프라인은 Ticket의 재개 상태를 `.ticket-runner/state/`에 뒀는데, 지금은 Target의 remote에 두고, 옮겨 주는 것은 없습니다. 이 디렉터리에 state file이 남아 있으면 Run은 해당 Ticket을 나열하며 거절합니다. 그 파일을 쓴 버전으로 Ticket을 마무리하거나 사람에게 넘긴 다음, 디렉터리를 지우세요.
-- **Check 없음.** 설정하거나 추론할 수 있는 Check 명령이 없으면, 검사하지 않은 코드를 merge하느니 Run을 거절합니다. Check가 없는 Target은 [`"checks": []`](./configuration.md#checks)를 적고, 그러면 Run은 경고와 함께 시작합니다.
+- **Check 없음.** 설정하거나 추론할 수 있는 Check 명령이 없으면 Run을 거절합니다. Stage 프롬프트가 Check 명령의 이름을 대고, CI가 실패하면 merge-base에서 이 명령으로 판정하기 때문입니다. Check가 없는 Target은 [`"checks": []`](./configuration.md#checks)를 적고, 그러면 Run은 경고와 함께 시작합니다.
 
 ## `remove`로 걷어 내기 {#take-it-out-with-remove}
 

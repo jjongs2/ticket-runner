@@ -1,11 +1,11 @@
 ---
 title: From Ticket to merge
-description: The path one Ticket takes through a Run, from the claim through the Stages, the Checks, the verdict and the fix budget to the Landing, and what the board is told on the way.
+description: The path one Ticket takes through a Run, from the claim through the Stages, the verdict and the fix budget to the Landing, and what the board is told on the way.
 ---
 
 # From Ticket to merge
 
-Nobody watches a Run, so nothing may merge on a single session's word. Every [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) goes through the same gates in the same order: deterministic Checks, a second session that tries to prove the work wrong, and CI. A failure a fresh session could mend buys exactly one fix Stage; anything else goes to a human. The Tickets of a Run are implemented side by side, but they land one at a time, so what CI graded is what reaches the base branch. A Target that [merges by hand](./configuration.md#merge) has each green Ticket handed off instead, and a human merges it.
+Nobody watches a Run, so nothing may merge on a single session's word. Every [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) goes through the same gates in the same order: a second session that tries to prove the work wrong, and the pull request's CI, which the Target sets up. The pipeline runs no Check on the branch itself. A failure a fresh session could mend buys exactly one fix Stage; anything else goes to a human. The Tickets of a Run are implemented side by side, but they land one at a time, so what CI graded is what reaches the base branch. A Target that [merges by hand](./configuration.md#merge) has each green Ticket handed off instead, and a human merges it.
 
 This page follows one Ticket from its claim to its merge. What happens when it stops short, whether by a Hand-off, a Release, a Stop or a Run that never came back, is on [Hand-offs, stopping and resuming](./stopping-and-resuming.md).
 
@@ -13,8 +13,7 @@ This page follows one Ticket from its claim to its merge. What happens when it s
 |---|---|---|
 | Claim | Guards, state file, assign, `ready-for-agent` → `in-progress` | the pipeline |
 | Worktree | `agent/<n>` in `.worktrees/ticket-<n>`, named `agent/<n>-<slug>` after the implement Stage | git, and the implement Stage's slug |
-| implement Stage | `/mattpocock-skills:implement` in the worktree | an agent |
-| Checks | Nothing uncommitted, then each Check command | exit codes |
+| implement Stage | `/mattpocock-skills:implement` in the worktree, then nothing left uncommitted | an agent |
 | verify Stage | Adversarial grading of the Acceptance Criteria, and of defects the branch made | the pipeline, from the verdict |
 | fix Stage | One fresh session given the failure, once per Ticket | the fix budget |
 | Landing | Rebase, conflict Stage, pull request, CI, squash merge | one Lane at a time |
@@ -26,21 +25,19 @@ flowchart TD
     G -->|refuse| S["Skipped"]
     C --> W["Worktree and branch"]
     W --> I["implement Stage"]
-    I --> K["Checks"]
-    K --> V["verify Stage"]
+    I --> V["verify Stage"]
     V --> R["Rebase"]
     R -->|conflict| X["conflict Stage"]
-    X -->|rebased| K2["Checks again"]
     R -->|clean| P["Pull request"]
-    K2 --> P
+    X -->|rebased| P
     P --> CI["Wait for CI"]
     CI -->|green| M["Squash merge"]
     CI -->|"green, merge off"| H
-    K -->|"fixable, budget unspent"| F["fix Stage"]
+    I -->|"uncommitted work, budget unspent"| F["fix Stage"]
     V -->|"fixable, budget unspent"| F
-    X -->|"still conflicted, budget unspent"| F
+    X -->|"still conflicted or uncommitted, budget unspent"| F
     CI -->|"red, budget unspent"| F
-    F -->|committed| K
+    F -->|committed| V
     F -->|no commits| H["Hand-off"]
     O["Any other failure, or a second one"] --> H
 ```
@@ -125,50 +122,30 @@ The implement skill reads the Ticket, builds it and reviews it. Once the review'
 - A branch with no commits beyond the base branch is a Hand-off: an agent that gave up silently leaves nothing to grade. The hand-off comment quotes the reason the Stage gave in `noCommitReason`, when it gave one.
 - Otherwise the branch is named and pushed, the Run prints `#<n> implemented · <branch>`, and the state file moves to `implemented`, so no later Run pays for this Stage again.
 
-## The Checks
+## Nothing uncommitted
 
-Two gates, run by the pipeline itself rather than by an agent:
+After an implement or fix Stage, a worktree holding changes no commit carries fails, naming every path, and spends the fix budget before anything grades the branch: the Stage's row reads `❌ uncommitted work` in place of `✅ committed`. Gitignored files, such as installed dependencies, do not count. The same guard runs on a resumed Ticket's worktree, as a `setup` row, and after a conflict Stage, before the pull request.
 
-1. **Nothing uncommitted.** A worktree holding changes no commit carries fails, naming every path. Gitignored files, such as installed dependencies, do not count.
-2. **The Check commands**, in order, each through a shell in the worktree, each under `checkTimeoutMinutes` (default 15). The first failure stops the rest. A command killed at the limit is reported as timed out, with a line appended to its output saying it hung rather than failed.
-
-The commands are [`checks`](./configuration.md#checks). Both failures spend the fix budget. An empty `checks`, which only `"checks": []` written in the config allows, runs nothing, so the row reads `⚠️ no checks` rather than `✅ passed`, here and after a conflict Stage alike.
-
-### A failure the base branch shares
-
-A test on the base branch that starts failing, one that reads the wall clock say, fails on every branch at once. Charged to each Ticket, it costs every one its fix budget, and each fix Stage mends it differently in its own pull request. So before a failure is charged, the pipeline asks whether the branch brought it or inherited it:
-
-| What failed | Run at the merge-base |
-|---|---|
-| A Check command | that command |
-| CI on the pull request | every Check command, stopping at the first that fails |
-
-The merge-base, as the remote holds it, is checked out clean, and the command runs there under the same `checkTimeoutMinutes`, once per Run however many Lanes fail on it. Nothing is installed there: the command finds its dependencies in the main checkout, as a Ticket's worktree does, so a command that needs an install or a build step of its own fails there too, and the Note's output shows why.
-
-| The merge-base | Progress cell | Result |
-|---|---|---|
-| passes | ``❌ `<command>` failed``, or CI's `❌ failed` | Spends the fix budget, as above |
-| fails too | ``⏸ `<command>` fails on the base branch`` | A Release; the budget stays as it was, spent or not |
-| could not be checked out or run | as if it passed | Spends the fix budget, and the Run log says why |
-
-The Release posts the pipeline's own Note on the standing Notes issue, naming the command and quoting the tail of its output, once per Run and merge-base commit however many Tickets it releases. Only the command is compared, so a branch that fails it differently is released all the same; the Note quotes the branch's own failure beside the merge-base's, marked as the branch's: the tail of the failing Check's output, or for CI the failing jobs' logs a fix Stage would have been handed. It is the failure of the Ticket that posted the Note; a Ticket released later over the same commit adds nothing. What to do next is on [Release over a failing base branch](./stopping-and-resuming.md#release-over-a-failing-base-branch).
+The pipeline runs no [Check](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) on the branch, after a Stage or when a Run resumes a Ticket: verify starts once the code Stage's work is pushed. The implement and fix Stages are told to run only the tests their change touches while they work and the full Checks once after committing, but nothing grades the branch with them. What gates the merge is the pull request's [CI](#ci-wait-and-grace-period), which the Target's owner sets up. The commands, [`checks`](./configuration.md#checks), are what the Stage prompts name and what grades a red CI at the branch's merge-base ([below](#a-failure-the-base-branch-shares)). A Target with no CI merges with its `ci` row reading `⚠️ no checks` or `⚠️ no workflow runs`, so nothing ran the code it merges.
 
 ## The verify Stage and its verdict
 
-No human reviews the code before it merges, and the session that wrote it is the last one to trust on whether it works. So a fresh session, with no plugin skill, tries to prove each Acceptance Criterion is **not** met. The pipeline lists the Ticket's unticked criteria by number, each with the indented lines under its box ([Planning the work](./planning.md#acceptance-criteria)), and the session runs the code, may write throwaway tests, and must not commit. A criterion that cannot be met without overturning a documented decision or another criterion is `unmet`, with evidence saying a human decision is needed. An `unmet` criterion's evidence states the failure: where it sits, what was run or read, what was expected, what came back, and the counterexample. It proposes no fix, though it may quote a limit the Ticket, a documented decision or another criterion sets, naming where it comes from. Its scratch files are discarded afterwards, so they never reach the pull request.
+No human reviews the code before it merges, and the session that wrote it is the last one to trust on whether it works. So a fresh session, with no plugin skill, tries to prove each Acceptance Criterion is **not** met. The pipeline lists the Ticket's unticked criteria by number, each with the indented lines under its box ([Planning the work](./planning.md#acceptance-criteria)), and the session runs the code, may write throwaway tests, and must not commit. Where Check commands are configured, it is told the pipeline does not run them and not to run them to grade the branch, but to spend its turns on targeted tests and probes. A criterion that cannot be met without overturning a documented decision or another criterion is `unmet`, with evidence saying a human decision is needed. An `unmet` criterion's evidence states the failure: where it sits, what was run or read, what was expected, what came back, and the counterexample. It proposes no fix, though it may quote a limit the Ticket, a documented decision or another criterion sets, naming where it comes from. Its scratch files are discarded afterwards, so they never reach the pull request.
 
 It also grades the branch itself. A defect the branch introduced, or one in code it added, shown with the evidence an `unmet` criterion needs, goes in the verdict's `defects` rather than a Note, unless the Ticket leaves it out of scope or a documented decision accepts it. The session is shown the Notes this Ticket's implement and fix Stages wrote in the Run, so such a defect among them is graded too. Anything else it finds leaves the session as a [Note](#notes).
 
-The **verdict** answers each criterion by its number, `met`, `unmet` or `unverifiable`, with evidence, and lists the defects of the branch. The agent's own pass or fail is advisory; the pipeline decides for itself: **no criterion unmet, no defect of the branch, and at least one criterion met.** Wherever a criterion is shown afterwards, in the fix and retry verify prompts, the hand-off and the squash commit, it is its checkbox line as the Ticket reads, never the verdict's copy.
+The **verdict** answers each criterion by its number, `met`, `unmet`, `unverifiable` or `ci`, with evidence, and lists the defects of the branch. The agent's own pass or fail is advisory; the pipeline decides for itself: **no criterion unmet, no defect of the branch, and at least one criterion `met` or `ci`.** Wherever a criterion is shown afterwards, in the fix and retry verify prompts, the hand-off and the squash commit, it is its checkbox line as the Ticket reads, never the verdict's copy.
 
 | Verdict | Progress cell | Result |
 |---|---|---|
-| Passes | `✅ <k> met · <v> unverifiable` | On to the Landing |
+| Passes | `✅ <k> met`, followed by `· <c> to CI` and `· <u> unverifiable` when there are any | On to the Landing |
 | Some `unmet` | `❌ <u> unmet` | Spends the fix budget; the fix Stage gets each unmet criterion with its evidence |
 | A defect the branch made | `❌ <d> defects`, or `❌ <u> unmet · <d> defects` | As `unmet`: spends the fix budget, and the fix Stage gets each defect with its evidence |
 | A listed number left out, answered twice, or one answered that was not listed | `❌ misnumbered` | Hand-off: it has not graded the Ticket |
 | All `unverifiable` | `❌ no evidence` | Hand-off: there is nothing to merge on |
 | Missing or malformed | `❌ no verdict` | Hand-off |
+
+**A criterion left to CI.** A criterion that asks for nothing but the pull request's CI, or some commands, to pass, such as "The checks pass.", is answered `ci` when a workflow under `.github/workflows/` runs on this pull request, its triggers and `paths` filters admitting the branch's changes, and runs every command the criterion names, whole or split across jobs; its evidence names the workflow and its steps. GitHub counts a skipped job as passed, so a workflow whose `paths` filter skips the branch is not one that runs it. Otherwise the session grades the criterion itself, running the commands it names. A `ci` criterion is ticked once CI passes. When the wait for CI ends in `⚠️ no checks` or `⚠️ no workflow runs`, it stays unticked and is named wherever an unverifiable criterion is, and a Ticket with no `met` criterion is then handed off, since no criterion has evidence to merge on.
 
 A verify after a fix for unmet criteria or defects gets the first verdict's unmet criteria and defects with their evidence, and is told such a criterion is met only when that counterexample is gone and the whole criterion holds. A defect it finds in the fix's own code is a Hand-off like any second failure, so the gate cannot loop.
 
@@ -180,9 +157,7 @@ Only a defect a fresh session could mend spends the budget:
 
 | Failure | At | Spends the budget? |
 |---|---|---|
-| Changes no commit carries | checks | Yes |
-| A Check failed or timed out | checks | Yes |
-| A Check failed that the merge-base fails too | checks | No, a Release |
+| Changes no commit carries | implement, fix, rebase after a conflict Stage, or setup on a resumed Ticket | Yes |
 | A criterion `unmet` | verify | Yes |
 | A defect the branch made | verify | Yes |
 | The conflict Stage did not finish the rebase | rebase | Yes |
@@ -196,11 +171,12 @@ Only a defect a fresh session could mend spends the budget:
 | The base branch could not be pulled | rebase | No, Hand-off |
 | Pushing or opening the pull request failed | pr | No, Hand-off |
 | CI timed out or found conflicting | ci | No, Hand-off |
+| No check ran on the pull request, and no criterion is `met` | ci | No, Hand-off |
 | The merge failed | merge | No, Hand-off |
 | A rate limit, a transient API failure or an API key out of budget, anywhere | any | No, a Release |
 | GitHub failing on its own side, or git unable to reach or log in to the remote, anywhere | any | No, a [Release](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) |
 
-After a fix Stage, the Ticket starts again at the Checks. Every gate grades the fix, the verify Stage included, so a fix is held to the same bar as the first attempt. A fix Stage whose branch did not grow is a Hand-off straight away: re-grading an untouched branch could only fail the same way. A squashed or amended branch counts as not grown. Its hand-off comment carries the evidence the fix Stage was sent in with, and quotes the reason the Stage gave in `noCommitReason` for committing nothing, whatever it was sent in for.
+After a fix Stage, the Ticket starts again at verify. Every gate grades the fix, so a fix is held to the same bar as the first attempt. A fix Stage whose branch did not grow is a Hand-off straight away: re-grading an untouched branch could only fail the same way. A squashed or amended branch counts as not grown. Its hand-off comment carries the evidence the fix Stage was sent in with, and quotes the reason the Stage gave in `noCommitReason` for committing nothing, whatever it was sent in for.
 
 A fix Stage stopped by the rate limit, an API failure or the API budget spends nothing. The fix budget is one fix Stage each time the pipeline takes the Ticket up: a Release carries a spent budget over to the next Run, having changed nothing about the Ticket, and a Hand-off restores it, because the Ticket only comes back through a human's hands and whatever they did to it is what the fresh budget is for. More on [Handing a Ticket back](./stopping-and-resuming.md#handing-a-ticket-back).
 
@@ -232,7 +208,7 @@ sequenceDiagram
 ```
 <!-- Sources: src/landing.ts, src/orchestrator.ts -->
 
-A Ticket also leaves the Landing for a fix Stage, a Hand-off or a Release, so nobody waits behind a session; one back from a fix Stage rejoins at the back. A Ticket [released over a failing base branch](#a-failure-the-base-branch-shares) passes through the Landing once when a later Run takes it up, for the pull and the rebase alone, before its Checks, and leaves it again at once, since nothing is merged behind them.
+A Ticket also leaves the Landing for a fix Stage, a Hand-off or a Release, so nobody waits behind a session; one back from a fix Stage rejoins at the back. A Ticket [released over a failing base branch](#a-failure-the-base-branch-shares) passes through the Landing once when a later Run takes it up, for the pull and the rebase alone, before anything else, and leaves it again at once, since nothing is merged behind them.
 
 ### Rebase
 
@@ -246,12 +222,13 @@ A conflict is not a defect in the branch: the base branch moved on underneath it
 
 | What the worktree shows | Result |
 |---|---|
-| Resolved, however the session ended (even rate-limited or stopped by an API failure) | `✅ rebased`; push, then **the Checks again** |
+| Resolved, however the session ended (even rate-limited or stopped by an API failure) | `✅ rebased`; push, then the pull request |
+| Resolved, with changes no commit carries | `❌ uncommitted work`; spend the fix budget |
 | Unresolved, session rate-limited or stopped by an API failure or the API budget | Abort the rebase, Release |
 | Unresolved otherwise | `❌ unresolved`; abort the rebase, spend the fix budget |
 | The Stage could not run, or git could not be asked | `❌ unknown`; abort the rebase, Hand-off |
 
-The Checks run again because the resolution is code no gate has seen. verify is not asked again: the Stage changes no behaviour the criteria cover. An unresolved rebase hands the fix Stage the conflict and what is still wrong as its evidence. The abort always happens, so a fix Stage or a human never inherits a half-finished rebase.
+The pipeline runs no Check on the resolution: the Stage is told to run the type checker and the tests covering the files it resolved, not the whole suite, and the pull request's CI grades it next. verify is not asked again: the Stage changes no behaviour the criteria cover. An unresolved rebase hands the fix Stage the conflict and what is still wrong as its evidence. The abort always happens, so a fix Stage or a human never inherits a half-finished rebase.
 
 ### Pull request
 
@@ -273,7 +250,7 @@ The pipeline polls the head commit's check runs and commit statuses until they s
 |---|---|---|
 | Every check passed or skipped | `✅ passed` | Merge, or on a Target that [merges by hand](./configuration.md#merge) a Hand-off whose `merge` row reads `👤 left to a human` |
 | A check failed, was cancelled, timed out, needs action or could not start | `❌ failed` | Spends the fix budget |
-| The same, and the merge-base fails a Check command | ``⏸ `<command>` fails on the base branch`` | A Release ([above](#a-failure-the-base-branch-shares)) |
+| The same, and the merge-base fails a Check command | ``⏸ `<command>` fails on the base branch`` | A Release ([below](#a-failure-the-base-branch-shares)) |
 | GitHub still failing on its own side after a minute of tries | `⏸ GitHub failure` | A [Release](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) |
 | Checks still pending at the timeout, or never listed | `❌ timed out` | Hand-off |
 | No checks, and GitHub finds the pull request conflicting | `❌ conflicting` | Hand-off at once |
@@ -282,7 +259,7 @@ The pipeline polls the head commit's check runs and commit statuses until they s
 
 A failed check hands the fix Stage the tail of the failing Actions jobs' logs. A conflicting pull request is handed off without waiting, because GitHub runs no checks on it; only a human merging meanwhile can cause it. A reading where GitHub would not list the check runs or statuses is no answer, and is asked again like a pending one.
 
-A pull request with no checks merges: whether one runs CI is a fact about it, such as a docs-only change a `paths` filter skips, and a Target that needs CI before a merge says so on GitHub ([Requiring CI before a merge](./configuration.md#requiring-ci-before-a-merge)).
+A pull request with no checks merges: whether one runs CI is a fact about it, such as a docs-only change a `paths` filter skips, and a Target that needs CI before a merge says so on GitHub ([Requiring CI before a merge](./configuration.md#requiring-ci-before-a-merge)). The pipeline runs no Check on the branch, so such a pull request merges code nothing ran.
 
 **The grace period.** Right after a pull request opens, GitHub reports no checks for a while, so "no checks" counts only after [`ciGraceMinutes`](./configuration.md#ci). Under `ciGraceMinutes: 0`, a pull request merges before a slow check run registers.
 
@@ -295,6 +272,20 @@ A pull request with no checks merges: whether one runs CI is a fact about it, su
 | `push` | `branches` or `branches-ignore` excludes the pull request's branch |
 
 Patterns are read as GitHub's filter pattern cheat sheet reads them, not as shell globs: `**.js` matches `src/js/app.js`. Anything the Run cannot rule out for certain counts as a workflow that can run, and the grace applies: a file that does not parse, any other event, a filter it does not read (`types`, a `push` `paths`, `tags`) unless one it reads rules the event out, a pattern with `?`, `+`, `[]` or a leading `!`, a path written from `/` or `./` or ending in `/`, and a wildcard that would have to match a name starting with `.`. Wrong that way, it costs the grace; wrong the other way, a pull request would merge before its CI registers.
+
+### A failure the base branch shares
+
+A test on the base branch that starts failing, one that reads the wall clock say, fails on every branch at once. Charged to each Ticket, it costs every one its fix budget, and each fix Stage mends it differently in its own pull request. So before a red CI is charged, the pipeline asks whether the branch brought it or inherited it: it runs every Check command at the branch's merge-base with the base branch, stopping at the first that fails.
+
+The merge-base, as the remote holds it, is checked out clean, and the commands run there under the same `checkTimeoutMinutes`, once per Run however many Lanes fail on it. Nothing is installed there: a command finds its dependencies in the main checkout, as a Ticket's worktree does, so a command that needs an install or a build step of its own fails there too, and the Note's output shows why.
+
+| The merge-base | Progress cell | Result |
+|---|---|---|
+| passes | `❌ failed` | Spends the fix budget |
+| fails too | ``⏸ `<command>` fails on the base branch`` | A Release; the budget stays as it was, spent or not, and the Run claims no more Tickets |
+| could not be checked out or run | as if it passed | Spends the fix budget, and the Run log says why |
+
+The Release posts the pipeline's own Note on the standing Notes issue, naming the command and quoting the tail of its output, once per Run and merge-base commit however many Tickets it releases. Nothing compares the two failures, so CI that went red over something else is released all the same; the Note quotes the branch's own failure beside the merge-base's, marked as the branch's: the failing jobs' logs a fix Stage would have been handed. It is the failure of the Ticket that posted the Note; a Ticket released later over the same commit adds nothing. What to do next is on [Release over a failing base branch](./stopping-and-resuming.md#release-over-a-failing-base-branch).
 
 ### Squash merge and its commit
 
@@ -315,14 +306,14 @@ Unverified:
 Co-authored-by: <name> <email>
 ```
 
-The subject is the pull request title. `<problem>` and `<solution>` are the latest the Stages answered, each line wider than 72 columns broken at its spaces, a wide character such as Hangul counting as two; the lines the Stage wrote stay, so a list stays a list. With no solution answered, the branch's commit subjects stand in for it as `- <subject>` lines, after the problem when there is one; nothing is made up for a missing answer. `Unverified:` appears only when a criterion was `unverifiable`, one line each with its evidence joined into one line, since nowhere else keeps that reason. Commit subjects and `Co-authored-by` trailers are read after the rebase, since those are the commits that land. On a Target that [merges by hand](./configuration.md#merge) none of this is composed: the human merging gets the Target's own default message.
+The subject is the pull request title. `<problem>` and `<solution>` are the latest the Stages answered, each line wider than 72 columns broken at its spaces, a wide character such as Hangul counting as two; the lines the Stage wrote stay, so a list stays a list. With no solution answered, the branch's commit subjects stand in for it as `- <subject>` lines, after the problem when there is one; nothing is made up for a missing answer. `Unverified:` appears only when a criterion was `unverifiable`, or `ci` with no check run on the pull request, one line each with its evidence joined into one line, since nowhere else keeps that reason. Commit subjects and `Co-authored-by` trailers are read after the rebase, since those are the commits that land. On a Target that [merges by hand](./configuration.md#merge) none of this is composed: the human merging gets the Target's own default message.
 
 ### After the merge
 
 The Ticket is merged, so nothing below can hand it off. Each step's failure is logged and the next step still runs:
 
 1. Remove the state file, so the Ticket never looks resumable again.
-2. Tick the met criteria (below).
+2. Tick the met criteria and, once CI passed, those left to CI (below).
 3. Remove `in-progress`. The merge closed the issue.
 4. Pull the base branch. This ends the Landing, and the next Lane's Ticket rebases onto a base branch that already carries this one.
 5. Remove the worktree and the local branch, and delete the remote branch unless GitHub already did.
@@ -337,17 +328,16 @@ The Ticket is merged, so nothing below can hand it off. Each step's failure is l
 | Stage | Outcome | Turns | Duration |
 |---|---|---|---|
 | implement | ✅ committed | 46 | 21m 14s |
-| checks | ❌ `npm test` failed | – | 1m 48s |
+| verify | ❌ 1 unmet | 11 | 5m 3s |
 | fix | ✅ committed | 12 | 6m 2s |
-| checks | ✅ passed | – | 1m 52s |
-| verify | ✅ 6 met · 1 unverifiable | 9 | 4m 31s |
+| verify | ✅ 5 met · 1 to CI · 1 unverifiable | 9 | 4m 31s |
 | ci | ✅ passed | – | 2m 40s |
 | merge | ✅ #31 | – | – |
 ```
 
 Rows carry a few words only. Anything a human has to act on is its own comment, since those are worth a notification: a hand-off, a guard warning, a Note. The exception is a green Ticket [handed off with nothing failed](./stopping-and-resuming.md#when-nothing-failed) and no criterion unverifiable, which gets no comment.
 
-**Ticking met criteria.** After the merge, every criterion the verdict marked `met` is ticked by its number (`- [ ]` → `- [x]`) wherever it is written: the body, or any comment, such as the one triage posted its brief in. The box ticked is the unticked line, across the body and every comment together, that still reads as the line the number named when verify got the list. When no line, or more than one, reads so, because the Ticket was edited in between, none is ticked and the Run log names the criterion: an untouched box is safer than a wrong one. An `unverifiable` criterion stays unticked, because nobody gathered evidence for it.
+**Ticking met criteria.** After the merge, every criterion the verdict marked `met`, and every `ci` one once CI passed, is ticked by its number (`- [ ]` → `- [x]`) wherever it is written: the body, or any comment, such as the one triage posted its brief in. The box ticked is the unticked line, across the body and every comment together, that still reads as the line the number named when verify got the list. When no line, or more than one, reads so, because the Ticket was edited in between, none is ticked and the Run log names the criterion: an untouched box is safer than a wrong one. An `unverifiable` criterion stays unticked, because nobody gathered evidence for it, and so does a `ci` one when no check ran on the pull request.
 
 ## Notes
 

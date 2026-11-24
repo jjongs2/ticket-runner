@@ -54,9 +54,9 @@ The command must refuse bad input.              ← not: prose
 1. [ ] a numbered item                          ← not: no bullet
 ```
 
-The pipeline numbers the unticked boxes, the body's first and then each comment's, and the verify Stage grades each one by its number as `met`, `unmet` or `unverifiable` ([From Ticket to merge](./ticket-to-merge.md#the-verify-stage-and-its-verdict)). The indented lines under a box that are not boxes themselves belong to it, so a sub-list or a code block can say what the line means; a nested box is a criterion of its own.
+The pipeline numbers the unticked boxes, the body's first and then each comment's, and the verify Stage grades each one by its number as `met`, `unmet`, `unverifiable` or `ci` ([From Ticket to merge](./ticket-to-merge.md#the-verify-stage-and-its-verdict)). The indented lines under a box that are not boxes themselves belong to it, so a sub-list or a code block can say what the line means; a nested box is a criterion of its own.
 
-Write criteria that a session can check by running or reading code. A criterion that needs a human's eyes (a screenshot, a feel) comes back `unverifiable`.
+Write criteria that a session can check by running or reading code. A criterion that needs a human's eyes (a screenshot, a feel) comes back `unverifiable`. One that asks for nothing but CI or some commands to pass, such as "The checks pass.", comes back `ci` when a workflow on the pull request runs those commands, and the merge ticks it once CI passes; with no such workflow, the session runs them itself.
 
 ## Blockers
 
