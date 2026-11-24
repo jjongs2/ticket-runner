@@ -7,7 +7,7 @@ export function runLogDir(repoRoot: string, runId: string): string {
 }
 
 /**
- * Where a Stage's command line, stdout, stderr and transcript are written:
+ * Where a Stage's command line, transcript and stderr are written:
  * one directory per Run, per Ticket, under the gitignored run directory.
  */
 export function stageLogDir(repoRoot: string, runId: string, ticket: number): string {
@@ -43,8 +43,8 @@ export function writeRunVersion(repoRoot: string, runId: string, version: string
 
 /**
  * What of a Stage's files a hand-off keeps: its command line, to reproduce it
- * by hand, and its transcript, to read why it did what it did. Its stdout is
- * what the transcript was parsed out of, and its stderr is the CLI's own.
+ * by hand, and its transcript, the session's output as it printed it, to read
+ * why it did what it did. Its stderr is the CLI's own.
  */
 const KEPT_SUFFIXES = [".command", ".transcript.jsonl"];
 

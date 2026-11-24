@@ -131,7 +131,7 @@ Failure 줄은 무엇이 Ticket을 멈췄는지 말합니다. 그에 따라 할 
 | Hand-off된 Stage의 transcript, remote에 남길 때 | `ticket-runner/state`의 `ticket-<n>/<runId>/` | state file이 사라질 때까지 |
 | Hand-off된 Stage의 transcript, remote에 남기지 않을 때 | 그 Host의 `.ticket-runner/runs/<runId>/<n>/` | 사람이 지우거나, 클라우드 Host의 VM이 사라질 때까지 |
 | worktree | 그 Host의 `.worktrees/ticket-<n>` | merge되거나 사람이 지울 때까지 |
-| 모든 Stage의 전체 로그(stdout, stderr 포함) | 그 Host의 `.ticket-runner/runs/<runId>/<n>/` | 사람이 지울 때까지 |
+| 모든 Stage의 파일(transcript, stderr, 명령줄) | 그 Host의 `.ticket-runner/runs/<runId>/<n>/` | 사람이 지울 때까지 |
 
 state branch는 바뀔 때마다 다시 쓰이니, 거기 남긴 transcript는 로컬 branch가 아니라 fetch한 것에서 읽으세요.
 

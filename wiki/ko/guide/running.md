@@ -210,7 +210,7 @@ ticket-runner 0.5.2 run 2026-09-17T09-00-00-000 · 1 lane
 #4 merged · PR #12
 ```
 
-첫 줄은 요약의 머리처럼 버전을 적습니다. 그래서 요약을 내기 전에 kill된 Run의 로그도 어느 버전이 돌았는지 말해 줍니다. 새 버전이 나왔다는 알림처럼 첫 줄에 딸린 알림은 그 바로 뒤에 오고, 첫 Ticket 줄 앞에는 빈 줄이 하나 옵니다. Stage가 도는 동안이나 CI를 기다리는 동안에는 아무것도 출력하지 않고, 이 시간은 한 시간이 될 수도 있습니다. Stage 자신의 출력은 아래의 `.stdout` 파일에 있습니다. 좁힌 Run이면 첫 줄에 지정한 Ticket이 덧붙습니다. Ticket은 `agent/<n>`에서 claim되므로 `claimed`는 branch를 적지 않고, implement Stage가 branch 이름을 지은 뒤 `implemented`가 그 이름을 적습니다([worktree와 branch](./ticket-to-merge.md#the-worktree-and-branch)). branch가 `agent/<n>`로 남는 Ticket은 그 앞에 이유를 적습니다. `#4 keeps agent/4 · …`. `verified`는 verify 줄과 같이 읽습니다. 충족된 기준 수, 그리고 있으면 `· <c> to CI`와 `· <u> unverifiable`입니다. 재개한 Ticket은 `claimed` 대신 `resumed from <state>`라고 출력하고, implement Stage 뒤에서 재개하면 그 뒤에 branch를 적습니다. Run과 다른 곳에 과금된 Stage는 끝나는 즉시 알려 줍니다. `#4 implement ran on apiKeySource apiKeyHelper, not the subscription (none)`. 경고와 거절은 stderr로 갑니다.
+첫 줄은 요약의 머리처럼 버전을 적습니다. 그래서 요약을 내기 전에 kill된 Run의 로그도 어느 버전이 돌았는지 말해 줍니다. 새 버전이 나왔다는 알림처럼 첫 줄에 딸린 알림은 그 바로 뒤에 오고, 첫 Ticket 줄 앞에는 빈 줄이 하나 옵니다. Stage가 도는 동안이나 CI를 기다리는 동안에는 아무것도 출력하지 않고, 이 시간은 한 시간이 될 수도 있습니다. Stage 자신의 출력은 아래의 `.transcript.jsonl` 파일에 세션이 출력하는 대로 덧붙습니다. 좁힌 Run이면 첫 줄에 지정한 Ticket이 덧붙습니다. Ticket은 `agent/<n>`에서 claim되므로 `claimed`는 branch를 적지 않고, implement Stage가 branch 이름을 지은 뒤 `implemented`가 그 이름을 적습니다([worktree와 branch](./ticket-to-merge.md#the-worktree-and-branch)). branch가 `agent/<n>`로 남는 Ticket은 그 앞에 이유를 적습니다. `#4 keeps agent/4 · …`. `verified`는 verify 줄과 같이 읽습니다. 충족된 기준 수, 그리고 있으면 `· <c> to CI`와 `· <u> unverifiable`입니다. 재개한 Ticket은 `claimed` 대신 `resumed from <state>`라고 출력하고, implement Stage 뒤에서 재개하면 그 뒤에 branch를 적습니다. Run과 다른 곳에 과금된 Stage는 끝나는 즉시 알려 줍니다. `#4 implement ran on apiKeySource apiKeyHelper, not the subscription (none)`. 경고와 거절은 stderr로 갑니다.
 
 터미널에서는 이 줄들과 요약의 `#4`, `PR #12`가 GitHub의 해당 이슈나 pull request로 가는 링크가 됩니다. 링크를 지원하는 터미널에서만 그렇습니다. 그리고 줄마다 읽는 사람에게 바라는 바에 따라 색이 붙습니다.
 
@@ -229,8 +229,8 @@ Stage가 한 일은 모두 Target의 gitignore된 `.ticket-runner/` 아래 디�
 |---|---|
 | `version.txt` | 돌린 버전. 첫 Stage 전에 씀 |
 | `<n>/<stage>.command` | 환경 변수까지 포함한 정확한 명령줄. 그대로 붙여 넣으면 Stage를 다시 돌릴 수 있음. 키 없이 실행한 Stage는 `env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_PLUGIN_DIRS …`, 키로 실행한 Stage는 `env -u CLAUDE_CODE_PLUGIN_DIRS ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" …`로 시작하고, 키 값은 적지 않음 |
-| `<n>/<stage>.stdout`, `<n>/<stage>.stderr` | Stage가 출력하는 대로 실시간으로 덧붙인 출력 |
-| `<n>/<stage>.transcript.jsonl` | 세션의 stream-json 이벤트 |
+| `<n>/<stage>.transcript.jsonl` | 세션이 출력한 그대로의 stream-json 출력, JSON이 아닌 줄까지 실시간으로 덧붙인 것 |
+| `<n>/<stage>.stderr` | 세션이 출력한 그대로의 stderr, 실시간으로 덧붙인 것 |
 | `<n>/retry/` | fix Stage와, 그 덕에 한 번 더 도는 시도. 실패한 시도의 파일은 옆에 그대로 남음 |
 
 명령줄은 Stage가 시작되기 전에, 출력은 나오는 대로 쓰니, Stage 도중에 kill된 Run도 거기까지 한 것은 남깁니다. Stage가 셸이 export한 `ANTHROPIC_API_KEY`를 출력한 곳에서는 파일에 그 값 대신 `<ANTHROPIC_API_KEY>`가 적힙니다. Hand-off된 Ticket의 명령줄과 transcript는 [`keepTranscripts`](./configuration.md#keeptranscripts)가 그러라고 할 때 Target의 remote에도 남고, 그 밖에는 이 파일이 유일한 사본입니다([무엇이 어디에 남나](./stopping-and-resuming.md#what-stays-where)).

@@ -415,9 +415,9 @@ describe("what a Stage is billed to", () => {
       run: async (_command, _args, options) => {
         // A Run killed here would leave the disk as it is now.
         options.onStdout?.(`ANTHROPIC_API_KEY=${KEY.slice(0, split)}`);
-        between.push(readFileSync(stageFile("stdout"), "utf8"));
+        between.push(readFileSync(stageFile("transcript.jsonl"), "utf8"));
         options.onStdout?.(`${KEY.slice(split)}\n${SUCCESS}`);
-        between.push(readFileSync(stageFile("stdout"), "utf8"));
+        between.push(readFileSync(stageFile("transcript.jsonl"), "utf8"));
         return execution({ stdout });
       },
     });
@@ -426,7 +426,7 @@ describe("what a Stage is billed to", () => {
 
     expect(between[0]).toBe("ANTHROPIC_API_KEY=");
     expect(between[1]).toBe(`ANTHROPIC_API_KEY=<ANTHROPIC_API_KEY>\n${SUCCESS}`);
-    expect(readFileSync(stageFile("stdout"), "utf8")).toBe(between[1]);
+    expect(readFileSync(stageFile("transcript.jsonl"), "utf8")).toBe(between[1]);
   });
 
   it("reports what the session said it ran on, from its init event", async () => {
@@ -557,27 +557,27 @@ describe("what a Stage is billed to", () => {
 });
 
 describe("saved logs", () => {
-  it("writes the command line, stdout, stderr and transcript for the Stage", async () => {
+  it("writes the command line, stderr and transcript for the Stage, and no second copy of its output", async () => {
     await runner(execution({ stdout: SUCCESS, stderr: "a warning\n" })).run(request());
 
     expect(readdirSync(logDir).sort()).toEqual([
       "implement.command",
       "implement.stderr",
-      "implement.stdout",
       "implement.transcript.jsonl",
     ]);
     expect(readFileSync(join(logDir, "implement.command"), "utf8")).toContain("claude --print");
     expect(readFileSync(join(logDir, "implement.stderr"), "utf8")).toBe("a warning\n");
-    expect(readFileSync(join(logDir, "implement.stdout"), "utf8")).toBe(SUCCESS);
+    expect(readFileSync(join(logDir, "implement.transcript.jsonl"), "utf8")).toBe(SUCCESS);
   });
 
-  it("keeps only the JSON events in the transcript", async () => {
-    const noise = `not json\n${SUCCESS}`;
-    const result = await runner(execution({ stdout: noise })).run(request());
+  it("keeps the output byte for byte in the transcript, a line that is not JSON included", async () => {
+    // The CLI escapes U+2028 as `\u2028`, which parsing and printing again would not.
+    const escaped = `{"type":"assistant","message":{"content":[{"type":"text","text":"a\\u2028b"}]}}\n`;
+    const printed = `not json\n${escaped}${SUCCESS}{"type":"assistant","mess`;
 
-    const lines = readFileSync(result.transcriptPath, "utf8").trim().split("\n");
-    expect(lines).toHaveLength(3);
-    expect(JSON.parse(lines[0] as string)).toMatchObject({ type: "system" });
+    const result = await runner(execution({ stdout: printed })).run(request());
+
+    expect(readFileSync(result.transcriptPath, "utf8")).toBe(printed);
   });
 });
 
@@ -605,12 +605,12 @@ describe("logs written while the Stage runs", () => {
     expect(onDisk).toContain("claude --print");
   });
 
-  it("appends stdout and stderr as the child prints them, not after it exits", async () => {
+  it("appends the transcript and stderr as the child prints them, not after it exits", async () => {
     let stdout: string | undefined;
     let stderr: string | undefined;
 
     await inspectMidRun(() => {
-      stdout = readFileSync(stageFile("stdout"), "utf8");
+      stdout = readFileSync(stageFile("transcript.jsonl"), "utf8");
       stderr = readFileSync(stageFile("stderr"), "utf8");
     }).run(request());
 
@@ -623,7 +623,7 @@ describe("logs written while the Stage runs", () => {
     await runner(execution({ stdout: SUCCESS, stderr: "second\n" })).run(request());
 
     expect(readFileSync(stageFile("stderr"), "utf8")).toBe("second\n");
-    expect(readFileSync(stageFile("stdout"), "utf8")).toBe(SUCCESS);
+    expect(readFileSync(stageFile("transcript.jsonl"), "utf8")).toBe(SUCCESS);
   });
 
   it("recovers the whole output when a chunk could not be written", async () => {
@@ -640,7 +640,7 @@ describe("logs written while the Stage runs", () => {
     const result = await interrupted.run(request());
 
     expect(result.ok).toBe(true);
-    expect(readFileSync(stageFile("stdout"), "utf8")).toBe(SUCCESS);
+    expect(readFileSync(stageFile("transcript.jsonl"), "utf8")).toBe(SUCCESS);
   });
 });
 
