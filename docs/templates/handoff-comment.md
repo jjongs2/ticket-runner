@@ -103,7 +103,7 @@ Markdown.
 A Ticket whose CI ran no check, its `ci` row `⚠️ no checks` or `⚠️ no workflow
 runs`, and that has no met criterion beside those the verify Stage left to CI,
 is handed off at `ci`: no criterion has evidence to merge on. Its evidence gives
-every criterion as an unmet one is given, those left to CI as unverifiable.
+every criterion as an unmet one is given, those left to CI as unverifiable, each one's evidence ending ` (left to CI, which ran no check on the pull request)`. The `Unverifiable criteria` below carry the same ending.
 
 ## When the Target merges by hand
 

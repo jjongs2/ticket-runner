@@ -5,8 +5,8 @@ ticket-runner 0.6.5 run 2026-11-10T21-04-11-302 · 2 lanes
 #301 claimed
 #297 resumed from implemented · agent/297-a-guard-refuses-a-body-with-no-criteria
 #301 implemented · agent/301-the-summary-names-the-version
-#297 rebased onto main before its Checks
-#301 rebased onto main before its Checks
+#297 rebased onto main first
+#301 rebased onto main first
 #297 verified · 4 met · 0 unverifiable
 #301 fixing · 1 unmet
 #301 noted on #323 for triage

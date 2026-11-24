@@ -53,7 +53,7 @@ describe("lineColour", () => {
     "#5 implemented · agent/5-name-it",
     "#5 verified · 1 of 5 criteria unmet",
     "#5 fixing · 1 of 5 criteria unmet",
-    "#5 rebased onto main before its Checks",
+    "#5 rebased onto main first",
     "#5 resolving a rebase conflict",
     "#5 released at implement · rate limit · agent/5",
     "#5 stopped the Run · rate limit",
