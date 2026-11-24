@@ -756,6 +756,31 @@ describe("push and pullBase", () => {
     expect(git(remote, "rev-parse", "agent/2-x")).toBe(git(path, "rev-parse", "HEAD"));
   });
 
+  it("renames a branch its worktree has checked out, and pushes it under the new name alone", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2" }, "main");
+    commit(path, "a.txt", "a\n", "feat: a (#2)");
+
+    await workspace.renameBranch(path, "agent/2", "agent/2-name-it");
+    await workspace.push(path, "agent/2-name-it");
+
+    expect(git(path, "rev-parse", "--abbrev-ref", "HEAD")).toBe("agent/2-name-it");
+    expect(await workspace.hasBranch("agent/2")).toBe(false);
+    expect(await workspace.hasWorktree({ path, branch: "agent/2-name-it" })).toBe(true);
+    expect(git(remote, "branch", "--list", "agent/2*")).toBe("agent/2-name-it");
+  });
+
+  it("refuses to rename a branch onto a name already taken here, and renames nothing", async () => {
+    const path = join(repo, ".worktrees", "ticket-2");
+    await workspace.createWorktree({ path, branch: "agent/2" }, "main");
+    git(repo, "branch", "agent/2-taken", "main");
+
+    await expect(workspace.renameBranch(path, "agent/2", "agent/2-taken")).rejects.toThrow(
+      /already exists/,
+    );
+    expect(git(path, "rev-parse", "--abbrev-ref", "HEAD")).toBe("agent/2");
+  });
+
   it("deletes the branch on the remote", async () => {
     const path = join(repo, ".worktrees", "ticket-2");
     await workspace.createWorktree({ path, branch: "agent/2-x" }, "main");

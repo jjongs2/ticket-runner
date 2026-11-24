@@ -624,3 +624,12 @@ describe("the reference Target", () => {
 function marks(out: string): string[] {
   return [...out.matchAll(/^ {2}([✓✗]) /gm)].map((match) => match[1] as string);
 }
+
+describe("colour", () => {
+  it("is never printed by init, with NO_COLOR unset", async () => {
+    const { out, err } = await init({ env: {} });
+
+    expect(out).toContain("init ·");
+    expect(`${out}${err}`).not.toContain("\x1b");
+  });
+});

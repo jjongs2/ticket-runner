@@ -888,6 +888,19 @@ export class FakeWorkspace implements Workspace {
     this.remoteBranches.add(branch);
   }
 
+  async renameBranch(cwd: string, from: string, to: string): Promise<void> {
+    this.called(`renameBranch:${from}:${to}`);
+    if (!this.worktrees.has(cwd)) {
+      throw new Error(`ENOENT: no such file or directory, chdir '${cwd}'`);
+    }
+    if (this.branches.has(to)) throw new Error(`fatal: a branch named '${to}' already exists`);
+    this.branches.delete(from);
+    this.branches.add(to);
+    for (const [path, branch] of this.worktrees) {
+      if (branch === from) this.worktrees.set(path, to);
+    }
+  }
+
   /**
    * Not in `calls`: a read, which only decides what a hand-off comment says.
    * The state branch is there while it holds anything, and the lock branch

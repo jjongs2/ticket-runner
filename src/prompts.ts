@@ -9,7 +9,13 @@ import type { FailureKind } from "./lifecycle.js";
 import { BRANCH_DEFECT, OWN_DEFECT } from "./note-schema.js";
 import { NOTE_PARTS, type WrittenNote } from "./notes.js";
 import { STAGE_ENV_VAR } from "./stage-guard.js";
-import { BRANCH_ANSWER_FIELDS, BRANCH_TITLE, type BranchAnswers, SUBJECT_RULE } from "./title.js";
+import {
+  BRANCH_ANSWER_FIELDS,
+  BRANCH_SLUG,
+  BRANCH_TITLE,
+  type BranchAnswers,
+  SUBJECT_RULE,
+} from "./title.js";
 
 /**
  * Appended to every Stage prompt, the fix Stage included, in every Target. The
@@ -94,6 +100,14 @@ const titleAnswer = (base: string) =>
 const titleGuidance = (base: string) => `- Answer ${titleAnswer(base)}`;
 
 /**
+ * How the implement Stage is told to name the branch, which only it does: the
+ * Run claims the Ticket on `agent/<n>` and renames the branch from this slug
+ * before its first push. Nothing is cut from the Ticket title, which says
+ * nothing in a branch name when it is not written in ASCII.
+ */
+const BRANCH_GUIDANCE = `- Answer a \`branch\` beside \`title\`: the slug the pipeline names this branch with once you finish, as \`agent/<n>-<slug>\`, ${BRANCH_SLUG}.`;
+
+/**
  * How the fix Stage is told to title the branch: blank, which keeps the title
  * answered before it, unless its fix changes what that title says. Told to
  * answer one for the whole branch, a fix Stage that had not read the Target's
@@ -162,6 +176,7 @@ const implementGuidance = (
 
 - Make an initial commit before running \`/mattpocock-skills:code-review\`, so the reviewed diff is not empty.
 ${titleGuidance(base)}
+${BRANCH_GUIDANCE}
 ${PROSE_GUIDANCE}
 ${CODE_STAGE_LANGUAGE}
 - The review the skill asks for is \`/mattpocock-skills:code-review\`. Invoke it by that full name: the short name also matches the CLI's own built-in review skill, which runs neither the Standards review nor the Spec review.
@@ -171,7 +186,7 @@ ${CODE_STAGE_LANGUAGE}
 - A later answer replaces an earlier one, so if you answer again, repeat every Note you still stand by.${codeChecksLine(checks, true)}
 ${FINISH_GUIDANCE}
 - Do not spawn nested review agents beyond what the skill itself does.
-- Do not open pull requests and do not close the issue; the pipeline does both.
+- Do not push, do not open pull requests and do not close the issue; the pipeline does all three, and names the branch before its first push.
 - Commit all of your work to the branch that is already checked out. ${NO_OTHER_BRANCH}`;
 
 /**

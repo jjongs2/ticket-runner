@@ -395,6 +395,13 @@ export interface Workspace {
    */
   push(cwd: string, branch: string): Promise<void>;
   /**
+   * Rename the local branch `from` to `to`, the worktree at `cwd` checked out
+   * on it moving with it. Asked once, of a branch no push has reached yet, so
+   * nothing on the remote goes by the old name. A name already taken here is
+   * refused, with git's reason, and nothing is renamed.
+   */
+  renameBranch(cwd: string, from: string, to: string): Promise<void>;
+  /**
    * Whether the remote has `branch`, asked by a hand-off so its comment says
    * where the work is once this Host is gone only when that is true.
    */

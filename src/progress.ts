@@ -209,7 +209,7 @@ export class Progress {
   /** Set while the comment on the Ticket lacks a row the last write failed to carry. */
   private behind = false;
 
-  constructor(private readonly options: ProgressOptions) {
+  constructor(private options: ProgressOptions) {
     // A Ticket taken back from a human keeps the comment that human read: a
     // Run resuming one rewrites nothing and starts a comment of its own. Every
     // other Run — a released Ticket, a stranded one, a second pass of this one
@@ -223,6 +223,14 @@ export class Progress {
       : findProgressComment(options.comments);
     this.earlier =
       this.comment === undefined ? "" : earlierSections(this.comment.body, options.runId);
+  }
+
+  /**
+   * Name the branch the implement Stage named, before the row that reports it:
+   * every write from here on names the branch the work is on.
+   */
+  followBranch(branch: string): void {
+    this.options = { ...this.options, branch };
   }
 
   /** Append a row, and show it on the Ticket. */

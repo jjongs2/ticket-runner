@@ -20,6 +20,7 @@ import type { ReleaseCause, TicketOutcome } from "./orchestrator.js";
 import type { IssueComment, SquashCommit } from "./ports/tracker.js";
 import type { KeptTranscripts } from "./ports/workspace.js";
 import type { RunStop } from "./run.js";
+import { type Colour, type Paint, PLAIN } from "./terminal-colour.js";
 import type { BranchProse } from "./title.js";
 import type { Verdict } from "./verdict.js";
 
@@ -776,10 +777,11 @@ export interface RunSummary {
   stop: RunStop;
   /**
    * What each line is handed through before it is printed: in a terminal, the
-   * one that makes every `#N` a link. The summary applies it itself, so a
-   * number a `noted` row cuts short stays out of it.
+   * one that makes every `#N` a link and colours what it is told to. The
+   * summary applies it itself, so a number a `noted` row cuts short stays out
+   * of it, and a row colours its verb alone.
    */
-  link?: (line: string) => string;
+  paint?: Paint;
 }
 
 /**
@@ -813,6 +815,23 @@ export function releaseWords(cause: ReleaseCause, credential: Credential): strin
 const VERB_WIDTH = 9;
 
 /**
+ * The colour a summary row's verb takes, by what the row asks of its reader:
+ * a hand-off to act on, a merge that asks nothing, and a Note's row, which is
+ * on GitHub already. Every other verb is read in the terminal's default.
+ */
+const VERB_COLOURS: Partial<Record<string, Colour>> = {
+  handed: "red",
+  merged: "green",
+  noted: "dim",
+};
+
+/**
+ * Where the summary starts in the log: a line of its own that nothing else
+ * the Run prints is, which is what an Operator's watch finds it by.
+ */
+export const SUMMARY_RULE = "---";
+
+/**
  * What a Run prints when it ends. One line per Ticket, then why the Run
  * stopped — the Frontier is empty, everything left on it is blocked, the rate
  * limit, a transient API failure, the API key's budget or a failing base branch
@@ -827,31 +846,33 @@ export function runSummary({
   billing = emptyBilling(),
   newer,
   stop,
-  link = (line) => line,
+  paint = PLAIN,
 }: RunSummary): string {
   const rows = [
     ...outcomes.flatMap((outcome) => [
-      ...ticketRows(outcome, credential, link),
+      ...ticketRows(outcome, credential, paint),
       ...billing.strays
         .filter((stray) => stray.ticket === outcome.ticket)
-        .map((stray) => link(billedRow(stray))),
+        .map((stray) => printedRow(billedRow(stray), paint)),
     ]),
     // Only a Run that reached the end of the Frontier can name what was held
     // back all Run, so only that stop carries candidates to skip.
     ...(stop.reason === "frontier"
-      ? stop.blocked.map((ticket) => link(row("skipped", ticket, "blocked")))
+      ? stop.blocked.map((ticket) => printedRow(row("skipped", ticket, "blocked"), paint))
       : []),
   ];
 
   return [
-    ...(newer === undefined ? [] : [link(newer)]),
-    link(
+    paint(SUMMARY_RULE, "dim"),
+    "",
+    ...(newer === undefined ? [] : [paint(newer)]),
+    paint(
       `ticket-runner ${version} run ${runId} · ${Math.round(durationMs / 60_000)}m · ${billedTo(credential, billing)}`,
     ),
     "",
     ...(rows.length === 0 ? ["  nothing to do"] : rows),
     "",
-    link(lastLine(stop, credential)),
+    paint(lastLine(stop, credential)),
     "",
   ].join("\n");
 }
@@ -875,7 +896,7 @@ function billedTo(credential: Credential, billing: Billing): string {
  * A Stage billed somewhere the Run did not choose, with its own figure where it
  * gave one, ending `+` where that is only part of its session's.
  */
-function billedRow(stray: StrayStage): string {
+function billedRow(stray: StrayStage): Row {
   const cost =
     stray.costUsd === undefined
       ? ""
@@ -948,14 +969,10 @@ function holding(busy: number[]): string {
  * The Notes follow their own Ticket rather than being gathered at the end, so a
  * Run that took six Tickets still says which one noticed what.
  */
-function ticketRows(
-  outcome: TicketOutcome,
-  credential: Credential,
-  link: (line: string) => string,
-): string[] {
+function ticketRows(outcome: TicketOutcome, credential: Credential, paint: Paint): string[] {
   return [
-    link(ticketRow(outcome, credential)),
-    ...(outcome.outcome === "skipped" ? [] : outcome.notes.map((note) => noteRow(note, link))),
+    printedRow(ticketRow(outcome, credential), paint),
+    ...(outcome.outcome === "skipped" ? [] : outcome.notes.map((note) => noteRow(note, paint))),
   ];
 }
 
@@ -985,27 +1002,24 @@ function cutNumber(text: string, kept: string): string {
 
 /**
  * One Note's line: where it went, where it came from, and the gist of it,
- * handed through `link` but for a number its ellipsis cuts short.
+ * handed through `paint` but for a number its ellipsis cuts short.
  */
-function noteRow(
-  { origin, stage, issue, opened, summary }: RoutedNote,
-  link: (line: string) => string,
-): string {
+function noteRow({ origin, stage, issue, opened, summary }: RoutedNote, paint: Paint): string {
   const destination = opened ? "new" : "comment";
   const text = splitMessage(summary).line;
   const kept = truncate(text, NOTE_WIDTH);
-  const line = row("noted", issue, `${destination} · from #${origin} ${stage} · ${kept}`);
+  const noted = row("noted", issue, `${destination} · from #${origin} ${stage} · ${kept}`);
   const cut = cutNumber(text, kept);
-  return cut === ""
-    ? link(line)
-    : `${link(line.slice(0, line.length - cut.length - 1))}${cut}\u2026`;
+  if (cut === "") return printedRow(noted, paint);
+  const shown = { ...noted, rest: noted.rest.slice(0, noted.rest.length - cut.length - 1) };
+  return `${printedRow(shown, paint)}${cut}\u2026`;
 }
 
 /** What a `handed` row says of a hand-off a fault outside the Ticket cut short. */
 const CUT_SHORT = "hand-off cut short";
 
 /** One Ticket's line in a summary: what happened to it, and where to look. */
-function ticketRow(outcome: TicketOutcome, credential: Credential): string {
+function ticketRow(outcome: TicketOutcome, credential: Credential): Row {
   switch (outcome.outcome) {
     case "merged":
       return row("merged", outcome.ticket, `${outcome.title} (PR #${outcome.pullRequest})`);
@@ -1035,6 +1049,21 @@ function ticketRow(outcome: TicketOutcome, credential: Credential): string {
   }
 }
 
-function row(verb: string, ticket: number, detail: string): string {
-  return `  ${verb.padEnd(VERB_WIDTH)}#${ticket} ${detail}`;
+/**
+ * One summary row, its verb kept apart from the rest so a terminal colours the
+ * verb alone and leaves the title plain.
+ */
+interface Row {
+  verb: string;
+  /** `#<n> <detail>`, everything after the verb's column. */
+  rest: string;
+}
+
+function row(verb: string, ticket: number, detail: string): Row {
+  return { verb, rest: `#${ticket} ${detail}` };
+}
+
+/** `  <verb>` padded to its column, then the rest, each through `paint`. */
+function printedRow({ verb, rest }: Row, paint: Paint): string {
+  return `  ${paint(verb, VERB_COLOURS[verb])}${" ".repeat(VERB_WIDTH - verb.length)}${paint(rest)}`;
 }

@@ -160,7 +160,7 @@ Tests sit beside each module as `*.test.ts`.
 | [`failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts) | runs a failing Check at the merge-base, once per Run per commit, and its Note once |
 | [`workflows.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/workflows.ts) | whether any workflow on a pull request's branch can run on it, which decides the CI grace |
 | [`base-branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/base-branch.ts) | resolves the base branch once per Run |
-| [`branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/branch.ts) | `agent/<n>-<slug>`, `.worktrees/ticket-<n>` and `.worktrees/base-<commit>` |
+| [`branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/branch.ts) | `agent/<n>`, the `agent/<n>-<slug>` the implement Stage's slug names, `.worktrees/ticket-<n>` and `.worktrees/base-<commit>` |
 | [`stranded.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stranded.ts) | the sweep for Stranded Tickets |
 | [`resume.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/resume.ts) | the state file's shape and name |
 | [`handoff.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/handoff.ts) | marks old hand-off comments as history when a Ticket is taken again |
@@ -232,7 +232,7 @@ The same string is stamped on:
 
 | Where | So that |
 |---|---|
-| the Run summary's header, the `init` report's first line | a terminal says which pipeline ran |
+| the Run's opening line, the Run summary's header, the `init` report's first line | a terminal, and the log of a Run killed before its summary, say which pipeline ran |
 | each Run's section of a progress comment | the board says which pipeline wrote it |
 | each state file's `version` | an unreadable file can still name what wrote it |
 | `version.txt` in the Run's directory | a transcript sits beside the pipeline that wrote it |

@@ -12,7 +12,7 @@ This page follows one Ticket from its claim to its merge. What happens when it s
 | Step | What happens | Who decides |
 |---|---|---|
 | Claim | Guards, state file, assign, `ready-for-agent` → `in-progress` | the pipeline |
-| Worktree | `agent/<n>-<slug>` in `.worktrees/ticket-<n>` | git |
+| Worktree | `agent/<n>` in `.worktrees/ticket-<n>`, named `agent/<n>-<slug>` after the implement Stage | git, and the implement Stage's slug |
 | implement Stage | `/mattpocock-skills:implement` in the worktree | an agent |
 | Checks | Nothing uncommitted, then each Check command | exit codes |
 | verify Stage | Adversarial grading of the Acceptance Criteria, and of defects the branch made | the pipeline, from the verdict |
@@ -64,11 +64,15 @@ Then, in this order:
 
 | | Value |
 |---|---|
-| Branch | `agent/<n>-<slug>`: the title in lowercase kebab-case, cut at a word boundary to 40 characters |
+| Branch | `agent/<n>` at the claim. Once the implement Stage has finished with commits, `agent/<n>-<slug>`, with the slug the Stage answered |
 | Worktree | `.worktrees/ticket-<n>` under the Target's root, gitignored |
 | Branched from | The remote's base branch, freshly fetched, with no upstream set |
 
 A branch of that name that already exists is never reused. The Ticket is handed off at `setup`, and the comment says whose branch it is and the command that clears it. A resumed Ticket carries on in the branch its state file names instead; see [Hand-offs, stopping and resuming](./stopping-and-resuming.md).
+
+Nothing is cut from the Ticket title, which says nothing in a branch name when it is not written in English. The implement Stage, which has read the Ticket, answers a `branch` slug instead: at most 40 characters matching `^[a-z0-9]+(-[a-z0-9]+)*$`, in English words saying what the Ticket does, whatever language the Target writes in. When the Stage finishes with commits, before the branch is first pushed, the Run records `agent/<n>-<slug>` in the state file, renames the branch, then pushes it under that name, so the remote never holds `agent/<n>` for it. Every later write names the new branch: the progress comment, the pull request and any hand-off.
+
+The branch keeps `agent/<n>` when the slug is empty, in silence, and, logging `#<n> keeps agent/<n> · <why>`, when the slug is out of shape, the state file write fails, a branch of the new name is on the Host or on the remote, or `agent/<n>` already reached the remote, which an implement Stage that did not finish pushed. A Ticket whose state file already names another branch keeps it. A Host that dies between the state file write and the rename leaves its next Run there a branch in the way, and the Ticket is handed off at `setup` with the worktree it is in; a Run on another Host takes it from the top, since nothing was pushed.
 
 ## How a Stage runs
 
@@ -115,11 +119,11 @@ What each Stage leaves on disk is on [Logs and transcripts](./running.md#logs-an
 
 ## The implement Stage
 
-The implement skill reads the Ticket, builds it and reviews it. Once the review's fixes are committed, the Stage answers `title`, `body`, `problem` and `solution` for the whole branch. When the session ends, the pipeline routes its [Notes](#notes), records each answer that is not blank in the state file, and pushes the branch if it has commits, so a Run on another Host can resume from it. Then:
+The implement skill reads the Ticket, builds it and reviews it. Once the review's fixes are committed, the Stage answers `title`, `body`, `problem` and `solution` for the whole branch, and the `branch` slug ([above](#the-worktree-and-branch)). It is told not to push. When the session ends, the pipeline routes its [Notes](#notes) and records each answer that is not blank in the state file. Then:
 
-- A Stage that did not finish is a Hand-off at `implement`.
+- A Stage that did not finish pushes its commits, if it has any, on `agent/<n>`, so a Run on another Host can resume from them, and is a Hand-off at `implement`. Nothing is renamed.
 - A branch with no commits beyond the base branch is a Hand-off: an agent that gave up silently leaves nothing to grade. The hand-off comment quotes the reason the Stage gave in `noCommitReason`, when it gave one.
-- Otherwise the state file moves to `implemented`, so no later Run pays for this Stage again.
+- Otherwise the branch is named and pushed, the Run prints `#<n> implemented · <branch>`, and the state file moves to `implemented`, so no later Run pays for this Stage again.
 
 ## The Checks
 
@@ -370,7 +374,8 @@ A `- [ ]` at the head of a line in a Note is escaped, so a Note is never read as
 
 ## References
 
-- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `processTicket`, `takeTicket`, `verify`, `fix`, `resolveConflict`, `requireGreenCi`
+- [`src/branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/branch.ts)
+- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `processTicket`, `takeTicket`, `nameBranch`, `verify`, `fix`, `resolveConflict`, `requireGreenCi`
 - [`src/workflows.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/workflows.ts): whether any workflow can run on a pull request
 - [`src/failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts): the Checks run at a merge-base, once per Run
 - [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts), [`src/frontier.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts), [`src/landing.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/landing.ts)

@@ -140,6 +140,15 @@ describe("asking a Run to stop", () => {
     return { code, signalled, lines: out, out: out.join("\n"), err: err.join("\n") };
   }
 
+  it("never prints colour", async () => {
+    lock();
+
+    const { out, err } = await stop();
+
+    expect(out).not.toBe("");
+    expect(`${out}${err}`).not.toContain("\x1b");
+  });
+
   it("sends SIGTERM to the Run the lock names, and says what it will finish", async () => {
     lock();
 

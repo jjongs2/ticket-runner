@@ -8,6 +8,7 @@ import { CLAUDE_SECTION, CONVENTIONS_PATH, conventionsDoc } from "./conventions.
 import { OPERATOR_SKILL_PATH, operatorSkill } from "./operator-skill.js";
 import { SELF_HOSTING_GUIDANCE, STAGE_BOUNDARY_GUIDANCE } from "./prompts.js";
 import { type Work, startRun } from "./start.js";
+import { withoutColour } from "./terminal-colour.js";
 import type { StopSource } from "./stop.js";
 import {
   ANOTHER_HOST,
@@ -649,7 +650,7 @@ describe("what a Run's Stages are billed to", () => {
       "subscription",
       "subscription",
     ]);
-    expect(lines.at(-1)?.split("\n")[1]).toBe(
+    expect(lines.at(-1)?.split("\n")[3]).toBe(
       `ticket-runner ${VERSION} run run-1 · 0m · subscription`,
     );
   });
@@ -667,7 +668,7 @@ describe("what a Run's Stages are billed to", () => {
 
     expect(code).toBe(0);
     expect(runner.requests.map((request) => request.credential)).toEqual(["api-key", "api-key"]);
-    expect(lines.at(-1)?.split("\n")[1]).toBe(
+    expect(lines.at(-1)?.split("\n")[3]).toBe(
       `ticket-runner ${VERSION} run run-1 · 0m · API key · $10.53`,
     );
   });
@@ -927,7 +928,7 @@ describe("the version a Run ran", () => {
   it("heads the summary the Run ends with", async () => {
     const { lines } = await start();
 
-    expect(lines.at(-1)?.split("\n")[1]).toBe(
+    expect(lines.at(-1)?.split("\n")[3]).toBe(
       `ticket-runner ${VERSION} run run-1 · 0m · subscription`,
     );
   });
@@ -939,7 +940,7 @@ describe("the version a Run ran", () => {
 
     const progress = tracker.updatedComments.at(-1)?.body ?? "";
     expect(progress.split("\n")[1]).toBe(
-      `**ticket-runner** \`${VERSION}\` · run \`run-1\` · \`agent/4-ticket-4\``,
+      `**ticket-runner** \`${VERSION}\` · run \`run-1\` · \`agent/4\``,
     );
   });
 });
@@ -950,7 +951,7 @@ describe("the Run log", () => {
 
     const { lines } = await start();
 
-    expect(lines[0]).toBe("ticket-runner run run-1 · 1 lane");
+    expect(lines[0]).toBe(`ticket-runner ${VERSION} run run-1 · 1 lane`);
   });
 
   it("names a configured Lane count in the plural", async () => {
@@ -959,7 +960,7 @@ describe("the Run log", () => {
 
     const { lines } = await start();
 
-    expect(lines[0]).toBe("ticket-runner run run-1 · 3 lanes");
+    expect(lines[0]).toBe(`ticket-runner ${VERSION} run run-1 · 3 lanes`);
   });
 
   it("names the Lane count the Run was started with, whatever the config says", async () => {
@@ -968,7 +969,7 @@ describe("the Run log", () => {
 
     const { lines } = await start({ command: "run", lanes: 2 });
 
-    expect(lines[0]).toBe("ticket-runner run run-1 · 2 lanes");
+    expect(lines[0]).toBe(`ticket-runner ${VERSION} run run-1 · 2 lanes`);
   });
 
   it("names the Tickets a narrowed Run was given after its Lane count", async () => {
@@ -977,7 +978,7 @@ describe("the Run log", () => {
 
     const { lines } = await start({ command: "run", tickets: [4, 12, 13] });
 
-    expect(lines[0]).toBe("ticket-runner run run-1 · 3 lanes · #4 #12 #13");
+    expect(lines[0]).toBe(`ticket-runner ${VERSION} run run-1 · 3 lanes · #4 #12 #13`);
   });
 
   it("starts every line between the opening and the summary with a Ticket number", async () => {
@@ -990,12 +991,48 @@ describe("the Run log", () => {
 
     // Split on newlines as well: an entry a Stage logs in two lines is two
     // lines in the transcript, and the second one has to carry the number too.
-    const ticketLines = lines.slice(1, -1).flatMap((entry) => entry.split("\n"));
-    // claimed, verified and merged for each of #4 and #7, and the guard's line
-    // for #9. Counted rather than bounded, so a new Ticket line has to be
-    // looked at here rather than slipping past an inequality.
-    expect(ticketLines).toHaveLength(7);
+    // The blank line that sets them apart from the opening comes first.
+    expect(lines[1]).toBe("");
+    const ticketLines = lines.slice(2, -1).flatMap((entry) => entry.split("\n"));
+    // claimed, implemented, verified and merged for each of #4 and #7, and the
+    // guard's line for #9. Counted rather than bounded, so a new Ticket line
+    // has to be looked at here rather than slipping past an inequality.
+    expect(ticketLines).toHaveLength(9);
     for (const line of ticketLines) expect(line).toMatch(/^#\d+ /);
+  });
+
+  it("follows its opening with every notice that goes with it, then a blank line before the first Ticket line", async () => {
+    tracker.publishedVersionTag = "v0.5.0";
+    tracker.targetVisibility = undefined;
+    workspace.shallow = true;
+    // A file where the Run's transcript directory goes, so the version cannot be recorded there.
+    write(join(".ticket-runner", "runs", "run-1"), "in the way");
+    tracker.addIssue({ number: 4 });
+
+    const { lines } = await start({ command: "run" }, undefined, REPOSITORY);
+
+    expect(lines[0]).toBe(`ticket-runner ${VERSION} run run-1 · 1 lane`);
+    expect(lines[1]).toMatch(/^A newer version is out: 0\.5\.0/);
+    expect(lines[2]).toMatch(/^could not read whether the Target is public/);
+    expect(lines[3]).toBe("the clone was shallow, so its full history was fetched");
+    expect(lines[4]).toMatch(/^could not record the version beside the transcripts: /);
+    expect(lines[5]).toBe("");
+    expect(lines[6]).toBe("#4 claimed");
+  });
+
+  it("opens its summary with --- between blank lines", async () => {
+    tracker.addIssue({ number: 4 });
+
+    const { lines } = await start();
+
+    expect(lines.at(-2)).toBe("#4 merged · PR #100");
+    expect(lines.at(-1)?.startsWith(`\n---\n\nticket-runner ${VERSION} run run-1 · `)).toBe(true);
+  });
+
+  it("separates a Run with no Ticket line from its summary by the summary's blank line alone", async () => {
+    const { out } = await start();
+
+    expect(out).toMatch(new RegExp(`^ticket-runner \\S+ run run-1 · 1 lane\n\n---\n\nticket-runner `));
   });
 
   it("prints a failure's output once, however many events it fails", async () => {
@@ -1051,7 +1088,11 @@ describe("the numbers a Run prints", () => {
    */
   async function narrowedRun(
     terminal: boolean | undefined,
-    { named = true, unreadable = false }: { named?: boolean; unreadable?: boolean } = {},
+    {
+      named = true,
+      unreadable = false,
+      env = { NO_COLOR: "1" },
+    }: { named?: boolean; unreadable?: boolean; env?: Record<string, string | undefined> } = {},
   ) {
     tracker = new FakeTracker();
     for (const name of ALL_LABELS) tracker.labels.add(name);
@@ -1082,14 +1123,17 @@ describe("the numbers a Run prints", () => {
     runner.queue("verify", stageResult({ result: PASSING_VERDICT }));
     runner.queue("verify", unmet);
 
-    return start({ command: "run", tickets: [4, 5, 57] }, undefined, undefined, {}, terminal);
+    return start({ command: "run", tickets: [4, 5, 57] }, undefined, undefined, env, terminal);
   }
 
   it("links every #N on standard output in a terminal, but one after a letter, digit or slash", async () => {
     const { out, lines } = await narrowedRun(true);
 
-    expect(lines[0]).toBe(`ticket-runner run run-1 · 1 lane · ${link(4)} ${link(5)} ${link(57)}`);
-    expect(lines).toContain(`${link(4)} claimed · agent/4-follow-up-on-2-after-acme-other-12`);
+    expect(lines[0]).toBe(
+      `ticket-runner ${VERSION} run run-1 · 1 lane · ${link(4)} ${link(5)} ${link(57)}`,
+    );
+    expect(lines).toContain(`${link(4)} claimed`);
+    expect(lines).toContain(`${link(4)} implemented · agent/4`);
     expect(lines.some((line) => line.startsWith(`${link(4)} merged · PR ${link(100)}`))).toBe(true);
     expect(lines.some((line) => line.startsWith(`${link(5)} handed off at `))).toBe(true);
     expect(out).toContain(
@@ -1113,7 +1157,7 @@ describe("the numbers a Run prints", () => {
     const { out, lines } = await narrowedRun(false);
 
     expect(out).not.toContain("\x1b");
-    expect(lines[0]).toBe("ticket-runner run run-1 · 1 lane · #4 #5 #57");
+    expect(lines[0]).toBe(`ticket-runner ${VERSION} run run-1 · 1 lane · #4 #5 #57`);
     expect(out).toContain("  merged   #4 Follow up on #2 after acme/other#12 (PR #100)\n");
     expect(out).toContain(
       "  noted    #9 comment · from #4 implement · the help drifts from READMEs, see #1283\u2026\n",
@@ -1130,6 +1174,64 @@ describe("the numbers a Run prints", () => {
 
     expect(linked).not.toBe(plain);
     expect(unlinked(linked)).toBe(plain);
+  });
+
+  it("colours each line by what it asks of its reader, whole before the summary and the verb alone in a row", async () => {
+    const { lines, out } = await narrowedRun(true, { env: {} });
+    const blue = (number: number) => `\x1b[94m${link(number)}\x1b[0m`;
+
+    // The opening is the Run's bookkeeping, and its numbers are still blue links.
+    expect(lines[0]).toBe(
+      `\x1b[2mticket-runner ${VERSION} run run-1 · 1 lane · \x1b[0m${blue(4)}\x1b[2m \x1b[0m${blue(5)}\x1b[2m \x1b[0m${blue(57)}`,
+    );
+    expect(lines).toContain(`${blue(4)}\x1b[2m claimed\x1b[0m`);
+    expect(lines).toContain(`${blue(4)} implemented · agent/4`);
+    expect(lines).toContain(`${blue(4)}\x1b[2m noted on \x1b[0m${blue(9)}`);
+    expect(lines).toContain(`${blue(4)}\x1b[32m merged · PR \x1b[0m${blue(100)}`);
+    expect(lines.some((line) => line.startsWith(`${blue(5)}\x1b[31m handed off at `))).toBe(true);
+    expect(lines).toContain(`${blue(5)} fixing · 1 of 1 criteria unmet`);
+    expect(lines).toContain(`${blue(57)} skipped · no-issue`);
+    expect(out).toContain("\n\x1b[2m---\x1b[0m\n\n");
+    expect(out).toContain(
+      `  \x1b[32mmerged\x1b[0m   ${blue(4)} Follow up on ${blue(2)} after acme/other#12 (PR ${blue(100)})\n`,
+    );
+    expect(out).toContain(`  \x1b[31mhanded\x1b[0m   ${blue(5)} Ticket 5 · `);
+    expect(out).toContain(
+      `  \x1b[2mnoted\x1b[0m    ${blue(9)} comment · from ${blue(4)} implement · the help drifts from READMEs, see #1283\u2026\n`,
+    );
+    expect(out).toContain(`  skipped  ${blue(57)} no-issue`);
+  });
+
+  it("prints in colour, colour codes taken out, byte for byte what it prints with NO_COLOR set", async () => {
+    const { out: coloured } = await narrowedRun(true, { env: {} });
+    const { out: noColour } = await narrowedRun(true, { env: { NO_COLOR: "1" } });
+
+    expect(coloured).not.toBe(noColour);
+    expect(noColour).not.toMatch(/\x1b\[[0-9;]*m/);
+    expect(withoutColour(coloured)).toBe(noColour);
+  });
+
+  it("colours as it would with NO_COLOR unset when NO_COLOR is empty", async () => {
+    const { out: empty } = await narrowedRun(true, { env: { NO_COLOR: "" } });
+
+    expect(empty).toBe((await narrowedRun(true, { env: {} })).out);
+  });
+
+  it("colours nothing, and links nothing, when standard output is not a terminal", async () => {
+    const { out } = await narrowedRun(false, { env: {} });
+
+    expect(out).not.toContain("\x1b");
+  });
+
+  it("never colours standard error", async () => {
+    write(CONVENTIONS_PATH, conventionsDoc("0.3.0"));
+    tracker.addIssue({ number: 4 });
+
+    const { err, out } = await start({ command: "run" }, undefined, undefined, {}, true);
+
+    expect(err).toContain("warning:");
+    expect(err).not.toContain("\x1b");
+    expect(out).toContain("\x1b[");
   });
 
   it("leaves every number plain in a terminal where GitHub could not name the Target", async () => {
@@ -1236,12 +1338,13 @@ describe("what a Run says about another version", () => {
     const { lines, out } = await start({ command: "run" }, undefined, REPOSITORY);
 
     // Straight after the opening line, and again above the summary's header.
-    expect(lines[0]).toContain("ticket-runner run run-1");
+    expect(lines[0]).toContain(`ticket-runner ${VERSION} run run-1`);
     expect(lines[1]).toContain("0.5.0");
     expect(lines[1]).toContain("0.4.0");
     const summary = (lines.at(-1) ?? "").trim().split("\n");
-    expect(summary[0]).toBe(lines[1]);
-    expect(summary[1]).toContain(`ticket-runner ${VERSION} run run-1`);
+    expect(summary.slice(0, 2)).toEqual(["---", ""]);
+    expect(summary[2]).toBe(lines[1]);
+    expect(summary[3]).toContain(`ticket-runner ${VERSION} run run-1`);
   });
 
   it("says it once to a narrowed Run as well", async () => {

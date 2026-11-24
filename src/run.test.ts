@@ -135,7 +135,7 @@ function worktreeOf(ticket: number): string {
 function stranded(ticket: number, overrides: Partial<TicketState> = {}): void {
   const state: TicketState = {
     ticket,
-    branch: `agent/${ticket}-ticket-${ticket}`,
+    branch: `agent/${ticket}`,
     state: "implemented",
     fixUsed: false,
     runId: "run-0",
@@ -192,8 +192,8 @@ describe("draining the Frontier", () => {
     await processRun(pipeline());
 
     expect(workspace.calls.filter((call) => call.startsWith("createWorktree"))).toEqual([
-      "createWorktree:agent/4-ticket-4",
-      "createWorktree:agent/5-ticket-5",
+      "createWorktree:agent/4",
+      "createWorktree:agent/5",
     ]);
     expect(tracker.calls.indexOf("squashMerge:100")).toBeLessThan(
       tracker.calls.indexOf("assign:5:pipeline-user"),
@@ -340,15 +340,15 @@ describe("a Ticket another Host left", () => {
 
   it("is swept up when stranded there, and resumed from its branch on the remote", async () => {
     stranded(4);
-    workspace.remoteBranches.add("agent/4-ticket-4");
+    workspace.remoteBranches.add("agent/4");
     moveToAnotherHost();
 
     const result = await processRun(pipeline());
 
     expect(result.outcomes).toEqual([expect.objectContaining({ outcome: "merged", ticket: 4 })]);
     expect(runner.stages()).toEqual(["verify"]);
-    expect(workspace.calls).toContain("worktreeFromRemote:agent/4-ticket-4");
-    expect(workspace.calls).not.toContain("createWorktree:agent/4-ticket-4");
+    expect(workspace.calls).toContain("worktreeFromRemote:agent/4");
+    expect(workspace.calls).not.toContain("createWorktree:agent/4");
   });
 
   it("is resumed through the Frontier from what it reached when released there", async () => {
@@ -365,7 +365,7 @@ describe("a Ticket another Host left", () => {
     // One implement Stage across both Hosts, which is the whole of what the
     // state on the remote saves.
     expect(runner.stages()).toEqual(["implement", "verify", "verify"]);
-    expect(workspace.calls).not.toContain("createWorktree:agent/4-ticket-4");
+    expect(workspace.calls).not.toContain("createWorktree:agent/4");
     expect(workspace.states.has(4)).toBe(false);
   });
 
@@ -385,7 +385,7 @@ describe("a Ticket another Host left", () => {
       expect.objectContaining({ outcome: "merged", ticket: 4, pullRequest: 100 }),
     ]);
     expect(runner.stages()).toEqual(["implement", "fix", "verify"]);
-    expect(workspace.calls).not.toContain("createWorktree:agent/4-ticket-4");
+    expect(workspace.calls).not.toContain("createWorktree:agent/4");
   });
 });
 
@@ -523,7 +523,7 @@ describe("a Ticket a transient API failure released", () => {
     expect(result.outcomes).toEqual([
       expect.objectContaining({ outcome: "released", ticket: 4, cause: "api-error" }),
     ]);
-    expect(workspace.calls).not.toContain("createWorktree:agent/5-ticket-5");
+    expect(workspace.calls).not.toContain("createWorktree:agent/5");
   });
 
   it("says an API failure ended the Run, not the rate limit", async () => {
@@ -629,7 +629,7 @@ describe("a Ticket released over a failing base branch", () => {
     expect(result.outcomes).toEqual([
       expect.objectContaining({ outcome: "released", ticket: 4, cause: "failing-base" }),
     ]);
-    expect(workspace.calls).not.toContain("createWorktree:agent/5-ticket-5");
+    expect(workspace.calls).not.toContain("createWorktree:agent/5");
   });
 
   it("says the base branch, the Check and the merge-base ended the Run", async () => {
@@ -658,7 +658,7 @@ describe("a Ticket the rate limit released", () => {
 
     expect(processed()).toEqual([4]);
     expect(result.outcomes.map((outcome) => outcome.outcome)).toEqual(["released"]);
-    expect(workspace.calls).not.toContain("createWorktree:agent/5-ticket-5");
+    expect(workspace.calls).not.toContain("createWorktree:agent/5");
     expect(runner.stages()).toEqual(["implement"]);
   });
 
@@ -721,7 +721,7 @@ describe("a Ticket that throws", () => {
         outcome: "handed-off",
         ticket: 4,
         title: "Ticket 4",
-        branch: "agent/4-ticket-4",
+        branch: "agent/4",
         // `take` catches what processTicket could not, so it can only blame setup.
         stage: "setup",
         failure: "gh: connection reset",
@@ -749,7 +749,7 @@ describe("a Ticket that throws", () => {
         outcome: "handed-off",
         ticket: 4,
         title: "Ticket 4",
-        branch: "agent/4-ticket-4",
+        branch: "agent/4",
         stage: "setup",
         failure: "gh: connection reset",
         notes: [],
@@ -792,7 +792,7 @@ describe("recomputing the Frontier", () => {
 
     const pull = workspace.calls.indexOf("pullBase");
     expect(pull).toBeGreaterThan(-1);
-    expect(pull).toBeLessThan(workspace.calls.indexOf("createWorktree:agent/5-ticket-5"));
+    expect(pull).toBeLessThan(workspace.calls.indexOf("createWorktree:agent/5"));
   });
 });
 
@@ -808,7 +808,7 @@ describe("stranded Tickets", () => {
 
     expect(result.outcomes).toEqual([expect.objectContaining({ outcome: "merged", ticket: 4 })]);
     expect(runner.stages()).toEqual(["verify"]);
-    expect(workspace.calls).not.toContain("createWorktree:agent/4-ticket-4");
+    expect(workspace.calls).not.toContain("createWorktree:agent/4");
   });
 
   it("resumes every one of them, in ascending number, before computing the Frontier", async () => {
@@ -881,7 +881,7 @@ describe("stranded Tickets", () => {
     tracker.addIssue({ number: 4, closed: true, assignees: ["pipeline-user"] });
     workspace.recordState({
       ticket: 4,
-      branch: "agent/4-ticket-4",
+      branch: "agent/4",
       state: "implemented",
       fixUsed: false,
       runId: "run-0",
@@ -899,7 +899,7 @@ describe("stranded Tickets", () => {
     tracker.addIssue({ number: 4, closed: true, assignees: ["pipeline-user"] });
     workspace.recordState({
       ticket: 4,
-      branch: "agent/4-ticket-4",
+      branch: "agent/4",
       state: "implemented",
       fixUsed: false,
       runId: "run-0",
@@ -933,13 +933,13 @@ describe("stranded Tickets", () => {
     tracker.addIssue({ number: 4 });
     workspace.recordState({
       ticket: 4,
-      branch: "agent/4-ticket-4",
+      branch: "agent/4",
       state: "implemented",
       fixUsed: false,
       runId: "run-0",
       updatedAt: "2026-09-17T09:00:00.000Z",
     });
-    workspace.worktrees.set(worktreeOf(4), "agent/4-ticket-4");
+    workspace.worktrees.set(worktreeOf(4), "agent/4");
 
     const result = await processRun(pipeline());
 
@@ -952,13 +952,13 @@ describe("stranded Tickets", () => {
     tracker.addIssue({ number: 4 });
     workspace.recordState({
       ticket: 4,
-      branch: "agent/4-ticket-4",
+      branch: "agent/4",
       state: "implemented",
       fixUsed: false,
       runId: "run-0",
       updatedAt: "2026-09-17T09:00:00.000Z",
     });
-    workspace.worktrees.set(worktreeOf(4), "agent/4-ticket-4");
+    workspace.worktrees.set(worktreeOf(4), "agent/4");
     tracker.addIssue({ number: 6 });
     runner.queue("verify", { ok: false, failure: "rate-limited" });
 
@@ -978,7 +978,7 @@ describe("stranded Tickets", () => {
     const result = await processRun(pipeline());
 
     expect(result.outcomes).toEqual([expect.objectContaining({ outcome: "merged", ticket: 4 })]);
-    expect(workspace.calls).toContain("createWorktree:agent/4-ticket-4");
+    expect(workspace.calls).toContain("createWorktree:agent/4");
     expect(runner.stages()).toEqual(["implement", "verify"]);
   });
 
@@ -1189,7 +1189,7 @@ describe("Lanes", () => {
 
     // The Release has happened and its Lane is free, and #6 is left where it is.
     expect(processed()).toEqual([4, 5]);
-    expect(workspace.calls).not.toContain("createWorktree:agent/6-ticket-6");
+    expect(workspace.calls).not.toContain("createWorktree:agent/6");
     expect(ended).toBe(false);
 
     verifying.release();
@@ -1853,7 +1853,7 @@ describe("a Run narrowed to the Tickets it was given", () => {
     tracker.addIssue({ number: 3, closed: true, assignees: ["pipeline-user"] });
     workspace.recordState({
       ticket: 3,
-      branch: "agent/3-ticket-3",
+      branch: "agent/3",
       state: "implemented",
       fixUsed: false,
       runId: "run-0",
@@ -2076,7 +2076,7 @@ describe("a Ticket GitHub or the remote failed on its own side", () => {
   it("ends it over a hand-off the fault cut short, reporting the Ticket handed off", async () => {
     for (const number of [4, 5]) tracker.addIssue({ number });
     // A branch a human holds, so the hand-off keeps no state, and its comment fails.
-    workspace.branches.add("agent/4-ticket-4");
+    workspace.branches.add("agent/4");
     tracker.comment = async () => {
       throw commentFault();
     };
@@ -2101,7 +2101,7 @@ describe("a Ticket GitHub or the remote failed on its own side", () => {
     // #5 is handed off at setup, its comment failing, while #4 is still in its
     // implement Stage; #4 is then released over the remote.
     workspace.pullBaseFailure = unreachable();
-    workspace.branches.add("agent/5-ticket-5");
+    workspace.branches.add("agent/5");
     tracker.comment = async () => {
       throw commentFault();
     };

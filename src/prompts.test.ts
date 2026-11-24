@@ -71,6 +71,26 @@ describe("implementPrompt", () => {
     expect(prompt).toMatch(/do not close/i);
   });
 
+  it("asks for a branch slug in its shape, in English whatever language the other answers take", () => {
+    const prompt = implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS);
+    const line = prompt.split("\n").find((l) => l.includes("`branch`"));
+
+    expect(line).toBeDefined();
+    expect(line).toContain("`agent/<n>-<slug>`");
+    expect(line).toContain("at most 40 characters matching `^[a-z0-9]+(-[a-z0-9]+)*$`");
+    expect(line).toContain("in English words saying what the Ticket does");
+    expect(line).toContain("whatever language your other answers take");
+    // The language rule lists what follows the Target's language, and the slug is not among them.
+    const language = prompt.split("\n").find((l) => l.includes("in the language this repository's"));
+    expect(language).not.toContain("`branch`");
+  });
+
+  it("tells the Stage not to push, since the branch is renamed before its first push", () => {
+    const prompt = implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS);
+
+    expect(prompt).toMatch(/^- Do not push, do not open pull requests and do not close the issue/m);
+  });
+
   it("states the subject shape itself rather than pointing at the conventions document", () => {
     const prompt = implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS);
 
@@ -170,6 +190,13 @@ describe("verifyPrompt", () => {
 });
 
 describe("fixPrompt", () => {
+  it("asks for no branch slug: only the implement Stage names the branch", () => {
+    const prompt = fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS);
+
+    expect(prompt).not.toContain("`branch`");
+    expect(prompt).not.toContain("<slug>");
+  });
+
   it("invokes no plugin skill but the pr skill: the implement skill would start over", () => {
     const prompt = fixPrompt(url, FAILED_CHECK, BASE, "", OTHER_TARGET, NO_CHECKS);
     const skills = prompt.match(/\/mattpocock-skills:[a-z-]+/g) ?? [];

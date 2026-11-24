@@ -147,9 +147,11 @@ One Run at a time per Target, whichever Host it is on. [The Run lock](./stopping
 
 ## The summary
 
-When a Run ends it prints one row per Ticket, in the order the Tickets ended, then one line saying why it stopped:
+When a Run ends it prints `---` between blank lines, which sets the summary apart from the lines above it, then one row per Ticket, in the order the Tickets ended, then one line saying why it stopped:
 
 ```text
+---
+
 ticket-runner 0.5.2 run 2026-09-17T09-00-00-000 · 84m · subscription
 
   merged   #4 Planning guards (PR #12)
@@ -200,15 +202,26 @@ A stopped Run exits with its outcomes' code as usual. The codes of the other com
 The Run's own lines go to the terminal, every line about a Ticket starting with its number, so interleaved Lanes can be read one Ticket at a time:
 
 ```text
-ticket-runner run 2026-09-17T09-00-00-000 · 1 lane
-#4 claimed · agent/4-planning-guards
+ticket-runner 0.5.2 run 2026-09-17T09-00-00-000 · 1 lane
+
+#4 claimed
+#4 implemented · agent/4-planning-guards
 #4 verified · 6 met · 1 unverifiable
 #4 merged · PR #12
 ```
 
-Nothing is printed while a Stage runs or CI is awaited, which can take an hour; a Stage's own output is in its `.stdout` file below. A narrowed Run's first line adds the Tickets named, and a resumed Ticket says `resumed from <state>` in place of `claimed`. A Stage billed to something other than what the Run bills its Stages to is named as it comes back: `#4 implement ran on apiKeySource apiKeyHelper, not the subscription (none)`. Warnings and refusals go to stderr.
+The first line names the version as the summary's header does, so the log of a Run killed before its summary still says which version ran. The notices that go with it follow it, such as a newer version being out, and a blank line comes before the first Ticket line. Nothing is printed while a Stage runs or CI is awaited, which can take an hour; a Stage's own output is in its `.stdout` file below. A narrowed Run's first line adds the Tickets named. A Ticket is claimed on `agent/<n>`, so `claimed` names no branch, and `implemented` names it once the implement Stage has named it ([The worktree and branch](./ticket-to-merge.md#the-worktree-and-branch)); a Ticket whose branch keeps `agent/<n>` says why first, `#4 keeps agent/4 · …`. A resumed Ticket says `resumed from <state>` in place of `claimed`, with its branch after it when it resumes past the implement Stage. A Stage billed to something other than what the Run bills its Stages to is named as it comes back: `#4 implement ran on apiKeySource apiKeyHelper, not the subscription (none)`. Warnings and refusals go to stderr.
 
-In a terminal, each `#4` and `PR #12` on these lines and in the summary is a link to it on GitHub, where your terminal supports links. A log file or a pipe gets the same text with no links.
+In a terminal, each `#4` and `PR #12` on these lines and in the summary is a link to it on GitHub, where your terminal supports links, and each line takes the colour of what it asks of you:
+
+| Colour | What the line asks | Lines |
+|---|---|---|
+| red | act on this Ticket now | `handed off at`, `failed outside the hand-off path`, `has a state file this version cannot use`, the summary's `handed` |
+| green | nothing: it merged | `merged ·`, the summary's `merged` |
+| default | read it | every other line: the Stage lines such as `implemented ·` and `verified ·`, `released at`, `stopped the Run`, `skipped`, the summary's header, its other rows and its last line |
+| dim | skip it: the Run's own bookkeeping | the first line, `claimed`, `resumed from`, `taken from the top`, `keeps agent/`, `noted on`, `---`, the summary's `noted` rows |
+
+A summary row colours its verb alone, so the titles stay plain, and every linked number is bright blue, in a dim line too. Set `NO_COLOR` to anything to turn colour off and keep the links. A log file or a pipe gets the same text with no links and no colour, and standard error is never coloured.
 
 Everything a Stage did goes to disk, under the Target's gitignored `.ticket-runner/`. The run id is the start time in UTC, such as `2026-09-17T09-00-00-000`.
 
@@ -283,6 +296,6 @@ In everything else a cloud Host runs the same Run against the same Target as a w
 - [`src/cli.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/cli.ts), [`src/command-line.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/command-line.ts), [`src/start.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/start.ts), [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts)
 - [`src/credential.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/credential.ts), [`src/adapters/claude-agent-runner.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/claude-agent-runner.ts), [`src/adapters/gh-tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts)
 - [`src/stop.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stop.ts), [`src/lock.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/lock.ts), [`src/stage-guard.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/stage-guard.ts), [`src/host.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/host.ts)
-- [`src/templates.ts` · `runSummary`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts), [`src/run-log.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run-log.ts), [`src/adapters/version.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts), [`src/terminal-links.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/terminal-links.ts)
+- [`src/templates.ts` · `runSummary`](https://github.com/jjongs2/ticket-runner/blob/main/src/templates.ts), [`src/run-log.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run-log.ts), [`src/adapters/version.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/version.ts), [`src/terminal-links.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/terminal-links.ts), [`src/terminal-colour.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/terminal-colour.ts)
 - [`docs/templates/run-summary.txt`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/run-summary.txt), [`docs/templates/stop-report.txt`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/stop-report.txt), [`docs/templates/operator-skill.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/operator-skill.md)
 - [ADR-0006](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0006-stop-is-a-signal-and-ctrl-c-is-a-kill.md), [ADR-0007](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0007-a-version-is-cut-by-a-human-and-installs-follow-tags.md), [ADR-0008](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0008-a-cloud-host-is-a-claude-code-cloud-session.md)

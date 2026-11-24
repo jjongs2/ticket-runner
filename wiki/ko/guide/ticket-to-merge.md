@@ -12,7 +12,7 @@ Run은 아무도 지켜보지 않으니, 세션 하나의 말만 믿고 merge할
 | 단계 | 하는 일 | 판단 주체 |
 |---|---|---|
 | claim | guard, state file, 담당자 지정, `ready-for-agent` → `in-progress` | 파이프라인 |
-| worktree | `.worktrees/ticket-<n>`에 `agent/<n>-<slug>` | git |
+| worktree | `.worktrees/ticket-<n>`에 `agent/<n>`, implement Stage 뒤에 `agent/<n>-<slug>`로 이름이 붙음 | git, 그리고 implement Stage의 slug |
 | implement Stage | worktree에서 `/mattpocock-skills:implement` 실행 | 에이전트 |
 | Check | commit 안 된 변경이 없는지 본 뒤 Check 명령을 하나씩 실행 | 종료 코드 |
 | verify Stage | Acceptance Criteria와 branch가 만든 결함을 적대적으로 판정 | 판정을 읽은 파이프라인 |
@@ -64,11 +64,15 @@ claim은 Ticket에 '가져감' 표시를 해서 다른 Run이 가져가지 않�
 
 | | 값 |
 |---|---|
-| branch | `agent/<n>-<slug>`: 제목을 소문자 kebab-case로 바꾸고, 40자 이내에서 단어 경계로 자름 |
+| branch | claim할 때는 `agent/<n>`. implement Stage가 commit을 남기고 끝나면 Stage가 답한 slug로 `agent/<n>-<slug>` |
 | worktree | Target 루트 아래 `.worktrees/ticket-<n>`, gitignore됨 |
 | 분기 기준 | 방금 fetch한 remote의 base branch, upstream은 설정하지 않음 |
 
 같은 이름의 branch가 이미 있으면 절대 재사용하지 않습니다. Ticket은 `setup`에서 Hand-off되고, 코멘트에 누구의 branch인지와 치우는 명령이 적힙니다. 재개되는 Ticket은 state file에 적힌 branch에서 이어 갑니다. 자세한 내용은 [Hand-off, 멈추고 이어 하기](./stopping-and-resuming.md)를 보세요.
+
+Ticket 제목에서는 아무것도 잘라 내지 않습니다. 영어로 쓰지 않은 제목은 branch 이름에서 아무 뜻도 남기지 못하기 때문입니다. 대신 Ticket을 읽은 implement Stage가 `branch` slug를 답합니다. `^[a-z0-9]+(-[a-z0-9]+)*$`에 맞는 40자 이내의 slug로, Target이 어떤 언어로 쓰든 Ticket이 하는 일을 영어 단어로 말합니다. Stage가 commit을 남기고 끝나면, branch를 처음 push하기 전에 Run은 state file에 `agent/<n>-<slug>`를 기록하고, branch 이름을 바꾸고, 그 이름으로 push합니다. 그래서 remote에는 그 Ticket의 `agent/<n>`가 남지 않습니다. 이후에 쓰는 것은 모두 새 branch를 적습니다. 진행 상황 코멘트, pull request, Hand-off가 그렇습니다.
+
+slug가 비어 있으면 branch는 아무 말 없이 `agent/<n>`로 남습니다. slug가 형식에 맞지 않을 때, state file 쓰기가 실패할 때, 새 이름의 branch가 Host나 remote에 이미 있을 때, `agent/<n>`가 이미 remote에 올라가 있을 때(끝까지 가지 못한 implement Stage가 push한 경우)도 `agent/<n>`로 남고, 이때는 `#<n> keeps agent/<n> · <why>`를 기록합니다. state file이 이미 다른 branch를 적고 있는 Ticket은 그 branch를 그대로 씁니다. state file을 쓰고 이름을 바꾸기 전에 Host가 죽으면, 그 Host의 다음 Run에는 길을 막는 branch가 남아 Ticket은 그 branch가 있는 worktree와 함께 `setup`에서 Hand-off됩니다. 다른 Host의 Run은 아무것도 push되지 않았으니 Ticket을 처음부터 다시 가져갑니다.
 
 ## Stage가 도는 방식 {#how-a-stage-runs}
 
@@ -115,11 +119,11 @@ Stage마다 디스크에 무엇을 남기는지는 [로그와 transcript](./runn
 
 ## implement Stage {#the-implement-stage}
 
-implement 스킬이 Ticket을 읽고, 만들고, 리뷰합니다. 리뷰에서 나온 수정까지 commit한 뒤 Stage는 branch 전체에 대해 `title`, `body`, `problem`, `solution`을 답합니다. 세션이 끝나면 파이프라인은 [Note](#notes)를 보내고, 비어 있지 않은 답변을 state file에 기록하고, commit이 있으면 branch를 push합니다. 다른 Host의 Run도 거기서 이어 갈 수 있게 하려는 것입니다. 그다음은 이렇습니다.
+implement 스킬이 Ticket을 읽고, 만들고, 리뷰합니다. 리뷰에서 나온 수정까지 commit한 뒤 Stage는 branch 전체에 대해 `title`, `body`, `problem`, `solution`을 답하고, `branch` slug도 답합니다([위](#the-worktree-and-branch)). Stage는 push하지 말라는 지시를 받습니다. 세션이 끝나면 파이프라인은 [Note](#notes)를 보내고, 비어 있지 않은 답변을 state file에 기록합니다. 그다음은 이렇습니다.
 
-- 끝까지 가지 못한 Stage는 `implement`에서 Hand-off됩니다.
+- 끝까지 가지 못한 Stage는 commit이 있으면 `agent/<n>`로 push해 다른 Host의 Run도 거기서 이어 갈 수 있게 하고, `implement`에서 Hand-off됩니다. 이름은 바꾸지 않습니다.
 - base branch보다 commit이 하나도 늘지 않은 branch도 Hand-off됩니다. 조용히 포기한 에이전트는 판정할 거리를 남기지 않기 때문입니다. Stage가 `noCommitReason`에 이유를 답했다면 hand-off 코멘트가 그 이유를 인용합니다.
-- 그 외에는 state file이 `implemented`로 넘어가, 이후 어떤 Run도 이 Stage 비용을 다시 치르지 않습니다.
+- 그 외에는 branch에 이름을 붙여 push하고, Run이 `#<n> implemented · <branch>`를 출력하고, state file이 `implemented`로 넘어가, 이후 어떤 Run도 이 Stage 비용을 다시 치르지 않습니다.
 
 ## Check {#the-checks}
 
@@ -370,7 +374,8 @@ Note 안의 줄 머리 `- [ ]`는 escape되므로, Note가 Acceptance Criteria�
 
 ## 참고 자료 {#references}
 
-- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `processTicket`, `takeTicket`, `verify`, `fix`, `resolveConflict`, `requireGreenCi`
+- [`src/branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/branch.ts)
+- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `processTicket`, `takeTicket`, `nameBranch`, `verify`, `fix`, `resolveConflict`, `requireGreenCi`
 - [`src/failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts): merge-base에서 Run마다 한 번 돌리는 Check
 - [`src/workflows.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/workflows.ts): pull request에서 돌 수 있는 워크플로가 있는지
 - [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts), [`src/frontier.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts), [`src/landing.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/landing.ts)
