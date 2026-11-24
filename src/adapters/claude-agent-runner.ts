@@ -403,6 +403,7 @@ function startStageLog(
 ): StageLog {
   mkdirSync(request.logDir, { recursive: true });
   const path = (suffix: string) => join(request.logDir, `${request.stage}.${suffix}`);
+  // Each stream's file: standard output is written as the transcript.
   const files = { stdout: path("transcript.jsonl"), stderr: path("stderr") };
   const redact = (text: string) =>
     key === undefined || key === "" ? text : text.replaceAll(key, REDACTED_KEY);

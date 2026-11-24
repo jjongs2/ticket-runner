@@ -57,7 +57,7 @@ export interface StageRequest {
    * kept out of its environment, or that key.
    */
   credential: Credential;
-  /** Where the command line, stdout, stderr and transcript are written. */
+  /** Where the command line, the transcript of stdout, and stderr are written. */
   logDir: string;
   /**
    * Where {@link SKILLS_PLUGIN} is installed on the Host, as the Run's

@@ -7,7 +7,7 @@ export function runLogDir(repoRoot: string, runId: string): string {
 }
 
 /**
- * Where a Stage's command line, stdout, stderr and transcript are written:
+ * Where a Stage's command line, transcript and stderr are written:
  * one directory per Run, per Ticket, under the gitignored run directory.
  */
 export function stageLogDir(repoRoot: string, runId: string, ticket: number): string {
