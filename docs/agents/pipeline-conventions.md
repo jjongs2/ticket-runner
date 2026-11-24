@@ -37,5 +37,5 @@ A Ticket is one issue the pipeline can implement in a single session. It is refu
 
 Both are `ticket-runner`'s own, both are gitignored by `ticket-runner init`, and neither is ever committed.
 
-- `.worktrees/ticket-<n>/` — one git worktree per claimed Ticket, where its Stages run. Beside them, `.worktrees/base-<commit>/` is a clean worktree at a merge-base with the base branch, made to run a failing Check there once and removed when it has run.
+- `.worktrees/ticket-<n>/` — one git worktree per claimed Ticket, where its Stages run. Beside them, `.worktrees/base-<commit>/` is a clean worktree at a merge-base with the base branch, made to run the Check commands there once when a pull request's CI fails, and removed when they have run.
 - `.ticket-runner/` — the Run's logs and Stage transcripts. The Run lock and the state file a Ticket keeps while its branch has work worth resuming are not here but on the Target's remote, so that a Run on any Host sees which Run holds the Target, and carries on from where a killed Run, or a handed-off Ticket relabelled `ready-for-agent`, stopped.

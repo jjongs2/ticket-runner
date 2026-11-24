@@ -406,7 +406,7 @@ export interface HandoffComment {
    */
   worktree?: string;
   pullRequest?: number;
-  /** Failing Check output, unmet criteria, or a CI log excerpt. */
+  /** The uncommitted paths, unmet criteria, or a CI log excerpt. */
   evidence: string;
   /** Whether the Ticket's fix budget had already been spent when this failure came. */
   fixUsed?: boolean;
