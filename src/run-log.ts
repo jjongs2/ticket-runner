@@ -43,8 +43,8 @@ export function writeRunVersion(repoRoot: string, runId: string, version: string
 
 /**
  * What of a Stage's files a hand-off keeps: its command line, to reproduce it
- * by hand, and its transcript, to read why it did what it did. Its stdout is
- * what the transcript was parsed out of, and its stderr is the CLI's own.
+ * by hand, and its transcript, the session's output as it printed it, to read
+ * why it did what it did. Its stderr is the CLI's own.
  */
 const KEPT_SUFFIXES = [".command", ".transcript.jsonl"];
 

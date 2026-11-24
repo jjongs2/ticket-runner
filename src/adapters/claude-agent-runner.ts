@@ -195,8 +195,8 @@ export class ClaudeAgentRunner implements AgentRunner {
     const log = startStageLog(request, commandLine, process.env[API_KEY_ENV_VAR]);
     const execution = await this.spawn(request, args, env, session, log);
 
+    log.close(execution);
     const events = parseEvents(execution.stdout);
-    log.close(execution, events);
 
     const results = events.filter(isResultEvent);
     const failure = classify(request, execution, events);
@@ -371,13 +371,13 @@ function buildArgs(
   return args;
 }
 
-/** The Stage's four files, written from the moment the Stage starts. */
+/** The Stage's three files, written from the moment the Stage starts. */
 interface StageLog {
   transcriptPath: string;
   appendStdout: (chunk: string) => void;
   appendStderr: (chunk: string) => void;
-  /** Reconcile the output files with the finished child, then transcribe it. */
-  close: (execution: Execution, events: unknown[]) => void;
+  /** Reconcile the output files with the finished child. */
+  close: (execution: Execution) => void;
 }
 
 /**
@@ -391,8 +391,9 @@ const REDACTED_KEY = `<${API_KEY_ENV_VAR}>`;
  * Put the Stage's command line on disk and empty its output files, before
  * anything is spawned. Chunks are appended as they arrive rather than saved at
  * the end, so the files hold what the session printed even when nobody is left
- * alive to write them (#12). The transcript is the one derivation that has to
- * wait: it is parsed out of the stdout the session has finished printing.
+ * alive to write them (#12). Standard output goes to the transcript, once and
+ * as printed: the CLI's own escapes, a line that is not JSON and a line cut off
+ * mid-way all stay as they were.
  */
 function startStageLog(
   request: StageRequest,
@@ -402,13 +403,14 @@ function startStageLog(
 ): StageLog {
   mkdirSync(request.logDir, { recursive: true });
   const path = (suffix: string) => join(request.logDir, `${request.stage}.${suffix}`);
+  const files = { stdout: path("transcript.jsonl"), stderr: path("stderr") };
   const redact = (text: string) =>
     key === undefined || key === "" ? text : text.replaceAll(key, REDACTED_KEY);
 
   writeFileSync(path("command"), `${commandLine}\n`);
   // Emptied up front, so a Stage never appends to output from an earlier one.
-  writeFileSync(path("stdout"), "");
-  writeFileSync(path("stderr"), "");
+  writeFileSync(files.stdout, "");
+  writeFileSync(files.stderr, "");
 
   const appended = { stdout: 0, stderr: 0 };
   // The tail of each stream that may be the start of a key the next chunk
@@ -417,41 +419,34 @@ function startStageLog(
   const heldBack = { stdout: "", stderr: "" };
   // Appending happens inside the child's stream handler, where a throw would
   // take the whole Run down. A write that fails is left to `close` to redo.
-  const append = (suffix: "stdout" | "stderr") => (chunk: string) => {
+  const append = (stream: "stdout" | "stderr") => (chunk: string) => {
     try {
-      const text = redact(heldBack[suffix] + chunk);
+      const text = redact(heldBack[stream] + chunk);
       const held = keyPrefixAtEnd(text, key);
-      heldBack[suffix] = text.slice(text.length - held);
-      appendFileSync(path(suffix), text.slice(0, text.length - held));
-      appended[suffix] += chunk.length;
+      heldBack[stream] = text.slice(text.length - held);
+      appendFileSync(files[stream], text.slice(0, text.length - held));
+      appended[stream] += chunk.length;
     } catch {
       // Nothing is lost: the chunk is still part of the execution.
     }
   };
 
   return {
-    transcriptPath: path("transcript.jsonl"),
+    transcriptPath: files.stdout,
     appendStdout: append("stdout"),
     appendStderr: append("stderr"),
-    close: (execution, events) => {
+    close: (execution) => {
       // Whatever the appends missed — a failed write, or a process runner that
       // delivered no chunks at all — is written back whole here, so a Stage
       // that ran to the end always has its full output on disk. Where the
       // Host has a key, both are written back whole whatever was appended,
       // which also puts the tail held back from the last chunk on disk.
       const keyed = key !== undefined && key !== "";
-      if (keyed || appended.stdout !== execution.stdout.length) {
-        writeFileSync(path("stdout"), redact(execution.stdout));
+      for (const stream of ["stdout", "stderr"] as const) {
+        if (keyed || appended[stream] !== execution[stream].length) {
+          writeFileSync(files[stream], redact(execution[stream]));
+        }
       }
-      if (keyed || appended.stderr !== execution.stderr.length) {
-        writeFileSync(path("stderr"), redact(execution.stderr));
-      }
-      writeFileSync(
-        path("transcript.jsonl"),
-        redact(
-          events.map((event) => JSON.stringify(event)).join("\n") + (events.length ? "\n" : ""),
-        ),
-      );
     },
   };
 }
@@ -476,7 +471,7 @@ function parseEvents(stdout: string): unknown[] {
     try {
       events.push(JSON.parse(trimmed));
     } catch {
-      // Anything the CLI printed outside the stream stays in the stdout file.
+      // Anything the CLI printed outside the stream stays in the transcript.
     }
   }
   return events;

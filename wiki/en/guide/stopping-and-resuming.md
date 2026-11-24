@@ -131,7 +131,7 @@ The Host a Ticket was worked on may be gone by the time a human looks, for examp
 | Handed-off Stages' transcripts, kept on the remote | `ticket-<n>/<runId>/` on `ticket-runner/state` | the state file goes |
 | Handed-off Stages' transcripts, kept off it | `.ticket-runner/runs/<runId>/<n>/` on that Host | a human deletes it, or the cloud Host's VM goes |
 | Worktree | `.worktrees/ticket-<n>` on that Host | the merge, or a human deletes it |
-| Every Stage's full log (stdout, stderr too) | `.ticket-runner/runs/<runId>/<n>/` on that Host | a human deletes it |
+| Every Stage's files (transcript, stderr and command line) | `.ticket-runner/runs/<runId>/<n>/` on that Host | a human deletes it |
 
 The state branch is rewritten on every change, so read transcripts kept there from a fetch rather than a local branch:
 
