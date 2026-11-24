@@ -831,7 +831,6 @@ describe("a defect the branch introduced", () => {
 
 describe("a code Stage that ends without a new commit", () => {
   const KINDS = [
-    "failed-check",
     "unmet-criteria",
     "failed-ci",
     "unresolved-conflict",
@@ -896,7 +895,6 @@ describe("an unmet criterion's evidence", () => {
     evidence: "- it works — npm test is red",
   };
   const OTHER_KINDS = [
-    "failed-check",
     "failed-ci",
     "unresolved-conflict",
     "uncommitted-work",

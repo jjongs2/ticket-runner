@@ -768,7 +768,7 @@ describe("handoffTakenComment", () => {
 
   it("marks a hand-off whose evidence only quotes the line", () => {
     const quoting = handoffComment({
-      stage: "checks",
+      stage: "ci",
       failure: "`npm test` failed",
       branch: "agent/2-skeleton",
       evidence: `a doc under test reads ${HANDOFF_TAKEN_LINE}`,
@@ -1114,7 +1114,7 @@ describe("runSummary", () => {
       outcomes: [
         {
           ...released,
-          stage: "checks",
+          stage: "ci",
           cause: "failing-base",
           notes: [
             {
@@ -1136,7 +1136,7 @@ describe("runSummary", () => {
     });
 
     expect(summary.split("\n").slice(4, 6)).toEqual([
-      "  released #6 Rebase conflict resolution · failing base branch at checks",
+      "  released #6 Rebase conflict resolution · failing base branch at ci",
       "  noted    #31 comment · from #6 pipeline · The base branch `main` fails `npm test`.",
     ]);
     expect(summary).not.toContain("rate limit");
