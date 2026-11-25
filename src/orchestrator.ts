@@ -760,7 +760,7 @@ async function takeTicket(
               ? "added-criteria"
               : "hand-off",
         };
-        await fix(
+        owed = await fix(
           pipeline,
           issue,
           worktree,
@@ -1932,7 +1932,7 @@ async function fix(
   progress: Progress,
   { notes, written }: CodeStageNotes,
   record: ResumeRecord,
-): Promise<void> {
+): Promise<TicketFailure | undefined> {
   const stage = pipeline.config.stages.fix;
   pipeline.log?.(`#${issue.number} fixing · ${failure.summary}`);
 
@@ -1989,13 +1989,15 @@ async function fix(
     throw leftNoCommits("fix", failure.evidence, result);
   }
 
-  // What the Stage left uncommitted hands the Ticket off from here, before
-  // anything grades the branch, whichever allowance paid for the Stage.
+  // What the Stage left uncommitted is owed to the loop, which throws it before
+  // anything grades the branch, so the allowance rule decides what it buys:
+  // a Hand-off after the fix budget's Stage, and the budget's own Stage after
+  // the fix for criteria added since a hand-off, which spent none of it.
   const uncommitted = await uncommittedWork(pipeline, worktree, "fix");
   await progress.record(
     stageRow("fix", result, uncommitted === undefined ? "✅ committed" : UNCOMMITTED_CELL),
   );
-  if (uncommitted !== undefined) throw uncommitted;
+  return uncommitted;
 }
 
 /**

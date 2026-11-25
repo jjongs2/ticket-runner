@@ -5201,6 +5201,24 @@ describe("criteria a comment added after the hand-off", () => {
     expect(runner.stages()).toEqual([...FIRST_RUN, "verify", "fix", "verify", "fix", "verify"]);
   });
 
+  it("spends the fix budget on what that fix Stage leaves uncommitted", async () => {
+    await handedOff();
+    commentAdds(ADDED);
+    handedBack();
+    runner.queue("verify", graded("met", "unmet"));
+    runner.queue("verify", graded("met", "met"));
+    let fixes = 0;
+    runner.leaves("fix", () => {
+      fixes += 1;
+      workspace.commits.push(`fix(cli): log the line, take ${fixes} (#2)`);
+      workspace.uncommitted = fixes === 1 ? ["src/cli.ts"] : [];
+    });
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).toEqual([...FIRST_RUN, "verify", "fix", "fix", "verify"]);
+    expect(runner.prompts("fix").at(-1)).toContain("src/cli.ts");
+  });
+
   it("spends the fix budget on a verdict whose unmet criteria are all the body's", async () => {
     await handedOff();
     commentAdds(ADDED);
