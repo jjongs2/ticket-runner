@@ -383,8 +383,8 @@ function asTicketFailure(error: unknown, point: FailurePoint): TicketFailure {
  * failure, and every second failure, ends in a hand-off. The one exception is
  * a Ticket handed back after a hand-off: a verdict leaving unmet a criterion a
  * comment added since buys a fix Stage that spends no budget, once each time
- * the Ticket is handed back. Nothing ends in a
- * merge that has not been through a green pass of the whole gauntlet.
+ * the Ticket is handed back. Nothing ends in a merge that has not been through
+ * a green pass of the whole gauntlet.
  *
  * A Stage the subscription rate limit or a transient API failure stopped ends
  * none of that: the Ticket is released, and a Run started once the limit has
@@ -543,7 +543,7 @@ async function takeTicket(
   // claimed, so a verify behind a fix answers the same numbers as the first.
   const criteria = listCriteria([issue.body, ...issue.comments.map((comment) => comment.body)]);
   // Those of them a comment posted after the last hand-off comment lists.
-  const added = criteriaAddedSinceHandoff(issue.body, issue.comments);
+  const addedSinceHandoff = criteriaAddedSinceHandoff(issue.body, issue.comments);
 
   // Declared out here because ticking the Acceptance Criteria it proved happens
   // after the merge, where a failure may no longer hand the Ticket off.
@@ -730,7 +730,7 @@ async function takeTicket(
         const funding: FixFunding =
           !addedCriteriaFixUsed &&
           failure instanceof UnmetCriteria &&
-          failure.unmet.some((number) => added.has(number))
+          failure.unmet.some((number) => addedSinceHandoff.has(number))
             ? "added-criteria"
             : "budget";
         if (funding === "budget" && fixUsed) throw failure;

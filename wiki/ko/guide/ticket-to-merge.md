@@ -15,7 +15,7 @@ Run은 아무도 지켜보지 않으니, 세션 하나의 말만 믿고 merge할
 | worktree | `.worktrees/ticket-<n>`에 `agent/<n>`, implement Stage 뒤에 `agent/<n>-<slug>`로 이름이 붙음 | git, 그리고 implement Stage의 slug |
 | implement Stage | worktree에서 `/mattpocock-skills:implement` 실행, 그다음 commit 안 된 변경이 없는지 확인 | 에이전트 |
 | verify Stage | Acceptance Criteria와 branch가 만든 결함을 적대적으로 판정 | 판정을 읽은 파이프라인 |
-| fix Stage | 실패 내용을 받은 새 세션, Ticket당 한 번 | fix 기회 |
+| fix Stage | 실패 내용을 받은 새 세션, Ticket당 한 번, [Hand-off 뒤 더해진 기준](#criteria-added-after-a-hand-off)에는 한 번 더 | fix 기회 |
 | Landing | rebase, conflict Stage, pull request, CI, squash merge | 한 번에 Lane 하나 |
 | merge 이후 | 충족된 기준에 체크, 정리 | 파이프라인 |
 
@@ -43,7 +43,7 @@ flowchart TD
 ```
 <!-- Sources: src/orchestrator.ts, src/lifecycle.ts -->
 
-fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종류와 상관없이 두 번째 실패, 또는 fix Stage가 손쓸 수 없는 실패는 Hand-off입니다. rate limit, API 장애, API 예산으로 멈춘 Stage, base branch도 똑같이 겪는 실패([아래](#a-failure-the-base-branch-shares)), 그리고 어느 단계에서든 [GitHub나 git remote가 장애를 일으킨 경우](./stopping-and-resuming.md#release-over-a-github-or-remote-failure)는 이 그림을 아예 벗어나 Ticket을 [Release](./stopping-and-resuming.md#release-on-a-rate-limit)합니다.
+fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종류와 상관없이 두 번째 실패, 또는 fix Stage가 손쓸 수 없는 실패는 Hand-off입니다. 다만 [Hand-off 뒤 더해진 기준](#criteria-added-after-a-hand-off)을 충족하지 못한 판정은 fix 기회를 쓰지 않는 fix Stage로 갑니다. rate limit, API 장애, API 예산으로 멈춘 Stage, base branch도 똑같이 겪는 실패([아래](#a-failure-the-base-branch-shares)), 그리고 어느 단계에서든 [GitHub나 git remote가 장애를 일으킨 경우](./stopping-and-resuming.md#release-over-a-github-or-remote-failure)는 이 그림을 아예 벗어나 Ticket을 [Release](./stopping-and-resuming.md#release-on-a-rate-limit)합니다.
 
 [Hand-off](./stopping-and-resuming.md#hand-off)는 claim을 풀고, `ready-for-human`을 달고, 실패와 작업이 있는 곳을 코멘트로 남기고, 열린 pull request를 draft로 되돌립니다. branch와 state file은 Target의 remote에 남습니다. 사람이 볼 즈음에는 작업한 Host가 없어졌을 수도 있기 때문입니다. 넘겨진 Stage들의 transcript는 [`keepTranscripts`](./configuration.md#keeptranscripts)에 따라 그 옆이나 Host에 남고, hand-off 코멘트가 그 위치를 알려 줍니다. 사람이 Ticket의 라벨을 `ready-for-agent`로 바꾸면 Ticket이 파이프라인으로 돌아가고, implement Stage를 다시 돌리지 않고 도달한 지점부터 이어 갑니다. [사람이 직접 merge하는](./configuration.md#merge) Target에서는 CI가 초록인 Ticket이 실패한 것 없이 [`merge`에서 Hand-off됩니다](./stopping-and-resuming.md#when-nothing-failed). state file은 파이프라인의 작업이 남지 않는 [setup에서의 Hand-off](./stopping-and-resuming.md#when-a-hand-off-does-less)에서 지워집니다. 새로 시작한 Ticket이 worktree가 생기기 전에 실패했거나, Run이 덮어쓰지 않으려 한 branch가 이미 있던 경우입니다. 거기서는 이 Run의 Stage가 하나도 돌지 않았으니 파이프라인이 이어 갈 것이 없습니다.
 
@@ -151,7 +151,7 @@ merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 �
 
 ## fix Stage와 fix 기회 {#the-fix-stage-and-the-fix-budget}
 
-fix 기회는 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사람에게 넘어갑니다. fix Stage는 같은 branch에서 `/mattpocock-skills:pr` 말고는 플러그인 스킬 없이 새로 띄운 세션이고, 실패와 그 근거를 받아 그 결함 하나를 고칩니다. branch에 대해 마지막으로 답한 `title`, `body`, `problem`, `solution`도 함께 받습니다. 수정으로 내용이 달라지는 답변은 branch 전체에 맞게 고쳐 다시 답하고, 그대로 맞는 답변은 비워 답해 앞의 것을 남깁니다. `unmet` 기준이나 branch의 결함 때문에 불려 왔는데 그중 하나라도 문서로 남은 결정이나 다른 기준을 뒤집어야만 충족되거나 고쳐진다면, 아무것도 commit하지 말고 `noCommitReason`에 이유를 밝히라고 합니다. 그러면 Ticket이 사람에게 넘어갑니다. 그렇지 않다면 근거에 적힌 수정안은 답이 아니라 실마리로만 봅니다. 원인은 직접 찾고, 더 좁은 수정에 만족하기 전에 Ticket의 범위 안에서 그 원인을 고칠 방법을 찾습니다. commit하기 전에는 받은 반례만이 아니라 그 원인에서 만든 입력으로도 수정을 시험합니다.
+fix 기회는 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사람에게 넘어갑니다. [Hand-off 뒤 더해진 기준](#criteria-added-after-a-hand-off)이 따로 받는 fix 하나는 예외입니다. fix Stage는 같은 branch에서 `/mattpocock-skills:pr` 말고는 플러그인 스킬 없이 새로 띄운 세션이고, 실패와 그 근거를 받아 그 결함 하나를 고칩니다. branch에 대해 마지막으로 답한 `title`, `body`, `problem`, `solution`도 함께 받습니다. 수정으로 내용이 달라지는 답변은 branch 전체에 맞게 고쳐 다시 답하고, 그대로 맞는 답변은 비워 답해 앞의 것을 남깁니다. `unmet` 기준이나 branch의 결함 때문에 불려 왔는데 그중 하나라도 문서로 남은 결정이나 다른 기준을 뒤집어야만 충족되거나 고쳐진다면, 아무것도 commit하지 말고 `noCommitReason`에 이유를 밝히라고 합니다. 그러면 Ticket이 사람에게 넘어갑니다. 그렇지 않다면 근거에 적힌 수정안은 답이 아니라 실마리로만 봅니다. 원인은 직접 찾고, 더 좁은 수정에 만족하기 전에 Ticket의 범위 안에서 그 원인을 고칠 방법을 찾습니다. commit하기 전에는 받은 반례만이 아니라 그 원인에서 만든 입력으로도 수정을 시험합니다.
 
 새 세션이 고칠 수 있는 결함만 fix 기회를 씁니다.
 
@@ -185,7 +185,7 @@ rate limit, API 장애, API 예산으로 멈춘 fix Stage는 fix 기회를 쓰�
 
 Ticket을 돌려주는 사람은 코드를 쓰지 않고 결정 코멘트로 기준을 먼저 더하거나 바꾸는 일이 많습니다. 그러면 첫 verify는 어떤 Stage도 손대지 않은 기준을 채점합니다. 그래서 Ticket의 마지막 hand-off 코멘트 뒤에 올라온 코멘트에서 나온 기준을 충족하지 못했다는 판정은 fix 기회를 쓰지 않는 fix Stage를 보내고, Ticket이 돌아올 때 가진 fix 기회는 다음 실패를 위해 그대로 남습니다. Ticket을 돌려받을 때마다 한 번입니다. 같은 기준을 또 충족하지 못한 다음 판정은 여느 실패처럼 fix 기회를 씁니다.
 
-그래도 verify가 먼저 돕니다. 사람이 이미 새 기준을 구현했을 수 있기 때문입니다. 본문을 고쳐 넣은 기준은 예외가 아닙니다. 기준이 언제 더해졌는지는 hand-off 코멘트 아래 놓인 코멘트의 자리만 말해 주기 때문입니다. 충족하지 못한 기준이 모두 본문이나 그 hand-off 코멘트 앞 코멘트의 것이거나, 결함만으로 실패한 판정은 평소처럼 fix 기회를 씁니다. Release를 거쳐도 이 fix를 두 번 사지는 않습니다. state file이 썼다고 기록하고, Release가 멈춘 이 fix Stage는 Ticket을 이어 받는 Run이 여전히 받습니다. 이 fix Stage도 아무것도 commit하지 않으면 다른 fix Stage처럼 Hand-off됩니다.
+그래도 verify가 먼저 돕니다. 사람이 이미 새 기준을 구현했을 수 있기 때문입니다. 본문을 고쳐 넣은 기준은 예외가 아닙니다. 기준이 언제 더해졌는지는 hand-off 코멘트 아래 놓인 코멘트의 자리만 말해 주기 때문입니다. 충족하지 못한 기준이 모두 본문이나 그 hand-off 코멘트 앞 코멘트의 것이거나, 결함만으로 실패한 판정은 평소처럼 fix 기회를 씁니다. Release를 거쳐도 이 fix를 두 번 사지는 않습니다. state file이 썼다고 기록하고, Release가 멈춘 이 fix Stage는 Ticket을 이어받는 Run이 여전히 받습니다. 이 fix Stage도 아무것도 commit하지 않으면 다른 fix Stage처럼 Hand-off됩니다.
 
 ## Lane과 Frontier 다시 채우기 {#lanes-and-the-frontier-refill}
 

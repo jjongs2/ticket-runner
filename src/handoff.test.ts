@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { carriesCurrentHandoff, markHandoffsTaken } from "./handoff.js";
+import { carriesCurrentHandoff, criteriaAddedSinceHandoff, markHandoffsTaken } from "./handoff.js";
 import type { IssueComment } from "./ports/tracker.js";
 import { PROGRESS_MARKER } from "./progress.js";
 import { HANDOFF_TAKEN_LINE, handoffComment, handoffTakenComment } from "./templates.js";
@@ -157,5 +157,32 @@ describe("a hand-off the Ticket is still carrying", () => {
 
   it("is nothing on a Ticket that was never handed off", () => {
     expect(carriesCurrentHandoff([{ id: "c1", body: `${PROGRESS_MARKER}\na table` }])).toBe(false);
+  });
+});
+
+describe("the criteria added since the last hand-off", () => {
+  const added = (...bodies: string[]) =>
+    [...criteriaAddedSinceHandoff("- [ ] it works", ticket(...bodies).comments)].sort();
+
+  it("are those of the comments below the last hand-off comment, numbered after the body's", () => {
+    expect(added("- [ ] it logs", HANDOFF, "- [ ] it rotates\n- [ ] it compresses")).toEqual([3, 4]);
+  });
+
+  it("count from the last hand-off comment when there are several", () => {
+    expect(added(HANDOFF, "- [ ] it logs", HANDOFF, "- [ ] it rotates")).toEqual([3]);
+  });
+
+  it("count from a hand-off comment already marked as history", () => {
+    const taken = handoffTakenComment(HANDOFF) ?? "";
+
+    expect(added(taken, "- [ ] it logs")).toEqual([2]);
+  });
+
+  it("are none on a Ticket never handed off, whatever its comments list", () => {
+    expect(added("- [ ] it logs")).toEqual([]);
+  });
+
+  it("are none when nothing below the hand-off comment lists a criterion", () => {
+    expect(added("- [ ] it logs", HANDOFF, "Looks fine to me.")).toEqual([]);
   });
 });
