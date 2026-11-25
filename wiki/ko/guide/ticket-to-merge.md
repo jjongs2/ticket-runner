@@ -139,7 +139,7 @@ merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 �
 | 판정 | 진행 상황 칸 | 결과 |
 |---|---|---|
 | 통과 | `✅ <k> met`, 있으면 뒤에 `· <c> to CI`와 `· <u> unverifiable` | Landing으로 |
-| `unmet`이 있음 | `❌ <u> unmet` | fix 기회를 씀. fix Stage는 충족되지 않은 기준과 그 근거를 받음 |
+| `unmet`이 있음 | `❌ <u> unmet` | fix 기회를 씀. 단, 그중 하나가 [Hand-off 뒤 코멘트로 더해진 기준](#criteria-added-after-a-hand-off)이면 쓰지 않음. fix Stage는 충족되지 않은 기준과 그 근거를 받음 |
 | branch가 만든 결함 | `❌ <d> defects` 또는 `❌ <u> unmet · <d> defects` | `unmet`과 같음. fix 기회를 쓰고, fix Stage는 결함마다 그 근거를 받음 |
 | 받은 번호를 빠뜨리거나, 두 번 답하거나, 받지 않은 번호에 답함 | `❌ misnumbered` | Hand-off. Ticket을 판정하지 않은 것 |
 | 전부 `unverifiable` | `❌ no evidence` | Hand-off. merge할 근거가 없음 |
@@ -147,7 +147,7 @@ merge 전에 코드를 리뷰하는 사람이 없고, 코드를 쓴 세션은 �
 
 **CI에 맡기는 기준.** pull request의 CI나 몇몇 명령이 통과하기만을 요구하는 기준("The checks pass." 같은 것)은, `.github/workflows/`의 워크플로가 이 pull request에서 돌고(트리거와 `paths` 필터가 branch의 변경을 받아들이고) 기준이 이름 댄 명령을 모두 돌린다면(통째로든 job 여럿에 나눠서든) `ci`로 답합니다. 근거에는 그 워크플로와 step을 적습니다. GitHub는 건너뛴 job을 통과로 치므로, `paths` 필터가 branch를 건너뛰는 워크플로는 그 명령을 돌리는 워크플로가 아닙니다. 그렇지 않으면 세션이 기준이 이름 댄 명령을 직접 돌려 판정합니다. `ci` 기준은 CI가 통과하면 체크됩니다. CI 대기가 `⚠️ no checks`나 `⚠️ no workflow runs`로 끝나면 체크되지 않고 `unverifiable` 기준이 나오는 곳마다 함께 이름이 오르며, 그때 `met` 기준이 하나도 없는 Ticket은 merge할 근거가 있는 기준이 없으니 Hand-off됩니다.
 
-`unmet` 기준이나 결함 때문에 fix를 거친 뒤의 verify는 첫 판정의 `unmet` 기준과 결함을 그 근거와 함께 받습니다. 그 반례가 사라지고 기준 전체가 성립해야만 충족이라는 말도 함께 듣습니다. 이 verify가 fix의 코드에서 찾은 결함은 다른 두 번째 실패처럼 Hand-off이므로, 이 게이트가 되풀이되지는 않습니다.
+`unmet` 기준이나 결함 때문에 fix를 거친 뒤의 verify는 첫 판정의 `unmet` 기준과 결함을 그 근거와 함께 받습니다. 그 반례가 사라지고 기준 전체가 성립해야만 충족이라는 말도 함께 듣습니다. 이 verify가 fix의 코드에서 찾은 결함은 다른 두 번째 실패처럼 Hand-off이므로, 이 게이트가 되풀이되지는 않습니다. 하나뿐인 예외는 [Hand-off 뒤 코멘트로 기준이 더해진](#criteria-added-after-a-hand-off) 채 돌아온 Ticket입니다. 이 Ticket은 돌려받을 때마다 한 번 fix를 더 받습니다.
 
 ## fix Stage와 fix 기회 {#the-fix-stage-and-the-fix-budget}
 
@@ -159,6 +159,7 @@ fix 기회는 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사�
 |---|---|---|
 | 어떤 commit에도 없는 변경 | implement, fix, conflict Stage 뒤의 rebase, 이어 하는 Ticket의 setup | 예 |
 | `unmet` 기준 | verify | 예 |
+| 마지막 hand-off 코멘트 뒤의 코멘트가 더한 `unmet` 기준, Ticket을 돌려받은 뒤 그런 판정이 처음일 때 | verify | 아니요, 따로 fix Stage 한 번([아래](#criteria-added-after-a-hand-off)) |
 | branch가 만든 결함 | verify | 예 |
 | conflict Stage가 rebase를 끝내지 못함 | rebase | 예 |
 | pull request check 실패 | ci | 예 |
@@ -178,7 +179,13 @@ fix 기회는 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사�
 
 fix Stage가 끝나면 Ticket은 verify부터 다시 시작합니다. 모든 게이트가 수정본을 다시 판정하므로, 수정본도 처음 구현과 같은 기준을 통과해야 합니다. fix Stage 후 branch가 자라지 않았다면 곧바로 Hand-off입니다. 아무도 건드리지 않은 branch를 다시 판정해 봐야 똑같이 실패할 뿐이기 때문입니다. squash하거나 amend한 branch도 자라지 않은 것으로 봅니다. 이때 hand-off 코멘트에는 fix Stage가 받았던 근거가 실리고, 무엇 때문에 불려 왔든 Stage가 `noCommitReason`에 답한 commit하지 않은 이유도 인용됩니다.
 
-rate limit, API 장애, API 예산으로 멈춘 fix Stage는 fix 기회를 쓰지 않습니다. fix 기회는 파이프라인이 Ticket을 맡을 때마다 fix Stage 한 번입니다. Release는 Ticket에 대해 아무것도 바꾸지 않았으니 이미 쓴 fix 기회를 다음 Run에 그대로 넘깁니다. Hand-off는 fix 기회를 되돌려 줍니다. Ticket은 사람의 손을 거쳐야만 돌아오고, 새 fix 기회는 그 사람이 손본 것을 위한 것이기 때문입니다. 자세한 것은 [Ticket 돌려주기](./stopping-and-resuming.md#handing-a-ticket-back)에 있습니다.
+rate limit, API 장애, API 예산으로 멈춘 fix Stage는 fix 기회를 쓰지 않습니다. fix 기회는 파이프라인이 Ticket을 맡을 때마다 fix Stage 한 번입니다. Release는 Ticket에 대해 아무것도 바꾸지 않았으니 이미 쓴 fix 기회를 다음 Run에 그대로 넘깁니다. Hand-off는 fix 기회를 되돌려 줍니다. Ticket은 사람의 손을 거쳐야만 돌아오고, 새 fix 기회는 그 사람이 손본 것을 위한 것이기 때문입니다. 코멘트로 기준이 더해진 채 돌아온 Ticket은 fix 기회를 쓰지 않는 fix를 하나 더 받습니다([아래](#criteria-added-after-a-hand-off)). 자세한 것은 [Ticket 돌려주기](./stopping-and-resuming.md#handing-a-ticket-back)에 있습니다.
+
+### Hand-off 뒤 더해진 기준 {#criteria-added-after-a-hand-off}
+
+Ticket을 돌려주는 사람은 코드를 쓰지 않고 결정 코멘트로 기준을 먼저 더하거나 바꾸는 일이 많습니다. 그러면 첫 verify는 어떤 Stage도 손대지 않은 기준을 채점합니다. 그래서 Ticket의 마지막 hand-off 코멘트 뒤에 올라온 코멘트에서 나온 기준을 충족하지 못했다는 판정은 fix 기회를 쓰지 않는 fix Stage를 보내고, Ticket이 돌아올 때 가진 fix 기회는 다음 실패를 위해 그대로 남습니다. Ticket을 돌려받을 때마다 한 번입니다. 같은 기준을 또 충족하지 못한 다음 판정은 여느 실패처럼 fix 기회를 씁니다.
+
+그래도 verify가 먼저 돕니다. 사람이 이미 새 기준을 구현했을 수 있기 때문입니다. 본문을 고쳐 넣은 기준은 예외가 아닙니다. 기준이 언제 더해졌는지는 hand-off 코멘트 아래 놓인 코멘트의 자리만 말해 주기 때문입니다. 충족하지 못한 기준이 모두 본문이나 그 hand-off 코멘트 앞 코멘트의 것이거나, 결함만으로 실패한 판정은 평소처럼 fix 기회를 씁니다. Release를 거쳐도 이 fix를 두 번 사지는 않습니다. state file이 썼다고 기록하고, Release가 멈춘 이 fix Stage는 Ticket을 이어 받는 Run이 여전히 받습니다. 이 fix Stage도 아무것도 commit하지 않으면 다른 fix Stage처럼 Hand-off됩니다.
 
 ## Lane과 Frontier 다시 채우기 {#lanes-and-the-frontier-refill}
 

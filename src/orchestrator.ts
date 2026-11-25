@@ -380,7 +380,10 @@ function asTicketFailure(error: unknown, point: FailurePoint): TicketFailure {
  * sets up, is what grades the code before it merges. Work left uncommitted, an
  * unmet criterion, a red CI or a rebase conflict the conflict Stage could not
  * resolve spends the Ticket's fix budget and starts again at verify; every other
- * failure, and every second failure, ends in a hand-off. Nothing ends in a
+ * failure, and every second failure, ends in a hand-off. The one exception is
+ * a Ticket handed back after a hand-off: a verdict leaving unmet a criterion a
+ * comment added since buys a fix Stage that spends no budget, once each time
+ * the Ticket is handed back. Nothing ends in a
  * merge that has not been through a green pass of the whole gauntlet.
  *
  * A Stage the subscription rate limit or a transient API failure stopped ends
@@ -513,8 +516,9 @@ async function takeTicket(
   let worktreeOnDisk: HandOffWorktree | undefined =
     resume === undefined ? undefined : { path: worktree, pushable: true };
   // The fix budget, which is one per Ticket and spent by the first failure a
-  // fix Stage is offered. Once it is gone the next failure of any kind — even a
-  // kind the fix Stage never touched — is a hand-off. A resumed Ticket keeps the
+  // fix Stage is offered, bar the one fix below for criteria added since a
+  // hand-off. Once it is gone the next failure of any kind — even a kind the
+  // fix Stage never touched — is a hand-off. A resumed Ticket keeps the
   // budget recorded when it stopped: resuming buys no second chances.
   let fixUsed = resume?.fixUsed ?? false;
   // The one fix Stage beside the budget, bought by a verdict that leaves unmet
@@ -1945,8 +1949,10 @@ async function fix(
   // A session that came back clean mended nothing, whatever it says. Believing
   // it costs the Ticket a whole second pass of the verdict and CI
   // over a branch nobody touched, which can only fail the way it just did — and
-  // a progress row claiming the Stage committed. The budget is already spent,
-  // so this ends the Ticket rather than buying another try.
+  // a progress row claiming the Stage committed. So this ends the Ticket
+  // rather than buying another try, whether the Stage spent the fix budget or
+  // was the fix for criteria added since a hand-off, which spends none: the
+  // branch is no better placed for a second session than it was for this one.
   //
   // A branch that grew is the whole signal, which is not the same as one that
   // changed: a session that squashed the branch shorter, or amended in place,
@@ -1962,8 +1968,8 @@ async function fix(
     throw leftNoCommits("fix", failure.evidence, result);
   }
 
-  // The budget is spent, so what the Stage left uncommitted hands the Ticket
-  // off from here, before anything grades the branch.
+  // What the Stage left uncommitted hands the Ticket off from here, before
+  // anything grades the branch, whichever allowance paid for the Stage.
   const uncommitted = await uncommittedWork(pipeline, worktree, "fix");
   await progress.record(
     stageRow("fix", result, uncommitted === undefined ? "✅ committed" : UNCOMMITTED_CELL),

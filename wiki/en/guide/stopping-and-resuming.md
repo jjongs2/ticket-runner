@@ -162,7 +162,7 @@ To hand a Ticket back, move its label from `ready-for-human` to `ready-for-agent
 
 A few things differ from the Run that handed it off:
 
-- **Fix budget**: fresh. The Ticket went through a human's hands, and whatever they did is what the new budget is for. The old comment still says the budget was spent, because it was.
+- **Fix budget**: fresh. The Ticket went through a human's hands, and whatever they did is what the new budget is for. The old comment still says the budget was spent, because it was. A criterion you add in a comment before relabelling gets one fix of its own besides, which spends none of the budget, once each time you hand the Ticket back ([Criteria added after a Hand-off](./ticket-to-merge.md#criteria-added-after-a-hand-off)). A criterion edited into the body does not.
 - **Draft pull request**: taken out of draft before CI is awaited, since a draft often runs no workflows and the wait would read "no checks". One that will not come out of draft, such as a pull request a human closed, is a Hand-off at `pr`: closing it said the work should not go on.
 - **Hand-off comments**: each is marked `_Taken again by a later Run; this hand-off is history._` under its marker, which notifies nobody.
 - **Progress comment**: a new one. The comment the human read is left exactly as they read it. A Ticket [handed off with no comment](#when-nothing-failed) carries on in its progress comment instead, below the section you read, which stays as it was: with no hand-off comment, nothing tells the Run a human held it.
@@ -286,6 +286,7 @@ The file is JSON a human can read without the pipeline:
   "branch": "agent/8-rate-limit-release-and-resume",
   "state": "implemented",
   "fixUsed": false,
+  "addedCriteriaFixUsed": true,
   "pullRequest": 31,
   "title": "feat: release a rate-limited Ticket",
   "body": "## Summary\n\n...",
@@ -304,6 +305,7 @@ The file is JSON a human can read without the pipeline:
 | `branch` | where the work is, used as-is rather than derived from the title again |
 | `state` | `claimed` (the implement Stage has not finished) or `implemented` (its work is on the branch) |
 | `fixUsed` | whether the fix budget is spent. Resuming buys no second chance, except after a Hand-off. |
+| `addedCriteriaFixUsed` | present only once a Ticket handed back has had the fix that [criteria added in a comment after its Hand-off](./ticket-to-merge.md#criteria-added-after-a-hand-off) get without spending the fix budget, so a Run resuming after a Release does not buy it twice. A Hand-off clears it. |
 | `pullRequest` | the pull request already open, so a resumed Run does not open a second one |
 | `title` | the latest title the implement or fix Stage gave for the whole branch, which names the pull request |
 | `body` | the latest pull request body they gave, written below `Closes #<n>` |

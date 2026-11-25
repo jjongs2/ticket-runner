@@ -58,6 +58,8 @@ The command must refuse bad input.              ← 아님: 산문
 
 기준은 세션이 코드를 돌려 보거나 읽어서 확인할 수 있게 쓰세요. 사람의 눈이 필요한 기준(스크린샷, 느낌)은 `unverifiable`로 돌아옵니다. CI나 몇몇 명령이 통과하기만을 요구하는 기준("The checks pass." 같은 것)은 pull request의 워크플로가 그 명령을 돌리면 `ci`로 돌아오고, CI가 통과하면 merge 때 체크됩니다. 그런 워크플로가 없으면 세션이 그 명령을 직접 돌립니다.
 
+입력에 걸친 기준에는 경계를 두세요. verify Stage는 기준마다 충족되지 않았음을 보이려 하고, fix 뒤에는 branch 전체를 처음부터 다시 채점합니다. Ticket이 나열하지 않은 입력이나 형태에 걸친 기준, 예컨대 어떤 패턴에 대한 "flags none of …", "never loses an edit, however often", "appears nowhere" 같은 기준은 verify마다 새 반례로 실패할 수 있습니다. fix는 저마다 받은 반례 하나에 답하기 때문입니다. 경계를 두는 방법은 셋입니다. 다루는 형태를 나열하거나, 남겨 두는 위험을 밝히거나, 애매한 경우가 어느 쪽으로 가는지 정하세요.
+
 ## blocker {#blockers}
 
 GitHub의 네이티브 `blocked by` 연결만 셉니다([ADR-0003](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0003-github-native-relations-only.md)). 그래서 Run이 가져가는 것은 GitHub 화면에서 막힘이 풀렸다고 보이는 것과 같습니다.
