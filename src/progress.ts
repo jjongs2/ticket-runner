@@ -38,7 +38,9 @@ export const PROGRESS_MARKER = "<!-- ticket-runner:progress -->";
  * row, and neither is an agent session. `setup` earns one where a resumed
  * Ticket's worktree holds work no commit carries, and `setup`, `rebase` and
  * `pr` one where GitHub or the remote failing on its own side released the
- * Ticket there.
+ * Ticket there. `pr` is also the pr Stage's row, as `conflict` is the conflict
+ * Stage's: each names what it worked on, and its cell what happened, so a
+ * `⏸ GitHub failure` while publishing reads apart from `✅ revised`.
  */
 export type ProgressPoint =
   | "setup"

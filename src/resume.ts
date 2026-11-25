@@ -40,6 +40,8 @@ const stateSchema = z.object({
   problem: z.string().optional(),
   solution: z.string().optional(),
   rebaseFirst: z.boolean().optional(),
+  handoffHead: z.string().min(1).optional(),
+  prStageOwed: z.boolean().optional(),
   runId: z.string(),
   version: z.string().optional(),
   updatedAt: z.string(),
@@ -92,6 +94,8 @@ export function readStateFile(contents: string, ticket: number): StateFile {
     problem,
     solution,
     rebaseFirst,
+    handoffHead,
+    prStageOwed,
     version,
     ...state
   } = parsed.data;
@@ -106,6 +110,8 @@ export function readStateFile(contents: string, ticket: number): StateFile {
       ...(problem === undefined ? {} : { problem }),
       ...(solution === undefined ? {} : { solution }),
       ...(rebaseFirst === undefined ? {} : { rebaseFirst }),
+      ...(handoffHead === undefined ? {} : { handoffHead }),
+      ...(prStageOwed === undefined ? {} : { prStageOwed }),
       ...(version === undefined ? {} : { version }),
     },
   };

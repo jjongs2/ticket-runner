@@ -72,6 +72,13 @@ function config(overrides: Partial<Config> = {}): Config {
         maxMinutes: 30,
         extraPrompt: "",
       },
+      pr: {
+        model: "claude-opus-5-5",
+        effort: "high",
+        maxTurns: 60,
+        maxMinutes: 20,
+        extraPrompt: "",
+      },
     },
     permissionMode: "auto",
     ciTimeoutMinutes: 30,
@@ -5432,6 +5439,287 @@ describe("criteria a comment added after the hand-off", () => {
   );
 });
 
+describe("a Ticket handed back with commits since its hand-off", () => {
+  /** The prose the implement Stage answered, which the hand-off leaves recorded. */
+  const FIRST = {
+    title: "feat: add the flag",
+    body: "## Summary\n\nAdds the flag.",
+    problem: "There was no flag.",
+    solution: "It adds one.",
+  };
+
+  /** What a pr Stage answers: blank keeps a recorded answer. */
+  const revised = (answers: Partial<typeof FIRST> = {}) =>
+    stageResult({ result: { title: "", body: "", problem: "", solution: "", ...answers } });
+
+  /** The Stages the first Run took, which every test here starts from. */
+  const FIRST_RUN = ["implement", "verify", "fix", "verify"];
+
+  /** The branch's head when the first Run handed it off: its two commits and the fix's. */
+  const HANDED_OFF_AT = "commit-3";
+
+  /** A first Run that answers {@link FIRST}, spends the fix budget and is handed off at CI. */
+  async function handedOff(): Promise<void> {
+    runner.queue("implement", described(FIRST, FIRST.title));
+    tracker.queueCi(RED_CI);
+    tracker.queueCi(RED_CI);
+
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "ci" });
+  }
+
+  /** What a human commits on the branch while they hold the Ticket. */
+  function humanCommits(): void {
+    workspace.commits.push("fix: mend what the Run left (#2)");
+  }
+
+  function handedBack(): void {
+    tracker.issue(TICKET).labels = ["ready-for-agent"];
+  }
+
+  /** The progress table this Run wrote, the last one on the Ticket. */
+  const lastTable = () =>
+    tracker
+      .issue(TICKET)
+      .comments.filter(({ body }) => body.startsWith(PROGRESS_MARKER))
+      .at(-1)?.body ?? "";
+
+  it("records the branch's head in the state file a hand-off keeps", async () => {
+    await handedOff();
+
+    expect(workspace.state(TICKET)).toMatchObject({ handoffHead: HANDED_OFF_AT });
+    expect(workspace.state(TICKET)).not.toHaveProperty("prStageOwed");
+  });
+
+  it("runs a pr Stage once verify passes and before the Landing, and lands what it answered", async () => {
+    await handedOff();
+    humanCommits();
+    handedBack();
+    runner.queue("pr", revised({ body: "## Summary\n\nAdds the flag, mended.", solution: "It adds one, mended." }));
+    let pullsBeforePr = -1;
+    runner.leaves("pr", () => {
+      pullsBeforePr = workspace.calls.filter((call) => call === "pullBase").length;
+    });
+    const pullsBefore = workspace.calls.filter((call) => call === "pullBase").length;
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+
+    expect(runner.stages()).toEqual([...FIRST_RUN, "verify", "pr"]);
+    expect(pullsBeforePr).toBe(pullsBefore);
+    const pr = tracker.pullRequest(100);
+    expect(pr.title).toBe(FIRST.title);
+    expect(pr.body).toBe(`Closes #${TICKET}\n\n## Summary\n\nAdds the flag, mended.\n`);
+    expect(pr.squashCommit?.body).toContain("There was no flag.");
+    expect(pr.squashCommit?.body).toContain("It adds one, mended.");
+    expect(lastTable()).toContain("| pr | ✅ revised |");
+  });
+
+  it("gives the pr Stage the recorded answers, the recorded head, the base branch and the passing verdict", async () => {
+    await handedOff();
+    humanCommits();
+    handedBack();
+
+    await run();
+
+    const [prompt = ""] = runner.prompts("pr");
+    expect(prompt).toContain(`\`git log ${HANDED_OFF_AT}..HEAD\``);
+    expect(prompt).toContain("`git diff main...HEAD`");
+    for (const answer of Object.values(FIRST)) expect(prompt).toContain(answer);
+    expect(prompt).toContain("- 1. it works — met: npm test is green");
+    expect(runner.requests.find((request) => request.stage === "pr")).toMatchObject({
+      cwd: worktree,
+      maxTurns: 60,
+      maxMinutes: 20,
+    });
+  });
+
+  it("gives it the whole branch against the base branch where the recorded head is no ancestor of it", async () => {
+    await handedOff();
+    humanCommits();
+    workspace.notAncestors.add(HANDED_OFF_AT);
+    handedBack();
+
+    await run();
+
+    const [prompt = ""] = runner.prompts("pr");
+    expect(prompt).not.toContain(HANDED_OFF_AT);
+    expect(prompt).toContain("`git log main..HEAD`");
+  });
+
+  it("clears the recorded head once the pr Stage has answered", async () => {
+    await handedOff();
+    humanCommits();
+    handedBack();
+    tracker.queueCi(RED_CI);
+    const seen = stateAtEachStage();
+
+    await run();
+
+    const atFix = seen.find(({ stage }) => stage === "fix")?.state;
+    expect(atFix).toBeDefined();
+    expect(atFix).not.toHaveProperty("handoffHead");
+    expect(atFix).not.toHaveProperty("prStageOwed");
+    expect(runner.stages()).toEqual([...FIRST_RUN, "verify", "pr", "fix", "verify"]);
+  });
+
+  it("runs no pr Stage on a Ticket handed back with its branch where the hand-off left it", async () => {
+    await handedOff();
+    handedBack();
+    const seen = stateAtEachStage();
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+
+    expect(runner.stages()).toEqual([...FIRST_RUN, "verify"]);
+    expect(seen.at(-1)?.state).not.toHaveProperty("handoffHead");
+  });
+
+  it("never counts the Run's own fix commits as a human's, across a Release and resume", async () => {
+    await handedOff();
+    handedBack();
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
+    runner.queue("verify", { ok: false, failure: "rate-limited" });
+
+    expect(await run()).toMatchObject({ outcome: "released", stage: "verify" });
+    expect(workspace.state(TICKET)).not.toHaveProperty("handoffHead");
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).not.toContain("pr");
+  });
+
+  it("keeps the pr Stage owed to the Run resuming a Ticket released before it ran", async () => {
+    await handedOff();
+    humanCommits();
+    handedBack();
+    runner.queue("verify", { ok: false, failure: "rate-limited" });
+
+    expect(await run()).toMatchObject({ outcome: "released", stage: "verify" });
+    expect(workspace.state(TICKET)).toMatchObject({ handoffHead: HANDED_OFF_AT, prStageOwed: true });
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).toEqual([...FIRST_RUN, "verify", "verify", "pr"]);
+    expect(runner.prompts("pr")[0]).toContain(`\`git log ${HANDED_OFF_AT}..HEAD\``);
+  });
+
+  it("runs no pr Stage on a Ticket never handed off", async () => {
+    expect(await run()).toMatchObject({ outcome: "merged" });
+
+    expect(runner.stages()).toEqual(["implement", "verify"]);
+  });
+
+  it("runs no pr Stage on a Ticket whose implement Stage runs in the Run that takes it back", async () => {
+    runner.queue("implement", { ok: false, failure: "turn-capped" });
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "implement" });
+    expect(workspace.state(TICKET)).toMatchObject({ state: "claimed", handoffHead: "commit-2" });
+    humanCommits();
+    handedBack();
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+
+    expect(runner.stages()).toEqual(["implement", "implement", "verify"]);
+  });
+
+  it("keeps a head no pr Stage has answered for through a second hand-off", async () => {
+    await handedOff();
+    humanCommits();
+    handedBack();
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
+    runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
+
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "verify" });
+
+    expect(runner.stages()).not.toContain("pr");
+    expect(workspace.state(TICKET)).toMatchObject({ handoffHead: HANDED_OFF_AT });
+    expect(workspace.state(TICKET)).not.toHaveProperty("prStageOwed");
+  });
+
+  it("records the head afresh at a hand-off after the pr Stage answered", async () => {
+    await handedOff();
+    humanCommits();
+    handedBack();
+    tracker.queueCi(RED_CI);
+    tracker.queueCi(RED_CI);
+
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "ci" });
+
+    expect(workspace.state(TICKET)).toMatchObject({ handoffHead: workspace.defaultHead() });
+    expect(workspace.defaultHead()).not.toBe(HANDED_OFF_AT);
+  });
+
+  it("resets a pr Stage that committed, drops its answers and goes on", async () => {
+    await handedOff();
+    humanCommits();
+    handedBack();
+    const started = workspace.defaultHead();
+    runner.leaves("pr", () => workspace.commits.push("docs: a commit the pr Stage made (#2)"));
+    runner.queue("pr", revised({ body: "## Summary\n\nDescribes the dropped commit." }));
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+
+    expect(workspace.calls).toContain(`resetTo:${started}`);
+    expect(workspace.commits).not.toContain("docs: a commit the pr Stage made (#2)");
+    expect(tracker.pullRequest(100).body).toBe(`Closes #${TICKET}\n\n${FIRST.body}\n`);
+    expect(lastTable()).toContain("| pr | ⚠️ left changes |");
+  });
+
+  it("resets a pr Stage that left uncommitted changes, and drops its answers", async () => {
+    await handedOff();
+    humanCommits();
+    handedBack();
+    runner.leaves("pr", () => {
+      workspace.uncommitted = ["CHANGELOG.md"];
+    });
+    runner.queue("pr", revised({ title: "feat: add the flag, mended" }));
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+
+    expect(workspace.uncommitted).toEqual([]);
+    expect(tracker.pullRequest(100).title).toBe(FIRST.title);
+    expect(lastTable()).toContain("| pr | ⚠️ left changes |");
+  });
+
+  it("goes on with the recorded answers when the pr Stage does not finish", async () => {
+    await handedOff();
+    humanCommits();
+    handedBack();
+    runner.queue("pr", { ok: false, failure: "turn-capped" });
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+
+    expect(tracker.pullRequest(100).body).toBe(`Closes #${TICKET}\n\n${FIRST.body}\n`);
+    expect(lastTable()).toContain("| pr | ⚠️ turn capped |");
+  });
+
+  it.each([
+    ["rate-limited", "⏸ rate limited"],
+    ["api-error", "⏸ API failure"],
+    ["out-of-budget", "⏸ out of API budget"],
+  ] as const)("releases a Ticket whose pr Stage was %s, and still owes it the Stage", async (failure, cell) => {
+    await handedOff();
+    humanCommits();
+    handedBack();
+    runner.queue("pr", { ok: false, failure });
+
+    expect(await run()).toMatchObject({ outcome: "released", stage: "pr" });
+    expect(lastTable()).toContain(`| pr | ${cell} |`);
+    expect(workspace.state(TICKET)).toMatchObject({ handoffHead: HANDED_OFF_AT, prStageOwed: true });
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).toEqual([...FIRST_RUN, "verify", "pr", "verify", "pr"]);
+  });
+
+  it("keeps the recorded answers a finished pr Stage answers blank", async () => {
+    await handedOff();
+    humanCommits();
+    handedBack();
+    runner.queue("pr", revised());
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+
+    expect(tracker.pullRequest(100).title).toBe(FIRST.title);
+    expect(tracker.pullRequest(100).body).toBe(`Closes #${TICKET}\n\n${FIRST.body}\n`);
+    expect(lastTable()).toContain("| pr | ✅ revised |");
+  });
+});
+
 describe("the Planning guards", () => {
   /** What the pipeline said to the Ticket, if anything. */
   const warnings = () => tracker.comments.filter((c) => c.issue === TICKET).map((c) => c.body);
@@ -5849,7 +6137,7 @@ describe("a Target that merges by hand", () => {
     expect(tracker.issue(TICKET).assignees).toEqual([]);
   });
 
-  it("leaves the pull request as the pr step published it", async () => {
+  it("leaves the pull request as publishing left it", async () => {
     await run(BY_HAND);
     const pr = tracker.pullRequest(100);
 

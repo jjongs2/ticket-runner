@@ -1,6 +1,8 @@
 /**
  * Where a Ticket was when it failed. Named after the lifecycle step, not the
- * Stage, because rebase, pull request and CI are not agent sessions.
+ * Stage, because rebase, publishing the pull request and CI are not agent
+ * sessions. `pr` covers the pr Stage, which revises the pull request's prose
+ * just before it is published, as well as publishing it.
  */
 export type FailurePoint =
   | "setup"

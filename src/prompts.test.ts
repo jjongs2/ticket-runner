@@ -7,6 +7,7 @@ import {
   conflictPrompt,
   fixPrompt,
   implementPrompt,
+  prPrompt,
   verifyPrompt,
 } from "./prompts.js";
 import { SUBJECT_SHAPE } from "./title.js";
@@ -333,6 +334,7 @@ describe("the Stage boundary guidance", () => {
     verifyPrompt(url, extra, selfHosted, NO_CHECKS),
     fixPrompt(url, FAILED_CI, BASE, extra, selfHosted, NO_CHECKS),
     conflictPrompt(url, CONFLICT, BASE, extra, selfHosted, NO_CHECKS),
+    prPrompt(url, BASE, extra, selfHosted, {}, "4f1e2d3c", "- 1. it works — npm test is green"),
   ];
 
   it("tells the session what holds in every Target", () => {
@@ -1011,6 +1013,7 @@ describe("the body, the problem and the solution", () => {
   const implement = () => implementPrompt(url, BASE, "", OTHER_TARGET, NO_CHECKS);
   const fix = (prose = {}) =>
     fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS, undefined, prose);
+  const revise = () => prPrompt(url, BASE, "", OTHER_TARGET, {}, "4f1e2d3c", "");
 
   it("has the implement Stage answer all three for the whole branch beside title, after the review's fixes", () => {
     expect(implement()).toMatch(
@@ -1021,6 +1024,7 @@ describe("the body, the problem and the solution", () => {
   it.each([
     ["implement", implement],
     ["fix", () => fix()],
+    ["pr", () => revise()],
   ])("puts the Target's own shapes before the pr skill's in the %s prompt", (_, prompt) => {
     const text = prompt();
 
@@ -1033,6 +1037,7 @@ describe("the body, the problem and the solution", () => {
   it.each([
     ["implement", implement],
     ["fix", () => fix()],
+    ["pr", () => revise()],
   ])("states the problem and solution shape itself in the %s prompt", (_, prompt) => {
     expect(prompt()).toContain(
       "the problem is the state before the change and its effect, and the solution is what the change does and why, each in at most two sentences, readable without opening the Ticket, leaving out what the diff and the body already show",
@@ -1042,6 +1047,7 @@ describe("the body, the problem and the solution", () => {
   it.each([
     ["implement", implement],
     ["fix", () => fix()],
+    ["pr", () => revise()],
   ])("keeps titles, closing keywords, screenshots and local paths out of all three in the %s prompt", (_, prompt) => {
     expect(prompt()).toContain(
       "None of the three carries a title, a closing keyword (`Closes`, `Fixes`, `Resolves`) before an issue reference, a screenshot or a local path",
@@ -1088,9 +1094,93 @@ describe("the language a Stage writes in", () => {
     }
   });
 
+  it("covers the pr Stage's four answers", () => {
+    expect(prPrompt(url, BASE, "", OTHER_TARGET, {}, undefined, "")).toContain(
+      `- Write your \`title\`, \`body\`, \`problem\` and \`solution\` ${RULE}`,
+    );
+  });
+
   it("covers the verify Stage's Notes and its verdict's evidence", () => {
     expect(verifyPrompt(url, "", OTHER_TARGET, NO_CHECKS)).toContain(
       `- Write your Notes and the verdict's evidence ${RULE}`,
     );
+  });
+});
+
+describe("prPrompt", () => {
+  const HEAD = "4f1e2d3c5b6a";
+  const VERDICT = "- 1. it works — npm test is green";
+  const ANSWERS = {
+    title: "feat: add a flag",
+    body: "## Summary\n\nAdds a flag.",
+    problem: "There was no flag.",
+    solution: "It adds one.",
+  };
+  const prompt = (since: string | undefined = HEAD) =>
+    prPrompt(url, BASE, "Mind the changelog.", OTHER_TARGET, ANSWERS, since, VERDICT);
+
+  it("names the Ticket and says what the Stage is for", () => {
+    const text = prompt();
+
+    expect(text.startsWith(`Ticket: ${url}`)).toBe(true);
+    expect(text).toMatch(/You are the pr Stage of an unattended pipeline/);
+    expect(text).toMatch(/handed it back with commits on its branch that no Stage has described/);
+    expect(text).toMatch(/revise them for the whole branch as it stands now/);
+  });
+
+  it("hands it the recorded answers, each under its field", () => {
+    const text = prompt();
+
+    expect(text).toContain("## What the branch's answers say now");
+    for (const [field, answer] of Object.entries(ANSWERS)) {
+      expect(text).toContain(`### \`${field}\`\n\n\`\`\`\n${answer}\n\`\`\``);
+    }
+  });
+
+  it("has it read the commits since the recorded head and their diff itself", () => {
+    const text = prompt();
+
+    expect(text).toContain(`\`git log ${HEAD}..HEAD\``);
+    expect(text).toContain(`\`git diff ${HEAD}..HEAD\``);
+    expect(text).toContain(`\`git diff ${BASE}...HEAD\``);
+  });
+
+  it("gives it the whole branch against the base branch where the recorded head is no ancestor", () => {
+    const text = prPrompt(url, BASE, "", OTHER_TARGET, ANSWERS, undefined, VERDICT);
+
+    expect(text).not.toContain(HEAD);
+    expect(text).toMatch(/no longer one of its ancestors, or is not in this repository/);
+    expect(text).toContain(`\`git log ${BASE}..HEAD\``);
+    expect(text).toContain(`\`git diff ${BASE}...HEAD\``);
+  });
+
+  it("gives it the passing verdict", () => {
+    const text = prompt();
+
+    expect(text).toContain("## The verdict the branch passed");
+    expect(text).toContain(VERDICT);
+  });
+
+  it("has it keep each answer that still holds by answering it blank", () => {
+    const text = prompt();
+
+    expect(text).toMatch(/Answer `title` as an empty string, which keeps it/);
+    expect(text).toMatch(/Answer as an empty string each one that still holds as it is, which keeps it/);
+    expect(text).toContain(SUBJECT_SHAPE);
+  });
+
+  it("has it commit nothing, answer no Notes and invoke no other plugin skill", () => {
+    const text = prompt();
+
+    expect(text).toMatch(/commit nothing, stage nothing, push nothing, and leave no file behind/);
+    expect(text).toMatch(/resets the worktree to where you found it and drops your answers/);
+    expect(text).toMatch(/Answer no Notes/);
+    expect(text).not.toMatch(/`notes` list/);
+    expect(text).toContain("Invoke no plugin skill but `/mattpocock-skills:pr`.");
+    expect(text).not.toContain("/mattpocock-skills:implement");
+  });
+
+  it("ends with the repo's own extra prompt", () => {
+    expect(prompt().endsWith("Mind the changelog.")).toBe(true);
   });
 });

@@ -390,6 +390,23 @@ export class GitWorkspace implements Workspace {
     return result.exitCode === 0;
   }
 
+  async branchHead(branch: string): Promise<string | undefined> {
+    const result = await this.tryGit(["rev-parse", "--verify", "--quiet", `refs/heads/${branch}^{commit}`]);
+    return result.exitCode === 0 ? result.stdout.trim() : undefined;
+  }
+
+  async isAncestor(commit: string, branch: string): Promise<boolean> {
+    // Exit 1 for a commit that is not an ancestor and 128 for one this repo
+    // does not have, and both answer no.
+    return await this.contains(`refs/heads/${branch}`, commit);
+  }
+
+  async resetTo(cwd: string, commit: string): Promise<void> {
+    await execOrThrow("git", ["reset", "--hard", commit], { cwd });
+    // No -x, as in discardChanges: gitignored files are not the Stage's scratch.
+    await execOrThrow("git", ["clean", "-fd"], { cwd });
+  }
+
   async mergeBase(cwd: string, base: string): Promise<string> {
     const from = (await this.fetchBranch(base)) ?? base;
     const { stdout } = await execOrThrow("git", ["merge-base", "HEAD", from], { cwd });

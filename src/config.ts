@@ -15,7 +15,7 @@ const DEFAULT_MODEL = "claude-opus-5-5";
 
 /**
  * The default effort for every Stage: `high`, the level Opus 5 ran at before
- * Opus 5.5 lowered its own default to `medium`. One number for all four Stages
+ * Opus 5.5 lowered its own default to `medium`. One number for every Stage
  * — tuning a Stage against its Ticket is the Target's job, not the pipeline's.
  */
 const DEFAULT_EFFORT: Effort = "high";
@@ -45,6 +45,7 @@ const configSchema = z
         verify: stageSchema.optional(),
         fix: stageSchema.optional(),
         conflict: stageSchema.optional(),
+        pr: stageSchema.optional(),
       })
       .strict()
       .optional(),
@@ -117,6 +118,7 @@ export interface Config {
     verify: StageConfig;
     fix: StageConfig;
     conflict: StageConfig;
+    pr: StageConfig;
   };
   permissionMode: PermissionMode;
   ciTimeoutMinutes: number;
@@ -148,6 +150,9 @@ const STAGE_DEFAULTS = {
   // Resolving one rebase is narrower work than mending a defect, and the
   // pull request's CI grades the whole of it once it finishes.
   conflict: { maxTurns: 120, maxMinutes: 30 },
+  // Revising four answers from a diff and the answers recorded before it:
+  // reading, not writing code, and nothing it does is graded after it.
+  pr: { maxTurns: 60, maxMinutes: 20 },
 } as const;
 
 /**
@@ -214,6 +219,7 @@ export function loadConfig(repoRoot: string, version: string): Config {
       verify: stage(STAGE_DEFAULTS.verify, file.stages?.verify),
       fix: stage(STAGE_DEFAULTS.fix, file.stages?.fix),
       conflict: stage(STAGE_DEFAULTS.conflict, file.stages?.conflict),
+      pr: stage(STAGE_DEFAULTS.pr, file.stages?.pr),
     },
     permissionMode: file.permissionMode ?? "auto",
     ciTimeoutMinutes: file.ciTimeoutMinutes ?? 30,

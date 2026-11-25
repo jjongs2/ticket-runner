@@ -109,6 +109,25 @@ export interface TicketState {
    * otherwise, and in state an earlier pipeline left.
    */
   rebaseFirst?: boolean;
+  /**
+   * The commit the branch's head was at when the Ticket was last handed off,
+   * where no pr Stage has answered for the branch since. Commits a human makes
+   * before handing the Ticket back are answered by no Stage, so the Run that
+   * takes it back compares this with the branch's head before any Stage runs:
+   * a head that moved owes a pr Stage, which reads the commits since this one,
+   * and a head that did not clears it. Absent otherwise, and in state an
+   * earlier pipeline left.
+   */
+  handoffHead?: string;
+  /**
+   * Whether a pr Stage is owed: settled once by the Run that takes the Ticket
+   * back, before any of its Stages run, so the Run's own fix commits never
+   * count as a human's, and kept for a Run resuming after a Release or a kill.
+   * Cleared once the pr Stage has run, and by a hand-off, which leaves the
+   * next Run that takes the Ticket back to settle it again. Written only while
+   * it is owed, so absent otherwise, and in state an earlier pipeline left.
+   */
+  prStageOwed?: boolean;
   /** The Run that last wrote the state, and when — both for a human reading it. */
   runId: string;
   /**
@@ -322,6 +341,26 @@ export interface Workspace {
    * answers yes about.
    */
   hasBranch(branch: string): Promise<boolean>;
+  /**
+   * The commit the local `branch` is at, or nothing when this repo has no such
+   * branch. Asked by a hand-off that keeps the state file, which records it, by
+   * the Run that takes the Ticket back, which compares it with what was
+   * recorded, and around a pr Stage, which must leave it where it found it.
+   */
+  branchHead(branch: string): Promise<string | undefined>;
+  /**
+   * Whether `commit` is an ancestor of the local `branch`, the branch's own
+   * head included: false when it is not, and when this repo has no such
+   * commit, as a branch a human rebased or squashed since leaves the head a
+   * hand-off recorded.
+   */
+  isAncestor(commit: string, branch: string): Promise<boolean>;
+  /**
+   * Put the worktree at `cwd` back at `commit`, tracked and untracked alike,
+   * as {@link discardChanges} does: what a pr Stage, which commits nothing,
+   * left behind is thrown away. Gitignored files stay.
+   */
+  resetTo(cwd: string, commit: string): Promise<void>;
   /**
    * The commit the branch checked out at `cwd` inherited from `base`: their
    * merge-base, with `base` as the remote holds it now. The checkout's own

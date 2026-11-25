@@ -45,6 +45,7 @@ import {
   conflictPrompt,
   fixPrompt,
   implementPrompt,
+  prPrompt,
   verifyPrompt,
 } from "./prompts.js";
 import { addedCriteriaLogDir, retryLogDir, stageLogDir } from "./run-log.js";
@@ -74,6 +75,7 @@ import {
   type BranchProse,
   CODE_STAGE_JSON_SCHEMA,
   IMPLEMENT_STAGE_JSON_SCHEMA,
+  PR_STAGE_JSON_SCHEMA,
   parseBranchProse,
   parseNoCommitReason,
   parseTitle,
@@ -488,6 +490,8 @@ async function takeTicket(
     ...(resume?.title === undefined ? {} : { title: resume.title }),
     ...(resume === undefined ? {} : recordedProse(resume)),
     ...(resume?.rebaseFirst === true ? { rebaseFirst: true } : {}),
+    ...(resume?.handoffHead === undefined ? {} : { handoffHead: resume.handoffHead }),
+    ...(resume?.prStageOwed === true ? { prStageOwed: true } : {}),
   });
 
   // The claim is the first write on the board: it shows what the pipeline holds
@@ -601,6 +605,9 @@ async function takeTicket(
       // rebases from the same clean start a released Ticket does.
       await workspace.abortRebase(worktree);
     }
+    // Whether the pr Stage is owed, settled before any Stage of this Run runs,
+    // so none of the Run's own commits is ever read as a human's.
+    let prStageOwed = await owesPrStage(pipeline, resume, branch, record);
     // Work no commit carries, which the first pass below fails on before
     // anything grades the branch: the fix budget answers for it there, as it
     // does for every other failure of the branch's.
@@ -659,6 +666,14 @@ async function takeTicket(
           written,
           unmetBefore,
         });
+        // Once verify has passed, so the verdict its Evidence reads is one the
+        // branch earned, and before the Landing, which no other Lane should
+        // wait a session behind.
+        if (prStageOwed) {
+          point = "pr";
+          await revise(pipeline, { issue, worktree, branch, logDir, verdict, progress, record });
+          prStageOwed = false;
+        }
 
         point = "rebase";
         // The Landing, from here until the base branch has been pulled: the
@@ -996,6 +1011,69 @@ async function resumable(
 }
 
 /**
+ * Whether this Run owes the Ticket a pr Stage, settled before any of its
+ * Stages runs and recorded, so a Run resuming after a Release or a kill reads
+ * the same answer rather than taking the Run's own commits for a human's.
+ *
+ * Owed by a Ticket handed back with commits made while a human held it: its
+ * branch's head is not the one its last hand-off recorded, and the answers the
+ * pull request and the squash commit are written from describe the branch as
+ * it stood then. Not by one never handed off, which recorded no head, nor by
+ * one whose implement Stage runs in this Run, which answers them afresh. A
+ * head that cannot be read counts as moved: the cost of being wrong that way
+ * is a Stage, and of the other an undescribed branch merged.
+ *
+ * A head that did not move is forgotten at once, so a later hand-off records
+ * its own.
+ */
+async function owesPrStage(
+  pipeline: Pipeline,
+  resume: TicketState | undefined,
+  branch: string,
+  record: ResumeRecord,
+): Promise<boolean> {
+  if (resume === undefined) return false;
+  // Settled by the Run this one resumes, after a Release or a kill.
+  if (resume.prStageOwed === true) return true;
+  const recorded = resume.handoffHead;
+  if (recorded === undefined) return false;
+
+  let moved = true;
+  try {
+    moved = (await pipeline.workspace.branchHead(branch)) !== recorded;
+  } catch (error) {
+    pipeline.log?.(
+      `#${resume.ticket} could not read the head of ${branch}, so counts it moved: ${(error as Error).message}`,
+    );
+  }
+  if (resume.state === "implemented" && moved) {
+    await record.advance({ prStageOwed: true });
+    pipeline.log?.(`#${resume.ticket} owes a pr Stage · ${branch} moved since its hand-off`);
+    return true;
+  }
+  await record.forgetHandoffHead();
+  return false;
+}
+
+/**
+ * The head a hand-off records, or nothing when it cannot be read, which is
+ * logged: the hand-off is what a human is waiting for, and a Ticket that comes
+ * back with no head recorded owes no pr Stage, as before the head was kept.
+ */
+async function headAtHandoff(
+  pipeline: Pipeline,
+  ticket: number,
+  branch: string,
+): Promise<string | undefined> {
+  try {
+    return await pipeline.workspace.branchHead(branch);
+  } catch (error) {
+    pipeline.log?.(`#${ticket} could not record the head of ${branch}: ${(error as Error).message}`);
+    return undefined;
+  }
+}
+
+/**
  * What the human is told about a branch whose copy here has parted from the
  * one on the remote: which two copies, and the two ways to make them one.
  *
@@ -1069,6 +1147,8 @@ type Advance = Partial<
     | "problem"
     | "solution"
     | "rebaseFirst"
+    | "handoffHead"
+    | "prStageOwed"
   >
 >;
 
@@ -1128,6 +1208,22 @@ class ResumeRecord {
     return recordedProse(this.reached);
   }
 
+  /** The head the last hand-off recorded, where no pr Stage has answered for the branch since. */
+  get handoffHead(): string | undefined {
+    return this.reached.handoffHead;
+  }
+
+  /**
+   * Forget the head the last hand-off recorded, and that a pr Stage is owed:
+   * the branch did not move while a human held the Ticket, or the pr Stage has
+   * run. Either way the next hand-off records the head afresh.
+   */
+  async forgetHandoffHead(): Promise<void> {
+    delete this.reached.handoffHead;
+    delete this.reached.prStageOwed;
+    await this.advance({});
+  }
+
   /** The latest title beside the latest body, problem and solution, as a fix Stage is handed them. */
   get answers(): BranchAnswers {
     const { title } = this;
@@ -1183,11 +1279,13 @@ class ResumeRecord {
   private file(): TicketState {
     // Written only while it is owed, so a state file says nothing of a rebase
     // nobody has to do.
-    // The fix for criteria added since the hand-off likewise, only once spent.
-    const { rebaseFirst, addedCriteriaFixUsed, ...reached } = this.reached;
+    // The fix for criteria added since the hand-off likewise, only once spent,
+    // and the pr Stage only while it is owed.
+    const { rebaseFirst, addedCriteriaFixUsed, prStageOwed, ...reached } = this.reached;
     return {
       ...reached,
       ...(addedCriteriaFixUsed === true ? { addedCriteriaFixUsed } : {}),
+      ...(prStageOwed === true ? { prStageOwed } : {}),
       ...(rebaseFirst === true ? { rebaseFirst } : {}),
       runId: this.pipeline.runId,
       version: this.pipeline.version,
@@ -2000,6 +2098,98 @@ async function fix(
   return uncommitted;
 }
 
+/** What the pr Stage is given and works in. */
+interface RevisionSubject {
+  issue: Issue;
+  worktree: string;
+  branch: string;
+  logDir: string;
+  /** The verdict the branch just passed, which the Evidence a body gives reads. */
+  verdict: Verdict;
+  progress: Progress;
+  record: ResumeRecord;
+}
+
+/** The cell of a pr Stage that left a commit or uncommitted changes behind. */
+const LEFT_CHANGES_CELL = "⚠️ left changes";
+
+/**
+ * The pr Stage: a fresh session that revises the title, body, problem and
+ * solution recorded for a branch a human handed back with commits since its
+ * hand-off, which no Stage answered for. Given the recorded answers, the head
+ * the hand-off recorded, or nothing where that head is no longer an ancestor
+ * of the branch or not in the repository at all, the base branch and the
+ * passing verdict; it reads the commits and their diff itself.
+ *
+ * It commits nothing. Whatever it leaves, a commit or uncommitted changes, is
+ * reset to the head it started on, and its answers are dropped, since they may
+ * describe what was discarded. One that does not finish leaves the recorded
+ * answers standing and the Ticket goes on: a missing answer is no reason for a
+ * hand-off. A rate limit, an API failure or the API budget stopping it
+ * releases the Ticket as in any Stage, and the Stage stays owed to the Run that
+ * resumes it. Otherwise it has run, owed or not, and the recorded head goes.
+ */
+async function revise(
+  pipeline: Pipeline,
+  { issue, worktree, branch, logDir, verdict, progress, record }: RevisionSubject,
+): Promise<void> {
+  const { workspace } = pipeline;
+  const stage = pipeline.config.stages.pr;
+  pipeline.log?.(`#${issue.number} revising the pull request's prose · ${branch} moved since its hand-off`);
+
+  const started = await workspace.branchHead(branch);
+  if (started === undefined) throw new Error(`the branch ${branch} is not in this repository`);
+  const recorded = record.handoffHead;
+  const since =
+    recorded !== undefined && (await workspace.isAncestor(recorded, branch)) ? recorded : undefined;
+
+  const result = await runStage(pipeline, "pr", {
+    ticket: issue.number,
+    prompt: prPrompt(
+      issue.url,
+      pipeline.baseBranch,
+      stage.extraPrompt,
+      pipeline.selfHosted,
+      record.answers,
+      since,
+      verdict.criteria.map(verdictLine).join("\n"),
+    ),
+    cwd: worktree,
+    logDir,
+    jsonSchema: PR_STAGE_JSON_SCHEMA,
+  });
+
+  // Before anything else, a Release included: the worktree a resuming Run
+  // finds must be the branch verify passed, or it would charge the Ticket's
+  // fix budget for what this Stage left.
+  const left =
+    (await workspace.branchHead(branch)) !== started ||
+    (await workspace.uncommittedPaths(worktree)).length > 0;
+  if (left) await workspace.resetTo(worktree, started);
+
+  const cause = releaseCause(result);
+  if (cause !== undefined) throw await releasedStage(pipeline, progress, "pr", "pr", result, cause);
+
+  let cell: string;
+  if (left) {
+    cell = LEFT_CHANGES_CELL;
+  } else if (!result.ok) {
+    cell = `⚠️ ${stageFailureCell(result, pipeline.credential)}`;
+  } else {
+    // A blank answer keeps the recorded one, as a fix Stage's does.
+    await recordAnswers(result, record);
+    cell = "✅ revised";
+  }
+  await progress.record(stageRow("pr", result, cell));
+  await record.forgetHandoffHead();
+  pipeline.log?.(`#${issue.number} pr Stage · ${cell}`);
+}
+
+/** A criterion of a passing verdict as the pr Stage reads it: its line, its status and its evidence. */
+function verdictLine(criterion: GradedCriterion): string {
+  return `- ${criterion.number}. ${criterion.text} — ${criterion.status}: ${criterion.evidence}`;
+}
+
 /**
  * Send one session into the stopped rebase to resolve it.
  *
@@ -2624,7 +2814,7 @@ async function handOff(
   let claimed = true;
   try {
     if (byHand !== undefined) {
-      // Nothing to do: ready for review, its title and body as the pr step wrote them.
+      // Nothing to do: ready for review, its title and body as publishing wrote them.
     } else if (pullRequest !== undefined) {
       await tracker.convertPullRequestToDraft(pullRequest);
     } else if (worktree?.pushable === true) {
@@ -2660,9 +2850,18 @@ async function handOff(
       // human's hands, and whatever they did to it is what the fresh budget is
       // for. Nothing is lost by it — the hand-off comment says the budget was
       // spent, and the claim only marks that comment as history.
+      //
+      // The branch's head goes with it, so the Run that takes the Ticket back
+      // can tell whether a human committed while they held it, unless the file
+      // already holds a head no pr Stage has answered for since: the commits
+      // after that one are still undescribed. Whether the Stage is owed is
+      // that Run's to settle again.
+      const head = record.handoffHead ?? (await headAtHandoff(pipeline, ticket, branch));
       await record.advance({
         fixUsed: false,
         addedCriteriaFixUsed: false,
+        prStageOwed: false,
+        ...(head === undefined ? {} : { handoffHead: head }),
         ...(pullRequest === undefined ? {} : { pullRequest }),
       });
     }

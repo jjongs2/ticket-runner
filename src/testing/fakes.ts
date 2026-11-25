@@ -785,6 +785,49 @@ export class FakeWorkspace implements Workspace {
     return [...this.workflows];
   }
 
+  /**
+   * The commit a branch is at, where a test says: one a human moved it to,
+   * say. A branch with none is at {@link defaultHead}, which every commit a
+   * Stage pushes onto {@link commits} moves on.
+   */
+  heads = new Map<string, string>();
+  /**
+   * Commits that are no ancestor of the branch they are asked about: a head a
+   * hand-off recorded that a human's rebase left behind, or one this repo
+   * never had.
+   */
+  notAncestors = new Set<string>();
+
+  /** The head of a branch no test has moved by hand: one name per length of {@link commits}. */
+  defaultHead(): string {
+    return `commit-${this.commits.length}`;
+  }
+
+  /** Not in `calls`: a read. */
+  async branchHead(branch: string): Promise<string | undefined> {
+    if (!this.branches.has(branch)) return undefined;
+    return this.heads.get(branch) ?? this.defaultHead();
+  }
+
+  /** Not in `calls`: a read. */
+  async isAncestor(commit: string, _branch: string): Promise<boolean> {
+    return !this.notAncestors.has(commit);
+  }
+
+  /**
+   * Back to `commit`, its changes discarded: a default head takes the commits
+   * after it off {@link commits}, and any other is where the branch now is.
+   */
+  async resetTo(cwd: string, commit: string): Promise<void> {
+    this.called(`resetTo:${commit}`);
+    this.uncommitted = [];
+    const branch = this.worktrees.get(cwd);
+    if (branch !== undefined) this.heads.delete(branch);
+    const length = /^commit-(\d+)$/.exec(commit)?.[1];
+    if (length !== undefined) this.commits.length = Number(length);
+    else if (branch !== undefined) this.heads.set(branch, commit);
+  }
+
   /** Not in `calls`: a read, asked only of a Check or a CI that failed. */
   async mergeBase(cwd: string, base: string): Promise<string> {
     this.basesGiven.push(base);

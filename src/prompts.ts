@@ -414,6 +414,44 @@ function conflictChecksLine(checks: readonly string[]): string {
   return `\n- This repository's Checks are ${checkList(checks)}. Run the type checker and the tests covering the files you resolved, not the whole suite.`;
 }
 
+/**
+ * The pr Stage's brief. A human handed the Ticket back with commits no Stage
+ * answered for, so the recorded title, body, problem and solution describe the
+ * branch as it stood at the Hand-off. A fresh session revises them from the
+ * recorded ones, which carry what the earlier Stages saw, and from the commits
+ * since, which it reads itself, so the body is written by the same rule the
+ * code Stages follow.
+ *
+ * It commits nothing: the branch has passed verify, and nothing grades it
+ * again before the pull request. The pipeline resets whatever it leaves and
+ * drops its answers, since they may describe what was discarded.
+ */
+const prInstructions = (
+  base: string,
+  since: string | undefined,
+) => `You are the pr Stage of an unattended pipeline. The Ticket below was handed to a human, who handed it back with commits on its branch that no Stage has described, and the branch has since passed the verify Stage. The title, pull request body, problem and solution answered for the branch before those commits are below, where any were answered; your job is to revise them for the whole branch as it stands now.
+
+- ${sinceLine(base, since)}
+- Start from the answers below: they carry what the earlier Stages saw, the evidence included. Keep whatever they say that still holds, and change what the new commits make untrue or leave unsaid.
+- The \`title\` answered so far is below, when there is one. Answer \`title\` as an empty string, which keeps it, unless the branch as it stands no longer fits it. When it does not, or when none is below, answer ${titleAnswer(base)}
+- Answer a \`body\`, a \`problem\` and a \`solution\`, each written for the whole branch. The \`body\` is the pull request's body below the \`Closes #<n>\` line the pipeline writes: write it ${BODY_SHAPE}. The \`problem\` and the \`solution\` open the squash commit's body, so \`git log\` says why without the Ticket: write them ${PROSE_SHAPE}. Answer as an empty string each one that still holds as it is, which keeps it. ${PROSE_LIMITS}
+${languageLine("your `title`, `body`, `problem` and `solution`")}
+- Change nothing in this worktree: commit nothing, stage nothing, push nothing, and leave no file behind. Whatever you leave, the pipeline resets the worktree to where you found it and drops your answers.
+- Answer no Notes: what you find beyond these four answers is not this session's.
+- Invoke no plugin skill but \`/mattpocock-skills:pr\`.`;
+
+/**
+ * Which commits the pr Stage reads: those since the head the Hand-off
+ * recorded, or the whole branch against the base branch where that head is no
+ * longer one of the branch's ancestors or not in the repository at all.
+ */
+function sinceLine(base: string, since: string | undefined): string {
+  if (since === undefined) {
+    return `The head the branch had at the Hand-off is no longer one of its ancestors, or is not in this repository: the branch was rebased, squashed or amended since. Read the whole branch against \`${base}\` yourself, with \`git log ${base}..HEAD\` and \`git diff ${base}...HEAD\`, and tell from it what the answers below do not describe.`;
+  }
+  return `Read the commits since \`${since}\`, the head the branch had at the Hand-off, and their diff yourself, with \`git log ${since}..HEAD\` and \`git diff ${since}..HEAD\`: they are what the answers below do not describe. The whole branch is \`git diff ${base}...HEAD\`.`;
+}
+
 /** How the fix prompt announces each kind of failure. */
 const failureSentences = (base: string): Record<FailureKind, string> => ({
   "uncommitted-work":
@@ -569,6 +607,36 @@ export function fixPrompt(
     answersSection(answers),
     stageBoundary(selfHosted),
     notesGuidance(standingNotes),
+    extraPrompt,
+  ]);
+}
+
+/**
+ * A fresh session with no plugin skill but the `pr` skill, told to revise the
+ * title, body, problem and solution recorded for a branch a human handed back
+ * with commits since its Hand-off: given them, the head the Hand-off recorded
+ * where it is still an ancestor of the branch, the base branch, and the
+ * passing verdict, as the criteria's lines read.
+ */
+export function prPrompt(
+  issueUrl: string,
+  base: string,
+  extraPrompt: string,
+  selfHosted: boolean,
+  answers: BranchAnswers,
+  since: string | undefined,
+  verdict: string,
+): string {
+  return sections([
+    `Ticket: ${issueUrl}`,
+    prInstructions(base, since),
+    answersSection(answers),
+    outputSection(
+      "## The verdict the branch passed",
+      verdict,
+      "The verify Stage graded the branch as it stands, the commits since the Hand-off included, with this evidence for each criterion, given as its checkbox line reads.",
+    ),
+    stageBoundary(selfHosted),
     extraPrompt,
   ]);
 }

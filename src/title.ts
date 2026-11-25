@@ -107,6 +107,25 @@ export const CODE_STAGE_JSON_SCHEMA = {
 } as const;
 
 /**
+ * The `--json-schema` the pr Stage is invoked with: the title, the body, the
+ * problem and the solution, as the code Stages answer them, and nothing else.
+ * It commits nothing, so it has no reason for not committing to give, and it
+ * answers no Notes. A blank answer keeps the recorded one, as a fix Stage's
+ * does.
+ */
+export const PR_STAGE_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    title: CODE_STAGE_JSON_SCHEMA.properties.title,
+    body: CODE_STAGE_JSON_SCHEMA.properties.body,
+    problem: CODE_STAGE_JSON_SCHEMA.properties.problem,
+    solution: CODE_STAGE_JSON_SCHEMA.properties.solution,
+  },
+  required: ["title", "body", "problem", "solution"],
+  additionalProperties: false,
+} as const;
+
+/**
  * What the implement Stage is told a branch slug is, in the words both its
  * schema and its prompt use: one declaration, so the two cannot drift apart.
  * English whatever language the Target writes in, because a branch name is
