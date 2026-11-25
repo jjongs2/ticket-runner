@@ -2135,8 +2135,6 @@ async function revise(
 ): Promise<void> {
   const { workspace } = pipeline;
   const stage = pipeline.config.stages.pr;
-  pipeline.log?.(`#${issue.number} revising the pull request's prose · ${branch} moved since its hand-off`);
-
   const started = await workspace.branchHead(branch);
   if (started === undefined) throw new Error(`the branch ${branch} is not in this repository`);
   const recorded = record.handoffHead;

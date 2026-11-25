@@ -104,6 +104,7 @@ Each Stage is one `claude -p` session. `stages` takes an object per Stage, and e
 | `verify` | Tries to prove the Acceptance Criteria are not met, and returns a verdict | `130` | `30` |
 | `fix` | Mends the one failure that spent the fix budget | `150` | `40` |
 | `conflict` | Resolves the conflict where a rebase stopped | `120` | `30` |
+| `pr` | Revises the pull request's title, body, problem and solution for a Ticket handed back with commits since its Hand-off | `60` | `20` |
 
 | Key | Type | Default | Passed as |
 |---|---|---|---|
@@ -112,6 +113,8 @@ Each Stage is one `claude -p` session. `stages` takes an object per Stage, and e
 | `maxTurns` | whole number ≥ 1 | per Stage, above | `--max-turns` |
 | `maxMinutes` | number > 0 | per Stage, above | The wall-clock limit the session is killed at |
 | `extraPrompt` | string | `""` | Appended as the last section of the Stage's prompt |
+
+The `pr` Stage runs only on a Ticket handed back with commits made since its Hand-off, which no Stage described ([The pr Stage](./ticket-to-merge.md#the-pr-stage)); the implement and fix Stages write every other pull request's prose.
 
 The model and effort are always passed, so the machine's own `claude` defaults never apply. What a Stage that runs out of turns or time costs the Ticket is on [From Ticket to merge](./ticket-to-merge.md).
 

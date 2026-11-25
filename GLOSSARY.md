@@ -49,7 +49,7 @@ The open `ready-for-agent` issues nobody has claimed and no open blocker holds b
 _Avoid_: queue, backlog
 
 **Stage**:
-One Claude Code session inside a Run with a single purpose: implement, verify, fix, or resolve a rebase conflict.
+One Claude Code session inside a Run with a single purpose: implement, verify, fix, resolve a rebase conflict, or revise a handed-back Ticket's pull request prose.
 _Avoid_: step, phase, task
 
 **Check**:

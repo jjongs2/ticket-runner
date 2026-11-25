@@ -16,6 +16,7 @@ Run은 아무도 지켜보지 않으니, 세션 하나의 말만 믿고 merge할
 | implement Stage | worktree에서 `/mattpocock-skills:implement` 실행, 그다음 commit 안 된 변경이 없는지 확인 | 에이전트 |
 | verify Stage | Acceptance Criteria와 branch가 만든 결함을 적대적으로 판정 | 판정을 읽은 파이프라인 |
 | fix Stage | 실패 내용을 받은 새 세션, Ticket당 한 번, [Hand-off 뒤 더해진 기준](#criteria-added-after-a-hand-off)에는 한 번 더 | fix 기회 |
+| pr Stage | Hand-off 뒤에 commit이 생긴 채 돌아온 Ticket에서만, verify를 통과한 뒤 새 세션 하나가 pull request의 제목, 본문, problem, solution을 고쳐 씀 | 에이전트, 돌려받을 때마다 한 번 |
 | Landing | rebase, conflict Stage, pull request, CI, squash merge | 한 번에 Lane 하나 |
 | merge 이후 | 충족된 기준에 체크, 정리 | 파이프라인 |
 
@@ -27,6 +28,8 @@ flowchart TD
     W --> I["implement Stage"]
     I --> V["verify Stage"]
     V --> R["rebase"]
+    V -->|"Hand-off 뒤 commit이 생긴 채 돌아옴"| PS["pr Stage"]
+    PS -->|"고쳐 썼든 아니든 계속 진행"| R
     R -->|충돌| X["conflict Stage"]
     R -->|깨끗함| P["pull request"]
     X -->|rebase 완료| P
@@ -43,7 +46,7 @@ flowchart TD
 ```
 <!-- Sources: src/orchestrator.ts, src/lifecycle.ts -->
 
-fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종류와 상관없이 두 번째 실패, 또는 fix Stage가 손쓸 수 없는 실패는 Hand-off입니다. 다만 [Hand-off 뒤 더해진 기준](#criteria-added-after-a-hand-off)을 충족하지 못한 판정은 fix 기회를 쓰지 않는 fix Stage로 갑니다. rate limit, API 장애, API 예산으로 멈춘 Stage, base branch도 똑같이 겪는 실패([아래](#a-failure-the-base-branch-shares)), 그리고 어느 단계에서든 [GitHub나 git remote가 장애를 일으킨 경우](./stopping-and-resuming.md#release-over-a-github-or-remote-failure)는 이 그림을 아예 벗어나 Ticket을 [Release](./stopping-and-resuming.md#release-on-a-rate-limit)합니다.
+fix Stage로 가는 화살표는 Ticket당 한 번만 탈 수 있습니다. 종류와 상관없이 두 번째 실패, 또는 fix Stage가 손쓸 수 없는 실패는 Hand-off입니다. 다만 [Hand-off 뒤 더해진 기준](#criteria-added-after-a-hand-off)을 충족하지 못한 판정은 fix 기회를 쓰지 않는 fix Stage로 갑니다. [pr Stage](#the-pr-stage)는 Ticket을 끝내지 않습니다. 끝까지 가지 못한 pr Stage는 이미 기록된 답변으로 계속 진행합니다. rate limit, API 장애, API 예산으로 멈춘 Stage, base branch도 똑같이 겪는 실패([아래](#a-failure-the-base-branch-shares)), 그리고 어느 단계에서든 [GitHub나 git remote가 장애를 일으킨 경우](./stopping-and-resuming.md#release-over-a-github-or-remote-failure)는 이 그림을 아예 벗어나 Ticket을 [Release](./stopping-and-resuming.md#release-on-a-rate-limit)합니다.
 
 [Hand-off](./stopping-and-resuming.md#hand-off)는 claim을 풀고, `ready-for-human`을 달고, 실패와 작업이 있는 곳을 코멘트로 남기고, 열린 pull request를 draft로 되돌립니다. branch와 state file은 Target의 remote에 남습니다. 사람이 볼 즈음에는 작업한 Host가 없어졌을 수도 있기 때문입니다. 넘겨진 Stage들의 transcript는 [`keepTranscripts`](./configuration.md#keeptranscripts)에 따라 그 옆이나 Host에 남고, hand-off 코멘트가 그 위치를 알려 줍니다. 사람이 Ticket의 라벨을 `ready-for-agent`로 바꾸면 Ticket이 파이프라인으로 돌아가고, implement Stage를 다시 돌리지 않고 도달한 지점부터 이어 갑니다. [사람이 직접 merge하는](./configuration.md#merge) Target에서는 CI가 초록인 Ticket이 실패한 것 없이 [`merge`에서 Hand-off됩니다](./stopping-and-resuming.md#when-nothing-failed). state file은 파이프라인의 작업이 남지 않는 [setup에서의 Hand-off](./stopping-and-resuming.md#when-a-hand-off-does-less)에서 지워집니다. 새로 시작한 Ticket이 worktree가 생기기 전에 실패했거나, Run이 덮어쓰지 않으려 한 branch가 이미 있던 경우입니다. 거기서는 이 Run의 Stage가 하나도 돌지 않았으니 파이프라인이 이어 갈 것이 없습니다.
 
@@ -85,6 +88,7 @@ slug가 비어 있으면 branch는 아무 말 없이 `agent/<n>`로 남습니다
 | verify | `Ticket: <issue URL>`과 번호를 매긴 기준, 스킬 없음 | 판정, 선택 항목 `notes` |
 | fix | `Ticket: <issue URL>`, `/mattpocock-skills:pr` 말고는 스킬 없음 | 선택 항목 `title`, `body`, `problem`, `solution`, `notes`, `noCommitReason` |
 | conflict | `Ticket: <issue URL>`, 스킬 없음 | 없음 |
+| pr | `Ticket: <issue URL>`, `/mattpocock-skills:pr` 말고는 스킬 없음 | `title`, `body`, `problem`, `solution`. 기록된 것을 유지하려면 각각 빈 문자열 |
 
 프롬프트 마지막에는 Stage별 [`extraPrompt`](./configuration.md#stages)가 붙습니다.
 
@@ -92,7 +96,7 @@ slug가 비어 있으면 branch는 아무 말 없이 `agent/<n>`로 남습니다
 
 | 답변 | 형식 |
 |---|---|
-| `title`, commit 제목 | `<type>[(<scope>)]: <summary>`. 기여 가이드가 commit 제목이나 pull request 제목에 정한 type, scope, 표현을 따르고, 정한 것이 없으면 형식만 따름. fix Stage는 자기 수정이 제목의 내용을 바꾸지 않으면 `title`을 빈 문자열로 답해 앞의 제목을 유지 |
+| `title`, commit 제목 | `<type>[(<scope>)]: <summary>`. 기여 가이드가 commit 제목이나 pull request 제목에 정한 type, scope, 표현을 따르고, 정한 것이 없으면 형식만 따름. fix Stage는 자기 수정이 제목의 내용을 바꾸지 않으면, pr Stage는 branch가 제목에서 벗어나지 않았으면 `title`을 빈 문자열로 답해 앞의 제목을 유지 |
 | `body` | Target의 기여 가이드나 `.github/PULL_REQUEST_TEMPLATE.md`가 `Closes` 줄 밖에 정한 형식. 둘 다 정하지 않았으면 `/mattpocock-skills:pr`의 Summary, Evidence, Merge Danger |
 | `problem`, `solution` | 기여 가이드가 commit 본문에 정한 형식. 정하지 않았으면 바뀌기 전 상태와 그 영향, 그리고 변경이 하는 일과 그 이유를 각각 두 문장 이내로, Ticket을 열지 않아도 읽히게 |
 
@@ -113,6 +117,8 @@ Stage마다 디스크에 무엇을 남기는지는 [로그와 transcript](./runn
 | `api-error` | `⏸ API failure` | CLI가 재시도를 포기한 일시적인 API 장애. Ticket을 Release함 |
 | `nonzero-exit` | `❌ exited non-zero` | 그 밖에 실패한 세션 |
 | `invalid-result` | `❌ invalid result` | verify Stage가 판정을 아예 내놓지 않음 |
+
+[pr Stage](#the-pr-stage)에서는 Release하지 않는 실패가 `❌` 대신 `⚠️`로 적힙니다(`⚠️ turn capped` 등). Ticket은 계속 진행합니다.
 
 ## implement Stage {#the-implement-stage}
 
@@ -170,6 +176,7 @@ fix 기회는 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사�
 | 받은 번호를 빠뜨리거나 받지 않은 번호를 더한 판정 | verify | 아니요, Hand-off |
 | conflict Stage를 띄우지 못했거나 git에 상태를 물을 수 없음 | rebase | 아니요, Hand-off |
 | base branch를 pull하지 못함 | rebase | 아니요, Hand-off |
+| pr Stage가 끝까지 가지 못했거나 변경을 남김 | pr | 아니요, Hand-off도 아님. 이미 기록된 답변으로 계속 진행 |
 | push나 pull request 열기가 실패 | pr | 아니요, Hand-off |
 | CI 시간 초과, 충돌 | ci | 아니요, Hand-off |
 | pull request에서 check가 하나도 돌지 않았고, `met` 기준이 없음 | ci | 아니요, Hand-off |
@@ -186,6 +193,23 @@ rate limit, API 장애, API 예산으로 멈춘 fix Stage는 fix 기회를 쓰�
 Ticket을 돌려주는 사람은 코드를 쓰지 않고 결정 코멘트로 기준을 먼저 더하거나 바꾸는 일이 많습니다. 그러면 첫 verify는 어떤 Stage도 손대지 않은 기준을 채점합니다. 그래서 Ticket의 마지막 hand-off 코멘트 뒤에 올라온 코멘트에서 나온 기준을 충족하지 못했다는 판정은 fix 기회를 쓰지 않는 fix Stage를 보내고, Ticket이 돌아올 때 가진 fix 기회는 다음 실패를 위해 그대로 남습니다. Ticket을 돌려받을 때마다 한 번입니다. 같은 기준을 또 충족하지 못한 다음 판정은 여느 실패처럼 fix 기회를 씁니다.
 
 그래도 verify가 먼저 돕니다. 사람이 이미 새 기준을 구현했을 수 있기 때문입니다. 본문을 고쳐 넣은 기준은 예외가 아닙니다. 기준이 언제 더해졌는지는 hand-off 코멘트 아래 놓인 코멘트의 자리만 말해 주기 때문입니다. 충족하지 못한 기준이 모두 본문이나 그 hand-off 코멘트 앞 코멘트의 것이거나, 결함만으로 실패한 판정은 평소처럼 fix 기회를 씁니다. Release를 거쳐도 이 fix를 두 번 사지는 않습니다. state file이 썼다고 기록하고, Release가 멈춘 이 fix Stage는 Ticket을 이어받는 Run이 여전히 받습니다. 이 fix Stage도 아무것도 commit하지 않으면 다른 fix Stage처럼 Hand-off됩니다.
+
+## pr Stage {#the-pr-stage}
+
+Ticket을 돌려주는 사람은 그 전에 branch에 commit할 수 있습니다. 그 commit에 답하는 Stage는 없으니, state file의 제목, 본문, problem, solution은 여전히 Hand-off 때의 branch를 설명합니다. 그리고 게시할 때마다 pull request를 그 답변으로 다시 쓰므로, 사람이 pull request를 직접 고쳐도 남지 않습니다. 그래서 pr Stage가 이 답변들을 고쳐 씁니다.
+
+**돌아야 하는지.** state file을 남기는 Hand-off는 branch의 head를 거기 기록합니다. 다만 아직 어떤 pr Stage도 답하지 않은 head가 이미 있으면 그것을 둡니다. 그 뒤의 commit은 여전히 설명되지 않았기 때문입니다. Ticket을 돌려받은 Run은 어떤 Stage도 돌리기 전에 그 head를 branch의 head와 비교합니다. head가 움직였으면 pr Stage를 돌려야 하고, 움직이지 않았으면 기록을 지웁니다. 이것을 먼저 정해 두므로 Run 자신의 fix commit이 사람의 commit으로 읽히는 일은 없고, state file이 그 답을 기록하므로 Release나 kill 뒤에 이어 하는 Run도 같은 답을 따릅니다. Hand-off된 적 없는 Ticket, branch가 Hand-off 때 그대로인 Ticket, 돌려받은 Run에서 implement Stage가 도는 Ticket에서는 pr Stage가 돌지 않습니다. implement Stage가 모든 답변을 새로 쓰기 때문입니다.
+
+**받는 것.** verify를 통과한 뒤, [Landing](#the-landing)에 들어가기 전에, Ticket을 돌려받을 때마다 많아야 한 번 돕니다. `/mattpocock-skills:pr` 말고는 플러그인 스킬 없이 새로 띄운 세션이고, 기록된 제목, 본문, problem, solution과 기록된 head, base branch, 통과한 판정을 받습니다. 그 head 이후의 commit과 diff는 직접 읽고, 본문까지 [위](#how-a-stage-runs)의 규칙대로 답하며, 빈 답변은 기록된 것을 남깁니다. 기록된 head가 rebase, squash, amend로 더는 branch의 조상이 아니거나 저장소에 아예 없으면, 대신 base branch에 대한 branch 전체를 받습니다. 아무것도 commit하지 않고 Note도 답하지 않습니다.
+
+| Stage가 한 일 | 진행 상황 칸 | 결과 |
+|---|---|---|
+| 스키마가 받아들이는 답변으로 끝남, 빈 답변 포함 | `✅ revised` | 코드를 쓰는 Stage의 답변처럼 기록된 답변을 대신하고, pull request와 squash commit이 이를 싣고, 기록된 head는 지움 |
+| commit이나 commit 안 된 변경을 남김 | `⚠️ left changes` | worktree를 Stage가 시작한 head로 되돌리고, 버려진 것을 설명할 수 있으니 답변도 버림. Ticket은 계속 진행 |
+| 끝까지 가지 못함 | `⚠️ <Stage가 끝나지 못한 이유>` | 기록된 답변이 그대로 남고 Ticket은 계속 진행. 답변이 없다는 것은 Hand-off할 이유가 아님 |
+| rate limit, API 장애, API 예산으로 멈춤 | `⏸ rate limited`, `⏸ API failure`, `⏸ out of API budget` | Release. Ticket을 이어 하는 Run이 여전히 이 Stage를 돌림 |
+
+왜 Stage가 글을 고쳐 쓰는지, 왜 Ticket의 이 지점에서인지는 [ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md)에 있습니다.
 
 ## Lane과 Frontier 다시 채우기 {#lanes-and-the-frontier-refill}
 
@@ -243,11 +267,11 @@ rebase로 branch가 다시 쓰였으니 `--force-with-lease`로 push합니다. b
 
 **제목**은 아래 후보 가운데 commit 컨벤션 형식(`<type>[(<scope>)]: <summary>`, 한 줄)에 맞는 첫 번째 것입니다. 끝의 `(#<n>)`는 떼어 냅니다.
 
-1. implement나 fix Stage가 branch 전체에 대해 마지막으로 답한 `title`. 이번 Run의 것이든, 이전 Run이 state file에 기록한 것이든 상관없습니다.
+1. implement, fix, pr Stage가 branch 전체에 대해 마지막으로 답한 `title`. 이번 Run의 것이든, 이전 Run이 state file에 기록한 것이든 상관없습니다.
 2. branch의 첫 commit 제목
 3. Ticket 제목 그대로
 
-**본문**은 `Closes #<n>`, 빈 줄, 그리고 이번 Run에서든 앞선 Run이 state file에 기록한 것이든 implement나 fix Stage가 마지막으로 답한 `body`입니다. 답한 것이 없으면 `Closes #<n>`만 씁니다. 파이프라인이 덧붙이는 것은 없습니다. 판정은 진행 상황 코멘트의 verify 줄에 있고, met 기준은 merge할 때 체크됩니다. [Hand-off](./stopping-and-resuming.md#hand-off)가 남긴 draft pull request는 Run이 다시 게시할 때까지 자기 본문을 유지합니다.
+**본문**은 `Closes #<n>`, 빈 줄, 그리고 이번 Run에서든 앞선 Run이 state file에 기록한 것이든 implement, fix, pr Stage가 마지막으로 답한 `body`입니다. 답한 것이 없으면 `Closes #<n>`만 씁니다. 파이프라인이 덧붙이는 것은 없습니다. 판정은 진행 상황 코멘트의 verify 줄에 있고, met 기준은 merge할 때 체크됩니다. [Hand-off](./stopping-and-resuming.md#hand-off)가 남긴 draft pull request는 Run이 다시 게시할 때까지 자기 본문을 유지합니다.
 
 ### CI 대기와 유예 시간 {#ci-wait-and-grace-period}
 
@@ -313,7 +337,7 @@ Unverified:
 Co-authored-by: <name> <email>
 ```
 
-제목은 pull request 제목입니다. `<problem>`과 `<solution>`은 Stage가 마지막으로 답한 것이고, 72칸이 넘는 줄은 공백에서 끊습니다. 한글 같은 전각 문자는 두 칸으로 셉니다. Stage가 쓴 줄은 그대로 두므로 목록은 목록으로 남습니다. `solution`을 답한 것이 없으면 branch의 commit 제목들이 `- <subject>` 줄로 그 자리를 대신하고, `problem`이 있으면 그 뒤에 옵니다. 빠진 답변을 지어내지는 않습니다. `Unverified:`는 `unverifiable` 기준이나, pull request에서 check가 하나도 돌지 않은 `ci` 기준이 있을 때만 붙고, 기준마다 근거를 한 줄로 이어 씁니다. 그 이유를 남기는 곳이 여기 말고는 없기 때문입니다. commit 제목들과 `Co-authored-by` trailer는 rebase 이후에 읽습니다. rebase한 뒤의 commit이 실제로 들어가기 때문입니다. [사람이 직접 merge하는](./configuration.md#merge) Target에서는 이 메시지를 조립하지 않습니다. merge하는 사람은 Target의 기본 메시지를 받습니다.
+제목은 pull request 제목입니다. `<problem>`과 `<solution>`은 implement, fix, pr Stage가 마지막으로 답한 것이고, 72칸이 넘는 줄은 공백에서 끊습니다. 한글 같은 전각 문자는 두 칸으로 셉니다. Stage가 쓴 줄은 그대로 두므로 목록은 목록으로 남습니다. `solution`을 답한 것이 없으면 branch의 commit 제목들이 `- <subject>` 줄로 그 자리를 대신하고, `problem`이 있으면 그 뒤에 옵니다. 빠진 답변을 지어내지는 않습니다. `Unverified:`는 `unverifiable` 기준이나, pull request에서 check가 하나도 돌지 않은 `ci` 기준이 있을 때만 붙고, 기준마다 근거를 한 줄로 이어 씁니다. 그 이유를 남기는 곳이 여기 말고는 없기 때문입니다. commit 제목들과 `Co-authored-by` trailer는 rebase 이후에 읽습니다. rebase한 뒤의 commit이 실제로 들어가기 때문입니다. [사람이 직접 merge하는](./configuration.md#merge) Target에서는 이 메시지를 조립하지 않습니다. merge하는 사람은 Target의 기본 메시지를 받습니다.
 
 ### merge 이후 {#after-the-merge}
 
@@ -372,7 +396,7 @@ Note 안의 줄 머리 `- [ ]`는 escape되므로, Note가 Acceptance Criteria�
 ## 참고 자료 {#references}
 
 - [`src/branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/branch.ts)
-- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `processTicket`, `takeTicket`, `nameBranch`, `verify`, `fix`, `resolveConflict`, `requireGreenCi`
+- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `processTicket`, `takeTicket`, `nameBranch`, `verify`, `fix`, `owesPrStage`, `revise`, `resolveConflict`, `requireGreenCi`
 - [`src/failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts): merge-base에서 Run마다 한 번 돌리는 Check
 - [`src/workflows.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/workflows.ts): pull request에서 돌 수 있는 워크플로가 있는지
 - [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts), [`src/frontier.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts), [`src/landing.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/landing.ts)

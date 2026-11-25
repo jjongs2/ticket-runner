@@ -2,10 +2,12 @@ Closes #<n>
 
 <body>
 
-`<body>` is the latest body a code Stage answered for the whole branch: in the
-shape the Target's contributing guide or `.github/PULL_REQUEST_TEMPLATE.md`
-sets, when either sets a body's sections or content beyond the `Closes` line,
-and otherwise the `pr` skill's Summary, Evidence and Merge Danger. The pipeline
+`<body>` is the latest body the implement, fix or pr Stage answered for the
+whole branch: in the shape the Target's contributing guide or
+`.github/PULL_REQUEST_TEMPLATE.md` sets, when either sets a body's sections or
+content beyond the `Closes` line, and otherwise written by invoking the `pr`
+skill. The pr Stage runs only on a Ticket handed back with commits made since
+its hand-off, which no other Stage described. The pipeline
 adds nothing of its own: the verify Stage's progress row carries the verdict,
 and the merge ticks the met criteria on the Ticket.
 

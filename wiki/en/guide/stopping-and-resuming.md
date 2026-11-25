@@ -48,7 +48,7 @@ A Hand-off leaves you:
 - `ready-for-human` in place of `in-progress`, and no assignee
 - each Stage's command line and transcript, kept on the `ticket-runner/state` branch or on the Host, as [`keepTranscripts`](./configuration.md#keeptranscripts) decides ([What stays where](#what-stays-where))
 
-Its state file is kept, so a relabel resumes the Ticket ([Handing a Ticket back](#handing-a-ticket-back)), except where no Stage of this Run could have left work (below).
+Its state file is kept, so a relabel resumes the Ticket ([Handing a Ticket back](#handing-a-ticket-back)), except where no Stage of this Run could have left work (below). It records the branch's head too, so the Run that takes the Ticket back can tell whether you committed on it.
 
 The comment follows [`docs/templates/handoff-comment.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/handoff-comment.md):
 
@@ -150,7 +150,7 @@ A handed-off Ticket is yours to end one of four ways:
 | You | Then |
 |---|---|
 | Change the Ticket, its criteria or the config, and hand it back | The next Run grades it against what the issue says then |
-| Push commits to its branch on the remote, and hand it back | The next Run brings its copy up to that tip. A rewritten history parts the copies instead |
+| Push commits to its branch on the remote, and hand it back | The next Run brings its copy up to that tip, and a [pr Stage](./ticket-to-merge.md#the-pr-stage) revises the pull request's prose for your commits once verify passes. A rewritten history parts the copies instead |
 | Finish it yourself: merge its pull request. A draft's body describes the Hand-off rather than the change, so rewrite it and mark it ready first; one [handed off with nothing failed](#when-nothing-failed) is ready already, with the body the Run published | The issue closes. Take `ready-for-human` off yourself, and delete the worktree and local branch on the Host that made them |
 | Drop it: close the issue | The pull request and the branch stay until you close and delete them |
 
@@ -163,6 +163,7 @@ To hand a Ticket back, move its label from `ready-for-human` to `ready-for-agent
 A few things differ from the Run that handed it off:
 
 - **Fix budget**: fresh. The Ticket went through a human's hands, and whatever they did is what the new budget is for. The old comment still says the budget was spent, because it was. A criterion you add in a comment before relabelling gets one fix of its own besides, which spends none of the budget, once each time you hand the Ticket back ([Criteria added after a Hand-off](./ticket-to-merge.md#criteria-added-after-a-hand-off)). A criterion edited into the body does not.
+- **Pull request prose**: revised for your commits. When the branch's head is not the one the Hand-off recorded, a [pr Stage](./ticket-to-merge.md#the-pr-stage) rewrites the title, body, problem and solution for the whole branch once verify passes, once each time you hand the Ticket back. Editing the pull request's body by hand does not last: each publish rewrites it from the state file.
 - **Draft pull request**: taken out of draft before CI is awaited, since a draft often runs no workflows and the wait would read "no checks". One that will not come out of draft, such as a pull request a human closed, is a Hand-off at `pr`: closing it said the work should not go on.
 - **Hand-off comments**: each is marked `_Taken again by a later Run; this hand-off is history._` under its marker, which notifies nobody.
 - **Progress comment**: a new one. The comment the human read is left exactly as they read it. A Ticket [handed off with no comment](#when-nothing-failed) carries on in its progress comment instead, below the section you read, which stays as it was: with no hand-off comment, nothing tells the Run a human held it.
@@ -293,6 +294,8 @@ The file is JSON a human can read without the pipeline:
   "problem": "A rate-limited Stage handed its Ticket to a human.",
   "solution": "The Ticket is released and resumed from its state file.",
   "rebaseFirst": true,
+  "handoffHead": "4f1e2d3c5b6a79880a1b2c3d4e5f60718293a4b5",
+  "prStageOwed": true,
   "runId": "2026-09-17T09-00-00-000",
   "version": "0.5.2",
   "updatedAt": "2026-09-17T10:14:02.511Z"
@@ -307,10 +310,12 @@ The file is JSON a human can read without the pipeline:
 | `fixUsed` | whether the fix budget is spent. Resuming buys no second chance, except after a Hand-off. |
 | `addedCriteriaFixUsed` | present only once a Ticket handed back has had the fix that [criteria added in a comment after its Hand-off](./ticket-to-merge.md#criteria-added-after-a-hand-off) get without spending the fix budget, so a Run resuming after a Release does not buy it twice. A Hand-off clears it. |
 | `pullRequest` | the pull request already open, so a resumed Run does not open a second one |
-| `title` | the latest title the implement or fix Stage gave for the whole branch, which names the pull request |
+| `title` | the latest title the implement, fix or pr Stage gave for the whole branch, which names the pull request |
 | `body` | the latest pull request body they gave, written below `Closes #<n>` |
 | `problem`, `solution` | the latest problem and solution they gave, which open the squash commit |
 | `rebaseFirst` | present only after a Release over a failing base branch: rebase onto the base branch first |
+| `handoffHead` | the branch's head at the last Hand-off, present while no [pr Stage](./ticket-to-merge.md#the-pr-stage) has answered for the commits after it. A Hand-off records it, unless one is already there; the Run that takes the Ticket back compares it with the branch's head before any Stage runs, and forgets it when the head did not move or once the pr Stage has run |
+| `prStageOwed` | present only once the Run that took the Ticket back found the head moved: a pr Stage is owed, which a Run resuming after a Release or a kill still runs. A Hand-off clears it, leaving the next Run that takes the Ticket back to settle it again |
 | `runId`, `version`, `updatedAt` | which Run and which [version](./internals.md#versions) wrote it, and when |
 
 There are only two states. Everything after the implement Stage (verify, rebase, pull request, CI, merge) is run again from verify by a Run that resumes at `implemented`.
@@ -377,7 +382,7 @@ flowchart TD
 
 ## References
 
-- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `takeTicket`, `resumable`, `ResumeRecord`, `rebaseFirst`, `release`, `undoClaim`, `noteFailingBase`, `handOff`, `cutShort`
+- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `takeTicket`, `resumable`, `owesPrStage`, `ResumeRecord`, `rebaseFirst`, `release`, `undoClaim`, `noteFailingBase`, `handOff`, `cutShort`
 - [`src/failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts): `BaseBranchChecks`
 - [`src/outside-fault.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/outside-fault.ts): `OutsideFault`, `faultSide`
 - [`src/adapters/gh-tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts): `GITHUB_RETRY_DELAYS_MS`

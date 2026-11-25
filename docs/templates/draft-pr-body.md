@@ -27,7 +27,7 @@ written again once they are, wherever the Run keeps them.
 
 The one hand-off that writes no such body is that of a green Ticket on a Target
 whose config sets `merge` to `false`: its pull request is no draft and keeps the
-body the `pr` step published, which is what the human merging it reads.
+body publishing gave it, which is what the human merging it reads.
 
 ## When the failure was unexpected
 
