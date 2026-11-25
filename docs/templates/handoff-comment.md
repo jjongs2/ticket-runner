@@ -123,7 +123,7 @@ every criterion as an unmet one is given, those left to CI as unverifiable, each
 A Target whose config sets `merge` to `false` has its green Tickets handed off
 at `merge` instead of merged. Nothing failed, so there is no `Failure:` line, no
 `said` paragraph and no Evidence block, and no transcripts are kept. The pull
-request is the one the `pr` step published, ready for review and not a draft,
+request is the one publishing left, ready for review and not a draft,
 its title and body unchanged, since that body is what the human reads and what
 GitHub's default squash commit becomes.
 

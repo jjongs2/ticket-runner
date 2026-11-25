@@ -16,6 +16,7 @@ This page follows one Ticket from its claim to its merge. What happens when it s
 | implement Stage | `/mattpocock-skills:implement` in the worktree, then nothing left uncommitted | an agent |
 | verify Stage | Adversarial grading of the Acceptance Criteria, and of defects the branch made | the pipeline, from the verdict |
 | fix Stage | One fresh session given the failure, once per Ticket, and once more for [criteria added after a Hand-off](#criteria-added-after-a-hand-off) | the fix budget |
+| pr Stage | Only on a Ticket handed back with commits made since its Hand-off: one fresh session revises the pull request's title, body, problem and solution, once verify passes | an agent, once each hand-back |
 | Landing | Rebase, conflict Stage, pull request, CI, squash merge | one Lane at a time |
 | After the merge | Tick met criteria, clean up | the pipeline |
 
@@ -27,6 +28,8 @@ flowchart TD
     W --> I["implement Stage"]
     I --> V["verify Stage"]
     V --> R["Rebase"]
+    V -->|"handed back with commits since its Hand-off"| PS["pr Stage"]
+    PS -->|"revised, or not, and goes on"| R
     R -->|conflict| X["conflict Stage"]
     R -->|clean| P["Pull request"]
     X -->|rebased| P
@@ -43,7 +46,7 @@ flowchart TD
 ```
 <!-- Sources: src/orchestrator.ts, src/lifecycle.ts -->
 
-Every edge to the fix Stage is taken at most once per Ticket. A second failure of any kind, or any failure the fix Stage cannot act on, is a Hand-off, except a verdict failing on [criteria added after a Hand-off](#criteria-added-after-a-hand-off), whose fix Stage spends no budget. A Stage stopped by the rate limit, an API failure or the API budget, a failure the base branch shares ([below](#a-failure-the-base-branch-shares)), and [GitHub or the git remote failing](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) at any step, leave this diagram entirely: they [release](./stopping-and-resuming.md#release-on-a-rate-limit) the Ticket.
+Every edge to the fix Stage is taken at most once per Ticket. A second failure of any kind, or any failure the fix Stage cannot act on, is a Hand-off, except a verdict failing on [criteria added after a Hand-off](#criteria-added-after-a-hand-off), whose fix Stage spends no budget. The [pr Stage](#the-pr-stage) never ends the Ticket: one that does not finish goes on with the answers already recorded. A Stage stopped by the rate limit, an API failure or the API budget, a failure the base branch shares ([below](#a-failure-the-base-branch-shares)), and [GitHub or the git remote failing](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) at any step, leave this diagram entirely: they [release](./stopping-and-resuming.md#release-on-a-rate-limit) the Ticket.
 
 A [Hand-off](./stopping-and-resuming.md#hand-off) undoes the claim, puts `ready-for-human` on, comments the failure and where the work is, and puts an open pull request back into draft. The branch and the state file stay on the Target's remote, since the Host the work was done on may be gone by the time a human looks. The handed-off Stages' transcripts are kept beside them or on the Host, as [`keepTranscripts`](./configuration.md#keeptranscripts) decides, and the hand-off comment says where. A human who relabels the Ticket `ready-for-agent` hands it back, and it carries on from what it reached rather than paying for the implement Stage again. On a Target that [merges by hand](./configuration.md#merge), a Ticket whose CI is green is [handed off at `merge`](./stopping-and-resuming.md#when-nothing-failed) with nothing failed. A [Hand-off at setup](./stopping-and-resuming.md#when-a-hand-off-does-less) that leaves no work of the pipeline's removes the state file: the Ticket started fresh and either failed before its worktree existed, or found a branch in the way that the Run would not branch over. No Stage of this Run worked there, so nothing is the pipeline's to resume.
 
@@ -85,6 +88,7 @@ Every Stage runs in the Ticket's worktree with `--permission-prompts none`, the 
 | verify | `Ticket: <issue URL>` and the criteria by number, no skill | the verdict, optional `notes` |
 | fix | `Ticket: <issue URL>`, no skill but `/mattpocock-skills:pr` | optional `title`, `body`, `problem`, `solution`, `notes` and `noCommitReason` |
 | conflict | `Ticket: <issue URL>`, no skill | none |
+| pr | `Ticket: <issue URL>`, no skill but `/mattpocock-skills:pr` | `title`, `body`, `problem` and `solution`, each blank to keep the one recorded |
 
 The prompt ends with the Stage's [`extraPrompt`](./configuration.md#stages).
 
@@ -92,8 +96,8 @@ The prompt ends with the Stage's [`extraPrompt`](./configuration.md#stages).
 
 | Answer | Shape |
 |---|---|
-| `title`, commit subjects | `<type>[(<scope>)]: <summary>`, with the types, scopes and wording the contributing guide sets for a commit subject or pull request title; where it sets none, the shape alone. A fix Stage answers the title blank, which keeps the one before it, unless its fix changes what it says |
-| `body` | What the Target's contributing guide or `.github/PULL_REQUEST_TEMPLATE.md` sets beyond the `Closes` line; where neither does, `/mattpocock-skills:pr`'s Summary, Evidence and Merge Danger |
+| `title`, commit subjects | `<type>[(<scope>)]: <summary>`, with the types, scopes and wording the contributing guide sets for a commit subject or pull request title; where it sets none, the shape alone. A fix Stage answers the title blank, which keeps the one before it, unless its fix changes what it says, and a pr Stage unless the branch no longer fits it |
+| `body` | What the Target's contributing guide or `.github/PULL_REQUEST_TEMPLATE.md` sets beyond the `Closes` line; where neither does, written by invoking `/mattpocock-skills:pr` |
 | `problem`, `solution` | What the contributing guide sets for a commit body; where it sets none, the state before the change and its effect, and what the change does and why, each in at most two sentences, readable without the Ticket |
 
 None of `body`, `problem` and `solution` carries a title, a closing keyword before an issue reference, a screenshot or a local path. Every Stage that answers writes its Notes, its verdict's evidence and these answers in the language the Target's contributing guide sets for issues and commits, or else in the language the Ticket is written in; a criterion's text stays as the Ticket writes it. The lines the pipeline writes itself, such as the progress table, stay in English.
@@ -113,6 +117,8 @@ What each Stage leaves on disk is on [Logs and transcripts](./running.md#logs-an
 | `api-error` | `⏸ API failure` | A transient API failure the CLI gave up retrying. Releases the Ticket |
 | `nonzero-exit` | `❌ exited non-zero` | Any other failed session |
 | `invalid-result` | `❌ invalid result` | The verify Stage answered no verdict at all |
+
+On the [pr Stage](#the-pr-stage) the failures that release nothing read `⚠️` rather than `❌`, such as `⚠️ turn capped`: the Ticket goes on.
 
 ## The implement Stage
 
@@ -170,6 +176,7 @@ Only a defect a fresh session could mend spends the budget:
 | A verdict that leaves out a listed number or adds one | verify | No, Hand-off |
 | The conflict Stage could not be run, or git could not be asked | rebase | No, Hand-off |
 | The base branch could not be pulled | rebase | No, Hand-off |
+| The pr Stage did not finish, or left changes behind | pr | No, and no Hand-off: the Ticket goes on with the answers already recorded |
 | Pushing or opening the pull request failed | pr | No, Hand-off |
 | CI timed out or found conflicting | ci | No, Hand-off |
 | No check ran on the pull request, and no criterion is `met` | ci | No, Hand-off |
@@ -186,6 +193,23 @@ A fix Stage stopped by the rate limit, an API failure or the API budget spends n
 A human who hands a Ticket back often adds a criterion first, or replaces one, in a decision comment, without writing code. The first verify then grades a criterion no Stage has worked on yet. So a verdict that leaves unmet a criterion listed from a comment posted after the Ticket's last hand-off comment sends a fix Stage that spends no fix budget, and the budget the Ticket came back with is still there for a later failure. That happens once each time the Ticket is handed back: a later verdict that leaves the same criteria unmet spends the budget as any failure does.
 
 verify still runs first, since a human may have implemented the new criteria already. A criterion edited into the body gets no exemption, because only a comment's place below the hand-off comment says when it was added. A verdict whose unmet criteria are all the body's or come from comments before that hand-off comment, or that fails on defects alone, spends the budget as usual. A Release does not buy the fix twice: the state file records that it was spent, and a fix Stage the Release stopped is still owed to the Run that resumes the Ticket. A fix Stage of this kind that commits nothing is a Hand-off, as any other is.
+
+## The pr Stage
+
+A human who hands a Ticket back may commit on its branch first. No Stage answers for those commits, so the title, body, problem and solution in the state file still describe the branch as it stood at the Hand-off, and since every publish rewrites the pull request from them, editing the pull request by hand does not last either. So the pr Stage revises them.
+
+**Whether it is owed.** A Hand-off that keeps the state file records the branch's head there, unless the file already holds a head no pr Stage has answered for since, whose later commits are still undescribed. When a Run takes the Ticket back, before any of its Stages runs, it compares that head with the branch's: a head that moved owes a pr Stage, and one that did not is forgotten. Settling it first means the Run's own fix commits never count as a human's, and the state file records the answer, so a Run resuming after a Release or a kill keeps it. No pr Stage runs on a Ticket never handed off, on one whose branch is where the Hand-off left it, or on one whose implement Stage runs in the Run that takes it back, which answers everything afresh.
+
+**What it is given.** It runs once verify passes and before the [Landing](#the-landing), at most once each time the Ticket is handed back. It is a fresh session with no plugin skill but `/mattpocock-skills:pr`, given the recorded title, body, problem and solution, the recorded head, the base branch and the passing verdict. It reads the commits since that head and their diff itself, and writes its answers by the rules [above](#how-a-stage-runs), the body included, each blank answer keeping the recorded one. Where the recorded head is no longer an ancestor of the branch, as after a rebase, a squash or an amend, or is not in the repository at all, it is given the whole branch against the base branch instead. It commits nothing and answers no Notes.
+
+| What the Stage did | Progress cell | Result |
+|---|---|---|
+| Finished with an answer its schema accepts, blank answers included | `✅ revised` | Its answers replace the recorded ones, as a code Stage's do; the pull request and the squash commit carry them, and the recorded head is cleared |
+| Left a commit or uncommitted changes | `⚠️ left changes` | The worktree is reset to the head it started on and its answers are dropped, since they may describe what was discarded; the Ticket goes on |
+| Did not finish | `⚠️ <why the Stage did not finish>` | The recorded answers stand and the Ticket goes on: a missing answer is no reason for a Hand-off |
+| Stopped by the rate limit, an API failure or the API budget | `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget` | A Release; the Stage is still owed to the Run that resumes the Ticket |
+
+Why a Stage revises the prose, and why at this point of the Ticket's way, is in [ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md).
 
 ## Lanes and the Frontier refill
 
@@ -243,11 +267,11 @@ The branch is pushed with `--force-with-lease`, since the rebase rewrote it. The
 
 **The title** is the first of these in the commit convention's shape, `<type>[(<scope>)]: <summary>` on one line (a trailing `(#<n>)` is dropped):
 
-1. The latest `title` the implement or fix Stage answered for the whole branch, in this Run or recorded in the state file by an earlier one.
+1. The latest `title` the implement, fix or pr Stage answered for the whole branch, in this Run or recorded in the state file by an earlier one.
 2. The branch's first commit subject.
 3. The Ticket title, as it is.
 
-**The body** is `Closes #<n>`, a blank line, and the latest `body` the implement or fix Stage answered, in this Run or recorded in the state file by an earlier one; with none, `Closes #<n>` alone. The pipeline adds nothing else: the verify row of the progress comment carries the verdict, and the merge ticks the met criteria. A draft pull request a [Hand-off](./stopping-and-resuming.md#hand-off) leaves keeps its own body until a Run publishes it again.
+**The body** is `Closes #<n>`, a blank line, and the latest `body` the implement, fix or pr Stage answered, in this Run or recorded in the state file by an earlier one; with none, `Closes #<n>` alone. The pipeline adds nothing else: the verify row of the progress comment carries the verdict, and the merge ticks the met criteria. A draft pull request a [Hand-off](./stopping-and-resuming.md#hand-off) leaves keeps its own body until a Run publishes it again.
 
 ### CI wait and grace period
 
@@ -313,7 +337,7 @@ Unverified:
 Co-authored-by: <name> <email>
 ```
 
-The subject is the pull request title. `<problem>` and `<solution>` are the latest the Stages answered, each line wider than 72 columns broken at its spaces, a wide character such as Hangul counting as two; the lines the Stage wrote stay, so a list stays a list. With no solution answered, the branch's commit subjects stand in for it as `- <subject>` lines, after the problem when there is one; nothing is made up for a missing answer. `Unverified:` appears only when a criterion was `unverifiable`, or `ci` with no check run on the pull request, one line each with its evidence joined into one line, since nowhere else keeps that reason. Commit subjects and `Co-authored-by` trailers are read after the rebase, since those are the commits that land. On a Target that [merges by hand](./configuration.md#merge) none of this is composed: the human merging gets the Target's own default message.
+The subject is the pull request title. `<problem>` and `<solution>` are the latest the implement, fix or pr Stage answered, each line wider than 72 columns broken at its spaces, a wide character such as Hangul counting as two; the lines the Stage wrote stay, so a list stays a list. With no solution answered, the branch's commit subjects stand in for it as `- <subject>` lines, after the problem when there is one; nothing is made up for a missing answer. `Unverified:` appears only when a criterion was `unverifiable`, or `ci` with no check run on the pull request, one line each with its evidence joined into one line, since nowhere else keeps that reason. Commit subjects and `Co-authored-by` trailers are read after the rebase, since those are the commits that land. On a Target that [merges by hand](./configuration.md#merge) none of this is composed: the human merging gets the Target's own default message.
 
 ### After the merge
 
@@ -372,7 +396,7 @@ A `- [ ]` at the head of a line in a Note is escaped, so a Note is never read as
 ## References
 
 - [`src/branch.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/branch.ts)
-- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `processTicket`, `takeTicket`, `nameBranch`, `verify`, `fix`, `resolveConflict`, `requireGreenCi`
+- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `processTicket`, `takeTicket`, `nameBranch`, `verify`, `fix`, `owesPrStage`, `revise`, `resolveConflict`, `requireGreenCi`
 - [`src/workflows.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/workflows.ts): whether any workflow can run on a pull request
 - [`src/failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts): the Checks run at a merge-base, once per Run
 - [`src/run.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/run.ts), [`src/frontier.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/frontier.ts), [`src/landing.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/landing.ts)

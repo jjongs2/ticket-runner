@@ -7,7 +7,11 @@ import type { Credential } from "../credential.js";
  * must respect; the adapter owns the child process and the transcript on disk.
  */
 
-export type StageName = "implement" | "verify" | "fix" | "conflict";
+/**
+ * The Stages. `pr` revises the pull request's prose on a Ticket handed back
+ * with commits since its hand-off, and runs nowhere else.
+ */
+export type StageName = "implement" | "verify" | "fix" | "conflict" | "pr";
 
 /**
  * The permission modes a Stage can run under. Only the modes that can actually

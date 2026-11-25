@@ -99,6 +99,19 @@ describe("what a state file says", () => {
     expect(file.readable && file.state).not.toHaveProperty("addedCriteriaFixUsed");
   });
 
+  it("carries the head a hand-off recorded, and whether a pr Stage is owed", () => {
+    const owed = { handoffHead: "4f1e2d3c", prStageOwed: true };
+
+    expect(read(stateFileContents(state(owed)))).toEqual({ readable: true, state: state(owed) });
+  });
+
+  it("still resumes a file written before a head was recorded in one", () => {
+    const file = read(JSON.stringify(state()));
+
+    expect(file.readable && file.state).not.toHaveProperty("handoffHead");
+    expect(file.readable && file.state).not.toHaveProperty("prStageOwed");
+  });
+
   it("carries the body, problem and solution a Stage answered for the branch", () => {
     const prose = { body: "## Summary", problem: "There was no flag.", solution: "It adds one." };
 

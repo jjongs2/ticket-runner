@@ -104,6 +104,7 @@ Stage 하나는 `claude -p` 세션 하나입니다. `stages`는 Stage마다 객�
 | `verify` | Acceptance Criteria가 충족되지 않았음을 증명하려 하고, 판정을 돌려줌 | `130` | `30` |
 | `fix` | fix 기회를 쓰게 만든 실패 하나를 고침 | `150` | `40` |
 | `conflict` | rebase가 멈춘 자리에서 충돌을 해결함 | `120` | `30` |
+| `pr` | Hand-off 뒤에 commit이 생긴 채 되돌아온 Ticket의 pull request 제목, 본문, problem, solution을 고쳐 씀 | `60` | `20` |
 
 | 키 | 타입 | 기본값 | 넘기는 방식 |
 |---|---|---|---|
@@ -112,6 +113,8 @@ Stage 하나는 `claude -p` 세션 하나입니다. `stages`는 Stage마다 객�
 | `maxTurns` | 1 이상의 정수 | 위의 Stage별 값 | `--max-turns` |
 | `maxMinutes` | 0보다 큰 수 | 위의 Stage별 값 | 세션을 kill하는 wall-clock 한도 |
 | `extraPrompt` | 문자열 | `""` | Stage 프롬프트의 마지막 섹션으로 덧붙임 |
+
+`pr` Stage는 Hand-off 뒤에 어떤 Stage도 설명하지 않은 commit이 생긴 채 되돌아온 Ticket에서만 돕니다([pr Stage](./ticket-to-merge.md#the-pr-stage)). 그 밖의 pull request는 implement와 fix Stage가 글을 씁니다.
 
 모델과 effort는 언제나 넘기므로, 머신에 있는 `claude`의 기본값은 쓰이지 않습니다. 턴이나 시간을 다 쓴 Stage가 Ticket에 무엇을 치르게 하는지는 [Ticket 하나가 merge되기까지](./ticket-to-merge.md)에 있습니다.
 

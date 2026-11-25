@@ -37,6 +37,13 @@ function config(overrides: Partial<Config>): Config {
         maxMinutes: 30,
         extraPrompt: "",
       },
+      pr: {
+        model: "claude-opus-5-5",
+        effort: "high",
+        maxTurns: 60,
+        maxMinutes: 20,
+        extraPrompt: "",
+      },
     },
     permissionMode: "auto",
     ciTimeoutMinutes: 30,

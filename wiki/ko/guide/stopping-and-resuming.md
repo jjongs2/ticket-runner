@@ -48,7 +48,7 @@ Hand-off가 남기는 것:
 - `in-progress` 대신 `ready-for-human`, 그리고 담당자 없음
 - 각 Stage의 명령줄과 transcript. [`keepTranscripts`](./configuration.md#keeptranscripts)에 따라 `ticket-runner/state` branch나 Host에 남습니다([무엇이 어디에 남나](#what-stays-where)).
 
-state file은 남겨 두니, 라벨만 바꾸면 Ticket을 이어 갑니다([Ticket 돌려주기](#handing-a-ticket-back)). 이 Run의 Stage가 작업을 남겼을 리 없는 경우는 예외입니다(아래 참고).
+state file은 남겨 두니, 라벨만 바꾸면 Ticket을 이어 갑니다([Ticket 돌려주기](#handing-a-ticket-back)). 이 Run의 Stage가 작업을 남겼을 리 없는 경우는 예외입니다(아래 참고). state file에는 branch의 head도 기록하므로, Ticket을 돌려받은 Run은 여러분이 그 branch에 commit했는지 알 수 있습니다.
 
 코멘트는 [`docs/templates/handoff-comment.md`](https://github.com/jjongs2/ticket-runner/blob/main/docs/templates/handoff-comment.md)의 모양을 따릅니다.
 
@@ -150,7 +150,7 @@ Hand-off된 Ticket은 네 가지 중 하나로 끝내면 됩니다.
 | 할 일 | 그다음 |
 |---|---|
 | Ticket이나 기준, 설정을 바꾸고 돌려주기 | 다음 Run이 그때 이슈에 적힌 대로 판정함 |
-| remote의 branch에 commit을 push하고 돌려주기 | 다음 Run이 자기 사본을 그 tip까지 끌어올림. 이력을 다시 쓰면 그 대신 사본이 갈라짐 |
+| remote의 branch에 commit을 push하고 돌려주기 | 다음 Run이 자기 사본을 그 tip까지 끌어올리고, verify를 통과하면 [pr Stage](./ticket-to-merge.md#the-pr-stage)가 그 commit에 맞게 pull request의 글을 고쳐 씀. 이력을 다시 쓰면 그 대신 사본이 갈라짐 |
 | 직접 마무리하기: pull request를 merge. draft의 본문은 변경이 아닌 Hand-off를 설명하니 먼저 고쳐 쓰고 ready로 바꾸기. [실패한 것 없이 넘겨진](#when-nothing-failed) pull request는 Run이 게시한 본문 그대로 이미 ready 상태 | 이슈가 닫힘. `ready-for-human`은 직접 떼고, worktree와 로컬 branch는 그것을 만든 Host에서 지우기 |
 | 버리기: 이슈를 닫음 | pull request와 branch는 직접 닫고 지울 때까지 남음 |
 
@@ -163,6 +163,7 @@ Ticket을 파이프라인에 돌려주려면 라벨을 `ready-for-human`에서 `
 넘겼던 Run 때와 달라지는 점이 몇 가지 있습니다.
 
 - **fix 기회**: 새로 채워집니다. Ticket이 사람 손을 거쳤으니, 그 사람이 한 일에 새 기회를 쓰라는 뜻입니다. 예전 코멘트에는 fix 기회를 썼다고 그대로 남습니다. 실제로 썼으니까요. 라벨을 바꾸기 전에 코멘트로 더한 기준은 그와 별개로 fix 기회를 쓰지 않는 fix를 한 번 받고, Ticket을 돌려줄 때마다 그렇습니다([Hand-off 뒤 더해진 기준](./ticket-to-merge.md#criteria-added-after-a-hand-off)). 본문을 고쳐 넣은 기준은 받지 않습니다.
+- **pull request의 글**: 여러분의 commit에 맞게 고쳐 씁니다. branch의 head가 Hand-off 때 기록한 것과 다르면, verify를 통과한 뒤 [pr Stage](./ticket-to-merge.md#the-pr-stage)가 branch 전체에 대해 제목, 본문, problem, solution을 다시 씁니다. Ticket을 돌려줄 때마다 한 번입니다. pull request 본문을 직접 고쳐도 남지 않습니다. 게시할 때마다 state file로 다시 쓰기 때문입니다.
 - **draft pull request**: CI를 기다리기 전에 draft를 풉니다. draft에서는 워크플로가 아예 돌지 않는 일이 많아서, 그대로 기다리면 "no checks"로 읽히기 때문입니다. 사람이 닫아 버린 pull request처럼 draft가 풀리지 않으면 `pr`에서 Hand-off합니다. 닫았다는 건 이어 가지 말라는 뜻이니까요.
 - **hand-off 코멘트**: 각 코멘트의 마커 바로 아래에 `_Taken again by a later Run; this hand-off is history._`가 붙습니다. 알림은 가지 않습니다.
 - **진행 상황 코멘트**: 새로 하나 답니다. 사람이 읽었던 코멘트는 읽은 모습 그대로 둡니다. [코멘트 없이 Hand-off된](#when-nothing-failed) Ticket은 예외로, 진행 상황 코멘트에서 이어 가며 여러분이 읽은 섹션 아래에 섹션을 붙입니다. 읽은 섹션은 그대로입니다. hand-off 코멘트가 없으니 사람이 Ticket을 맡고 있었다는 걸 Run이 알 길이 없기 때문입니다.
@@ -293,6 +294,8 @@ Ticket이 어디까지 갔는지 기록이 없으면, Release되거나 stranded�
   "problem": "A rate-limited Stage handed its Ticket to a human.",
   "solution": "The Ticket is released and resumed from its state file.",
   "rebaseFirst": true,
+  "handoffHead": "4f1e2d3c5b6a79880a1b2c3d4e5f60718293a4b5",
+  "prStageOwed": true,
   "runId": "2026-09-17T09-00-00-000",
   "version": "0.5.2",
   "updatedAt": "2026-09-17T10:14:02.511Z"
@@ -307,10 +310,12 @@ Ticket이 어디까지 갔는지 기록이 없으면, Release되거나 stranded�
 | `fixUsed` | fix 기회를 썼는지. 이어받는다고 기회가 한 번 더 생기지는 않음. 단, Hand-off 뒤는 예외 |
 | `addedCriteriaFixUsed` | 돌려받은 Ticket이 [Hand-off 뒤 코멘트로 더해진 기준](./ticket-to-merge.md#criteria-added-after-a-hand-off)에 fix 기회를 쓰지 않고 받는 fix를 쓴 뒤에만 있음. Release 뒤 이어받는 Run이 두 번 사지 않게 함. Hand-off가 지움 |
 | `pullRequest` | 이미 열린 pull request. 이어받은 Run이 하나를 더 열지 않도록 |
-| `title` | implement나 fix Stage가 branch 전체에 대해 마지막으로 준 제목. pull request 제목이 됨 |
-| `body` | 두 Stage가 마지막으로 준 pull request 본문. `Closes #<n>` 아래에 들어감 |
-| `problem`, `solution` | 두 Stage가 마지막으로 준 문제와 해결. squash commit 본문이 이것으로 시작함 |
+| `title` | implement, fix, pr Stage가 branch 전체에 대해 마지막으로 준 제목. pull request 제목이 됨 |
+| `body` | 세 Stage가 마지막으로 준 pull request 본문. `Closes #<n>` 아래에 들어감 |
+| `problem`, `solution` | 세 Stage가 마지막으로 준 문제와 해결. squash commit 본문이 이것으로 시작함 |
 | `rebaseFirst` | base branch 실패로 Release된 뒤에만 있음. 먼저 base branch 위로 rebase할 것 |
+| `handoffHead` | 마지막 Hand-off 때 branch의 head. 그 뒤의 commit에 아직 어떤 [pr Stage](./ticket-to-merge.md#the-pr-stage)도 답하지 않은 동안 있음. 이미 있지 않으면 Hand-off가 기록하고, Ticket을 돌려받은 Run이 어떤 Stage도 돌리기 전에 branch의 head와 비교하며, head가 움직이지 않았거나 pr Stage가 돈 뒤에는 지움 |
+| `prStageOwed` | Ticket을 돌려받은 Run이 head가 움직인 것을 본 뒤에만 있음. pr Stage를 돌려야 하고, Release나 kill 뒤에 이어 하는 Run도 그것을 돌림. Hand-off가 지우므로, 다음에 Ticket을 돌려받는 Run이 다시 정함 |
 | `runId`, `version`, `updatedAt` | 어느 Run과 어느 [버전](./internals.md#versions)이 언제 썼는지 |
 
 상태는 둘뿐입니다. implement Stage 다음의 모든 것(verify, rebase, pull request, CI, merge)은 `implemented`에서 이어받은 Run이 verify부터 다시 돌립니다.
@@ -377,7 +382,7 @@ flowchart TD
 
 ## 참고 자료 {#references}
 
-- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `takeTicket`, `resumable`, `ResumeRecord`, `rebaseFirst`, `release`, `undoClaim`, `noteFailingBase`, `handOff`, `cutShort`
+- [`src/orchestrator.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/orchestrator.ts): `takeTicket`, `resumable`, `owesPrStage`, `ResumeRecord`, `rebaseFirst`, `release`, `undoClaim`, `noteFailingBase`, `handOff`, `cutShort`
 - [`src/failing-base.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/failing-base.ts): `BaseBranchChecks`
 - [`src/outside-fault.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/outside-fault.ts): `OutsideFault`, `faultSide`
 - [`src/adapters/gh-tracker.ts`](https://github.com/jjongs2/ticket-runner/blob/main/src/adapters/gh-tracker.ts): `GITHUB_RETRY_DELAYS_MS`

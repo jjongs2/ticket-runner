@@ -390,6 +390,29 @@ export class GitWorkspace implements Workspace {
     return result.exitCode === 0;
   }
 
+  async branchHead(branch: string): Promise<string | undefined> {
+    const result = await this.tryGit(["rev-parse", "--verify", "--quiet", `refs/heads/${branch}^{commit}`]);
+    return result.exitCode === 0 ? result.stdout.trim() : undefined;
+  }
+
+  async isAncestor(commit: string, branch: string): Promise<boolean> {
+    // Exit 1 for a commit that is not an ancestor and 128 for one this repo
+    // does not have, and both answer no.
+    return await this.contains(`refs/heads/${branch}`, commit);
+  }
+
+  async resetTo({ path: cwd, branch }: WorktreeRef, commit: string): Promise<void> {
+    // A rebase left in progress would refuse the Landing's own. Quit rather
+    // than abort: the checkout below decides where HEAD goes.
+    await exec("git", ["rebase", "--quit"], { cwd });
+    // Checked out by name, not reset where HEAD is: a Stage that detached HEAD
+    // or switched to another branch committed off this one, and the Landing
+    // rebases and pushes the worktree as it finds it.
+    await execOrThrow("git", ["checkout", "--force", "-B", branch, commit], { cwd });
+    // No -x, as in discardChanges: gitignored files are not the Stage's scratch.
+    await execOrThrow("git", ["clean", "-fd"], { cwd });
+  }
+
   async mergeBase(cwd: string, base: string): Promise<string> {
     const from = (await this.fetchBranch(base)) ?? base;
     const { stdout } = await execOrThrow("git", ["merge-base", "HEAD", from], { cwd });

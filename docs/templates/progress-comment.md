@@ -13,6 +13,7 @@
 | verify | ❌ <k> unmet | <n> | <duration> |
 | fix | ✅ committed | <n> | <duration> |
 | verify | ✅ <k> met · <c> to CI · <u> unverifiable | <n> | <duration> |
+| pr | ✅ revised | <n> | <duration> |
 | conflict | ✅ rebased | <n> | <duration> |
 | ci | ✅ passed | – | <duration> |
 | merge | ✅ #<pr> | – | – |
@@ -86,8 +87,9 @@ notifies nobody after the first Stage.
 ## Outcome cells
 
 An icon and a handful of words. `✅` passed, `❌` ended the Ticket or spent its
-fix budget, `⚠️` let the Ticket go on with nothing graded, `⏸` released the
-Ticket for a later Run to resume, `👤` handed it to a human with nothing failed.
+fix budget, `⚠️` let the Ticket go on without what its row stands for, `⏸`
+released the Ticket for a later Run to resume, `👤` handed it to a human with
+nothing failed.
 
 | Stage | Outcome |
 |---|---|
@@ -97,7 +99,7 @@ Ticket for a later Run to resume, `👤` handed it to a human with nothing faile
 | verify | `✅ <k> met`, `✅ <k> met · <c> to CI`, `✅ <k> met · <u> unverifiable`, `✅ <k> met · <c> to CI · <u> unverifiable`, `❌ <k> unmet`, `❌ <d> defects`, `❌ <k> unmet · <d> defects`, `❌ misnumbered`, `❌ no evidence`, `❌ no verdict`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ <why the Stage did not finish>` |
 | conflict | `✅ rebased`, `❌ unresolved`, `❌ uncommitted work`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `❌ unknown` |
 | rebase | `⏸ remote unreachable` |
-| pr | `⏸ GitHub failure`, `⏸ remote unreachable` |
+| pr | `✅ revised`, `⚠️ left changes`, `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget`, `⚠️ <why the Stage did not finish>`, `⏸ GitHub failure`, `⏸ remote unreachable` |
 | ci | `✅ passed`, `❌ failed`, `❌ conflicting`, `⚠️ no checks`, `⚠️ no workflow runs`, `❌ timed out`, ``⏸ `<command>` fails on the base branch``, `⏸ GitHub failure`, `⏸ remote unreachable` |
 | merge | `✅ #<pr>`, `👤 left to a human`, `⏸ GitHub failure` |
 
@@ -143,12 +145,30 @@ failing on its own side wherever the Ticket was: a 5xx or an answer that is not
 complete JSON that about a minute of tries did not mend, or git unable to
 connect to or authenticate with the remote. Nothing about the Ticket is wrong,
 so it is released with its fix budget as it was, and this is the last row of
-its Run's table. Its Stage is the step it was on, which is why `setup`,
-`rebase` and `pr` have rows at all: no other outcome is written for those
-steps. The row says which fault it was, and the Run's last line names the
+its Run's table. Its Stage is the step it was on, which is why `setup` and
+`rebase` have rows at all, and publishing a `pr` row: no other outcome is
+written for those steps, setup's uncommitted work aside. The row says which fault it was, and the Run's last line names the
 command and what it printed. A write GitHub refused here may be missing from
 the table, which is why the comment is written once more when the Ticket
 ends, if its last write failed.
+
+`pr` is two things, each named by its row as `conflict` is: the pr Stage, and
+publishing the pull request. The `conflict` row likewise names what it worked
+on, the rebase, and its cell what happened. The pr Stage runs only on a Ticket
+handed back with commits made since its hand-off, once verify passes and before
+the rebase, at most once each time the Ticket is handed back; the implement and
+fix Stages write every other pull request's title, body, problem and solution.
+`✅ revised` is a pr Stage that finished with an answer its schema accepts, blank
+answers included, which keep the recorded ones. `⚠️ left changes` is one that
+left a commit or uncommitted changes: the worktree is reset to the head it
+started on and its answers are dropped, since they may describe what was
+discarded. `⚠️ <why the Stage did not finish>` is one that did not finish, which
+leaves the recorded answers in place. Either way the Ticket goes on, without the
+revision its row stands for. A pr Stage the rate limit, an API failure or the
+API budget stopped releases the Ticket as any Stage does, and the Run that
+resumes it still runs it. Publishing writes a `pr` row only for the faults
+below, `⏸ GitHub failure` and `⏸ remote unreachable`, and its log line names
+what happened, so the two read apart.
 
 `👤 left to a human` is the `merge` row of a Ticket whose CI is green on a
 Target whose config sets `merge` to `false`: the pipeline merges nothing there,

@@ -35,6 +35,7 @@ describe("loadConfig", () => {
     expect(config.stages.verify).toMatchObject({ maxTurns: 130, maxMinutes: 30 });
     expect(config.stages.fix).toMatchObject({ maxTurns: 150, maxMinutes: 40 });
     expect(config.stages.conflict).toMatchObject({ maxTurns: 120, maxMinutes: 30 });
+    expect(config.stages.pr).toMatchObject({ maxTurns: 60, maxMinutes: 20 });
     expect(config.labels).toEqual({
       needsTriage: "needs-triage",
       needsInfo: "needs-info",
@@ -159,6 +160,24 @@ describe("loadConfig", () => {
     });
   });
 
+  it("takes what the other Stages take for the pr Stage", () => {
+    const root = repoWith({
+      [CONFIG_FILENAME]: JSON.stringify({
+        stages: {
+          pr: { model: "claude-sonnet-5-5", effort: "medium", maxTurns: 30, extraPrompt: "Be brief." },
+        },
+      }),
+    });
+
+    expect(loadConfig(root, VERSION).stages.pr).toEqual({
+      model: "claude-sonnet-5-5",
+      effort: "medium",
+      maxTurns: 30,
+      maxMinutes: 20,
+      extraPrompt: "Be brief.",
+    });
+  });
+
   it("takes the effort the config names for one Stage and leaves the rest alone", () => {
     const root = repoWith({
       [CONFIG_FILENAME]: JSON.stringify({ stages: { verify: { effort: "max" } } }),
@@ -169,6 +188,7 @@ describe("loadConfig", () => {
     expect(config.stages.implement.effort).toBe("high");
     expect(config.stages.fix.effort).toBe("high");
     expect(config.stages.conflict.effort).toBe("high");
+    expect(config.stages.pr.effort).toBe("high");
   });
 
   it.each(["low", "medium", "high", "xhigh", "max"])("takes %o as an effort", (level) => {
