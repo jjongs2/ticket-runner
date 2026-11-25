@@ -33,6 +33,7 @@ const stateSchema = z.object({
   branch: z.string().min(1),
   state: z.enum(REACHED_STATES),
   fixUsed: z.boolean(),
+  addedCriteriaFixUsed: z.boolean().optional(),
   pullRequest: z.number().int().positive().optional(),
   title: z.string().optional(),
   body: z.string().optional(),
@@ -83,12 +84,22 @@ export function readStateFile(contents: string, ticket: number): StateFile {
   // answered, and a version an older pipeline never wrote, are keys that are
   // not there rather than keys holding nothing: the rest of the pipeline reads
   // these with the same distinction.
-  const { pullRequest, title, body, problem, solution, rebaseFirst, version, ...state } =
-    parsed.data;
+  const {
+    addedCriteriaFixUsed,
+    pullRequest,
+    title,
+    body,
+    problem,
+    solution,
+    rebaseFirst,
+    version,
+    ...state
+  } = parsed.data;
   return {
     readable: true,
     state: {
       ...state,
+      ...(addedCriteriaFixUsed === undefined ? {} : { addedCriteriaFixUsed }),
       ...(pullRequest === undefined ? {} : { pullRequest }),
       ...(title === undefined ? {} : { title }),
       ...(body === undefined ? {} : { body }),

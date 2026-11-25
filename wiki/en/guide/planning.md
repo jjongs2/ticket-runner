@@ -58,6 +58,8 @@ The pipeline numbers the unticked boxes, the body's first and then each comment'
 
 Write criteria that a session can check by running or reading code. A criterion that needs a human's eyes (a screenshot, a feel) comes back `unverifiable`. One that asks for nothing but CI or some commands to pass, such as "The checks pass.", comes back `ci` when a workflow on the pull request runs those commands, and the merge ticks it once CI passes; with no such workflow, the session runs them itself.
 
+Bound a criterion over inputs. The verify Stage tries to prove each criterion unmet, and after a fix it grades the whole branch again from the top. A criterion over inputs or forms the Ticket does not list, such as "flags none of …" over a pattern, "never loses an edit, however often" or "appears nowhere", can fail on a new counterexample at every verify, since each fix answers the one it was given. Three ways bound it: name the forms it covers, name the risk it leaves, or say which way a doubtful case goes.
+
 ## Blockers
 
 Only GitHub's native `blocked by` links count ([ADR-0003](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0003-github-native-relations-only.md)), so what a Run takes is what GitHub's own UI shows as unblocked.

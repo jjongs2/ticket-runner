@@ -24,7 +24,9 @@ pushed nothing.
 
 The transcripts line names where the hand-off kept the command line and
 transcript of each Stage this Run ran for the Ticket, with those of the fix
-Stage and the pass it bought under `retry/`, and the Run's `version.txt`. Where
+Stage the fix budget bought and the pass behind it under `retry/`, those of the
+fix for criteria added since the last hand-off and its pass under
+`added-criteria/`, and the Run's `version.txt`. Where
 depends on the Target's `keepTranscripts` setting, and on its visibility where
 the setting is unset, as the wiki's configuration page describes:
 

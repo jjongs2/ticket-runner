@@ -162,7 +162,7 @@ Ticket을 파이프라인에 돌려주려면 라벨을 `ready-for-human`에서 `
 
 넘겼던 Run 때와 달라지는 점이 몇 가지 있습니다.
 
-- **fix 기회**: 새로 채워집니다. Ticket이 사람 손을 거쳤으니, 그 사람이 한 일에 새 기회를 쓰라는 뜻입니다. 예전 코멘트에는 fix 기회를 썼다고 그대로 남습니다. 실제로 썼으니까요.
+- **fix 기회**: 새로 채워집니다. Ticket이 사람 손을 거쳤으니, 그 사람이 한 일에 새 기회를 쓰라는 뜻입니다. 예전 코멘트에는 fix 기회를 썼다고 그대로 남습니다. 실제로 썼으니까요. 라벨을 바꾸기 전에 코멘트로 더한 기준은 그와 별개로 fix 기회를 쓰지 않는 fix를 한 번 받고, Ticket을 돌려줄 때마다 그렇습니다([Hand-off 뒤 더해진 기준](./ticket-to-merge.md#criteria-added-after-a-hand-off)). 본문을 고쳐 넣은 기준은 받지 않습니다.
 - **draft pull request**: CI를 기다리기 전에 draft를 풉니다. draft에서는 워크플로가 아예 돌지 않는 일이 많아서, 그대로 기다리면 "no checks"로 읽히기 때문입니다. 사람이 닫아 버린 pull request처럼 draft가 풀리지 않으면 `pr`에서 Hand-off합니다. 닫았다는 건 이어 가지 말라는 뜻이니까요.
 - **hand-off 코멘트**: 각 코멘트의 마커 바로 아래에 `_Taken again by a later Run; this hand-off is history._`가 붙습니다. 알림은 가지 않습니다.
 - **진행 상황 코멘트**: 새로 하나 답니다. 사람이 읽었던 코멘트는 읽은 모습 그대로 둡니다. [코멘트 없이 Hand-off된](#when-nothing-failed) Ticket은 예외로, 진행 상황 코멘트에서 이어 가며 여러분이 읽은 섹션 아래에 섹션을 붙입니다. 읽은 섹션은 그대로입니다. hand-off 코멘트가 없으니 사람이 Ticket을 맡고 있었다는 걸 Run이 알 길이 없기 때문입니다.
@@ -286,6 +286,7 @@ Ticket이 어디까지 갔는지 기록이 없으면, Release되거나 stranded�
   "branch": "agent/8-rate-limit-release-and-resume",
   "state": "implemented",
   "fixUsed": false,
+  "addedCriteriaFixUsed": true,
   "pullRequest": 31,
   "title": "feat: release a rate-limited Ticket",
   "body": "## Summary\n\n...",
@@ -304,6 +305,7 @@ Ticket이 어디까지 갔는지 기록이 없으면, Release되거나 stranded�
 | `branch` | 작업이 있는 곳. 제목에서 다시 만들지 않고 이 값을 그대로 씀 |
 | `state` | `claimed`(implement Stage가 끝나지 않음) 또는 `implemented`(그 작업이 branch에 있음) |
 | `fixUsed` | fix 기회를 썼는지. 이어받는다고 기회가 한 번 더 생기지는 않음. 단, Hand-off 뒤는 예외 |
+| `addedCriteriaFixUsed` | 돌려받은 Ticket이 [Hand-off 뒤 코멘트로 더해진 기준](./ticket-to-merge.md#criteria-added-after-a-hand-off)에 fix 기회를 쓰지 않고 받는 fix를 쓴 뒤에만 있음. Release 뒤 이어받는 Run이 두 번 사지 않게 함. Hand-off가 지움 |
 | `pullRequest` | 이미 열린 pull request. 이어받은 Run이 하나를 더 열지 않도록 |
 | `title` | implement나 fix Stage가 branch 전체에 대해 마지막으로 준 제목. pull request 제목이 됨 |
 | `body` | 두 Stage가 마지막으로 준 pull request 본문. `Closes #<n>` 아래에 들어감 |

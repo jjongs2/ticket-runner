@@ -15,7 +15,7 @@ This page follows one Ticket from its claim to its merge. What happens when it s
 | Worktree | `agent/<n>` in `.worktrees/ticket-<n>`, named `agent/<n>-<slug>` after the implement Stage | git, and the implement Stage's slug |
 | implement Stage | `/mattpocock-skills:implement` in the worktree, then nothing left uncommitted | an agent |
 | verify Stage | Adversarial grading of the Acceptance Criteria, and of defects the branch made | the pipeline, from the verdict |
-| fix Stage | One fresh session given the failure, once per Ticket | the fix budget |
+| fix Stage | One fresh session given the failure, once per Ticket, and once more for [criteria added after a Hand-off](#criteria-added-after-a-hand-off) | the fix budget |
 | Landing | Rebase, conflict Stage, pull request, CI, squash merge | one Lane at a time |
 | After the merge | Tick met criteria, clean up | the pipeline |
 
@@ -43,7 +43,7 @@ flowchart TD
 ```
 <!-- Sources: src/orchestrator.ts, src/lifecycle.ts -->
 
-Every edge to the fix Stage is taken at most once per Ticket. A second failure of any kind, or any failure the fix Stage cannot act on, is a Hand-off. A Stage stopped by the rate limit, an API failure or the API budget, a failure the base branch shares ([below](#a-failure-the-base-branch-shares)), and [GitHub or the git remote failing](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) at any step, leave this diagram entirely: they [release](./stopping-and-resuming.md#release-on-a-rate-limit) the Ticket.
+Every edge to the fix Stage is taken at most once per Ticket. A second failure of any kind, or any failure the fix Stage cannot act on, is a Hand-off, except a verdict failing on [criteria added after a Hand-off](#criteria-added-after-a-hand-off), whose fix Stage spends no budget. A Stage stopped by the rate limit, an API failure or the API budget, a failure the base branch shares ([below](#a-failure-the-base-branch-shares)), and [GitHub or the git remote failing](./stopping-and-resuming.md#release-over-a-github-or-remote-failure) at any step, leave this diagram entirely: they [release](./stopping-and-resuming.md#release-on-a-rate-limit) the Ticket.
 
 A [Hand-off](./stopping-and-resuming.md#hand-off) undoes the claim, puts `ready-for-human` on, comments the failure and where the work is, and puts an open pull request back into draft. The branch and the state file stay on the Target's remote, since the Host the work was done on may be gone by the time a human looks. The handed-off Stages' transcripts are kept beside them or on the Host, as [`keepTranscripts`](./configuration.md#keeptranscripts) decides, and the hand-off comment says where. A human who relabels the Ticket `ready-for-agent` hands it back, and it carries on from what it reached rather than paying for the implement Stage again. On a Target that [merges by hand](./configuration.md#merge), a Ticket whose CI is green is [handed off at `merge`](./stopping-and-resuming.md#when-nothing-failed) with nothing failed. A [Hand-off at setup](./stopping-and-resuming.md#when-a-hand-off-does-less) that leaves no work of the pipeline's removes the state file: the Ticket started fresh and either failed before its worktree existed, or found a branch in the way that the Run would not branch over. No Stage of this Run worked there, so nothing is the pipeline's to resume.
 
@@ -139,7 +139,7 @@ The **verdict** answers each criterion by its number, `met`, `unmet`, `unverifia
 | Verdict | Progress cell | Result |
 |---|---|---|
 | Passes | `✅ <k> met`, followed by `· <c> to CI` and `· <u> unverifiable` when there are any | On to the Landing |
-| Some `unmet` | `❌ <u> unmet` | Spends the fix budget; the fix Stage gets each unmet criterion with its evidence |
+| Some `unmet` | `❌ <u> unmet` | Spends the fix budget, unless one was [added in a comment after a Hand-off](#criteria-added-after-a-hand-off); the fix Stage gets each unmet criterion with its evidence |
 | A defect the branch made | `❌ <d> defects`, or `❌ <u> unmet · <d> defects` | As `unmet`: spends the fix budget, and the fix Stage gets each defect with its evidence |
 | A listed number left out, answered twice, or one answered that was not listed | `❌ misnumbered` | Hand-off: it has not graded the Ticket |
 | All `unverifiable` | `❌ no evidence` | Hand-off: there is nothing to merge on |
@@ -147,11 +147,11 @@ The **verdict** answers each criterion by its number, `met`, `unmet`, `unverifia
 
 **A criterion left to CI.** A criterion that asks for nothing but the pull request's CI, or some commands, to pass, such as "The checks pass.", is answered `ci` when a workflow under `.github/workflows/` runs on this pull request, its triggers and `paths` filters admitting the branch's changes, and runs every command the criterion names, whole or split across jobs; its evidence names the workflow and its steps. GitHub counts a skipped job as passed, so a workflow whose `paths` filter skips the branch is not one that runs it. Otherwise the session grades the criterion itself, running the commands it names. A `ci` criterion is ticked once CI passes. When the wait for CI ends in `⚠️ no checks` or `⚠️ no workflow runs`, it stays unticked and is named wherever an unverifiable criterion is, and a Ticket with no `met` criterion is then handed off, since no criterion has evidence to merge on.
 
-A verify after a fix for unmet criteria or defects gets the first verdict's unmet criteria and defects with their evidence, and is told such a criterion is met only when that counterexample is gone and the whole criterion holds. A defect it finds in the fix's own code is a Hand-off like any second failure, so the gate cannot loop.
+A verify after a fix for unmet criteria or defects gets the first verdict's unmet criteria and defects with their evidence, and is told such a criterion is met only when that counterexample is gone and the whole criterion holds. A defect it finds in the fix's own code is a Hand-off like any second failure, so the gate cannot loop. The one exception is a Ticket handed back with [criteria added in a comment after its Hand-off](#criteria-added-after-a-hand-off), which gets one fix more, once each time it is handed back.
 
 ## The fix Stage and the fix budget
 
-The fix budget is one fix Stage per Ticket, and whatever still fails after it goes to a human. The fix Stage is a fresh session on the same branch, with no plugin skill but `/mattpocock-skills:pr`, given the failure and its evidence to mend that one defect. It is also given the latest `title`, `body`, `problem` and `solution` answered for the branch: one its fix changes it answers again, revised for the whole branch, and one it leaves true it answers blank, which keeps the earlier one. Sent in for unmet criteria or defects of the branch, it commits nothing and says why in `noCommitReason` when one cannot be met or fixed without overturning a documented decision or another criterion, which hands the Ticket to a human. Otherwise it takes a fix the evidence proposes as a lead, not the answer: it finds the cause itself, looks for a fix of that cause within the Ticket's scope before settling for a narrower one, and before committing tests its fix with inputs built from that cause, not only with the counterexample it was given.
+The fix budget is one fix Stage per Ticket, and whatever still fails after it goes to a human, bar the one fix [criteria added after a Hand-off](#criteria-added-after-a-hand-off) get besides. The fix Stage is a fresh session on the same branch, with no plugin skill but `/mattpocock-skills:pr`, given the failure and its evidence to mend that one defect. It is also given the latest `title`, `body`, `problem` and `solution` answered for the branch: one its fix changes it answers again, revised for the whole branch, and one it leaves true it answers blank, which keeps the earlier one. Sent in for unmet criteria or defects of the branch, it commits nothing and says why in `noCommitReason` when one cannot be met or fixed without overturning a documented decision or another criterion, which hands the Ticket to a human. Otherwise it takes a fix the evidence proposes as a lead, not the answer: it finds the cause itself, looks for a fix of that cause within the Ticket's scope before settling for a narrower one, and before committing tests its fix with inputs built from that cause, not only with the counterexample it was given.
 
 Only a defect a fresh session could mend spends the budget:
 
@@ -159,6 +159,7 @@ Only a defect a fresh session could mend spends the budget:
 |---|---|---|
 | Changes no commit carries | implement, fix, rebase after a conflict Stage, or setup on a resumed Ticket | Yes |
 | A criterion `unmet` | verify | Yes |
+| A criterion `unmet` that a comment added after the last hand-off comment, the first such verdict since the Ticket was handed back | verify | No, a fix Stage of its own ([below](#criteria-added-after-a-hand-off)) |
 | A defect the branch made | verify | Yes |
 | The conflict Stage did not finish the rebase | rebase | Yes |
 | A pull request check failed | ci | Yes |
@@ -178,7 +179,13 @@ Only a defect a fresh session could mend spends the budget:
 
 After a fix Stage, the Ticket starts again at verify. Every gate grades the fix, so a fix is held to the same bar as the first attempt. A fix Stage whose branch did not grow is a Hand-off straight away: re-grading an untouched branch could only fail the same way. A squashed or amended branch counts as not grown. Its hand-off comment carries the evidence the fix Stage was sent in with, and quotes the reason the Stage gave in `noCommitReason` for committing nothing, whatever it was sent in for.
 
-A fix Stage stopped by the rate limit, an API failure or the API budget spends nothing. The fix budget is one fix Stage each time the pipeline takes the Ticket up: a Release carries a spent budget over to the next Run, having changed nothing about the Ticket, and a Hand-off restores it, because the Ticket only comes back through a human's hands and whatever they did to it is what the fresh budget is for. More on [Handing a Ticket back](./stopping-and-resuming.md#handing-a-ticket-back).
+A fix Stage stopped by the rate limit, an API failure or the API budget spends nothing. The fix budget is one fix Stage each time the pipeline takes the Ticket up: a Release carries a spent budget over to the next Run, having changed nothing about the Ticket, and a Hand-off restores it, because the Ticket only comes back through a human's hands and whatever they did to it is what the fresh budget is for. A Ticket handed back with criteria added in a comment gets one fix besides, which spends none of it ([below](#criteria-added-after-a-hand-off)). More on [Handing a Ticket back](./stopping-and-resuming.md#handing-a-ticket-back).
+
+### Criteria added after a Hand-off {#criteria-added-after-a-hand-off}
+
+A human who hands a Ticket back often adds a criterion first, or replaces one, in a decision comment, without writing code. The first verify then grades a criterion no Stage has worked on yet. So a verdict that leaves unmet a criterion listed from a comment posted after the Ticket's last hand-off comment sends a fix Stage that spends no fix budget, and the budget the Ticket came back with is still there for a later failure. That happens once each time the Ticket is handed back: a later verdict that leaves the same criteria unmet spends the budget as any failure does.
+
+verify still runs first, since a human may have implemented the new criteria already. A criterion edited into the body gets no exemption, because only a comment's place below the hand-off comment says when it was added. A verdict whose unmet criteria are all the body's or come from comments before that hand-off comment, or that fails on defects alone, spends the budget as usual. A Release does not buy the fix twice: the state file records that it was spent, and a fix Stage the Release stopped is still owed to the Run that resumes the Ticket. A fix Stage of this kind that commits nothing is a Hand-off, as any other is.
 
 ## Lanes and the Frontier refill
 

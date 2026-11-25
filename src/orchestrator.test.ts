@@ -5126,6 +5126,312 @@ describe("a Ticket handed off and then handed back", () => {
   });
 });
 
+describe("criteria a comment added after the hand-off", () => {
+  /** The criterion the body has had from the start, as the first Run graded it. */
+  const ORIGINAL = "it works";
+  /** The criterion a human adds in a comment before handing the Ticket back. */
+  const ADDED = "it also logs";
+
+  /** A verdict over both criteria: the original first, the added one second. */
+  const graded = (original: "met" | "unmet", added: "met" | "unmet") =>
+    stageResult({
+      result: verdictResult(
+        [
+          { text: ORIGINAL, status: original, evidence: `${ORIGINAL} is ${original}` },
+          { text: ADDED, status: added, evidence: `${ADDED} is ${added}` },
+        ],
+        original === "met" && added === "met",
+      ),
+    });
+
+  /** The criterion, posted as a comment of its own, below whatever the Ticket carries. */
+  function commentAdds(text: string): void {
+    const { comments } = tracker.issue(TICKET);
+    comments.push({ id: `human-${comments.length}`, body: `Decision:\n\n- [ ] ${text}` });
+  }
+
+  /** A first Run that spends the fix budget and is handed off at CI. */
+  async function handedOff(): Promise<void> {
+    tracker.queueCi(RED_CI);
+    tracker.queueCi(RED_CI);
+
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "ci" });
+  }
+
+  function handedBack(): void {
+    tracker.issue(TICKET).labels = ["ready-for-agent"];
+  }
+
+  /** The Stages the first Run took, which every test here starts from. */
+  const FIRST_RUN = ["implement", "verify", "fix", "verify"];
+
+  it("buys a fix Stage that spends no fix budget, which is still there for a later failure", async () => {
+    await handedOff();
+    commentAdds(ADDED);
+    handedBack();
+    runner.queue("verify", graded("met", "unmet"));
+    runner.queue("verify", graded("met", "unmet"));
+    runner.queue("verify", graded("met", "met"));
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).toEqual([...FIRST_RUN, "verify", "fix", "verify", "fix", "verify"]);
+  });
+
+  it("buys it once: a third verdict leaving the added criterion unmet is handed off", async () => {
+    await handedOff();
+    commentAdds(ADDED);
+    handedBack();
+    runner.queue("verify", graded("met", "unmet"));
+    runner.queue("verify", graded("met", "unmet"));
+    runner.queue("verify", graded("met", "unmet"));
+
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "verify" });
+    expect(runner.stages()).toEqual([...FIRST_RUN, "verify", "fix", "verify", "fix", "verify"]);
+  });
+
+  it("buys it even after the fix budget has gone on another failure", async () => {
+    await handedOff();
+    commentAdds(ADDED);
+    handedBack();
+    runner.queue("verify", graded("unmet", "met"));
+    runner.queue("verify", graded("met", "unmet"));
+    runner.queue("verify", graded("met", "met"));
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).toEqual([...FIRST_RUN, "verify", "fix", "verify", "fix", "verify"]);
+  });
+
+  it("spends the fix budget on what that fix Stage leaves uncommitted", async () => {
+    await handedOff();
+    commentAdds(ADDED);
+    handedBack();
+    runner.queue("verify", graded("met", "unmet"));
+    runner.queue("verify", graded("met", "met"));
+    let fixes = 0;
+    runner.leaves("fix", () => {
+      fixes += 1;
+      workspace.commits.push(`fix(cli): log the line, take ${fixes} (#2)`);
+      workspace.uncommitted = fixes === 1 ? ["src/cli.ts"] : [];
+    });
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).toEqual([...FIRST_RUN, "verify", "fix", "fix", "verify"]);
+    expect(runner.prompts("fix").at(-1)).toContain("src/cli.ts");
+  });
+
+  it("spends the fix budget on a verdict whose unmet criteria are all the body's", async () => {
+    await handedOff();
+    commentAdds(ADDED);
+    handedBack();
+    runner.queue("verify", graded("unmet", "met"));
+    runner.queue("verify", graded("unmet", "met"));
+
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "verify" });
+    expect(runner.stages()).toEqual([...FIRST_RUN, "verify", "fix", "verify"]);
+  });
+
+  it("spends the fix budget on a criterion a comment added before the hand-off", async () => {
+    commentAdds(ADDED);
+    runner.queue("verify", graded("met", "met"));
+    runner.queue("verify", graded("met", "met"));
+    await handedOff();
+    handedBack();
+    runner.queue("verify", graded("met", "unmet"));
+    runner.queue("verify", graded("met", "unmet"));
+
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "verify" });
+    expect(runner.stages()).toEqual([...FIRST_RUN, "verify", "fix", "verify"]);
+  });
+
+  it("spends the fix budget on a verdict that fails on defects alone", async () => {
+    await handedOff();
+    commentAdds(ADDED);
+    handedBack();
+    const defective = stageResult({
+      result: verdictResult(
+        [
+          { text: ORIGINAL, status: "met", evidence: "npm test is green" },
+          { text: ADDED, status: "met", evidence: "the log has the line" },
+        ],
+        false,
+        [{ summary: "the log leaks a token", evidence: "src/log.ts:3" }],
+      ),
+    });
+    runner.queue("verify", defective);
+    runner.queue("verify", defective);
+
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "verify" });
+    expect(runner.stages()).toEqual([...FIRST_RUN, "verify", "fix", "verify"]);
+  });
+
+  it("spends the fix budget on a Ticket never handed off, whatever comment the criterion is in", async () => {
+    commentAdds(ADDED);
+    runner.queue("verify", graded("met", "unmet"));
+    runner.queue("verify", graded("met", "unmet"));
+
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "verify" });
+    expect(runner.stages()).toEqual(["implement", "verify", "fix", "verify"]);
+  });
+
+  it("is still owed to the Run that resumes a Ticket released while it ran", async () => {
+    await handedOff();
+    commentAdds(ADDED);
+    handedBack();
+    runner.queue("verify", graded("met", "unmet"));
+    runner.queue("fix", { ok: false, failure: "rate-limited" });
+
+    expect(await run()).toMatchObject({ outcome: "released", stage: "fix" });
+    expect(workspace.state(TICKET)).toMatchObject({ fixUsed: false });
+    expect(workspace.state(TICKET)?.addedCriteriaFixUsed).toBeUndefined();
+
+    runner.queue("verify", graded("met", "unmet"));
+    runner.queue("verify", graded("met", "unmet"));
+    runner.queue("verify", graded("met", "met"));
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(runner.stages()).toEqual([
+      ...FIRST_RUN,
+      "verify",
+      "fix",
+      "verify",
+      "fix",
+      "verify",
+      "fix",
+      "verify",
+    ]);
+  });
+
+  it("is not bought twice across a Release and resume", async () => {
+    await handedOff();
+    commentAdds(ADDED);
+    handedBack();
+    runner.queue("verify", graded("met", "unmet"));
+    runner.queue("verify", { ok: false, failure: "rate-limited" });
+
+    expect(await run()).toMatchObject({ outcome: "released", stage: "verify" });
+    expect(workspace.state(TICKET)).toMatchObject({ fixUsed: false, addedCriteriaFixUsed: true });
+
+    runner.queue("verify", graded("met", "unmet"));
+    runner.queue("verify", graded("met", "unmet"));
+
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "verify" });
+    expect(runner.stages()).toEqual([
+      ...FIRST_RUN,
+      "verify",
+      "fix",
+      "verify",
+      "verify",
+      "fix",
+      "verify",
+    ]);
+  });
+
+  it("is bought again each time the Ticket is handed back", async () => {
+    await handedOff();
+    commentAdds(ADDED);
+    handedBack();
+    runner.queue("verify", graded("met", "unmet"));
+    runner.queue("verify", graded("met", "unmet"));
+    runner.queue("verify", graded("met", "unmet"));
+    expect(await run()).toMatchObject({ outcome: "handed-off", stage: "verify" });
+    // The hand-off gives back the fix budget and the fix this exempts alike.
+    expect(workspace.state(TICKET)?.addedCriteriaFixUsed).toBeUndefined();
+
+    const third = "it also rotates the log";
+    commentAdds(third);
+    handedBack();
+    const all = (last: "met" | "unmet") =>
+      stageResult({
+        result: verdictResult(
+          [
+            { text: ORIGINAL, status: "met", evidence: "green" },
+            { text: ADDED, status: "met", evidence: "logged" },
+            { text: third, status: last, evidence: `rotation is ${last}` },
+          ],
+          last === "met",
+        ),
+      });
+    runner.queue("verify", all("unmet"));
+    runner.queue("verify", all("unmet"));
+    runner.queue("verify", all("met"));
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    expect(runner.stages().slice(-5)).toEqual(["verify", "fix", "verify", "fix", "verify"]);
+  });
+
+  /** The opening of a fix Stage's brief: what paid for it and what a failure after it buys. */
+  const allowance = (prompt: string | undefined) =>
+    prompt?.match(/one gate failed\. (.*)/)?.[1] ?? "";
+
+  it("tells the fix it bought that it spent no budget, and that a failure after it buys the budget's fix", async () => {
+    await handedOff();
+    commentAdds(ADDED);
+    handedBack();
+    runner.queue("verify", graded("met", "unmet"));
+    runner.queue("verify", graded("unmet", "met"));
+    runner.queue("verify", graded("met", "met"));
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    const [, free, paid] = runner.prompts("fix").map(allowance);
+    expect(free).toMatch(/spend none of its fix budget:/);
+    expect(free).not.toMatch(/budget is spent|already spent/);
+    expect(free).toMatch(/a second failure .*buys one more, which spends the fix budget/);
+    expect(free).not.toMatch(/second failure of any kind hands/);
+    expect(paid).toMatch(/^You are what its fix budget bought, and the budget is spent: a second failure of any kind hands the Ticket to a human\.$/);
+  });
+
+  it("tells the budget's fix that a verdict on an added criterion still buys one more, and the fix after it that nothing is left", async () => {
+    await handedOff();
+    commentAdds(ADDED);
+    handedBack();
+    runner.queue("verify", graded("unmet", "met"));
+    runner.queue("verify", graded("met", "unmet"));
+    runner.queue("verify", graded("met", "met"));
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    const [, paid, free] = runner.prompts("fix").map(allowance);
+    expect(paid).toMatch(/budget is spent: a second failure hands the Ticket to a human, unless .*added after the Ticket's last hand-off/);
+    expect(free).toMatch(/spend none of its fix budget, which an earlier failure already spent: a second failure of any kind hands the Ticket to a human\.$/);
+  });
+
+  it("tells the budget's fix on a Ticket never handed back that a second failure hands it off", async () => {
+    commentAdds(ADDED);
+    runner.queue("verify", graded("met", "unmet"));
+
+    await run();
+
+    expect(allowance(runner.prompts("fix")[0])).toBe(
+      "You are what its fix budget bought, and the budget is spent: a second failure of any kind hands the Ticket to a human.",
+    );
+  });
+
+  it.each([
+    ["the added criterion first", graded("met", "unmet"), graded("unmet", "met"), "added-criteria", "retry"],
+    ["the body's criterion first", graded("unmet", "met"), graded("met", "unmet"), "retry", "added-criteria"],
+  ])(
+    "logs each fix Stage and its pass apart, so none overwrites another or the verdict that sent it, %s",
+    async (_, first, second, firstDir, secondDir) => {
+      await handedOff();
+      commentAdds(ADDED);
+      handedBack();
+      const before = runner.requests.length;
+      runner.queue("verify", first);
+      runner.queue("verify", second);
+      runner.queue("verify", second);
+
+      expect(await run()).toMatchObject({ outcome: "handed-off", stage: "verify" });
+      const ticketLogs = `${repoRoot}/.ticket-runner/runs/run-1/${TICKET}`;
+      expect(runner.requests.slice(before).map((request) => [request.stage, request.logDir])).toEqual([
+        ["verify", ticketLogs],
+        ["fix", `${ticketLogs}/${firstDir}`],
+        ["verify", `${ticketLogs}/${firstDir}`],
+        ["fix", `${ticketLogs}/${secondDir}`],
+        ["verify", `${ticketLogs}/${secondDir}`],
+      ]);
+    },
+  );
+});
+
 describe("the Planning guards", () => {
   /** What the pipeline said to the Ticket, if anything. */
   const warnings = () => tracker.comments.filter((c) => c.issue === TICKET).map((c) => c.body);

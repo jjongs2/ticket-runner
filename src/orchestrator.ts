@@ -12,7 +12,7 @@ import {
 import { tickMetCriteria } from "./criteria.js";
 import type { BaseBranchChecks, FailingBase } from "./failing-base.js";
 import { type SkipReason, isGuardReason, skipReason, tickedBoxes } from "./guards.js";
-import { markHandoffsTaken } from "./handoff.js";
+import { criteriaAddedSinceHandoff, markHandoffsTaken } from "./handoff.js";
 import type { Landing, LandingTurn } from "./landing.js";
 import type { FailureKind, FailurePoint } from "./lifecycle.js";
 import {
@@ -40,13 +40,14 @@ import type {
 } from "./ports/workspace.js";
 import { Progress, type ProgressPoint, type ProgressRow } from "./progress.js";
 import {
+  type FixAllowance,
   type FixFailure,
   conflictPrompt,
   fixPrompt,
   implementPrompt,
   verifyPrompt,
 } from "./prompts.js";
-import { retryLogDir, stageLogDir } from "./run-log.js";
+import { addedCriteriaLogDir, retryLogDir, stageLogDir } from "./run-log.js";
 import { type FaultSide, OutsideFault } from "./outside-fault.js";
 import { holdsClaim } from "./stranded.js";
 import {
@@ -253,6 +254,27 @@ class TicketFailure extends Error {
 }
 
 /**
+ * A verdict that failed, with the numbers of the criteria it left unmet, which
+ * decide whether the fix Stage it sends spends the fix budget
+ * ({@link criteriaAddedSinceHandoff}).
+ */
+class UnmetCriteria extends TicketFailure {
+  constructor(
+    summary: string,
+    evidence: string,
+    readonly unmet: readonly number[],
+  ) {
+    super("verify", summary, evidence, "unmet-criteria");
+  }
+}
+
+/**
+ * Which allowance pays for a fix Stage: the fix budget, or the one fix a
+ * Ticket handed back gets for criteria added in a comment since its hand-off.
+ */
+type FixFunding = "budget" | "added-criteria";
+
+/**
  * A Ticket that passed every gate on a Target that merges by hand (`merge`
  * off). Nothing failed: it ends in a hand-off only because a human merges here,
  * so the hand-off leaves its pull request as published and keeps no
@@ -359,8 +381,11 @@ function asTicketFailure(error: unknown, point: FailurePoint): TicketFailure {
  * sets up, is what grades the code before it merges. Work left uncommitted, an
  * unmet criterion, a red CI or a rebase conflict the conflict Stage could not
  * resolve spends the Ticket's fix budget and starts again at verify; every other
- * failure, and every second failure, ends in a hand-off. Nothing ends in a
- * merge that has not been through a green pass of the whole gauntlet.
+ * failure, and every second failure, ends in a hand-off. The one exception is
+ * a Ticket handed back after a hand-off: a verdict leaving unmet a criterion a
+ * comment added since buys a fix Stage that spends no budget, once each time
+ * the Ticket is handed back. Nothing ends in a merge that has not been through
+ * a green pass of the whole gauntlet.
  *
  * A Stage the subscription rate limit or a transient API failure stopped ends
  * none of that: the Ticket is released, and a Run started once the limit has
@@ -458,6 +483,7 @@ async function takeTicket(
     branch,
     state: resume?.state ?? "claimed",
     fixUsed: resume?.fixUsed ?? false,
+    ...(resume?.addedCriteriaFixUsed === true ? { addedCriteriaFixUsed: true } : {}),
     ...(resume?.pullRequest === undefined ? {} : { pullRequest: resume.pullRequest }),
     ...(resume?.title === undefined ? {} : { title: resume.title }),
     ...(resume === undefined ? {} : recordedProse(resume)),
@@ -491,11 +517,22 @@ async function takeTicket(
   let worktreeOnDisk: HandOffWorktree | undefined =
     resume === undefined ? undefined : { path: worktree, pushable: true };
   // The fix budget, which is one per Ticket and spent by the first failure a
-  // fix Stage is offered. Once it is gone the next failure of any kind — even a
-  // kind the fix Stage never touched — is a hand-off. A resumed Ticket keeps the
+  // fix Stage is offered, bar the one fix below for criteria added since a
+  // hand-off. Once it is gone the next failure of any kind — even a kind the
+  // fix Stage never touched — is a hand-off. A resumed Ticket keeps the
   // budget recorded when it stopped: resuming buys no second chances.
   let fixUsed = resume?.fixUsed ?? false;
-  // The pass behind a fix Stage logs beside the first one rather than over it.
+  // The one fix Stage beside the budget, bought by a verdict that leaves unmet
+  // a criterion a comment added since the Ticket's last hand-off: the first
+  // verify after a hand-back grades criteria no Stage has worked on yet, and
+  // the budget is for what the work then gets wrong. verify still runs first,
+  // since a human may have implemented them already. Once each time the
+  // Ticket is handed back, a Release and resume in between included.
+  let addedCriteriaFixUsed = resume?.addedCriteriaFixUsed ?? false;
+  // Which of the two pays for the fix Stage running now, if one is.
+  let fixing: FixFunding | undefined;
+  // The pass behind a fix Stage logs beside the first one rather than over it,
+  // in a directory of its own for each allowance that can pay for one.
   let logDir = stageLogDir(repoRoot, runId, ticket);
   // The unmet criteria the fix Stage was sent in for, and their evidence, which
   // the verify behind it is held to. Only this Run's: the state file keeps no
@@ -507,6 +544,8 @@ async function takeTicket(
   // The criteria verify grades, numbered once from the Ticket as it was
   // claimed, so a verify behind a fix answers the same numbers as the first.
   const criteria = listCriteria([issue.body, ...issue.comments.map((comment) => comment.body)]);
+  // Those of them a comment posted after the last hand-off comment lists.
+  const addedSinceHandoff = criteriaAddedSinceHandoff(issue.body, issue.comments);
 
   // Declared out here because ticking the Acceptance Criteria it proved happens
   // after the merge, where a failure may no longer hand the Ticket off.
@@ -689,22 +728,46 @@ async function takeTicket(
         // Ticket is released, whole, further up.
         if (error instanceof Releasing || error instanceof OutsideFault) throw error;
         const failure = asTicketFailure(error, point);
-        if (fixUsed || failure.kind === undefined) throw failure;
-        fixUsed = true;
+        if (failure.kind === undefined) throw failure;
+        const funding: FixFunding =
+          !addedCriteriaFixUsed &&
+          failure instanceof UnmetCriteria &&
+          failure.unmet.some((number) => addedSinceHandoff.has(number))
+            ? "added-criteria"
+            : "budget";
+        if (funding === "budget" && fixUsed) throw failure;
+        if (funding === "budget") fixUsed = true;
+        else addedCriteriaFixUsed = true;
+        fixing = funding;
         point = "fix";
         // A fix Stage is a session nobody else is waiting on, so the Landing
         // goes back: another Ticket lands while it runs, and this one rejoins
         // the queue at the back when it reaches the rebase again.
         landing.leave();
-        logDir = retryLogDir(repoRoot, runId, ticket);
+        logDir = (funding === "budget" ? retryLogDir : addedCriteriaLogDir)(
+          repoRoot,
+          runId,
+          ticket,
+        );
         if (failure.kind === "unmet-criteria") unmetBefore = failure.evidence;
-        await fix(
+        // What a failure after this fix buys, read off the same rule as above,
+        // so the Stage is told which allowance it spent and what is left.
+        const allowance: FixAllowance = {
+          paidBy: funding,
+          next: !fixUsed
+            ? "budget"
+            : !addedCriteriaFixUsed && addedSinceHandoff.size > 0
+              ? "added-criteria"
+              : "hand-off",
+        };
+        owed = await fix(
           pipeline,
           issue,
           worktree,
           branch,
           logDir,
           { kind: failure.kind, summary: failure.summary, evidence: failure.evidence },
+          allowance,
           progress,
           { notes, written },
           record,
@@ -712,7 +775,10 @@ async function takeTicket(
         // Recorded once the Stage has come back, not when the budget was
         // committed: a fix Stage the rate limit or an API failure stopped
         // before it ran spends nothing, and the release below says so.
-        await record.advance({ fixUsed: true });
+        fixing = undefined;
+        await record.advance(
+          funding === "budget" ? { fixUsed: true } : { addedCriteriaFixUsed: true },
+        );
       }
     }
 
@@ -754,9 +820,11 @@ async function takeTicket(
         branch,
         stopped,
         record,
-        // A fix Stage stopped before it ran spends nothing: the budget is
-        // still there for the Run that resumes the Ticket.
-        fixUsed: fixUsed && stopped.point !== "fix",
+        // A fix Stage stopped before it ran spends nothing: whichever paid
+        // for it is still there for the Run that resumes the Ticket.
+        fixUsed: fixUsed && !(stopped.point === "fix" && fixing === "budget"),
+        addedCriteriaFixUsed:
+          addedCriteriaFixUsed && !(stopped.point === "fix" && fixing === "added-criteria"),
         progress,
         notes,
       });
@@ -994,6 +1062,7 @@ type Advance = Partial<
     | "branch"
     | "state"
     | "fixUsed"
+    | "addedCriteriaFixUsed"
     | "pullRequest"
     | "title"
     | "body"
@@ -1114,9 +1183,11 @@ class ResumeRecord {
   private file(): TicketState {
     // Written only while it is owed, so a state file says nothing of a rebase
     // nobody has to do.
-    const { rebaseFirst, ...reached } = this.reached;
+    // The fix for criteria added since the hand-off likewise, only once spent.
+    const { rebaseFirst, addedCriteriaFixUsed, ...reached } = this.reached;
     return {
       ...reached,
+      ...(addedCriteriaFixUsed === true ? { addedCriteriaFixUsed } : {}),
       ...(rebaseFirst === true ? { rebaseFirst } : {}),
       runId: this.pipeline.runId,
       version: this.pipeline.version,
@@ -1395,7 +1466,9 @@ async function pushCommitted(
  * The failure of a code Stage that finished with no new commit, carrying the
  * reason it gave, if any, for the hand-off to quote. Never one a fix Stage is
  * bought for: the implement Stage's has nothing to grade, and the fix Stage's
- * comes after the budget is spent.
+ * leaves the branch no better placed for a second session than it was for
+ * that one, whether that fix spent the budget or was the one for criteria
+ * added since a hand-off, which spends none.
  */
 function leftNoCommits(
   stage: "implement" | "fix",
@@ -1796,11 +1869,10 @@ async function verify(
       ...(defects.length === 0 ? [] : [`the branch made ${defectCount(defects.length)}`]),
     ].join(", and ");
     await progress.record(stageRow("verify", result, `❌ ${cell}`));
-    throw new TicketFailure(
-      "verify",
+    throw new UnmetCriteria(
       summary,
       [...unmet.map(criterionLine), ...defects.map(defectLine)].join("\n"),
-      "unmet-criteria",
+      unmet.map((criterion) => criterion.number),
     );
   }
 
@@ -1856,10 +1928,11 @@ async function fix(
   branch: string,
   logDir: string,
   failure: FixFailure,
+  allowance: FixAllowance,
   progress: Progress,
   { notes, written }: CodeStageNotes,
   record: ResumeRecord,
-): Promise<void> {
+): Promise<TicketFailure | undefined> {
   const stage = pipeline.config.stages.fix;
   pipeline.log?.(`#${issue.number} fixing · ${failure.summary}`);
 
@@ -1879,6 +1952,7 @@ async function fix(
       pipeline.config.checks,
       await standingNotesNumber(pipeline),
       record.answers,
+      allowance,
     ),
     cwd: worktree,
     logDir,
@@ -1896,8 +1970,10 @@ async function fix(
   // A session that came back clean mended nothing, whatever it says. Believing
   // it costs the Ticket a whole second pass of the verdict and CI
   // over a branch nobody touched, which can only fail the way it just did — and
-  // a progress row claiming the Stage committed. The budget is already spent,
-  // so this ends the Ticket rather than buying another try.
+  // a progress row claiming the Stage committed. So this ends the Ticket
+  // rather than buying another try, whether the Stage spent the fix budget or
+  // was the fix for criteria added since a hand-off, which spends none: the
+  // branch is no better placed for a second session than it was for this one.
   //
   // A branch that grew is the whole signal, which is not the same as one that
   // changed: a session that squashed the branch shorter, or amended in place,
@@ -1913,13 +1989,15 @@ async function fix(
     throw leftNoCommits("fix", failure.evidence, result);
   }
 
-  // The budget is spent, so what the Stage left uncommitted hands the Ticket
-  // off from here, before anything grades the branch.
+  // What the Stage left uncommitted is owed to the loop, which throws it before
+  // anything grades the branch, so the allowance rule decides what it buys:
+  // a Hand-off after the fix budget's Stage, and the budget's own Stage after
+  // the fix for criteria added since a hand-off, which spent none of it.
   const uncommitted = await uncommittedWork(pipeline, worktree, "fix");
   await progress.record(
     stageRow("fix", result, uncommitted === undefined ? "✅ committed" : UNCOMMITTED_CELL),
   );
-  if (uncommitted !== undefined) throw uncommitted;
+  return uncommitted;
 }
 
 /**
@@ -2215,6 +2293,8 @@ interface Release {
   record: ResumeRecord;
   /** Whether the fix budget was spent by a failure of the Ticket's own. */
   fixUsed: boolean;
+  /** Whether the fix for criteria added since the last hand-off was spent. */
+  addedCriteriaFixUsed: boolean;
   /** The progress comment, written once more if its last write failed. */
   progress: Progress;
   notes: RoutedNote[];
@@ -2235,7 +2315,7 @@ interface Release {
  */
 async function release(
   pipeline: Pipeline,
-  { issue, user, branch, stopped, record, fixUsed, progress, notes }: Release,
+  { issue, user, branch, stopped, record, fixUsed, addedCriteriaFixUsed, progress, notes }: Release,
 ): Promise<TicketOutcome> {
   const { tracker, config } = pipeline;
   const ticket = issue.number;
@@ -2247,6 +2327,7 @@ async function release(
   await record.advance({
     state: stopped.state,
     fixUsed,
+    addedCriteriaFixUsed,
     ...(stopped.failingBase === undefined ? {} : { rebaseFirst: true }),
   });
   if (stopped.failingBase !== undefined) {
@@ -2581,6 +2662,7 @@ async function handOff(
       // spent, and the claim only marks that comment as history.
       await record.advance({
         fixUsed: false,
+        addedCriteriaFixUsed: false,
         ...(pullRequest === undefined ? {} : { pullRequest }),
       });
     }

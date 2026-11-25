@@ -178,8 +178,11 @@ reads `⏸ API rate limited`.
 session that came back having committed nothing — but it is not the same
 question. implement asks whether the branch carries anything at all; fix asks
 whether it grew, since implement's commits are already on it. A fix Stage that
-answers no ends the Ticket where it stands, because the fix budget it would take
-to try again is the one already spent on it.
+answers no ends the Ticket where it stands, whether it spent the fix budget or
+was the fix a Ticket handed back gets, spending none, for criteria a comment
+added after its hand-off: a branch the Stage left as it was can only fail the
+way it just did, and committing nothing is how a fix Stage hands back what only
+a human can settle.
 
 A `conflict` Stage that came back rate-limited, or stopped by an API failure or
 the API budget, is still read as `✅ rebased` when it had finished the rebase

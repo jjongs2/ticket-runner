@@ -231,7 +231,8 @@ Everything a Stage did goes to disk, under the Target's gitignored `.ticket-runn
 | `<n>/<stage>.command` | The exact command line, environment included, to rerun the Stage by hand: `env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_PLUGIN_DIRS …` for a Stage run without the key, `env -u CLAUDE_CODE_PLUGIN_DIRS ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" …` for one run on it, never its value |
 | `<n>/<stage>.transcript.jsonl` | The session's stream-json output as it printed it, appended live, a line that is not JSON included |
 | `<n>/<stage>.stderr` | The session's standard error as it printed it, appended live |
-| `<n>/retry/` | The fix Stage and the pass it bought, so the failing pass's files survive beside them |
+| `<n>/retry/` | The fix Stage the fix budget bought and the pass behind it, so the failing pass's files survive beside them |
+| `<n>/added-criteria/` | The fix Stage for [criteria added after a Hand-off](./ticket-to-merge.md#criteria-added-after-a-hand-off), which spends no fix budget, and the pass behind it |
 
 The command line is written before the Stage starts and output as it arrives, so a Run killed mid-Stage still leaves what it had reached. Wherever a Stage printed the `ANTHROPIC_API_KEY` your shell exports, its files say `<ANTHROPIC_API_KEY>` instead. A handed-off Ticket's command lines and transcripts are also kept on the Target's remote where [`keepTranscripts`](./configuration.md#keeptranscripts) says so; elsewhere these files are the only copy ([What stays where](./stopping-and-resuming.md#what-stays-where)).
 
