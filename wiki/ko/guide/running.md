@@ -231,7 +231,8 @@ Stage가 한 일은 모두 Target의 gitignore된 `.ticket-runner/` 아래 디�
 | `<n>/<stage>.command` | 환경 변수까지 포함한 정확한 명령줄. 그대로 붙여 넣으면 Stage를 다시 돌릴 수 있음. 키 없이 실행한 Stage는 `env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_PLUGIN_DIRS …`, 키로 실행한 Stage는 `env -u CLAUDE_CODE_PLUGIN_DIRS ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" …`로 시작하고, 키 값은 적지 않음 |
 | `<n>/<stage>.transcript.jsonl` | 세션이 출력한 그대로의 stream-json 출력, JSON이 아닌 줄까지 실시간으로 덧붙인 것 |
 | `<n>/<stage>.stderr` | 세션이 출력한 그대로의 stderr, 실시간으로 덧붙인 것 |
-| `<n>/retry/` | fix Stage와, 그 덕에 한 번 더 도는 시도. 실패한 시도의 파일은 옆에 그대로 남음 |
+| `<n>/retry/` | fix 기회를 쓴 fix Stage와, 그 덕에 한 번 더 도는 시도. 실패한 시도의 파일은 옆에 그대로 남음 |
+| `<n>/added-criteria/` | [Hand-off 뒤 더해진 기준](./ticket-to-merge.md#criteria-added-after-a-hand-off)을 위한, fix 기회를 쓰지 않는 fix Stage와 그 뒤의 시도 |
 
 명령줄은 Stage가 시작되기 전에, 출력은 나오는 대로 쓰니, Stage 도중에 kill된 Run도 거기까지 한 것은 남깁니다. Stage가 셸이 export한 `ANTHROPIC_API_KEY`를 출력한 곳에서는 파일에 그 값 대신 `<ANTHROPIC_API_KEY>`가 적힙니다. Hand-off된 Ticket의 명령줄과 transcript는 [`keepTranscripts`](./configuration.md#keeptranscripts)가 그러라고 할 때 Target의 remote에도 남고, 그 밖에는 이 파일이 유일한 사본입니다([무엇이 어디에 남나](./stopping-and-resuming.md#what-stays-where)).
 

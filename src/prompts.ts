@@ -341,7 +341,8 @@ const fixInstructions = (
   base: string,
   kind: FailureKind,
   checks: readonly string[],
-) => `You are the fix Stage of an unattended pipeline. The Ticket below is already implemented on the branch you are on, and one gate failed. You are what its fix budget bought, and the budget is spent: a second failure of any kind hands the Ticket to a human.
+  allowance: FixAllowance,
+) => `You are the fix Stage of an unattended pipeline. The Ticket below is already implemented on the branch you are on, and one gate failed. ${allowanceSentence(allowance)}
 
 - Commit your fix on the branch you are on, in this worktree. ${NO_OTHER_BRANCH} Do not open pull requests, and do not close the Ticket.
 - Start from the evidence: reproduce the failure, find what actually causes it, and fix that rather than the symptom.
@@ -421,6 +422,47 @@ const failureSentences = (base: string): Record<FailureKind, string> => ({
   "failed-ci": "a pull request check failed after the branch was pushed",
   "unresolved-conflict": `the branch conflicts with ${base}, and the session sent in to resolve the rebase did not finish it`,
 });
+
+/**
+ * What paid for a fix Stage, and what the failure after it buys: the fix
+ * budget, or the one fix a Ticket handed back gets for criteria a comment
+ * added since its last hand-off, which spends no budget.
+ */
+export interface FixAllowance {
+  paidBy: "budget" | "added-criteria";
+  /**
+   * What a failure of the branch after this fix leads to: a hand-off, a fix
+   * Stage the fix budget pays for, or, for a verdict leaving unmet a
+   * criterion added since the hand-off and only for it, the fix that spends
+   * no budget.
+   */
+  next: "hand-off" | "budget" | "added-criteria";
+}
+
+/** A fix Stage on a Ticket never handed back: the budget paid, and is spent. */
+const BUDGET_SPENT: FixAllowance = { paidBy: "budget", next: "hand-off" };
+
+/**
+ * What paid for the fix Stage and what its failure would lead to, as it is,
+ * so a fix that spent no budget is not told it did, nor one with another fix
+ * behind it that a second failure ends the Ticket.
+ */
+function allowanceSentence({ paidBy, next }: FixAllowance): string {
+  const bought =
+    paidBy === "budget"
+      ? "You are what its fix budget bought, and the budget is spent"
+      : next === "budget"
+        ? "You were bought for criteria a comment added after the Ticket's last hand-off, and spend none of its fix budget"
+        : "You were bought for criteria a comment added after the Ticket's last hand-off, and spend none of its fix budget, which an earlier failure already spent";
+  const after = {
+    "hand-off": "a second failure of any kind hands the Ticket to a human.",
+    budget:
+      "a second failure of a kind a fix Stage is sent for buys one more, which spends the fix budget, and any failure after that hands the Ticket to a human.",
+    "added-criteria":
+      "a second failure hands the Ticket to a human, unless it is a verdict leaving unmet a criterion a comment added after the Ticket's last hand-off, which buys one more fix Stage, the last.",
+  }[next];
+  return `${bought}: ${after}`;
+}
 
 /** What went wrong, in the words the hand-off comment would have used. */
 export interface FixFailure {
@@ -506,8 +548,8 @@ export function conflictPrompt(
 
 /**
  * A fresh session with no plugin skill but the `pr` skill, given one failure
- * and told to mend it, and the title, body, problem and solution answered so
- * far.
+ * and told to mend it, what paid for it and what a failure after it buys, and
+ * the title, body, problem and solution answered so far.
  */
 export function fixPrompt(
   issueUrl: string,
@@ -518,10 +560,11 @@ export function fixPrompt(
   checks: readonly string[],
   standingNotes?: number,
   answers: BranchAnswers = {},
+  allowance: FixAllowance = BUDGET_SPENT,
 ): string {
   return sections([
     `Ticket: ${issueUrl}`,
-    fixInstructions(base, failure.kind, checks),
+    fixInstructions(base, failure.kind, checks, allowance),
     failureSection(failure, base),
     answersSection(answers),
     stageBoundary(selfHosted),

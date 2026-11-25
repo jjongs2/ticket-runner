@@ -15,7 +15,8 @@ export function stageLogDir(repoRoot: string, runId: string, ticket: number): st
 }
 
 /**
- * Where the fix Stage and the pass it bought write instead.
+ * Where the fix Stage the fix budget bought, and the pass behind it, write
+ * instead.
  *
  * A Stage's files are named after the Stage and emptied when it starts, so a
  * second verify would overwrite the verdict that spent the fix budget — which
@@ -23,6 +24,16 @@ export function stageLogDir(repoRoot: string, runId: string, ticket: number): st
  */
 export function retryLogDir(repoRoot: string, runId: string, ticket: number): string {
   return join(stageLogDir(repoRoot, runId, ticket), "retry");
+}
+
+/**
+ * Where the fix Stage bought for criteria a comment added since the Ticket's
+ * last hand-off, and the pass behind it, write: a Run can hold it and the one
+ * the budget bought, in either order, and neither may overwrite the other's
+ * files, nor the verdict that sent the other in.
+ */
+export function addedCriteriaLogDir(repoRoot: string, runId: string, ticket: number): string {
+  return join(stageLogDir(repoRoot, runId, ticket), "added-criteria");
 }
 
 /** The file naming the version, at the top of a Run's transcripts. */
@@ -57,8 +68,8 @@ export interface TranscriptFile {
 
 /**
  * The files Run `runId` wrote for `ticket` that a hand-off keeps, in name
- * order: every Stage's command line and transcript, the retries' in `retry/`,
- * and the version the Run was, so they still name the pipeline that wrote them
+ * order: every Stage's command line and transcript, the retries' in `retry/`
+ * and `added-criteria/`, and the version the Run was, so they still name the pipeline that wrote them
  * once they are somewhere else. None when the Run wrote nothing for the Ticket.
  */
 export function transcriptFiles(

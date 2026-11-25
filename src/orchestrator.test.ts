@@ -5340,6 +5340,78 @@ describe("criteria a comment added after the hand-off", () => {
     expect(await run()).toMatchObject({ outcome: "merged" });
     expect(runner.stages().slice(-5)).toEqual(["verify", "fix", "verify", "fix", "verify"]);
   });
+
+  /** The opening of a fix Stage's brief: what paid for it and what a failure after it buys. */
+  const allowance = (prompt: string | undefined) =>
+    prompt?.match(/one gate failed\. (.*)/)?.[1] ?? "";
+
+  it("tells the fix it bought that it spent no budget, and that a failure after it buys the budget's fix", async () => {
+    await handedOff();
+    commentAdds(ADDED);
+    handedBack();
+    runner.queue("verify", graded("met", "unmet"));
+    runner.queue("verify", graded("unmet", "met"));
+    runner.queue("verify", graded("met", "met"));
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    const [, free, paid] = runner.prompts("fix").map(allowance);
+    expect(free).toMatch(/spend none of its fix budget:/);
+    expect(free).not.toMatch(/budget is spent|already spent/);
+    expect(free).toMatch(/a second failure .*buys one more, which spends the fix budget/);
+    expect(free).not.toMatch(/second failure of any kind hands/);
+    expect(paid).toMatch(/^You are what its fix budget bought, and the budget is spent: a second failure of any kind hands the Ticket to a human\.$/);
+  });
+
+  it("tells the budget's fix that a verdict on an added criterion still buys one more, and the fix after it that nothing is left", async () => {
+    await handedOff();
+    commentAdds(ADDED);
+    handedBack();
+    runner.queue("verify", graded("unmet", "met"));
+    runner.queue("verify", graded("met", "unmet"));
+    runner.queue("verify", graded("met", "met"));
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+    const [, paid, free] = runner.prompts("fix").map(allowance);
+    expect(paid).toMatch(/budget is spent: a second failure hands the Ticket to a human, unless .*added after the Ticket's last hand-off/);
+    expect(free).toMatch(/spend none of its fix budget, which an earlier failure already spent: a second failure of any kind hands the Ticket to a human\.$/);
+  });
+
+  it("tells the budget's fix on a Ticket never handed back that a second failure hands it off", async () => {
+    commentAdds(ADDED);
+    runner.queue("verify", graded("met", "unmet"));
+
+    await run();
+
+    expect(allowance(runner.prompts("fix")[0])).toBe(
+      "You are what its fix budget bought, and the budget is spent: a second failure of any kind hands the Ticket to a human.",
+    );
+  });
+
+  it.each([
+    ["the added criterion first", graded("met", "unmet"), graded("unmet", "met"), "added-criteria", "retry"],
+    ["the body's criterion first", graded("unmet", "met"), graded("met", "unmet"), "retry", "added-criteria"],
+  ])(
+    "logs each fix Stage and its pass apart, so none overwrites another or the verdict that sent it, %s",
+    async (_, first, second, firstDir, secondDir) => {
+      await handedOff();
+      commentAdds(ADDED);
+      handedBack();
+      const before = runner.requests.length;
+      runner.queue("verify", first);
+      runner.queue("verify", second);
+      runner.queue("verify", second);
+
+      expect(await run()).toMatchObject({ outcome: "handed-off", stage: "verify" });
+      const ticketLogs = `${repoRoot}/.ticket-runner/runs/run-1/${TICKET}`;
+      expect(runner.requests.slice(before).map((request) => [request.stage, request.logDir])).toEqual([
+        ["verify", ticketLogs],
+        ["fix", `${ticketLogs}/${firstDir}`],
+        ["verify", `${ticketLogs}/${firstDir}`],
+        ["fix", `${ticketLogs}/${secondDir}`],
+        ["verify", `${ticketLogs}/${secondDir}`],
+      ]);
+    },
+  );
 });
 
 describe("the Planning guards", () => {

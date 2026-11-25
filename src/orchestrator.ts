@@ -40,13 +40,14 @@ import type {
 } from "./ports/workspace.js";
 import { Progress, type ProgressPoint, type ProgressRow } from "./progress.js";
 import {
+  type FixAllowance,
   type FixFailure,
   conflictPrompt,
   fixPrompt,
   implementPrompt,
   verifyPrompt,
 } from "./prompts.js";
-import { retryLogDir, stageLogDir } from "./run-log.js";
+import { addedCriteriaLogDir, retryLogDir, stageLogDir } from "./run-log.js";
 import { type FaultSide, OutsideFault } from "./outside-fault.js";
 import { holdsClaim } from "./stranded.js";
 import {
@@ -530,7 +531,8 @@ async function takeTicket(
   let addedCriteriaFixUsed = resume?.addedCriteriaFixUsed ?? false;
   // Which of the two pays for the fix Stage running now, if one is.
   let fixing: FixFunding | undefined;
-  // The pass behind a fix Stage logs beside the first one rather than over it.
+  // The pass behind a fix Stage logs beside the first one rather than over it,
+  // in a directory of its own for each allowance that can pay for one.
   let logDir = stageLogDir(repoRoot, runId, ticket);
   // The unmet criteria the fix Stage was sent in for, and their evidence, which
   // the verify behind it is held to. Only this Run's: the state file keeps no
@@ -742,8 +744,22 @@ async function takeTicket(
         // goes back: another Ticket lands while it runs, and this one rejoins
         // the queue at the back when it reaches the rebase again.
         landing.leave();
-        logDir = retryLogDir(repoRoot, runId, ticket);
+        logDir = (funding === "budget" ? retryLogDir : addedCriteriaLogDir)(
+          repoRoot,
+          runId,
+          ticket,
+        );
         if (failure.kind === "unmet-criteria") unmetBefore = failure.evidence;
+        // What a failure after this fix buys, read off the same rule as above,
+        // so the Stage is told which allowance it spent and what is left.
+        const allowance: FixAllowance = {
+          paidBy: funding,
+          next: !fixUsed
+            ? "budget"
+            : !addedCriteriaFixUsed && addedSinceHandoff.size > 0
+              ? "added-criteria"
+              : "hand-off",
+        };
         await fix(
           pipeline,
           issue,
@@ -751,6 +767,7 @@ async function takeTicket(
           branch,
           logDir,
           { kind: failure.kind, summary: failure.summary, evidence: failure.evidence },
+          allowance,
           progress,
           { notes, written },
           record,
@@ -1449,7 +1466,9 @@ async function pushCommitted(
  * The failure of a code Stage that finished with no new commit, carrying the
  * reason it gave, if any, for the hand-off to quote. Never one a fix Stage is
  * bought for: the implement Stage's has nothing to grade, and the fix Stage's
- * comes after the budget is spent.
+ * leaves the branch no better placed for a second session than it was for
+ * that one, whether that fix spent the budget or was the one for criteria
+ * added since a hand-off, which spends none.
  */
 function leftNoCommits(
   stage: "implement" | "fix",
@@ -1909,6 +1928,7 @@ async function fix(
   branch: string,
   logDir: string,
   failure: FixFailure,
+  allowance: FixAllowance,
   progress: Progress,
   { notes, written }: CodeStageNotes,
   record: ResumeRecord,
@@ -1932,6 +1952,7 @@ async function fix(
       pipeline.config.checks,
       await standingNotesNumber(pipeline),
       record.answers,
+      allowance,
     ),
     cwd: worktree,
     logDir,

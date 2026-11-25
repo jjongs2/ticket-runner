@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   VERSION_FILE,
+  addedCriteriaLogDir,
   newRunId,
   retryLogDir,
   runLogDir,
@@ -31,6 +32,10 @@ describe("where a Run writes", () => {
     );
     expect(stageLogDir(repoRoot, RUN_ID, 8)).toBe(join(runLogDir(repoRoot, RUN_ID), "8"));
     expect(retryLogDir(repoRoot, RUN_ID, 8)).toBe(join(stageLogDir(repoRoot, RUN_ID, 8), "retry"));
+    expect(addedCriteriaLogDir(repoRoot, RUN_ID, 8)).toBe(
+      join(stageLogDir(repoRoot, RUN_ID, 8), "added-criteria"),
+    );
+    expect(addedCriteriaLogDir(repoRoot, RUN_ID, 8)).not.toBe(retryLogDir(repoRoot, RUN_ID, 8));
   });
 });
 
@@ -69,18 +74,22 @@ describe("the files a hand-off keeps", () => {
       "verify.transcript.jsonl",
       "retry/fix.command",
       "retry/fix.transcript.jsonl",
+      "added-criteria/fix.command",
+      "added-criteria/fix.transcript.jsonl",
     ]);
 
     const files = transcriptFiles(repoRoot, RUN_ID, 8);
 
     expect(files.map(({ name }) => name)).toEqual([
+      "added-criteria/fix.command",
+      "added-criteria/fix.transcript.jsonl",
       "retry/fix.command",
       "retry/fix.transcript.jsonl",
       "verify.command",
       "verify.transcript.jsonl",
       "version.txt",
     ]);
-    expect(files[0]?.path).toBe(join(retryLogDir(repoRoot, RUN_ID, 8), "fix.command"));
+    expect(files[2]?.path).toBe(join(retryLogDir(repoRoot, RUN_ID, 8), "fix.command"));
   });
 
   it("are none for a Ticket the Run ran no Stage of, whatever its other Tickets left", () => {
