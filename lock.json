@@ -1,13 +1,1 @@
-{
-  "held": true,
-  "host": {
-    "kind": "workstation",
-    "id": "595a3de669a74295863fbaf53dd0e182",
-    "name": "jjongs"
-  },
-  "pid": 2110225,
-  "command": "ticket-runner run",
-  "runId": "2026-11-25T07-49-10-698",
-  "startedAt": "2026-11-25T07:49:26.071Z",
-  "processStartedAt": "1365198"
-}
+{ "held": false }
