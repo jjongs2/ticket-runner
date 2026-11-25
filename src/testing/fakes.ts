@@ -815,17 +815,17 @@ export class FakeWorkspace implements Workspace {
   }
 
   /**
-   * Back to `commit`, its changes discarded: a default head takes the commits
+   * Back on `branch` at `commit`, its changes discarded: a default head takes the commits
    * after it off {@link commits}, and any other is where the branch now is.
    */
-  async resetTo(cwd: string, commit: string): Promise<void> {
+  async resetTo({ path, branch }: WorktreeRef, commit: string): Promise<void> {
     this.called(`resetTo:${commit}`);
     this.uncommitted = [];
-    const branch = this.worktrees.get(cwd);
-    if (branch !== undefined) this.heads.delete(branch);
+    this.worktrees.set(path, branch);
+    this.heads.delete(branch);
     const length = /^commit-(\d+)$/.exec(commit)?.[1];
     if (length !== undefined) this.commits.length = Number(length);
-    else if (branch !== undefined) this.heads.set(branch, commit);
+    else this.heads.set(branch, commit);
   }
 
   /** Not in `calls`: a read, asked only of a Check or a CI that failed. */

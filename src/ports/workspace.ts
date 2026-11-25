@@ -356,11 +356,13 @@ export interface Workspace {
    */
   isAncestor(commit: string, branch: string): Promise<boolean>;
   /**
-   * Put the worktree at `cwd` back at `commit`, tracked and untracked alike,
-   * as {@link discardChanges} does: what a pr Stage, which commits nothing,
-   * left behind is thrown away. Gitignored files stay.
+   * Put the worktree at `path` back on `branch` at `commit`, tracked and
+   * untracked alike, as {@link discardChanges} does: what a pr Stage, which
+   * commits nothing, left behind is thrown away, a detached HEAD, another
+   * branch checked out or a rebase left in progress included. Gitignored
+   * files stay.
    */
-  resetTo(cwd: string, commit: string): Promise<void>;
+  resetTo(worktree: WorktreeRef, commit: string): Promise<void>;
   /**
    * The commit the branch checked out at `cwd` inherited from `base`: their
    * merge-base, with `base` as the remote holds it now. The checkout's own

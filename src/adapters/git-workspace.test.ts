@@ -565,7 +565,7 @@ describe("the head a hand-off records and a pr Stage leaves", () => {
     writeFileSync(join(path, "a.ts"), "edited\n");
     writeFileSync(join(path, "scratch.md"), "scratch\n");
 
-    await workspace.resetTo(path, start);
+    await workspace.resetTo({ path, branch: "agent/2-x" }, start);
 
     expect(git(path, "rev-parse", "HEAD")).toBe(start);
     expect(await workspace.branchHead("agent/2-x")).toBe(start);
@@ -574,6 +574,55 @@ describe("the head a hand-off records and a pr Stage leaves", () => {
     expect(existsSync(join(path, "scratch.md"))).toBe(false);
     expect(existsSync(join(path, "keep.txt"))).toBe(true);
     expect(git(path, "status", "--porcelain")).toBe("");
+  });
+
+  // What the pr Stage's check asks after the Stage: the branch where it was,
+  // the worktree on it and nothing uncommitted.
+  async function untouched(start: string): Promise<boolean> {
+    return (
+      (await workspace.branchHead("agent/2-x")) === start &&
+      (await workspace.hasWorktree({ path, branch: "agent/2-x" })) &&
+      (await workspace.uncommittedPaths(path)).length === 0
+    );
+  }
+
+  it.each([
+    ["a detached HEAD", ["switch", "--detach"]],
+    ["another branch", ["switch", "-c", "agent/2-elsewhere"]],
+  ])("sees a commit made on %s, and puts the worktree back on its branch", async (_, leave) => {
+    const start = git(path, "rev-parse", "HEAD");
+    expect(await untouched(start)).toBe(true);
+    git(path, ...leave);
+    commit(path, "b.ts", "two\n", "docs: a commit off the branch (#2)");
+
+    expect(await workspace.branchHead("agent/2-x")).toBe(start);
+    expect(await untouched(start)).toBe(false);
+
+    await workspace.resetTo({ path, branch: "agent/2-x" }, start);
+
+    expect(git(path, "symbolic-ref", "HEAD")).toBe("refs/heads/agent/2-x");
+    expect(git(path, "rev-parse", "HEAD")).toBe(start);
+    expect(existsSync(join(path, "b.ts"))).toBe(false);
+    expect(await untouched(start)).toBe(true);
+  });
+
+  it("sees a rebase left stopped on a conflict, and leaves none in progress", async () => {
+    const start = git(path, "rev-parse", "HEAD");
+    git(path, "switch", "-c", "agent/2-other", "HEAD~1");
+    commit(path, "a.ts", "other\n", "docs: conflicting (#2)");
+    git(path, "switch", "agent/2-x");
+    expect(() => git(path, "rebase", "agent/2-other")).toThrow();
+
+    expect(await untouched(start)).toBe(false);
+
+    await workspace.resetTo({ path, branch: "agent/2-x" }, start);
+
+    expect(git(path, "symbolic-ref", "HEAD")).toBe("refs/heads/agent/2-x");
+    expect(git(path, "rev-parse", "HEAD")).toBe(start);
+    expect(readFileSync(join(path, "a.ts"), "utf8")).toBe("one\n");
+    expect(await untouched(start)).toBe(true);
+    // Not refused as a rebase already under way.
+    git(path, "rebase", "main");
   });
 });
 

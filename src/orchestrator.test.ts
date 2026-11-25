@@ -5660,6 +5660,26 @@ describe("a Ticket handed back with commits since its hand-off", () => {
     expect(lastTable()).toContain("| pr | ⚠️ left changes |");
   });
 
+  it.each([
+    ["detached HEAD", ""],
+    ["switched to another branch", "agent/2-elsewhere"],
+  ])("resets a pr Stage that %s and committed there, leaving its branch where it was", async (_, checkedOut) => {
+    await handedOff();
+    humanCommits();
+    handedBack();
+    const started = workspace.defaultHead();
+    const worktree = [...workspace.worktrees].find(([, branch]) => branch === BRANCH)?.[0];
+    expect(worktree).toBeDefined();
+    runner.leaves("pr", () => workspace.worktrees.set(worktree ?? "", checkedOut));
+    runner.queue("pr", revised({ body: "## Summary\n\nDescribes a commit off the branch." }));
+
+    expect(await run()).toMatchObject({ outcome: "merged" });
+
+    expect(workspace.calls).toContain(`resetTo:${started}`);
+    expect(tracker.pullRequest(100).body).toBe(`Closes #${TICKET}\n\n${FIRST.body}\n`);
+    expect(lastTable()).toContain("| pr | ⚠️ left changes |");
+  });
+
   it("resets a pr Stage that left uncommitted changes, and drops its answers", async () => {
     await handedOff();
     humanCommits();

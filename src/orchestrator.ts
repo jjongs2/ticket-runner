@@ -2165,10 +2165,14 @@ async function revise(
   // Before anything else, a Release included: the worktree a resuming Run
   // finds must be the branch verify passed, or it would charge the Ticket's
   // fix budget for what this Stage left.
+  // The worktree is asked as well as the branch: a Stage that detached HEAD or
+  // switched to another branch and committed there leaves the branch where it
+  // was, and the worktree on a commit verify never passed.
   const left =
     (await workspace.branchHead(branch)) !== started ||
+    !(await workspace.hasWorktree({ path: worktree, branch })) ||
     (await workspace.uncommittedPaths(worktree)).length > 0;
-  if (left) await workspace.resetTo(worktree, started);
+  if (left) await workspace.resetTo({ path: worktree, branch }, started);
 
   const cause = releaseCause(result);
   if (cause !== undefined) throw await releasedStage(pipeline, progress, "pr", "pr", result, cause);

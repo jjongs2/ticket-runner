@@ -401,8 +401,14 @@ export class GitWorkspace implements Workspace {
     return await this.contains(`refs/heads/${branch}`, commit);
   }
 
-  async resetTo(cwd: string, commit: string): Promise<void> {
-    await execOrThrow("git", ["reset", "--hard", commit], { cwd });
+  async resetTo({ path: cwd, branch }: WorktreeRef, commit: string): Promise<void> {
+    // A rebase left in progress would refuse the Landing's own. Quit rather
+    // than abort: the checkout below decides where HEAD goes.
+    await exec("git", ["rebase", "--quit"], { cwd });
+    // Checked out by name, not reset where HEAD is: a Stage that detached HEAD
+    // or switched to another branch committed off this one, and the Landing
+    // rebases and pushes the worktree as it finds it.
+    await execOrThrow("git", ["checkout", "--force", "-B", branch, commit], { cwd });
     // No -x, as in discardChanges: gitignored files are not the Stage's scratch.
     await execOrThrow("git", ["clean", "-fd"], { cwd });
   }
