@@ -14,6 +14,7 @@
  * is the source of truth for the shape.
  */
 
+import { listCriteria } from "./acceptance-criteria.js";
 import type { IssueComment, Tracker } from "./ports/tracker.js";
 import { HANDOFF_MARKER, findMarkedComments, handoffTakenComment } from "./templates.js";
 
@@ -84,4 +85,30 @@ export async function markHandoffsTaken({
       );
     }
   }
+}
+
+/**
+ * The numbers of the Acceptance Criteria a comment posted after the Ticket's
+ * last hand-off comment lists, as {@link listCriteria} numbers them over the
+ * body and then each comment: empty on a Ticket never handed off with a
+ * comment.
+ *
+ * A human handing a Ticket back often adds criteria in a decision comment
+ * first, and the first verify then grades criteria no Stage has worked on yet.
+ * Only a comment's place below the hand-off comment tells when it was added: a
+ * criterion edited into the body, or into an earlier comment, is not told
+ * apart from one that was always there. The hand-off comment counted is the
+ * last one whether or not a claim has marked it as history since, so a Run
+ * resuming after a Release reads the same numbers the Run it resumes read.
+ */
+export function criteriaAddedSinceHandoff(
+  body: string,
+  comments: IssueComment[],
+): ReadonlySet<number> {
+  const last = findMarkedComments(comments, HANDOFF_MARKER).at(-1);
+  if (last === undefined) return new Set();
+  const handedOffAt = comments.indexOf(last);
+  const before = listCriteria([body, ...comments.slice(0, handedOffAt + 1).map((c) => c.body)]);
+  const all = listCriteria([body, ...comments.map((comment) => comment.body)]);
+  return new Set(all.slice(before.length).map((criterion) => criterion.number));
 }

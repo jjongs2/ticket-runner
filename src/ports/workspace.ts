@@ -72,6 +72,15 @@ export interface TicketState {
    */
   fixUsed: boolean;
   /**
+   * Whether the Ticket, handed back after a hand-off, has had the fix Stage a
+   * verdict failing on a criterion added in a comment since that hand-off buys
+   * without spending the fix budget. Once each time the Ticket is handed back:
+   * recorded so a Run resuming after a Release does not buy it twice, and
+   * cleared by a hand-off as it gives the fix budget back. Written only while
+   * it is spent, so absent otherwise, and in state an earlier pipeline left.
+   */
+  addedCriteriaFixUsed?: boolean;
+  /**
    * The pull request the Ticket already has, if it got that far. Without it the
    * resuming Run would try to open a second one for the branch.
    */

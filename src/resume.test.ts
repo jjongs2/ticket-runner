@@ -85,6 +85,20 @@ describe("what a state file says", () => {
     expect(file.readable && file.state).not.toHaveProperty("title");
   });
 
+  it("carries the fix spent on criteria added since the hand-off", () => {
+    expect(read(stateFileContents(state({ addedCriteriaFixUsed: true })))).toEqual({
+      readable: true,
+      state: state({ addedCriteriaFixUsed: true }),
+    });
+  });
+
+  it("still resumes a file written before that fix was recorded in one", () => {
+    const file = read(JSON.stringify(state()));
+
+    expect(file).toEqual({ readable: true, state: state() });
+    expect(file.readable && file.state).not.toHaveProperty("addedCriteriaFixUsed");
+  });
+
   it("carries the body, problem and solution a Stage answered for the branch", () => {
     const prose = { body: "## Summary", problem: "There was no flag.", solution: "It adds one." };
 
