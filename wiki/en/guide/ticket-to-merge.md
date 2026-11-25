@@ -97,7 +97,7 @@ The prompt ends with the Stage's [`extraPrompt`](./configuration.md#stages).
 | Answer | Shape |
 |---|---|
 | `title`, commit subjects | `<type>[(<scope>)]: <summary>`, with the types, scopes and wording the contributing guide sets for a commit subject or pull request title; where it sets none, the shape alone. A fix Stage answers the title blank, which keeps the one before it, unless its fix changes what it says, and a pr Stage unless the branch no longer fits it |
-| `body` | What the Target's contributing guide or `.github/PULL_REQUEST_TEMPLATE.md` sets beyond the `Closes` line; where neither does, `/mattpocock-skills:pr`'s Summary, Evidence and Merge Danger |
+| `body` | What the Target's contributing guide or `.github/PULL_REQUEST_TEMPLATE.md` sets beyond the `Closes` line; where neither does, written by invoking `/mattpocock-skills:pr` |
 | `problem`, `solution` | What the contributing guide sets for a commit body; where it sets none, the state before the change and its effect, and what the change does and why, each in at most two sentences, readable without the Ticket |
 
 None of `body`, `problem` and `solution` carries a title, a closing keyword before an issue reference, a screenshot or a local path. Every Stage that answers writes its Notes, its verdict's evidence and these answers in the language the Target's contributing guide sets for issues and commits, or else in the language the Ticket is written in; a criterion's text stays as the Ticket writes it. The lines the pipeline writes itself, such as the progress table, stay in English.
@@ -207,7 +207,7 @@ A human who hands a Ticket back may commit on its branch first. No Stage answers
 | Finished with an answer its schema accepts, blank answers included | `✅ revised` | Its answers replace the recorded ones, as a code Stage's do; the pull request and the squash commit carry them, and the recorded head is cleared |
 | Left a commit or uncommitted changes | `⚠️ left changes` | The worktree is reset to the head it started on and its answers are dropped, since they may describe what was discarded; the Ticket goes on |
 | Did not finish | `⚠️ <why the Stage did not finish>` | The recorded answers stand and the Ticket goes on: a missing answer is no reason for a Hand-off |
-| Stopped by the rate limit, an API failure or the API budget | `⏸ rate limited`, `⏸ API failure`, `⏸ out of API budget` | A Release; the Stage is still owed to the Run that resumes the Ticket |
+| Stopped by the rate limit, an API failure or the API budget | `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget` | A Release; the Stage is still owed to the Run that resumes the Ticket |
 
 Why a Stage revises the prose, and why at this point of the Ticket's way, is in [ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md).
 

@@ -97,7 +97,7 @@ slug가 비어 있으면 branch는 아무 말 없이 `agent/<n>`로 남습니다
 | 답변 | 형식 |
 |---|---|
 | `title`, commit 제목 | `<type>[(<scope>)]: <summary>`. 기여 가이드가 commit 제목이나 pull request 제목에 정한 type, scope, 표현을 따르고, 정한 것이 없으면 형식만 따름. fix Stage는 자기 수정이 제목의 내용을 바꾸지 않으면, pr Stage는 branch가 제목에서 벗어나지 않았으면 `title`을 빈 문자열로 답해 앞의 제목을 유지 |
-| `body` | Target의 기여 가이드나 `.github/PULL_REQUEST_TEMPLATE.md`가 `Closes` 줄 밖에 정한 형식. 둘 다 정하지 않았으면 `/mattpocock-skills:pr`의 Summary, Evidence, Merge Danger |
+| `body` | Target의 기여 가이드나 `.github/PULL_REQUEST_TEMPLATE.md`가 `Closes` 줄 밖에 정한 형식. 둘 다 정하지 않았으면 `/mattpocock-skills:pr`를 실행해 씀 |
 | `problem`, `solution` | 기여 가이드가 commit 본문에 정한 형식. 정하지 않았으면 바뀌기 전 상태와 그 영향, 그리고 변경이 하는 일과 그 이유를 각각 두 문장 이내로, Ticket을 열지 않아도 읽히게 |
 
 `body`, `problem`, `solution` 어느 것에도 제목, 이슈 참조 앞의 closing keyword, 스크린샷, 로컬 경로는 넣지 않습니다. 답하는 Stage는 모두 Note, 판정의 근거, 이 답변들을 Target의 기여 가이드가 이슈와 commit에 정한 언어로 쓰고, 정한 언어가 없으면 Ticket이 쓰인 언어로 씁니다. 기준의 문구는 Ticket에 적힌 그대로 둡니다. 진행 상황 표처럼 파이프라인이 직접 쓰는 줄은 영어 그대로입니다.
@@ -207,7 +207,7 @@ Ticket을 돌려주는 사람은 그 전에 branch에 commit할 수 있습니다
 | 스키마가 받아들이는 답변으로 끝남, 빈 답변 포함 | `✅ revised` | 코드를 쓰는 Stage의 답변처럼 기록된 답변을 대신하고, pull request와 squash commit이 이를 싣고, 기록된 head는 지움 |
 | commit이나 commit 안 된 변경을 남김 | `⚠️ left changes` | worktree를 Stage가 시작한 head로 되돌리고, 버려진 것을 설명할 수 있으니 답변도 버림. Ticket은 계속 진행 |
 | 끝까지 가지 못함 | `⚠️ <Stage가 끝나지 못한 이유>` | 기록된 답변이 그대로 남고 Ticket은 계속 진행. 답변이 없다는 것은 Hand-off할 이유가 아님 |
-| rate limit, API 장애, API 예산으로 멈춤 | `⏸ rate limited`, `⏸ API failure`, `⏸ out of API budget` | Release. Ticket을 이어 하는 Run이 여전히 이 Stage를 돌림 |
+| rate limit, API 장애, API 예산으로 멈춤 | `⏸ rate limited`, `⏸ API rate limited`, `⏸ API failure`, `⏸ out of API budget` | Release. Ticket을 이어 하는 Run이 여전히 이 Stage를 돌림 |
 
 왜 Stage가 글을 고쳐 쓰는지, 왜 Ticket의 이 지점에서인지는 [ADR-0004](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0004-resume-state-lives-on-the-targets-remote.md)에 있습니다.
 

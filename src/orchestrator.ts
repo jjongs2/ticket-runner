@@ -1988,6 +1988,11 @@ function criterionLine(criterion: GradedCriterion): string {
   return `- ${criterion.number}. ${criterion.text} — ${criterion.evidence}`;
 }
 
+/** A criterion of a passing verdict as the pr Stage reads it: its line, its status and its evidence. */
+function verdictLine(criterion: GradedCriterion): string {
+  return `- ${criterion.number}. ${criterion.text} — ${criterion.status}: ${criterion.evidence}`;
+}
+
 /** A defect of the branch, beside the criteria in the same evidence. */
 function defectLine(defect: Defect): string {
   return `- Defect: ${defect.summary} — ${defect.evidence}`;
@@ -2181,11 +2186,6 @@ async function revise(
   await progress.record(stageRow("pr", result, cell));
   await record.forgetHandoffHead();
   pipeline.log?.(`#${issue.number} pr Stage · ${cell}`);
-}
-
-/** A criterion of a passing verdict as the pr Stage reads it: its line, its status and its evidence. */
-function verdictLine(criterion: GradedCriterion): string {
-  return `- ${criterion.number}. ${criterion.text} — ${criterion.status}: ${criterion.evidence}`;
 }
 
 /**
