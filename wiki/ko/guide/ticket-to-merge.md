@@ -78,7 +78,7 @@ slug가 비어 있으면 branch는 아무 말 없이 `agent/<n>`로 남습니다
 
 [Stage](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 일 하나만 맡는 `claude -p` 자식 프로세스입니다([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)).
 
-모든 Stage는 Ticket의 worktree에서 `--permission-prompts none`, 설정된 `permissionMode`, 그리고 Stage별 `model`, `effort`, `maxTurns`, `maxMinutes`로 실행됩니다([설정](./configuration.md) 참고). 시간 한도는 프로세스와 그 프로세스가 띄운 것을 모두 kill해서 지킵니다.
+모든 Stage는 Ticket의 worktree에서 `--permission-prompts none`, 설정된 `permissionMode`, 그리고 Stage별 `model`, `effort`, `maxMinutes`로 실행됩니다([설정](./configuration.md) 참고). 시간 한도는 프로세스와 그 프로세스가 띄운 것을 모두 kill해서 지킵니다.
 
 **Stage가 보는 것.** branch의 파일들이고, Target의 `CLAUDE.md`도 그중 하나입니다. 그래서 `init`이 쓴 것은 base branch에 들어간 뒤에야 Stage에 닿습니다. MCP 서버는 claude.ai connector까지 포함해 하나도 없고, auto memory도, 예약처럼 세션 밖에서 작동하는 도구도 없습니다. MCP 서버가 필요한 일은 Stage가 할 수 없습니다.
 
@@ -111,14 +111,13 @@ Stage마다 디스크에 무엇을 남기는지는 [로그와 transcript](./runn
 | 실패 | 진행 상황 칸 | 뜻 |
 |---|---|---|
 | `timed-out` | `❌ timed out` | `maxMinutes`에서 kill됨 |
-| `turn-capped` | `❌ turn capped` | `maxTurns`에 도달함 |
 | `out-of-budget` | `⏸ out of API budget` | API 키의 크레딧이나 지출 한도. `--api-key` Run에서만 겪음. Ticket을 Release함 |
 | `rate-limited` | `⏸ rate limited`, `--api-key` Run이면 `⏸ API rate limited` | 요금제의 rate limit, `--api-key` Run이면 API의 rate limit. Ticket을 Release함 |
 | `api-error` | `⏸ API failure` | CLI가 재시도를 포기한 일시적인 API 장애. Ticket을 Release함 |
 | `nonzero-exit` | `❌ exited non-zero` | 그 밖에 실패한 세션 |
 | `invalid-result` | `❌ invalid result` | verify Stage가 판정을 아예 내놓지 않음 |
 
-[pr Stage](#the-pr-stage)에서는 Release하지 않는 실패가 `❌` 대신 `⚠️`로 적힙니다(`⚠️ turn capped` 등). Ticket은 계속 진행합니다.
+[pr Stage](#the-pr-stage)에서는 Release하지 않는 실패가 `❌` 대신 `⚠️`로 적힙니다(`⚠️ timed out` 등). Ticket은 계속 진행합니다.
 
 ## implement Stage {#the-implement-stage}
 
@@ -170,7 +169,7 @@ fix 기회는 Ticket당 fix Stage 한 번이고, 그 뒤에도 실패하면 사�
 | conflict Stage가 rebase를 끝내지 못함 | rebase | 예 |
 | pull request check 실패 | ci | 예 |
 | pull request check 실패, merge-base도 Check에 실패 | ci | 아니요, Release |
-| 끝까지 가지 못한 Stage(시간 초과, 턴 한도, 0이 아닌 종료 코드, 잘못된 결과) | 해당 Stage | 아니요, Hand-off |
+| 끝까지 가지 못한 Stage(시간 초과, 0이 아닌 종료 코드, 잘못된 결과) | 해당 Stage | 아니요, Hand-off |
 | implement가 commit을 남기지 않음 | implement | 아니요, Hand-off |
 | 근거가 없는 판정, 또는 판정 없음 | verify | 아니요, Hand-off |
 | 받은 번호를 빠뜨리거나 받지 않은 번호를 더한 판정 | verify | 아니요, Hand-off |
@@ -356,15 +355,17 @@ Ticket은 이미 merge됐으니 여기서부터는 Hand-off될 수 없습니다.
 ```text
 **ticket-runner** `0.4.0` · run `2026-09-17T09-00-00-000` · `agent/4-planning-guards`
 
-| Stage | Outcome | Turns | Duration |
+| Stage | Outcome | Context | Duration |
 |---|---|---|---|
-| implement | ✅ committed | 46 | 21m 14s |
-| verify | ❌ 1 unmet | 11 | 5m 3s |
-| fix | ✅ committed | 12 | 6m 2s |
-| verify | ✅ 5 met · 1 to CI · 1 unverifiable | 9 | 4m 31s |
+| implement | ✅ committed | 107.6K | 21m 14s |
+| verify | ❌ 1 unmet | 64.2K | 5m 3s |
+| fix | ✅ committed | 88.9K · compacted | 6m 2s |
+| verify | ✅ 5 met · 1 to CI · 1 unverifiable | 59K | 4m 31s |
 | ci | ✅ passed | – | 2m 40s |
 | merge | ✅ #31 | – | – |
 ```
+
+Stage의 Context 칸은 Stage가 끝날 때 main session이 쥐고 있던 context의 양을 Claude Code 앱의 Context 카드처럼 token 수로 적고, 그 main session이 compact했으면 뒤에 `· compacted`를 붙입니다. `ci`, `merge`처럼 세션이 알려 준 것이 없는 행은 `–`입니다. 클라우드 Host의 transcript는 VM과 함께 사라지므로, 클라우드 Host의 Run이 merge하거나 Release한 Ticket에서는 이것이 각 Stage가 context를 얼마나 썼는지 남은 유일한 기록입니다.
 
 행에는 몇 단어만 적습니다. 사람이 행동해야 하는 것은 알림을 받을 가치가 있으니 따로 코멘트로 올립니다. Hand-off, guard 경고, Note가 그렇습니다. 예외는 [실패한 것 없이 Hand-off된](./stopping-and-resuming.md#when-nothing-failed) 초록 Ticket 가운데 확인할 수 없었던 기준도 없는 경우로, 코멘트를 달지 않습니다.
 
@@ -372,7 +373,7 @@ Ticket은 이미 merge됐으니 여기서부터는 Hand-off될 수 없습니다.
 
 ## Note {#notes}
 
-Stage는 자기 Ticket과 상관없는 결함을 자주 만납니다. 고치면 verify가 판정하는 범위를 넘어 Ticket이 넓어지고, 무시하면 transcript 속에 묻혀 버립니다. 그래서 implement, verify, fix Stage는 [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 목록을 남기며 끝나고, 파이프라인은 각 Note를 사람이 볼 만한 곳에 올립니다. Note는 잘못 동작하거나 망가지는 Ticket 밖의 결함입니다. 취향이나 리팩터링, 있으면 좋을 테스트는 Note가 아니고, 그 Ticket 안에서는 손대지 않습니다. Ticket이 요구한 보고 섹션처럼 Ticket의 결과물이 이미 기록하는 것도 Note가 아닙니다. branch 스스로 만든 결함, 즉 base branch에서는 제대로 돌고 branch에서는 잘못 도는 결함이나 branch가 더한 코드 안의 결함은 그 Ticket의 몫입니다. implement와 fix Stage는 Note로 남기지 않고 고치고, 아무것도 고치지 않는 verify는 판정에 적어 [그 판정을 실패시킵니다](#the-verify-stage-and-its-verdict). Note는 Stage 자체의 결과를 판정하기 전에 보내므로, 턴이 바닥난 Stage도 알아챈 것은 전합니다.
+Stage는 자기 Ticket과 상관없는 결함을 자주 만납니다. 고치면 verify가 판정하는 범위를 넘어 Ticket이 넓어지고, 무시하면 transcript 속에 묻혀 버립니다. 그래서 implement, verify, fix Stage는 [Note](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) 목록을 남기며 끝나고, 파이프라인은 각 Note를 사람이 볼 만한 곳에 올립니다. Note는 잘못 동작하거나 망가지는 Ticket 밖의 결함입니다. 취향이나 리팩터링, 있으면 좋을 테스트는 Note가 아니고, 그 Ticket 안에서는 손대지 않습니다. Ticket이 요구한 보고 섹션처럼 Ticket의 결과물이 이미 기록하는 것도 Note가 아닙니다. branch 스스로 만든 결함, 즉 base branch에서는 제대로 돌고 branch에서는 잘못 도는 결함이나 branch가 더한 코드 안의 결함은 그 Ticket의 몫입니다. implement와 fix Stage는 Note로 남기지 않고 고치고, 아무것도 고치지 않는 verify는 판정에 적어 [그 판정을 실패시킵니다](#the-verify-stage-and-its-verdict). Note는 Stage 자체의 결과를 판정하기 전에 보내므로, 시간이 바닥난 Stage도 알아챈 것은 전합니다.
 
 | Note가 가리키는 곳 | 가는 곳 |
 |---|---|

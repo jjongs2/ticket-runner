@@ -7,6 +7,7 @@ import {
   type AgentPreflight,
   type AgentRunner,
   SKILLS_PLUGIN,
+  type StageContext,
   type StageFailure,
   type StageRequest,
   type StageResult,
@@ -72,10 +73,9 @@ interface ResultEvent {
   type: "result";
   subtype?: string;
   is_error?: boolean;
-  num_turns?: number;
   /**
-   * What the CLI priced the whole session at so far, in dollars. Unlike
-   * `num_turns`, it is the session's on every waking, not the waking's.
+   * What the CLI priced the whole session at so far, in dollars: the session's
+   * on every waking, not the waking's.
    */
   total_cost_usd?: unknown;
   result?: unknown;
@@ -100,6 +100,23 @@ interface InitEvent {
   type: "system";
   subtype?: string;
   apiKeySource?: unknown;
+}
+
+/**
+ * An `assistant` event of a stream-json run, as far as we rely on it: the
+ * context its request carried, and whose session it was. A subagent's events
+ * name the tool use that started it; the main session's name none.
+ */
+interface AssistantEvent {
+  type: "assistant";
+  parent_tool_use_id?: unknown;
+  message?: {
+    usage?: {
+      input_tokens?: unknown;
+      cache_creation_input_tokens?: unknown;
+      cache_read_input_tokens?: unknown;
+    };
+  };
 }
 
 /**
@@ -201,7 +218,7 @@ export class ClaudeAgentRunner implements AgentRunner {
     const results = events.filter(isResultEvent);
     const failure = classify(request, execution, events);
     const structured = request.jsonSchema === undefined ? undefined : structuredOutput(results);
-    const turns = countTurns(results);
+    const context = stageContext(events);
     const resetsAt = failure === "rate-limited" ? limitResetsAt(events) : undefined;
     const apiKeySource = keySource(events);
     const cost = sessionCost(execution, events);
@@ -212,7 +229,7 @@ export class ClaudeAgentRunner implements AgentRunner {
       ...(structured === undefined ? {} : { result: structured }),
       commandLine,
       transcriptPath: log.transcriptPath,
-      ...(turns === undefined ? {} : { turns }),
+      ...(context === undefined ? {} : { context }),
       ...(resetsAt === undefined ? {} : { limitResetsAt: resetsAt }),
       ...(apiKeySource === undefined ? {} : { apiKeySource }),
       ...cost,
@@ -240,15 +257,51 @@ export class ClaudeAgentRunner implements AgentRunner {
 }
 
 /**
- * A session that spawns a background agent ends its main turn with a `result`
- * event, then wakes once per finished agent and ends each waking with another.
- * Every later event counts only its own waking, so a Stage's turns are the sum
- * over all of them.
+ * The main session's context when the Stage ended: the tokens its last request
+ * carried, read from its last `assistant` event whose usage sums above zero.
+ * The CLI prints its own rate-limit and API-error messages as main-session
+ * `assistant` events with all-zero usage, and a Stage can end on one. The last
+ * figure is right with or without a compaction, after which the peak is only
+ * where the CLI compacted. Read from the events alone, so a Stage the
+ * wall-clock limit stopped, or that crashed, still has one.
  */
-function countTurns(results: ResultEvent[]): number | undefined {
-  const counted = results.filter((result) => result.num_turns !== undefined);
-  if (counted.length === 0) return undefined;
-  return counted.reduce((sum, result) => sum + (result.num_turns ?? 0), 0);
+function stageContext(events: unknown[]): StageContext | undefined {
+  let tokens: number | undefined;
+  for (const event of events.toReversed()) {
+    if (!isAssistantEvent(event) || !ofMainSession(event)) continue;
+    const sum = contextTokens(event);
+    if (sum > 0) {
+      tokens = sum;
+      break;
+    }
+  }
+  if (tokens === undefined) return undefined;
+  return events.some(isMainCompaction) ? { tokens, compacted: true } : { tokens };
+}
+
+/** The input, cache-creation and cache-read tokens of one request, summed. */
+function contextTokens(event: AssistantEvent): number {
+  const usage = event.message?.usage;
+  const count = (value: unknown) => (isAmount(value) && value > 0 ? value : 0);
+  return (
+    count(usage?.input_tokens) +
+    count(usage?.cache_creation_input_tokens) +
+    count(usage?.cache_read_input_tokens)
+  );
+}
+
+/** An event of the main session rather than of a subagent it started. */
+function ofMainSession(event: { parent_tool_use_id?: unknown }): boolean {
+  return event.parent_tool_use_id === undefined || event.parent_tool_use_id === null;
+}
+
+/** The `system/compact_boundary` event the CLI prints when the main session compacts. */
+function isMainCompaction(event: unknown): boolean {
+  return (
+    isEvent(event, "system") &&
+    (event as { subtype?: unknown }).subtype === "compact_boundary" &&
+    ofMainSession(event as { parent_tool_use_id?: unknown })
+  );
 }
 
 /**
@@ -362,8 +415,6 @@ function buildArgs(
     // human pastes back, so neither may be left to the host's own default.
     "--effort",
     request.effort,
-    "--max-turns",
-    String(request.maxTurns),
   ];
   if (request.jsonSchema !== undefined) {
     args.push("--json-schema", JSON.stringify(request.jsonSchema));
@@ -482,6 +533,10 @@ function isResultEvent(event: unknown): event is ResultEvent {
   return isEvent(event, "result");
 }
 
+function isAssistantEvent(event: unknown): event is AssistantEvent {
+  return isEvent(event, "assistant");
+}
+
 function isInitEvent(event: unknown): event is InitEvent {
   return isEvent(event, "system") && (event as InitEvent).subtype === "init";
 }
@@ -516,8 +571,6 @@ function classify(
   const result = results.at(-1);
 
   if (execution.timedOut) return "timed-out";
-
-  if (result?.subtype === "error_max_turns") return "turn-capped";
 
   // A session's failure is read from how it ended, never from what it talked
   // about: a Ticket about rate limits mentions them hundreds of times and

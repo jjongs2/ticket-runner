@@ -28,7 +28,7 @@ Planning is a chain of skills from the `mattpocock-skills` plugin, run in your o
 | `to-tickets` | **Tickets**: native sub-issues of the Spec, each one agent session of work, labelled `ready-for-agent` |
 | `triage` | Tickets from issues that arrived some other way, with the brief (and its criteria) posted as a comment |
 
-A [Spec](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is only ever implemented through its Tickets. A [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) should be small enough for one implement Stage, which by default has 300 turns and 60 minutes ([Configuration](./configuration.md#stages)).
+A [Spec](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is only ever implemented through its Tickets. A [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) should be small enough for one implement Stage, which by default has 60 minutes ([Configuration](./configuration.md#stages)).
 
 After `to-tickets`, check what a guard would otherwise refuse:
 

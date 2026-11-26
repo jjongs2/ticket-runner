@@ -11,7 +11,7 @@ import { StandingNotes } from "./notes.js";
 import { processTicket } from "./orchestrator.js";
 import { OutsideFault } from "./outside-fault.js";
 import { failedExecution } from "./testing/executions.js";
-import { PROGRESS_MARKER, progressComment } from "./progress.js";
+import { PROGRESS_MARKER } from "./progress.js";
 import { HANDOFF_MARKER, HANDOFF_TAKEN_LINE, handoffComment } from "./templates.js";
 import type { Pipeline, TicketOutcome } from "./orchestrator.js";
 import type { StageName } from "./ports/agent-runner.js";
@@ -47,35 +47,30 @@ function config(overrides: Partial<Config> = {}): Config {
       implement: {
         model: "claude-opus-5-5",
         effort: "high",
-        maxTurns: 300,
         maxMinutes: 60,
         extraPrompt: "",
       },
       verify: {
         model: "claude-opus-5-5",
         effort: "high",
-        maxTurns: 80,
         maxMinutes: 20,
         extraPrompt: "",
       },
       fix: {
         model: "claude-opus-5-5",
         effort: "high",
-        maxTurns: 150,
         maxMinutes: 40,
         extraPrompt: "",
       },
       conflict: {
         model: "claude-opus-5-5",
         effort: "high",
-        maxTurns: 120,
         maxMinutes: 30,
         extraPrompt: "",
       },
       pr: {
         model: "claude-opus-5-5",
         effort: "high",
-        maxTurns: 60,
         maxMinutes: 20,
         extraPrompt: "",
       },
@@ -635,20 +630,18 @@ describe("the pull request title and the squash commit", () => {
 });
 
 describe("Stage invocation", () => {
-  it("passes each Stage its configured model, effort, turn and time limits", async () => {
+  it("passes each Stage its configured model, effort and time limit", async () => {
     await run();
 
     expect(runner.requests[0]).toMatchObject({
       stage: "implement",
       model: "claude-opus-5-5",
       effort: "high",
-      maxTurns: 300,
       maxMinutes: 60,
       permissionMode: "auto",
     });
     expect(runner.requests[1]).toMatchObject({
       stage: "verify",
-      maxTurns: 80,
       maxMinutes: 20,
     });
   });
@@ -1370,7 +1363,7 @@ describe("rebase", () => {
     await run();
 
     const request = runner.requests.find((r) => r.stage === "conflict");
-    expect(request).toMatchObject({ cwd: worktree, maxTurns: 120, maxMinutes: 30 });
+    expect(request).toMatchObject({ cwd: worktree, maxMinutes: 30 });
     expect(request?.prompt).not.toContain("/mattpocock-skills:");
     expect(request?.prompt).toContain(URL);
     expect(request?.prompt).toContain(CONFLICT);
@@ -1408,9 +1401,9 @@ describe("rebase", () => {
     expect(tracker.calls.findIndex((call) => call.startsWith("createPullRequest"))).toBeGreaterThanOrEqual(fixAt);
   });
 
-  it("takes a Stage that finished the rebase and only then ran out of turns", async () => {
+  it("takes a Stage that finished the rebase and only then ran out of time", async () => {
     workspace.conflictOnce(CONFLICT);
-    runner.queue("conflict", { ok: false, failure: "turn-capped" });
+    runner.queue("conflict", { ok: false, failure: "timed-out" });
 
     expect(await run()).toMatchObject({ outcome: "merged" });
   });
@@ -1470,17 +1463,28 @@ describe("rebase", () => {
     expect(handoffBody()).not.toMatch(/fix budget/i);
   });
 
-  it("hands off naming the limit when the conflict Stage ran out of turns", async () => {
+  it("dashes the context of a conflict row whose Stage result was lost", async () => {
+    workspace.conflictOnce(CONFLICT);
+    workspace.rebaseState = async () => {
+      throw new Error("fatal: not a git repository");
+    };
+
+    await run();
+
+    expect(progressTable()).toContain("| conflict | ❌ unknown | – | – |");
+  });
+
+  it("hands off naming the limit when the conflict Stage ran out of time", async () => {
     // An unmet verdict spends the budget first, so this conflict gets one Stage only.
     runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
     workspace.rebaseOutcome = { ok: false, conflict: CONFLICT };
     workspace.rebaseStateAfterStage = UNRESOLVED;
-    runner.queue("conflict", { ok: false, failure: "turn-capped" });
+    runner.queue("conflict", { ok: false, failure: "timed-out" });
 
     const outcome = await run();
 
     expect(outcome).toMatchObject({ outcome: "handed-off", stage: "rebase" });
-    expect(handoffBody()).toContain("the conflict Stage hit its 120 turn limit");
+    expect(handoffBody()).toContain("the conflict Stage ran past its 30 minute limit");
   });
 
   it("does not spend the fix budget on a conflict it resolved", async () => {
@@ -2188,7 +2192,7 @@ describe("the fix Stage", () => {
     );
   });
 
-  it("takes its own model, effort, turn and time limits, and its own extra prompt", async () => {
+  it("takes its own model, effort, time limit and extra prompt", async () => {
     tracker.queueCi(RED_CI);
 
     await run({
@@ -2197,7 +2201,6 @@ describe("the fix Stage", () => {
         fix: {
           model: "claude-sonnet-5",
           effort: "low",
-          maxTurns: 12,
           maxMinutes: 9,
           extraPrompt: "Keep the diff small.",
         },
@@ -2208,7 +2211,6 @@ describe("the fix Stage", () => {
       stage: "fix",
       model: "claude-sonnet-5",
       effort: "low",
-      maxTurns: 12,
       maxMinutes: 9,
       permissionMode: "auto",
     });
@@ -2274,7 +2276,7 @@ describe("a fix Stage that committed nothing", () => {
     expect(outcome).toMatchObject({ outcome: "handed-off", stage: "fix" });
     expect(handoffBody()).toContain("the fix Stage left no new commits on the branch");
     expect(handoffBody()).toContain("after the fix budget was used");
-    expect(progressTable()).toContain("| fix | ❌ no commits | 7 | 1s |");
+    expect(progressTable()).toContain("| fix | ❌ no commits | 107.6K | 1s |");
   });
 
   it("stops the pass there, so nothing re-grades a branch nobody touched", async () => {
@@ -2393,7 +2395,7 @@ describe("a fix Stage that committed nothing", () => {
     tracker.queueCi(RED_CI);
     runner.queue("fix", {
       ok: false,
-      failure: "turn-capped",
+      failure: "timed-out",
       result: answer({ noCommitReason: FIX_REASON }),
     });
 
@@ -2440,7 +2442,7 @@ describe("a fix Stage that committed nothing", () => {
     const outcome = await run();
 
     expect(outcome).toMatchObject({ outcome: "merged" });
-    expect(progressTable()).toContain("| fix | ✅ committed | 7 | 1s |");
+    expect(progressTable()).toContain("| fix | ✅ committed | 107.6K | 1s |");
   });
 
   it("shows no reason from a Stage that committed, in the hand-off that comes later", async () => {
@@ -2589,12 +2591,12 @@ describe("the fix budget", () => {
 
   it("hands the Ticket off at fix when the fix Stage itself fails", async () => {
     tracker.queueCi(RED_CI);
-    runner.queue("fix", { ok: false, failure: "turn-capped" });
+    runner.queue("fix", { ok: false, failure: "timed-out" });
 
     const outcome = await run();
 
     expect(outcome).toMatchObject({ outcome: "handed-off", stage: "fix" });
-    expect(handoffBody()).toContain("the fix Stage hit its 150 turn limit");
+    expect(handoffBody()).toContain("the fix Stage ran past its 40 minute limit");
     expect(handoffBody()).toContain("after the fix budget was used");
   });
 
@@ -2762,7 +2764,7 @@ describe("releasing a rate-limited Ticket", () => {
 
     await run();
 
-    expect(progressTable()).toContain("| implement | ⏸ rate limited | 7 | 1s |");
+    expect(progressTable()).toContain("| implement | ⏸ rate limited | 107.6K | 1s |");
   });
 
   it("records the implement Stage's work when the verify Stage is stopped", async () => {
@@ -2829,7 +2831,7 @@ describe("releasing a rate-limited Ticket", () => {
     workspace.conflictOnce(CONFLICT);
     runner.queue("conflict", { ok: false, failure: "rate-limited" });
 
-    // The worktree decides the conflict Stage, as it decides the turn-capped
+    // The worktree decides the conflict Stage, as it decides the timed-out
     // one: nothing after the rebase needs an agent, so the Ticket can merge.
     expect(await run()).toMatchObject({ outcome: "merged" });
     expect(state()).toBeUndefined();
@@ -2837,7 +2839,7 @@ describe("releasing a rate-limited Ticket", () => {
   });
 
   it("leaves a state file behind when the Ticket is handed off instead", async () => {
-    runner.queue("implement", { ok: false, failure: "turn-capped" });
+    runner.queue("implement", { ok: false, failure: "timed-out" });
 
     // A hand-off keeps the file too; the label is what tells the two apart, and
     // a Release is not the only ending a later Run resumes from.
@@ -2876,7 +2878,7 @@ describe("releasing a Ticket a transient API failure stopped", () => {
     expect(workspace.worktrees.get(worktree)).toBe(BRANCH);
     expect(workspace.calls).not.toContain(`deleteRemoteBranch:${BRANCH}`);
     expect(state()).toMatchObject({ state: "claimed", fixUsed: false });
-    expect(progressTable()).toContain("| implement | ⏸ API failure | 7 | 1s |");
+    expect(progressTable()).toContain("| implement | ⏸ API failure | 107.6K | 1s |");
   });
 
   it("releases a verify Stage it stopped with the implement Stage's work recorded", async () => {
@@ -2948,7 +2950,7 @@ describe("releasing a Ticket whose API key ran out of budget", () => {
     expect(workspace.worktrees.get(worktree)).toBe(BRANCH);
     expect(workspace.calls).not.toContain(`deleteRemoteBranch:${BRANCH}`);
     expect(state()).toMatchObject({ state: "claimed", fixUsed: false });
-    expect(progressTable()).toContain("| implement | ⏸ out of API budget | 7 | 1s |");
+    expect(progressTable()).toContain("| implement | ⏸ out of API budget | 107.6K | 1s |");
     expect(logged).toContain(`#${TICKET} released at implement · out of API budget · ${BRANCH}`);
   });
 
@@ -3733,7 +3735,7 @@ describe("resuming a stranded Ticket", () => {
     expect(outcome).toMatchObject({ outcome: "handed-off", stage: "setup" });
     expect(runner.stages()).toEqual([]);
     expect(handoffBody()).toContain("the worktree holds changes no commit carries");
-    expect(progressTable()).toContain("| setup | ❌ uncommitted work |");
+    expect(progressTable()).toContain("| setup | ❌ uncommitted work | – |");
   });
 
   it("is taken from the top, in place, when its worktree and branch are gone", async () => {
@@ -4487,7 +4489,7 @@ describe("releasing a Ticket GitHub or the remote failed on its own side", () =>
       },
     });
     expect(notices()).toEqual([]);
-    expect(progressTable()).toContain("| pr | ⏸ GitHub failure |");
+    expect(progressTable()).toContain("| pr | ⏸ GitHub failure | – |");
   });
 
   it("releases a Ticket whose answer from GitHub was not complete JSON", async () => {
@@ -4962,7 +4964,7 @@ describe("a progress write that failed", () => {
   it("is written once more when the Ticket is handed off", async () => {
     runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
     runner.queue("verify", stageResult({ result: UNMET_VERDICT }));
-    failWrites("| verify | ❌ 1 unmet | 7 | 1s |\n| fix |");
+    failWrites("| verify | ❌ 1 unmet | 107.6K | 1s |\n| fix |");
     runner.leaves("fix", () => workspace.commits.push("fix(cli): x (#2)"));
 
     expect(await run()).toMatchObject({ outcome: "handed-off" });
@@ -5527,7 +5529,6 @@ describe("a Ticket handed back with commits since its hand-off", () => {
     expect(prompt).toContain("- 1. it works — met: npm test is green");
     expect(runner.requests.find((request) => request.stage === "pr")).toMatchObject({
       cwd: worktree,
-      maxTurns: 60,
       maxMinutes: 20,
     });
   });
@@ -5606,7 +5607,7 @@ describe("a Ticket handed back with commits since its hand-off", () => {
   });
 
   it("runs no pr Stage on a Ticket whose implement Stage runs in the Run that takes it back", async () => {
-    runner.queue("implement", { ok: false, failure: "turn-capped" });
+    runner.queue("implement", { ok: false, failure: "timed-out" });
     expect(await run()).toMatchObject({ outcome: "handed-off", stage: "implement" });
     expect(workspace.state(TICKET)).toMatchObject({ state: "claimed", handoffHead: "commit-2" });
     humanCommits();
@@ -5700,12 +5701,12 @@ describe("a Ticket handed back with commits since its hand-off", () => {
     await handedOff();
     humanCommits();
     handedBack();
-    runner.queue("pr", { ok: false, failure: "turn-capped" });
+    runner.queue("pr", { ok: false, failure: "timed-out" });
 
     expect(await run()).toMatchObject({ outcome: "merged" });
 
     expect(tracker.pullRequest(100).body).toBe(`Closes #${TICKET}\n\n${FIRST.body}\n`);
-    expect(lastTable()).toContain("| pr | ⚠️ turn capped |");
+    expect(lastTable()).toContain("| pr | ⚠️ timed out |");
   });
 
   it.each([
@@ -5912,12 +5913,12 @@ describe("the progress comment", () => {
   }
 
   it("creates one comment on the first Stage of a Ticket", async () => {
-    runner.queue("implement", { ok: false, failure: "turn-capped" });
+    runner.queue("implement", { ok: false, failure: "timed-out" });
 
     await run();
 
     expect(tracker.comments.filter(({ body }) => body.startsWith(PROGRESS_MARKER))).toHaveLength(1);
-    expect(progressTable()).toContain("| Stage | Outcome | Turns | Duration |");
+    expect(progressTable()).toContain("| Stage | Outcome | Context | Duration |");
     expect(rows()).toEqual(["implement"]);
   });
 
@@ -5929,12 +5930,22 @@ describe("the progress comment", () => {
     expect(tracker.updatedComments.length).toBeGreaterThan(0);
   });
 
-  it("reports what each Stage did, with its turns", async () => {
+  it("reports what each Stage did, with its context", async () => {
     await run();
 
-    expect(progressTable()).toContain("| implement | ✅ committed | 7 | 1s |");
-    expect(progressTable()).toContain("| verify | ✅ 1 met | 7 | 1s |");
+    expect(progressTable()).toContain("| implement | ✅ committed | 107.6K | 1s |");
+    expect(progressTable()).toContain("| verify | ✅ 1 met | 107.6K | 1s |");
     expect(progressTable()).toContain("| merge | ✅ #100 | – | – |");
+  });
+
+  it("writes the context figure in this comment alone, neither in the Run's log nor in the outcome the summary is made from", async () => {
+    runner.queue("implement", stageResult({ context: { tokens: 123_456, compacted: true } }));
+
+    const outcome = await run();
+
+    expect(progressTable()).toContain("| implement | ✅ committed | 123.5K · compacted | 1s |");
+    const said = [...logged, JSON.stringify(outcome)].join("\n");
+    expect(said).not.toMatch(/123[.,]?(5K|456)|compacted|context/i);
   });
 
   it("has no checks row, whether or not a Check command is configured", async () => {
@@ -5948,7 +5959,7 @@ describe("the progress comment", () => {
 
     await run();
 
-    expect(progressTable()).toContain("| verify | ✅ 1 met · 1 unverifiable | 7 | 1s |");
+    expect(progressTable()).toContain("| verify | ✅ 1 met · 1 unverifiable | 107.6K | 1s |");
   });
 
   it("names the Run and the branch it is reporting on", async () => {
@@ -5972,16 +5983,20 @@ describe("the progress comment", () => {
     await run();
 
     expect(rows()).toEqual(["implement", "verify", "conflict", "ci", "merge"]);
-    expect(progressTable()).toContain("| conflict | ✅ rebased | 7 | 1s |");
+    expect(progressTable()).toContain("| conflict | ✅ rebased | 107.6K | 1s |");
   });
 
   it("carries on in the comment an earlier Run left, below that Run's section", async () => {
-    const earlier = progressComment({
-      version: "0.5.0",
-      runId: "run-0",
-      branch: BRANCH,
-      rows: [{ point: "implement", outcome: "✅ committed", turns: 46, durationMs: 1_260_000 }],
-    });
+    // As an earlier version wrote it, with the `Turns` column it then had.
+    const earlier = [
+      PROGRESS_MARKER,
+      `**ticket-runner** \`0.5.0\` · run \`run-0\` · \`${BRANCH}\``,
+      "",
+      "| Stage | Outcome | Turns | Duration |",
+      "|---|---|---|---|",
+      "| implement | ✅ committed | 46 | 21m 0s |",
+      "",
+    ].join("\n");
     tracker.issue(TICKET).comments.push({ id: "99", body: earlier });
 
     await run();
@@ -6356,7 +6371,7 @@ describe("criteria left to CI", () => {
     runner.queue("verify", { result: LEFT_TO_CI });
 
     expect(await run()).toMatchObject({ outcome: "merged" });
-    expect(progressTable()).toContain("| verify | ✅ 1 met · 1 to CI | 7 | 1s |");
+    expect(progressTable()).toContain("| verify | ✅ 1 met · 1 to CI | 107.6K | 1s |");
     expect(logged).toContain(`#${TICKET} verified · 1 met · 1 to CI`);
   });
 
@@ -6646,9 +6661,9 @@ describe("Notes a Stage makes", () => {
 
   it("routes a failed verify Stage's Notes before handing the Ticket off", async () => {
     runner.queue("verify", {
-      ...verdictWithNotes([{ ticket: OTHER, summary: "noticed before I ran out of turns" }]),
+      ...verdictWithNotes([{ ticket: OTHER, summary: "noticed before I ran out of time" }]),
       ok: false,
-      failure: "turn-capped",
+      failure: "timed-out",
     });
 
     const outcome = await run();
@@ -6656,7 +6671,7 @@ describe("Notes a Stage makes", () => {
     expect(outcome).toMatchObject({
       outcome: "handed-off",
       stage: "verify",
-      notes: [{ stage: "verify", issue: OTHER, summary: "noticed before I ran out of turns" }],
+      notes: [{ stage: "verify", issue: OTHER, summary: "noticed before I ran out of time" }],
     });
   });
 
@@ -6717,7 +6732,7 @@ describe("Notes a Stage makes", () => {
     runner.queue("implement", {
       ...noteResult([{ ticket: OTHER, summary: "noticed before I died" }]),
       ok: false,
-      failure: "turn-capped",
+      failure: "timed-out",
     });
 
     const outcome = await run();

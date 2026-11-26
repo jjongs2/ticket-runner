@@ -28,14 +28,13 @@ describe("loadConfig", () => {
     expect(config.stages.implement).toEqual({
       model: "claude-opus-5-5",
       effort: "high",
-      maxTurns: 300,
       maxMinutes: 60,
       extraPrompt: "",
     });
-    expect(config.stages.verify).toMatchObject({ maxTurns: 130, maxMinutes: 30 });
-    expect(config.stages.fix).toMatchObject({ maxTurns: 150, maxMinutes: 40 });
-    expect(config.stages.conflict).toMatchObject({ maxTurns: 120, maxMinutes: 30 });
-    expect(config.stages.pr).toMatchObject({ maxTurns: 60, maxMinutes: 20 });
+    expect(config.stages.verify).toMatchObject({ maxMinutes: 30 });
+    expect(config.stages.fix).toMatchObject({ maxMinutes: 40 });
+    expect(config.stages.conflict).toMatchObject({ maxMinutes: 30 });
+    expect(config.stages.pr).toMatchObject({ maxMinutes: 20 });
     expect(config.labels).toEqual({
       needsTriage: "needs-triage",
       needsInfo: "needs-info",
@@ -138,7 +137,6 @@ describe("loadConfig", () => {
     expect(config.stages.verify).toEqual({
       model: "claude-opus-5-5",
       effort: "high",
-      maxTurns: 130,
       maxMinutes: 5,
       extraPrompt: "",
     });
@@ -148,14 +146,13 @@ describe("loadConfig", () => {
 
   it("takes limits for the conflict Stage like any other", () => {
     const root = repoWith({
-      [CONFIG_FILENAME]: JSON.stringify({ stages: { conflict: { maxTurns: 40 } } }),
+      [CONFIG_FILENAME]: JSON.stringify({ stages: { conflict: { maxMinutes: 40 } } }),
     });
 
     expect(loadConfig(root, VERSION).stages.conflict).toEqual({
       model: "claude-opus-5-5",
       effort: "high",
-      maxTurns: 40,
-      maxMinutes: 30,
+      maxMinutes: 40,
       extraPrompt: "",
     });
   });
@@ -164,7 +161,7 @@ describe("loadConfig", () => {
     const root = repoWith({
       [CONFIG_FILENAME]: JSON.stringify({
         stages: {
-          pr: { model: "claude-sonnet-5-5", effort: "medium", maxTurns: 30, extraPrompt: "Be brief." },
+          pr: { model: "claude-sonnet-5-5", effort: "medium", maxMinutes: 15, extraPrompt: "Be brief." },
         },
       }),
     });
@@ -172,8 +169,7 @@ describe("loadConfig", () => {
     expect(loadConfig(root, VERSION).stages.pr).toEqual({
       model: "claude-sonnet-5-5",
       effort: "medium",
-      maxTurns: 30,
-      maxMinutes: 20,
+      maxMinutes: 15,
       extraPrompt: "Be brief.",
     });
   });
@@ -302,10 +298,10 @@ describe("loadConfig", () => {
 
   it("names the offending nested field", () => {
     const root = repoWith({
-      [CONFIG_FILENAME]: JSON.stringify({ stages: { implement: { maxTurns: -1 } } }),
+      [CONFIG_FILENAME]: JSON.stringify({ stages: { implement: { maxMinutes: -1 } } }),
     });
 
-    expect(() => loadConfig(root, VERSION)).toThrowError(/stages\.implement\.maxTurns/);
+    expect(() => loadConfig(root, VERSION)).toThrowError(/stages\.implement\.maxMinutes/);
   });
 
   it("names an unknown field rather than ignoring it", () => {
@@ -359,6 +355,16 @@ describe("a key this install does not know", () => {
     expect(message).toContain("gates");
     expect(message).toContain("or one it no longer takes");
   });
+
+  it.each(["implement", "verify", "fix", "conflict", "pr"])(
+    "refuses the key the %s Stage once took for its other limit, as any unknown key",
+    (stage) => {
+      const message = refusal({ stages: { [stage]: { maxTurns: 300, maxMinutes: 60 } } });
+
+      expect(message).toContain(`stages.${stage}: Unrecognized key: "maxTurns"`);
+      expect(message).toContain("or one it no longer takes");
+    },
+  );
 
   it("says the same of a key nested inside one the schema knows", () => {
     expect(refusal({ stages: { verify: { flakes: true } } })).toContain(

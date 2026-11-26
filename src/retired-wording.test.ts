@@ -61,3 +61,106 @@ describe("what the pipeline ships", () => {
     expect(RETIRED.some((pattern) => pattern.test(joined(comment)))).toBe(true);
   });
 });
+
+/**
+ * A Stage once had a cap on its turns beside its wall-clock limit, and the
+ * progress comment counted them. Its only limit is its minutes now (ADR-0002's
+ * amendment), so nothing shipped may still give a Stage's turns as a limit: not
+ * a page, a template, a prompt, a code comment, an ADR's amendment, nor a test
+ * name. The CHANGELOG and the ADRs' bodies above their amendments keep their
+ * history. A turn as a unit of work, as in "spend your turns", is not covered.
+ */
+const RETIRED_TURN_LIMIT: readonly RegExp[] = [
+  /maxTurns/,
+  /--max-turns/,
+  /turn-capped/,
+  /turn capped/i,
+  /turn limit/i,
+  /out of turns/i,
+  /턴 한도/,
+  /턴이나 시간/,
+  /턴이 바닥/,
+  /\b\d+ turns?,? and \d+ minutes/i,
+  /\d+ ?턴, ?\d+ ?분/,
+  /\bturns?(?:,|,? and|,? or) (?:time|minutes?|wall-clock|duration)(?: \w+){0,2} (?:limits?|caps?|budgets?|bounds?)\b/i,
+  /\b(?:time|minutes?|wall-clock|duration)(?:,|,? and|,? or) turns? (?:limits?|caps?|budgets?|bounds?)\b/i,
+  /\b(?:max(?:imum)?|turn) (?:turns|cap|budget)\b/i,
+  /턴(?:과|이나|·|, ?) ?(?:시간|분) ?(?:한도|제한|상한)/,
+  /(?:시간|분)(?:과|이나|·|, ?) ?턴 ?(?:한도|제한|상한)/,
+  /턴 (?:수 )?제한/,
+];
+
+/** Every ADR's amendments, without the body above the first of them. */
+function amendments(): { file: string; text: string }[] {
+  const dir = join(ROOT, "docs", "adr");
+  return readdirSync(dir).flatMap((name) => {
+    const text = readFileSync(join(dir, name), "utf8");
+    const first = text.indexOf("\n## Amendment");
+    return first === -1 ? [] : [{ file: join(dir, name), text: text.slice(first) }];
+  });
+}
+
+/** Every test file under `src`, wherever it is. */
+function testFiles(dir = "src"): string[] {
+  const path = join(ROOT, dir);
+  return readdirSync(path).flatMap((name) => {
+    const child = join(path, name);
+    if (statSync(child).isDirectory()) return testFiles(relative(ROOT, child));
+    return name.endsWith(".test.ts") ? [child] : [];
+  });
+}
+
+/** The names a test file gives its tests and their groups, `it.each` names included. */
+function testNames(text: string): string[] {
+  const opening = /(?:\b(?:it|describe|test)(?:\.\w+)?|[\])]\s*(?:as const)?\s*\))\(\s*(["'`])((?:\\.|(?!\1).)*)\1/g;
+  return [...text.matchAll(opening)].map((match) => match[2] ?? "");
+}
+
+describe("what the pipeline ships, on a Stage's turns", () => {
+  const shipped = [
+    ...[...SHIPPED.flatMap(files), ...PAGES.map((page) => join(ROOT, page))].map((file) => ({
+      file,
+      text: joined(readFileSync(file, "utf8")),
+    })),
+    ...amendments().map(({ file, text }) => ({ file, text: joined(text) })),
+    ...testFiles().map((file) => ({
+      file,
+      text: testNames(readFileSync(file, "utf8")).join("\n"),
+    })),
+  ];
+
+  it("reads pages, amendments and test names, so a moved directory cannot make it pass on nothing", () => {
+    expect(shipped.some(({ file }) => file.endsWith(join("wiki", "en", "guide", "configuration.md")))).toBe(true);
+    expect(shipped.some(({ file }) => file.endsWith("0002-claude-p-child-process-per-stage.md"))).toBe(true);
+    const names = shipped.find(({ file }) => file.endsWith("progress.test.ts"))?.text ?? "";
+    expect(names).toContain("writes %i tokens as %s");
+  });
+
+  it.each(RETIRED_TURN_LIMIT.map((pattern, index) => [index, pattern] as const))(
+    "gives a Stage's turns as a limit nowhere, by retired wording %i",
+    (_index, pattern) => {
+      const found = shipped.filter(({ text }) => pattern.test(text));
+      expect(found.map(({ file }) => relative(ROOT, file))).toEqual([]);
+    },
+  );
+
+  it.each([
+    "takes its own model, effort, turn and time limits, and its own extra prompt",
+    "its turn, time and cost limits",
+    "a Stage's time or turn budget",
+    "the maximum turns a Stage may take",
+    "Stage마다 턴과 시간 한도를 따로 둡니다",
+  ])("still catches turns listed among a Stage's limits: %s", (phrase) => {
+    expect(RETIRED_TURN_LIMIT.some((pattern) => pattern.test(phrase))).toBe(true);
+  });
+
+  it("still reads a turn as a unit of work", () => {
+    const prompt = "Do not run them to grade the branch: spend your turns on targeted tests.";
+    expect(RETIRED_TURN_LIMIT.some((pattern) => pattern.test(prompt))).toBe(false);
+  });
+
+  it("reads the name an `it.each` gives its tests", () => {
+    const text = 'it.each([\n  [1, "a"],\n] as const)("names case %i", () => {});';
+    expect(testNames(text)).toEqual(["names case %i"]);
+  });
+});

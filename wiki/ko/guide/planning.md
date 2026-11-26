@@ -28,7 +28,7 @@ Planning은 `mattpocock-skills` 플러그인의 스킬을 차례로 쓰는 일�
 | `to-tickets` | **Ticket**: Spec의 네이티브 sub-issue. 하나가 에이전트 세션 하나 분량이고, `ready-for-agent` 라벨이 붙음 |
 | `triage` | 다른 경로로 들어온 이슈를 Ticket으로. 브리프(와 그 기준)는 코멘트로 올라감 |
 
-[Spec](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 언제나 하위 Ticket을 통해서만 구현됩니다. [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 implement Stage 한 번에 끝날 만큼 작아야 합니다. implement Stage는 기본으로 300턴, 60분입니다([설정](./configuration.md#stages)).
+[Spec](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 언제나 하위 Ticket을 통해서만 구현됩니다. [Ticket](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)은 implement Stage 한 번에 끝날 만큼 작아야 합니다. implement Stage는 기본으로 60분입니다([설정](./configuration.md#stages)).
 
 `to-tickets`를 돌린 뒤에는, 그대로 두면 guard가 거절할 것들을 확인하세요.
 

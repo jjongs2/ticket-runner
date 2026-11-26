@@ -64,7 +64,7 @@ claude --print <prompt> --output-format stream-json --verbose \
   --settings '{"claudeMdExcludes":["<home>/.claude/CLAUDE.md"]}' \
   --plugin-dir <installPath of mattpocock-skills> \
   --disallowedTools CronCreate CronDelete RemoteTrigger PushNotification ScheduleWakeup Workflow \
-  --model … --effort … --max-turns … [--json-schema …]
+  --model … --effort … [--json-schema …]
 ```
 
 - `--strict-mcp-config` leaves the session no MCP server, the claude.ai connectors of the Host user's account included. `--disallowedTools` takes away the tools that act beyond the worktree and the session.
@@ -91,7 +91,7 @@ claude --print <prompt> --output-format stream-json --verbose \
 - Every process a Stage starts inherits both marks. The Stage mark is a tripwire against an honest mistake, not a sandbox: a session that unsets it gets through, and keeping two Runs off one Target is the Run lock's job. The session mark is kept apart from it because two Lanes in the same Stage share the Stage mark.
 - It writes the [Stage's files](./running.md#logs-and-transcripts) from the moment the Stage starts, never with the key's value in them: command files can reach the Target's remote with a Hand-off ([`keepTranscripts`](./configuration.md#keeptranscripts)).
 - It reads the `apiKeySource` of the session's `system/init` event, which the orchestrator sets against what the Run's Stages are billed to.
-- It kills the child at `maxMinutes`, with everything it started, and classifies a failure as `rate-limited`, `api-error`, `out-of-budget`, `timed-out`, `turn-capped`, `nonzero-exit` or `invalid-result`. A session that succeeds is never any of the first three, and they are read off a failed one like this:
+- It kills the child at `maxMinutes`, with everything it started, and classifies a failure as `rate-limited`, `api-error`, `out-of-budget`, `timed-out`, `nonzero-exit` or `invalid-result`. A session that succeeds is never any of the first three, and they are read off a failed one like this:
 
   | Failure | Read off |
   |---|---|
@@ -262,6 +262,7 @@ The full records are in [`docs/adr/`](https://github.com/jjongs2/ticket-runner/t
 - **Decision**: Each Stage is its own `claude -p` child process.
 - **Why**: Only headless mode expands a user-invoked `/plugin:skill`. A process also gives per-Stage limits, `--json-schema`, and a command line to replay.
 - **Cost**: One to two seconds of startup per Stage. No shared context, so each Stage reads the Ticket and the branch.
+- **Amendment**: A Stage is bounded by its `maxMinutes` alone, and nothing caps its turns. A turn is one request to the API, short or long, and the cap on them only ever stopped Stages well inside their minutes, while the wall-clock limit bounds the same runaway Stage. The progress comment shows each Stage's context in place of its turns. A Stage looping on short turns now runs until its wall-clock limit.
 
 ### [ADR-0003: Trust only GitHub-native issue relations](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0003-github-native-relations-only.md) {#adr-0003}
 
