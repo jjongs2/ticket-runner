@@ -108,7 +108,7 @@ export function progressComment({
     "|---|---|---|---|",
     ...rows.map(
       (row) =>
-        `| ${row.point} | ${cell(row.outcome)} | ${context(row.context)} | ${duration(row.durationMs)} |`,
+        `| ${row.point} | ${cell(row.outcome)} | ${contextCell(row.context)} | ${duration(row.durationMs)} |`,
     ),
     "",
   ].join("\n");
@@ -153,7 +153,7 @@ function cell(text: string): string {
 }
 
 /** A Stage's context, followed by ` · compacted` when its main session compacted. */
-function context(stageContext: StageContext | undefined): string {
+function contextCell(stageContext: StageContext | undefined): string {
   if (stageContext === undefined) return NO_ANSWER;
   const figure = tokenCount(stageContext.tokens);
   return stageContext.compacted ? `${figure} · compacted` : figure;

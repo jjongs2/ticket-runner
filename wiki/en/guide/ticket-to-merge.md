@@ -78,7 +78,7 @@ The branch keeps `agent/<n>` when the slug is empty, in silence, and, logging `#
 
 A [Stage](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is one `claude -p` child process with one job ([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)).
 
-Every Stage runs in the Ticket's worktree with `--permission-prompts none`, the configured `permissionMode`, and its own `model`, `effort` and `maxMinutes` (see [Configuration](./configuration.md)). The wall-clock limit is the Stage's only limit, and is enforced by killing the process and everything it started.
+Every Stage runs in the Ticket's worktree with `--permission-prompts none`, the configured `permissionMode`, and its own `model`, `effort` and `maxMinutes` (see [Configuration](./configuration.md)). The wall-clock limit is enforced by killing the process and everything it started.
 
 **What a Stage sees.** The branch's files, the Target's `CLAUDE.md` among them, so what `init` wrote reaches a Stage once it is on the base branch. No MCP server, the claude.ai connectors included, no auto memory, and none of the tools that act beyond the session, such as scheduling. Work that needs an MCP server cannot be done by a Stage.
 

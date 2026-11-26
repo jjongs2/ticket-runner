@@ -78,7 +78,7 @@ slug가 비어 있으면 branch는 아무 말 없이 `agent/<n>`로 남습니다
 
 [Stage](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md)는 일 하나만 맡는 `claude -p` 자식 프로세스입니다([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)).
 
-모든 Stage는 Ticket의 worktree에서 `--permission-prompts none`, 설정된 `permissionMode`, 그리고 Stage별 `model`, `effort`, `maxMinutes`로 실행됩니다([설정](./configuration.md) 참고). 시간 한도가 Stage의 유일한 한도이고, 프로세스와 그 프로세스가 띄운 것을 모두 kill해서 지킵니다.
+모든 Stage는 Ticket의 worktree에서 `--permission-prompts none`, 설정된 `permissionMode`, 그리고 Stage별 `model`, `effort`, `maxMinutes`로 실행됩니다([설정](./configuration.md) 참고). 시간 한도는 프로세스와 그 프로세스가 띄운 것을 모두 kill해서 지킵니다.
 
 **Stage가 보는 것.** branch의 파일들이고, Target의 `CLAUDE.md`도 그중 하나입니다. 그래서 `init`이 쓴 것은 base branch에 들어간 뒤에야 Stage에 닿습니다. MCP 서버는 claude.ai connector까지 포함해 하나도 없고, auto memory도, 예약처럼 세션 밖에서 작동하는 도구도 없습니다. MCP 서버가 필요한 일은 Stage가 할 수 없습니다.
 
@@ -365,7 +365,7 @@ Ticket은 이미 merge됐으니 여기서부터는 Hand-off될 수 없습니다.
 | merge | ✅ #31 | – | – |
 ```
 
-Stage의 Context 칸은 Stage가 끝날 때 main session이 쥐고 있던 context의 양을 Claude Code 앱의 Context 카드처럼 token 수로 적고, 그 세션이 compact했으면 뒤에 `· compacted`를 붙입니다. `ci`, `merge`처럼 세션이 알려 준 것이 없는 행은 `–`입니다. cloud Host의 transcript는 VM과 함께 사라지므로, cloud Run이 merge하거나 Release한 Ticket에서는 이것이 각 Stage가 context를 얼마나 썼는지 남은 유일한 기록입니다.
+Stage의 Context 칸은 Stage가 끝날 때 main session이 쥐고 있던 context의 양을 Claude Code 앱의 Context 카드처럼 token 수로 적고, 그 main session이 compact했으면 뒤에 `· compacted`를 붙입니다. `ci`, `merge`처럼 세션이 알려 준 것이 없는 행은 `–`입니다. 클라우드 Host의 transcript는 VM과 함께 사라지므로, 클라우드 Host의 Run이 merge하거나 Release한 Ticket에서는 이것이 각 Stage가 context를 얼마나 썼는지 남은 유일한 기록입니다.
 
 행에는 몇 단어만 적습니다. 사람이 행동해야 하는 것은 알림을 받을 가치가 있으니 따로 코멘트로 올립니다. Hand-off, guard 경고, Note가 그렇습니다. 예외는 [실패한 것 없이 Hand-off된](./stopping-and-resuming.md#when-nothing-failed) 초록 Ticket 가운데 확인할 수 없었던 기준도 없는 경우로, 코멘트를 달지 않습니다.
 
