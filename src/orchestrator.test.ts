@@ -2192,7 +2192,7 @@ describe("the fix Stage", () => {
     );
   });
 
-  it("takes its own model, effort, turn and time limits, and its own extra prompt", async () => {
+  it("takes its own model, effort, time limit and extra prompt", async () => {
     tracker.queueCi(RED_CI);
 
     await run({

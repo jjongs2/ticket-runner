@@ -82,6 +82,12 @@ const RETIRED_TURN_LIMIT: readonly RegExp[] = [
   /턴이 바닥/,
   /\b\d+ turns?,? and \d+ minutes/i,
   /\d+ ?턴, ?\d+ ?분/,
+  /\bturns?(?:,|,? and|,? or) (?:time|minutes?|wall-clock|duration)(?: \w+){0,2} (?:limits?|caps?|budgets?|bounds?)\b/i,
+  /\b(?:time|minutes?|wall-clock|duration)(?:,|,? and|,? or) turns? (?:limits?|caps?|budgets?|bounds?)\b/i,
+  /\b(?:max(?:imum)?|turn) (?:turns|cap|budget)\b/i,
+  /턴(?:과|이나|·|, ?) ?(?:시간|분) ?(?:한도|제한|상한)/,
+  /(?:시간|분)(?:과|이나|·|, ?) ?턴 ?(?:한도|제한|상한)/,
+  /턴 (?:수 )?제한/,
 ];
 
 /** Every ADR's amendments, without the body above the first of them. */
@@ -137,6 +143,16 @@ describe("what the pipeline ships, on a Stage's turns", () => {
       expect(found.map(({ file }) => relative(ROOT, file))).toEqual([]);
     },
   );
+
+  it.each([
+    "takes its own model, effort, turn and time limits, and its own extra prompt",
+    "its turn, time and cost limits",
+    "a Stage's time or turn budget",
+    "the maximum turns a Stage may take",
+    "Stage마다 턴과 시간 한도를 따로 둡니다",
+  ])("still catches turns listed among a Stage's limits: %s", (phrase) => {
+    expect(RETIRED_TURN_LIMIT.some((pattern) => pattern.test(phrase))).toBe(true);
+  });
 
   it("still reads a turn as a unit of work", () => {
     const prompt = "Do not run them to grade the branch: spend your turns on targeted tests.";
