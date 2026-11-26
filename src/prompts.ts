@@ -342,8 +342,8 @@ const CI_CRITERION_LINE =
  * and the next verify found the same promise broken in the cleanup, with the
  * fix budget spent. Of the verifies that failed again after a fix, about one in
  * five failed so on a sibling place, every one in code the branch added, so the
- * Stage searches the branch's own changes and nothing beyond them. A fix Stage
- * sent in for anything else is not told this: its failure names no promise.
+ * places the Stage is sent after are those in the branch's own changes. A fix
+ * Stage sent in for anything else is not told this: its failure names no promise.
  *
  * It drives no plugin skill but the `pr` skill: the implement skill would
  * re-read the Ticket and start over.
