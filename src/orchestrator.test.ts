@@ -2831,7 +2831,7 @@ describe("releasing a rate-limited Ticket", () => {
     workspace.conflictOnce(CONFLICT);
     runner.queue("conflict", { ok: false, failure: "rate-limited" });
 
-    // The worktree decides the conflict Stage, as it decides the turn-capped
+    // The worktree decides the conflict Stage, as it decides the timed-out
     // one: nothing after the rebase needs an agent, so the Ticket can merge.
     expect(await run()).toMatchObject({ outcome: "merged" });
     expect(state()).toBeUndefined();

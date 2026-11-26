@@ -64,7 +64,7 @@ claude --print <prompt> --output-format stream-json --verbose \
   --settings '{"claudeMdExcludes":["<home>/.claude/CLAUDE.md"]}' \
   --plugin-dir <installPath of mattpocock-skills> \
   --disallowedTools CronCreate CronDelete RemoteTrigger PushNotification ScheduleWakeup Workflow \
-  --model … --effort … --max-turns … [--json-schema …]
+  --model … --effort … [--json-schema …]
 ```
 
 - `--strict-mcp-config`로 세션에 MCP 서버를 하나도 주지 않습니다. Host 사용자 계정의 claude.ai connector도 빠집니다. `--disallowedTools`는 worktree와 세션 밖에서 일하는 도구를 막습니다.
@@ -91,7 +91,7 @@ claude --print <prompt> --output-format stream-json --verbose \
 - Stage가 띄우는 프로세스는 모두 두 표시를 물려받습니다. Stage 표시는 실수를 막는 장치일 뿐 sandbox가 아닙니다. 변수를 지운 세션은 그대로 통과하고, 한 Target에 Run 둘이 붙지 못하게 하는 것은 Run lock의 몫입니다. session 표시를 따로 두는 것은 같은 Stage에 있는 두 Lane이 Stage 표시를 같이 쓰기 때문입니다.
 - Stage가 시작되는 순간부터 [Stage의 파일](./running.md#logs-and-transcripts)을 쓰고, 거기에 키 값은 절대 적지 않습니다. 명령 파일은 Hand-off 때 Target의 remote로 갈 수 있기 때문입니다([`keepTranscripts`](./configuration.md#keeptranscripts)).
 - 세션의 `system/init` 이벤트에서 `apiKeySource`를 읽고, orchestrator가 이를 Run의 Stage가 과금되는 곳과 맞춰 봅니다.
-- `maxMinutes`가 지나면 자식과 자식이 띄운 프로세스를 모두 죽이고, 실패를 `rate-limited`, `api-error`, `out-of-budget`, `timed-out`, `turn-capped`, `nonzero-exit`, `invalid-result`로 분류합니다. 성공한 세션은 앞의 셋 중 어느 것도 아니고, 셋은 실패한 세션에서 이렇게 읽습니다.
+- `maxMinutes`가 지나면 자식과 자식이 띄운 프로세스를 모두 죽이고, 실패를 `rate-limited`, `api-error`, `out-of-budget`, `timed-out`, `nonzero-exit`, `invalid-result`로 분류합니다. 성공한 세션은 앞의 셋 중 어느 것도 아니고, 셋은 실패한 세션에서 이렇게 읽습니다.
 
   | 실패 | 읽는 곳 |
   |---|---|
@@ -262,6 +262,7 @@ Run과 `init`은 파이프라인 자신의 저장소에서 공개된 가장 높�
 - **결정**: Stage마다 `claude -p` 자식 프로세스를 하나씩 둡니다.
 - **이유**: 사용자 호출 전용 `/plugin:skill`을 펼쳐 주는 건 헤드리스 모드뿐입니다. 프로세스로 나누면 Stage별 한도, `--json-schema`, 다시 돌려 볼 명령줄도 얻습니다.
 - **비용**: Stage마다 1–2초의 시작 비용이 듭니다. 공유하는 문맥이 없으니 Stage마다 Ticket과 branch를 읽습니다.
+- **개정**: Stage는 `maxMinutes` 하나로만 묶이고, 턴 수에는 상한이 없습니다. 턴은 짧든 길든 API 요청 하나라서, 턴 수 상한은 분 한도가 한참 남은 Stage를 멈춘 적밖에 없고, 같은 폭주 Stage는 wall-clock 한도가 묶어 둡니다. 진행 상황 코멘트는 턴 수 대신 Stage마다 context를 보여 줍니다. 짧은 턴을 되풀이하는 Stage는 이제 wall-clock 한도까지 돕니다.
 
 ### [ADR-0003: Trust only GitHub-native issue relations](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0003-github-native-relations-only.md) {#adr-0003}
 

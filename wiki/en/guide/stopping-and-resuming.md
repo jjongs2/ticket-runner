@@ -71,7 +71,7 @@ The Failure line says what stopped the Ticket. What it asks of you:
 
 | Failure | What to change before handing it back |
 |---|---|
-| A Stage ran past its minute limit, or hit its turn limit | Raise that Stage's `maxMinutes` or `maxTurns` in [`stages`](./configuration.md#stages), or split the Ticket |
+| A Stage ran past its minute limit | Raise that Stage's `maxMinutes` in [`stages`](./configuration.md#stages), or split the Ticket |
 | implement left no commits | Read the reason the Stage gave in the hand-off comment, or its transcript when it gave none, then make the Ticket smaller or clearer |
 | fix left no new commits | Read the reason the Stage gave in the hand-off comment, or its transcript when it gave none, then take the decision it asks for or mend the code by hand on the branch |
 | Uncommitted work, a criterion or CI still failing after the fix | Read the evidence in the comment, then mend the code by hand on the branch, or, for a criterion, rewrite it as the next row says |

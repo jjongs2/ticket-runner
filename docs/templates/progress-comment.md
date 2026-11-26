@@ -1,20 +1,20 @@
 <!-- ticket-runner:progress -->
 **ticket-runner** `<version>` · run `<runId>` · `<branch>`
 
-| Stage | Outcome | Turns | Duration |
+| Stage | Outcome | Context | Duration |
 |---|---|---|---|
-| implement | ✅ committed | <n> | <duration> |
-| verify | ⏸ rate limited | <n> | <duration> |
+| implement | ✅ committed | <context> | <duration> |
+| verify | ⏸ rate limited | <context> | <duration> |
 
 **ticket-runner** `<version>` · run `<runId>` · `<branch>`
 
-| Stage | Outcome | Turns | Duration |
+| Stage | Outcome | Context | Duration |
 |---|---|---|---|
-| verify | ❌ <k> unmet | <n> | <duration> |
-| fix | ✅ committed | <n> | <duration> |
-| verify | ✅ <k> met · <c> to CI · <u> unverifiable | <n> | <duration> |
-| pr | ✅ revised | <n> | <duration> |
-| conflict | ✅ rebased | <n> | <duration> |
+| verify | ❌ <k> unmet | <context> | <duration> |
+| fix | ✅ committed | <context> · compacted | <duration> |
+| verify | ✅ <k> met · <c> to CI · <u> unverifiable | <context> | <duration> |
+| pr | ✅ revised | <context> | <duration> |
+| conflict | ✅ rebased | <context> | <duration> |
 | ci | ✅ passed | – | <duration> |
 | merge | ✅ #<pr> | – | – |
 
@@ -37,7 +37,9 @@ every section's header and table exactly as they were and writes its own
 section below them, whether the Ticket was released, stranded, or resumed on the
 same Host or another. A Run's transcripts go with a cloud Host's VM, so the
 sections an earlier Run wrote are the only record of which Stages it ran, on
-which version, and what they cost. A Run whose own section is already the last
+which version, and how much context they used. Each section is its own table,
+so they need not agree: one an earlier version wrote with a `Turns` column is
+carried forward with it, above this Run's `Context`. A Run whose own section is already the last
 one — the same runId — rewrites that section rather than starting a second. A
 comment an earlier version wrote, with one header and one table, is one earlier
 section.
@@ -65,8 +67,34 @@ is taken back. Nothing tells the Run a human held it, and nothing failed there:
 the section the human read, ending in `👤 left to a human`, stays exactly as it
 was, above the new Run's.
 
-`–` is what a cell has no answer for: CI and the merge run no agent, so they
-have no turn count, and the merge takes no measurable time of its own.
+`–` is what a cell has no answer for: a row no session reported has no
+context — `setup`, `rebase`, `ci` and `merge`, a `pr` row for publishing
+(`⏸ GitHub failure`, `⏸ remote unreachable`), and a `conflict` row whose Stage
+result was lost (`❌ unknown`) — and the merge takes no measurable time of its
+own. A Stage whose session printed no request of its own with any usage on it
+has `–` too.
+
+`<context>` is the main session's context when the Stage ended: the
+`input_tokens`, `cache_creation_input_tokens` and `cache_read_input_tokens` of
+the `usage` on the last `assistant` event of the Stage's stream whose
+`parent_tool_use_id` is `null` or absent, a subagent's events naming the tool
+use that started it, and whose sum is above zero, since the CLI writes its own
+rate-limit and API-error messages as main-session events with all-zero usage.
+The last figure is the right one with or without a compaction, after which the
+peak is only where the CLI compacted. It is read from those events alone, so a
+Stage the wall-clock limit stopped, or that crashed, still has one. It is
+written in tokens as the Claude Code app's Context card writes its count: a
+whole number below 1,000 (`850`), and from there `K` per thousand or, from
+1,000,000, `M` per million, rounded to one decimal, half up, with a trailing
+`.0` dropped (`107.6K`, `200K`, `1M`); a figure that rounds to `1000K` is
+`1M`. It carries no percentage and no window: a token count compares across
+Tickets whatever model a Target configures, and a percentage of the window
+does not. ` · compacted` follows it, once however many times, when the stream
+holds a `system` event with the `subtype` `compact_boundary` whose
+`parent_tool_use_id` is `null` or absent: the main session compacted. The
+figure is written here alone, never in the Run's log or summary, since a cloud
+Host's transcripts go with its VM and this comment is what survives a cloud
+Run.
 
 `<duration>` is written as GitHub Actions writes one on a pull request's checks,
 where a human already reads them: `40s` under a minute, `1m 5s` under an hour,
@@ -183,8 +211,8 @@ a worktree graded with work the branch lacks would pass on code the pull
 request never carries.
 
 `<why the Stage did not finish>` is the short form of a Stage failure: `timed
-out`, `turn capped`, `exited non-zero`, `invalid result`, or `failed` when the
-Stage came back without saying which. The rate limit, a transient API failure
+out`, `exited non-zero`, `invalid result`, or `failed` when the Stage came back
+without saying which. A Stage's only limit is its wall-clock one. The rate limit, a transient API failure
 — an API error with a 5xx status or none, after the CLI had given up retrying
 it — and, on a Run started with `--api-key`, the key out of credit or past its
 workspace's spend limit are the Stage failures that are nothing about the

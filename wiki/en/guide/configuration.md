@@ -32,7 +32,7 @@ A file that sets several of them:
   "checks": ["npm test", "npm run typecheck", "npm run lint"],
   "checkTimeoutMinutes": 20,
   "stages": {
-    "implement": { "maxTurns": 400, "extraPrompt": "Run `npm run lint -- --fix` before committing." },
+    "implement": { "maxMinutes": 80, "extraPrompt": "Run `npm run lint -- --fix` before committing." },
     "verify": { "effort": "max" }
   },
   "ciTimeoutMinutes": 45,
@@ -98,25 +98,24 @@ Two things the pipeline's own merge gives you then depend on the Target:
 
 Each Stage is one `claude -p` session. `stages` takes an object per Stage, and every key in it is optional:
 
-| Stage | What it does | `maxTurns` | `maxMinutes` |
-|---|---|---|---|
-| `implement` | Drives `/mattpocock-skills:implement` on the Ticket | `300` | `60` |
-| `verify` | Tries to prove the Acceptance Criteria are not met, and returns a verdict | `130` | `30` |
-| `fix` | Mends the one failure that spent the fix budget | `150` | `40` |
-| `conflict` | Resolves the conflict where a rebase stopped | `120` | `30` |
-| `pr` | Revises the pull request's title, body, problem and solution for a Ticket handed back with commits since its Hand-off | `60` | `20` |
+| Stage | What it does | `maxMinutes` |
+|---|---|---|
+| `implement` | Drives `/mattpocock-skills:implement` on the Ticket | `60` |
+| `verify` | Tries to prove the Acceptance Criteria are not met, and returns a verdict | `30` |
+| `fix` | Mends the one failure that spent the fix budget | `40` |
+| `conflict` | Resolves the conflict where a rebase stopped | `30` |
+| `pr` | Revises the pull request's title, body, problem and solution for a Ticket handed back with commits since its Hand-off | `20` |
 
 | Key | Type | Default | Passed as |
 |---|---|---|---|
 | `model` | string, anything `claude --model` takes, such as `sonnet` | `"claude-opus-5-5"` | `--model` |
 | `effort` | `"low"`, `"medium"`, `"high"`, `"xhigh"` or `"max"` | `"high"` | `--effort` |
-| `maxTurns` | whole number ≥ 1 | per Stage, above | `--max-turns` |
-| `maxMinutes` | number > 0 | per Stage, above | The wall-clock limit the session is killed at |
+| `maxMinutes` | number > 0 | per Stage, above | The wall-clock limit the session is killed at, the Stage's only limit |
 | `extraPrompt` | string | `""` | Appended as the last section of the Stage's prompt |
 
 The `pr` Stage runs only on a Ticket handed back with commits made since its Hand-off, which no Stage described ([The pr Stage](./ticket-to-merge.md#the-pr-stage)); the implement and fix Stages write every other pull request's prose.
 
-The model and effort are always passed, so the machine's own `claude` defaults never apply. What a Stage that runs out of turns or time costs the Ticket is on [From Ticket to merge](./ticket-to-merge.md).
+The model and effort are always passed, so the machine's own `claude` defaults never apply. What a Stage that runs out of time costs the Ticket is on [From Ticket to merge](./ticket-to-merge.md).
 
 ## `permissionMode`
 

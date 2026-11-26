@@ -78,7 +78,7 @@ The branch keeps `agent/<n>` when the slug is empty, in silence, and, logging `#
 
 A [Stage](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md) is one `claude -p` child process with one job ([ADR-0002](https://github.com/jjongs2/ticket-runner/blob/main/docs/adr/0002-claude-p-child-process-per-stage.md)).
 
-Every Stage runs in the Ticket's worktree with `--permission-prompts none`, the configured `permissionMode`, and its own `model`, `effort`, `maxTurns` and `maxMinutes` (see [Configuration](./configuration.md)). The wall-clock limit is enforced by killing the process and everything it started.
+Every Stage runs in the Ticket's worktree with `--permission-prompts none`, the configured `permissionMode`, and its own `model`, `effort` and `maxMinutes` (see [Configuration](./configuration.md)). The wall-clock limit is the Stage's only limit, and is enforced by killing the process and everything it started.
 
 **What a Stage sees.** The branch's files, the Target's `CLAUDE.md` among them, so what `init` wrote reaches a Stage once it is on the base branch. No MCP server, the claude.ai connectors included, no auto memory, and none of the tools that act beyond the session, such as scheduling. Work that needs an MCP server cannot be done by a Stage.
 
@@ -111,14 +111,13 @@ What each Stage leaves on disk is on [Logs and transcripts](./running.md#logs-an
 | Failure | Progress cell | Meaning |
 |---|---|---|
 | `timed-out` | `❌ timed out` | Killed at `maxMinutes` |
-| `turn-capped` | `❌ turn capped` | Reached `maxTurns` |
 | `out-of-budget` | `⏸ out of API budget` | The API key's credit or spend limit, met only on an `--api-key` Run. Releases the Ticket |
 | `rate-limited` | `⏸ rate limited`, `⏸ API rate limited` on an `--api-key` Run | The plan's rate limit, or the API's on an `--api-key` Run. Releases the Ticket |
 | `api-error` | `⏸ API failure` | A transient API failure the CLI gave up retrying. Releases the Ticket |
 | `nonzero-exit` | `❌ exited non-zero` | Any other failed session |
 | `invalid-result` | `❌ invalid result` | The verify Stage answered no verdict at all |
 
-On the [pr Stage](#the-pr-stage) the failures that release nothing read `⚠️` rather than `❌`, such as `⚠️ turn capped`: the Ticket goes on.
+On the [pr Stage](#the-pr-stage) the failures that release nothing read `⚠️` rather than `❌`, such as `⚠️ timed out`: the Ticket goes on.
 
 ## The implement Stage
 
@@ -170,7 +169,7 @@ Only a defect a fresh session could mend spends the budget:
 | The conflict Stage did not finish the rebase | rebase | Yes |
 | A pull request check failed | ci | Yes |
 | A pull request check failed, and the merge-base fails a Check | ci | No, a Release |
-| A Stage that did not finish (timed out, turn-capped, non-zero, invalid result) | its Stage | No, Hand-off |
+| A Stage that did not finish (timed out, non-zero, invalid result) | its Stage | No, Hand-off |
 | implement left no commits | implement | No, Hand-off |
 | A verdict with no evidence, or none at all | verify | No, Hand-off |
 | A verdict that leaves out a listed number or adds one | verify | No, Hand-off |
@@ -356,15 +355,17 @@ The Ticket is merged, so nothing below can hand it off. Each step's failure is l
 ```text
 **ticket-runner** `0.4.0` · run `2026-09-17T09-00-00-000` · `agent/4-planning-guards`
 
-| Stage | Outcome | Turns | Duration |
+| Stage | Outcome | Context | Duration |
 |---|---|---|---|
-| implement | ✅ committed | 46 | 21m 14s |
-| verify | ❌ 1 unmet | 11 | 5m 3s |
-| fix | ✅ committed | 12 | 6m 2s |
-| verify | ✅ 5 met · 1 to CI · 1 unverifiable | 9 | 4m 31s |
+| implement | ✅ committed | 107.6K | 21m 14s |
+| verify | ❌ 1 unmet | 64.2K | 5m 3s |
+| fix | ✅ committed | 88.9K · compacted | 6m 2s |
+| verify | ✅ 5 met · 1 to CI · 1 unverifiable | 59K | 4m 31s |
 | ci | ✅ passed | – | 2m 40s |
 | merge | ✅ #31 | – | – |
 ```
+
+A Stage's Context cell is how much context its main session held when the Stage ended, in tokens as the Claude Code app's Context card writes them, followed by `· compacted` when that session compacted. A row no session reported, such as `ci` and `merge`, has `–`. A cloud Host's transcripts go with its VM, so for a Ticket a cloud Run merged or released, this is the only record left of how much context each Stage used.
 
 Rows carry a few words only. Anything a human has to act on is its own comment, since those are worth a notification: a hand-off, a guard warning, a Note. The exception is a green Ticket [handed off with nothing failed](./stopping-and-resuming.md#when-nothing-failed) and no criterion unverifiable, which gets no comment.
 
@@ -372,7 +373,7 @@ Rows carry a few words only. Anything a human has to act on is its own comment, 
 
 ## Notes
 
-A Stage keeps meeting defects that are not its Ticket's. Fixing them widens the Ticket past what verify grades; ignoring them loses them in a transcript. So the implement, verify and fix Stages end with a list of [Notes](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), and the pipeline posts each one where a human will meet it. A Note is a defect outside the Ticket, something that behaves wrongly or breaks, never a preference, a refactor or a test that would be nice to have, and never acted on in it. What the Ticket's own deliverable already records, such as a report section the Ticket asks for, is not a Note either. A defect the branch itself introduced, one that behaves correctly on the base branch and wrongly on the branch or sits in code the branch added, belongs to the Ticket: the implement and fix Stages fix it rather than note it, and verify, which fixes nothing, reports it in its verdict, [failing it](#the-verify-stage-and-its-verdict). Notes are routed before the Stage's own outcome is judged, so a Stage that ran out of turns still reports what it noticed.
+A Stage keeps meeting defects that are not its Ticket's. Fixing them widens the Ticket past what verify grades; ignoring them loses them in a transcript. So the implement, verify and fix Stages end with a list of [Notes](https://github.com/jjongs2/ticket-runner/blob/main/GLOSSARY.md), and the pipeline posts each one where a human will meet it. A Note is a defect outside the Ticket, something that behaves wrongly or breaks, never a preference, a refactor or a test that would be nice to have, and never acted on in it. What the Ticket's own deliverable already records, such as a report section the Ticket asks for, is not a Note either. A defect the branch itself introduced, one that behaves correctly on the base branch and wrongly on the branch or sits in code the branch added, belongs to the Ticket: the implement and fix Stages fix it rather than note it, and verify, which fixes nothing, reports it in its verdict, [failing it](#the-verify-stage-and-its-verdict). Notes are routed before the Stage's own outcome is judged, so a Stage that ran out of time still reports what it noticed.
 
 | The Note names | Where it goes |
 |---|---|
