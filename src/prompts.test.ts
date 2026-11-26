@@ -952,7 +952,7 @@ describe("an unmet criterion's evidence", () => {
 
   it("sends the fix Stage after a fix of the cause within the Ticket's scope first", () => {
     expect(fixPrompt(url, UNMET, BASE, "", OTHER_TARGET, NO_CHECKS)).toMatch(
-      /look for a fix of the cause you found within the scope this Ticket sets before you settle for a narrower one/i,
+      /look for a fix of that cause within the scope this Ticket sets before you settle for a narrower one/i,
     );
   });
 
@@ -962,7 +962,7 @@ describe("an unmet criterion's evidence", () => {
     expect(prompt).toMatch(
       /before you commit, test your fix with inputs built from the cause you found, of the kind a verify Stage trying to falsify the criterion would try, and not only with the counterexample you were given/i,
     );
-    expect(prompt).toMatch(/your regression test covers the cause, not only that counterexample/i);
+    expect(prompt).toMatch(/your regression test covers the cause and each place you fix, not only that counterexample/i);
   });
 
   it("is not raised with a fix Stage sent in for anything but unmet criteria", () => {
@@ -971,9 +971,89 @@ describe("an unmet criterion's evidence", () => {
 
       expect(prompt).not.toMatch(/is a lead, not the answer/i);
       expect(prompt).not.toMatch(/find the cause yourself/i);
-      expect(prompt).not.toMatch(/a fix of the cause you found within the scope/i);
+      expect(prompt).not.toMatch(/a fix of that cause within the scope/i);
       expect(prompt).not.toMatch(/inputs built from the cause/i);
       expect(prompt).not.toMatch(/regression test covers the cause/i);
+    }
+  });
+});
+
+describe("the cause a fix Stage sent in for unmet criteria reads", () => {
+  const UNMET = {
+    kind: "unmet-criteria" as const,
+    summary: "1 of 1 criteria unmet",
+    evidence: "- it works — npm test is red",
+  };
+  const OTHER_KINDS = [
+    "failed-ci",
+    "unresolved-conflict",
+    "uncommitted-work",
+  ] as const;
+
+  /** The prompt's line on fixing the cause: the one that sends the Stage after a fix of it within the Ticket's scope. */
+  function causeLineOf(prompt: string): string {
+    const lines = prompt.split("\n").filter((line) => /within the scope this Ticket sets/i.test(line));
+    expect(lines).toHaveLength(1);
+    return lines[0]!;
+  }
+
+  it("is the promise or rule the failure breaks, not the place the evidence names, in the line on fixing the cause", () => {
+    const line = causeLineOf(fixPrompt(url, UNMET, BASE, "", OTHER_TARGET, NO_CHECKS));
+
+    expect(line).toMatch(
+      /the cause is the promise or rule the failure breaks, such as a sentence the branch shows, a documented behaviour or a criterion, not the place the evidence names/i,
+    );
+    expect(line).toMatch(/look for a fix of that cause within the scope this Ticket sets/i);
+  });
+
+  it("is fixed when every place in the branch's own changes the promise covers keeps it, said in that same line", () => {
+    const line = causeLineOf(fixPrompt(url, UNMET, "develop", "", OTHER_TARGET, NO_CHECKS));
+
+    expect(line).toMatch(
+      /a fix of the cause makes every place in this branch's own changes against `develop` \(`git diff develop\.\.\.HEAD`\) that the promise covers keep it/i,
+    );
+  });
+
+  it("finds those places by what the promise speaks of, not by the places its text or the evidence names", () => {
+    const line = causeLineOf(fixPrompt(url, UNMET, BASE, "", OTHER_TARGET, NO_CHECKS));
+
+    expect(line).toMatch(
+      /find those places by what the promise speaks of, not by the places its text or the evidence names/i,
+    );
+    expect(line).toMatch(
+      /each place that produces, stores or shows the same thing as the place the evidence names/i,
+    );
+    expect(line).toMatch(
+      /every call of the same function, every holder of the same field, every use of the same message, every rule of the same list/i,
+    );
+  });
+
+  it("has the regression test cover each place the fix mends", () => {
+    expect(fixPrompt(url, UNMET, BASE, "", OTHER_TARGET, NO_CHECKS)).toMatch(
+      /your regression test covers the cause and each place you fix, not only that counterexample/i,
+    );
+  });
+
+  it("asks for no search outside the branch's own changes, and leaves the lines on its own defects and Notes as they were", () => {
+    const unmet = fixPrompt(url, UNMET, BASE, "", OTHER_TARGET, NO_CHECKS);
+    const failedCi = fixPrompt(url, FAILED_CI, BASE, "", OTHER_TARGET, NO_CHECKS);
+    const noteLines = (prompt: string) => prompt.split("\n").filter((line) => /\bNotes?\b/.test(line));
+
+    expect(causeLineOf(unmet)).not.toMatch(/outside|whole (repository|codebase)|rest of the (repository|codebase)/i);
+    expect(unmet).toMatch(/defects this branch introduced\. Anything else you find belongs to another Ticket, not to this session; record it as a Note rather than mending it/);
+    expect(unmet).toMatch(/belongs to this Ticket: fix it, and do not record it as a Note\./);
+    expect(noteLines(unmet)).toEqual(noteLines(failedCi));
+  });
+
+  it("is not told a fix Stage sent in for anything but unmet criteria", () => {
+    for (const kind of OTHER_KINDS) {
+      const prompt = fixPrompt(url, { ...FAILED_CI, kind }, BASE, "", OTHER_TARGET, NO_CHECKS);
+
+      expect(prompt).not.toMatch(/promise/i);
+      expect(prompt).not.toMatch(/the place the evidence names/i);
+      expect(prompt).not.toMatch(/branch's own changes/i);
+      expect(prompt).not.toMatch(/produces, stores or shows/i);
+      expect(prompt).not.toMatch(/each place you fix/i);
     }
   });
 });

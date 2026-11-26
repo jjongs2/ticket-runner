@@ -334,6 +334,17 @@ const CI_CRITERION_LINE =
  * evidence may still propose, and to test that fix the way the next verify will
  * attack it, for the reason {@link verifyInstructions} gives.
  *
+ * That cause is the promise the failure breaks, not the place the evidence
+ * names, and its fix makes every place in the branch's own changes that the
+ * promise covers keep it (#360). A branch that kept one promise in a draft, a
+ * rewrite and a cleanup alike was told by verify that the rewrite broke it; the
+ * fix Stage mended the rewrite alone, though it had read the cleanup's code,
+ * and the next verify found the same promise broken in the cleanup, with the
+ * fix budget spent. Of the verifies that failed again after a fix, about one in
+ * five failed so on a sibling place, every one in code the branch added, so the
+ * Stage searches the branch's own changes and nothing beyond them. A fix Stage
+ * sent in for anything else is not told this: its failure names no promise.
+ *
  * It drives no plugin skill but the `pr` skill: the implement skill would
  * re-read the Ticket and start over.
  */
@@ -346,7 +357,7 @@ const fixInstructions = (
 
 - Commit your fix on the branch you are on, in this worktree. ${NO_OTHER_BRANCH} Do not open pull requests, and do not close the Ticket.
 - Start from the evidence: reproduce the failure, find what actually causes it, and fix that rather than the symptom.
-- Where the failure is an unmet Acceptance Criterion or a defect this branch made, add the regression test that would have caught it and commit it with the fix.${kind === "unmet-criteria" ? `${UNMET_CAUSE_LINES}${HUMAN_DECISION_LINE}` : ""}
+- Where the failure is an unmet Acceptance Criterion or a defect this branch made, add the regression test that would have caught it and commit it with the fix.${kind === "unmet-criteria" ? `${unmetCauseLines(base)}${HUMAN_DECISION_LINE}` : ""}
 - Stay inside this Ticket's Acceptance Criteria and the defects this branch introduced. Anything else you find belongs to another Ticket, not to this session; record it as a Note rather than mending it.${codeChecksLine(checks, false)}
 ${FINISH_GUIDANCE}
 - Write commit subjects ${SUBJECT_RULE}. The pipeline re-runs the verify Stage as soon as you finish.
@@ -377,10 +388,14 @@ const FIX_PROSE_GUIDANCE = `- The \`body\`, \`problem\` and \`solution\` answere
 const NO_COMMIT_LINE =
   "- If you end without a new commit, say why in `noCommitReason`, in a few sentences: committing nothing hands the Ticket to a human, and the hand-off comment quotes your reason. Otherwise answer it empty.";
 
-/** How the fix Stage sent in for unmet criteria reaches and tests a fix of the cause. */
-const UNMET_CAUSE_LINES = `
-- Look for a fix of the cause you found within the scope this Ticket sets before you settle for a narrower one, such as a patch that answers only the counterexample.
-- Before you commit, test your fix with inputs built from the cause you found, of the kind a verify Stage trying to falsify the criterion would try, and not only with the counterexample you were given. Your regression test covers the cause, not only that counterexample.`;
+/**
+ * How the fix Stage sent in for unmet criteria reads the cause, and reaches
+ * and tests a fix of it: the cause is the promise the failure breaks, and its
+ * fix covers every place in the branch's own changes that keeps it.
+ */
+const unmetCauseLines = (base: string) => `
+- The cause is the promise or rule the failure breaks, such as a sentence the branch shows, a documented behaviour or a criterion, not the place the evidence names. Look for a fix of that cause within the scope this Ticket sets before you settle for a narrower one, such as a patch that answers only the counterexample. A fix of the cause makes every place in this branch's own changes against \`${base}\` (\`git diff ${base}...HEAD\`) that the promise covers keep it. Find those places by what the promise speaks of, not by the places its text or the evidence names: each place that produces, stores or shows the same thing as the place the evidence names, such as every call of the same function, every holder of the same field, every use of the same message, every rule of the same list.
+- Before you commit, test your fix with inputs built from the cause you found, of the kind a verify Stage trying to falsify the criterion would try, and not only with the counterexample you were given. Your regression test covers the cause and each place you fix, not only that counterexample.`;
 
 /** What the fix Stage sent in for unmet criteria does with one only a human can settle. */
 const HUMAN_DECISION_LINE = `
