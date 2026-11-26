@@ -68,7 +68,6 @@ function request(overrides: Partial<StageRequest> = {}): StageRequest {
     cwd: "/repo/.worktrees/ticket-2",
     model: "claude-opus-5-5",
     effort: "high",
-    maxTurns: 300,
     maxMinutes: 60,
     permissionMode: "auto",
     credential: "subscription",
@@ -188,7 +187,13 @@ describe("the command line", () => {
     expect(args.join(" ")).toContain("--permission-mode auto");
     expect(args.join(" ")).toContain("--model claude-opus-5-5");
     expect(args.join(" ")).toContain("--effort high");
-    expect(args.join(" ")).toContain("--max-turns 300");
+  });
+
+  it("leaves the wall-clock limit the session's only one", async () => {
+    await runner(execution({ stdout: SUCCESS })).run(request());
+
+    expect(calls[0]?.args).not.toContain("--max-turns");
+    expect(calls[0]?.options.timeoutMs).toBe(60 * 60_000);
   });
 
   it("passes the effort the Stage was given", async () => {
@@ -470,7 +475,6 @@ describe("what a Stage is billed to", () => {
     const result = await runner(execution({ stdout })).run(request({ credential: "api-key" }));
 
     expect(result.costUsd).toBe(10.53);
-    expect(result.turns).toBe(83);
   });
 
   it("reports the latest cost a session gave when its wakings disagree", async () => {
@@ -681,12 +685,6 @@ describe("a session that woke for a background agent", () => {
     waking("both are in"),
   );
 
-  it("counts the turns of every waking, not the last one's", async () => {
-    const result = await runner(execution({ stdout: WOKEN_TWICE })).run(request());
-
-    expect(result.turns).toBe(60);
-  });
-
   it("keeps the structured output the main turn returned", async () => {
     const result = await runner(execution({ stdout: WOKEN_TWICE })).run(
       request({ jsonSchema: { type: "object" }, resultRequired: false }),
@@ -734,28 +732,14 @@ describe("a session that woke for a background agent", () => {
     expect(result).toMatchObject({ ok: false, failure: "invalid-result" });
     expect(result.result).toBeUndefined();
   });
-
-  it("still fails a Stage whose last waking hit the turn cap", async () => {
-    const stdout = transcript(mainTurn, {
-      type: "result",
-      subtype: "error_max_turns",
-      is_error: true,
-      num_turns: 3,
-    });
-
-    const result = await runner(execution({ stdout })).run(request());
-
-    expect(result).toMatchObject({ ok: false, failure: "turn-capped" });
-  });
 });
 
 describe("reading the outcome", () => {
-  it("reports success with the turn count the session used", async () => {
+  it("reports success", async () => {
     const result = await runner(execution({ stdout: SUCCESS })).run(request());
 
     expect(result.ok).toBe(true);
     expect(result.failure).toBeUndefined();
-    expect(result.turns).toBe(12);
   });
 
   it("returns the structured output when a schema was requested", async () => {
@@ -857,19 +841,6 @@ describe("reading the outcome", () => {
     const result = await runner(execution({ exitCode: 124 })).run(request());
 
     expect(result).toMatchObject({ ok: false, failure: "nonzero-exit" });
-  });
-
-  it("classifies the turn cap from the result event", async () => {
-    const stdout = transcript({
-      type: "result",
-      subtype: "error_max_turns",
-      is_error: true,
-      num_turns: 300,
-    });
-
-    const result = await runner(execution({ exitCode: 1, stdout })).run(request());
-
-    expect(result).toMatchObject({ ok: false, failure: "turn-capped" });
   });
 
   it("classifies a subscription rate limit so the failure is not blamed on the Ticket", async () => {
@@ -1159,5 +1130,155 @@ describe("reading the outcome", () => {
     const result = await runner(failedExecution("boom", { exitCode: 2 })).run(request());
 
     expect(result).toMatchObject({ ok: false, failure: "nonzero-exit" });
+  });
+});
+
+/**
+ * The main session's context when the Stage ended, as the progress comment's
+ * Context cell shows it.
+ */
+describe("the main session's context", () => {
+  /** An `assistant` event with the usage its request reported. */
+  const assistant = (
+    usage: { input: number; creation: number; read: number },
+    parent: string | null = null,
+    model = "claude-opus-5-5",
+  ) => ({
+    type: "assistant",
+    message: {
+      model,
+      content: [{ type: "text", text: "working" }],
+      usage: {
+        input_tokens: usage.input,
+        cache_creation_input_tokens: usage.creation,
+        cache_read_input_tokens: usage.read,
+        output_tokens: 400,
+      },
+    },
+    parent_tool_use_id: parent,
+  });
+  /** The event a probe on Claude Code 2.1.330 printed for a compaction, ids left out. */
+  const COMPACT_BOUNDARY = {
+    type: "system",
+    subtype: "compact_boundary",
+    compact_metadata: {
+      trigger: "manual",
+      pre_tokens: 19512,
+      post_tokens: 3790,
+      cumulative_dropped_tokens: 15722,
+      duration_ms: 5885,
+    },
+  };
+
+  it("sums the input, cache-creation and cache-read tokens of the main session's last request", async () => {
+    const stdout = transcript(
+      assistant({ input: 4, creation: 2_000, read: 40_000 }),
+      assistant({ input: 6, creation: 1_667, read: 105_927 }),
+      SUCCESS_RESULT,
+    );
+
+    const result = await runner(execution({ stdout })).run(request());
+
+    expect(result.context).toEqual({ tokens: 107_600 });
+  });
+
+  it("counts an event with no parent tool use at all as the main session's", async () => {
+    const { parent_tool_use_id: _, ...unparented } = assistant({ input: 1, creation: 0, read: 849 });
+    const stdout = transcript(unparented, SUCCESS_RESULT);
+
+    const result = await runner(execution({ stdout })).run(request());
+
+    expect(result.context).toEqual({ tokens: 850 });
+  });
+
+  it("keeps the main session's figure when a subagent's event comes after its last", async () => {
+    const stdout = transcript(
+      assistant({ input: 6, creation: 1_667, read: 105_927 }),
+      assistant({ input: 3, creation: 9_000, read: 300_000 }, "toolu_01Review"),
+      SUCCESS_RESULT,
+    );
+
+    const result = await runner(execution({ stdout })).run(request());
+
+    expect(result.context).toEqual({ tokens: 107_600 });
+  });
+
+  it("passes over an event whose usage is all zero, as the CLI's own messages are", async () => {
+    const stdout = transcript(
+      assistant({ input: 6, creation: 1_667, read: 105_927 }),
+      assistant({ input: 0, creation: 0, read: 0 }, null, "<synthetic>"),
+      {
+        type: "result",
+        subtype: "error",
+        is_error: true,
+        result: "Claude AI usage limit reached|1748000000",
+      },
+    );
+
+    const result = await runner(execution({ exitCode: 1, stdout })).run(request());
+
+    expect(result.failure).toBe("rate-limited");
+    expect(result.context).toEqual({ tokens: 107_600 });
+  });
+
+  it("has none for a session with no request of its own to read", async () => {
+    const stdout = transcript(
+      { type: "system", subtype: "init", session_id: "abc" },
+      assistant({ input: 3, creation: 9_000, read: 300_000 }, "toolu_01Review"),
+      assistant({ input: 0, creation: 0, read: 0 }, null, "<synthetic>"),
+      { type: "assistant", message: { content: [{ type: "text", text: "no usage" }] } },
+      SUCCESS_RESULT,
+    );
+
+    const result = await runner(execution({ stdout })).run(request());
+
+    expect(result).not.toHaveProperty("context");
+  });
+
+  it("says the main session compacted, once however often it did", async () => {
+    const stdout = transcript(
+      assistant({ input: 6, creation: 1_667, read: 190_000 }),
+      COMPACT_BOUNDARY,
+      assistant({ input: 6, creation: 1_667, read: 30_000 }),
+      COMPACT_BOUNDARY,
+      assistant({ input: 6, creation: 1_667, read: 105_927 }),
+      SUCCESS_RESULT,
+    );
+
+    const result = await runner(execution({ stdout })).run(request());
+
+    expect(result.context).toEqual({ tokens: 107_600, compacted: true });
+  });
+
+  it("says nothing of a compaction only a subagent made", async () => {
+    const stdout = transcript(
+      assistant({ input: 6, creation: 1_667, read: 105_927 }),
+      { ...COMPACT_BOUNDARY, parent_tool_use_id: "toolu_01Review" },
+      SUCCESS_RESULT,
+    );
+
+    const result = await runner(execution({ stdout })).run(request());
+
+    expect(result.context).toEqual({ tokens: 107_600 });
+  });
+
+  it("still has a figure for a Stage the wall-clock limit stopped", async () => {
+    const stdout = transcript(assistant({ input: 6, creation: 1_667, read: 105_927 }));
+
+    const result = await runner(execution({ exitCode: 143, timedOut: true, stdout })).run(
+      request(),
+    );
+
+    expect(result).toMatchObject({ ok: false, failure: "timed-out" });
+    expect(result.context).toEqual({ tokens: 107_600 });
+  });
+
+  it("still has a figure for a Stage that crashed before its result", async () => {
+    const stdout = transcript(assistant({ input: 6, creation: 1_667, read: 105_927 }));
+
+    const result = await runner(execution({ exitCode: 1, stdout })).run(request());
+
+    expect(result).toMatchObject({ ok: false, failure: "nonzero-exit" });
+    expect(result.context).toEqual({ tokens: 107_600 });
   });
 });

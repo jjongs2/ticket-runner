@@ -480,7 +480,7 @@ export class FakeAgentRunner implements AgentRunner {
   async run(request: StageRequest): Promise<StageResult> {
     this.requests.push(request);
     // Before the result is read, and whatever it turns out to be: a session
-    // that committed and then ran out of turns still committed.
+    // that committed and then ran out of time still committed.
     this.effects.get(request.stage)?.();
     await this.held.get(request.stage)?.reached();
     const queued = this.queued.get(request.stage);
@@ -494,7 +494,7 @@ export function stageResult(overrides: Partial<StageResult> = {}): StageResult {
     ok: true,
     commandLine: "claude -p ...",
     transcriptPath: "/logs/transcript.jsonl",
-    turns: 7,
+    context: { tokens: 107_600 },
     durationMs: 1_000,
     ...overrides,
   };

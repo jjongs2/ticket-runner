@@ -10,7 +10,6 @@ function request(stage: StageName): StageRequest {
     cwd: "/repo/.worktrees/ticket-2",
     model: "claude-opus-5-5",
     effort: "high",
-    maxTurns: 10,
     maxMinutes: 5,
     permissionMode: "auto",
     credential: "subscription",
@@ -79,14 +78,14 @@ describe("holding a Stage open", () => {
 
   it("answers the result the test queued, once it is released", async () => {
     const runner = new FakeAgentRunner();
-    runner.queue("verify", { ok: false, failure: "turn-capped" });
+    runner.queue("verify", { ok: false, failure: "timed-out" });
     const hold = runner.holds("verify");
 
     const verify = runner.run(request("verify"));
     await hold.started();
     hold.release();
 
-    expect((await verify).failure).toBe("turn-capped");
+    expect((await verify).failure).toBe("timed-out");
   });
 });
 

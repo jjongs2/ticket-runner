@@ -26,6 +26,7 @@
  */
 
 import { carriesCurrentHandoff } from "./handoff.js";
+import type { StageContext } from "./ports/agent-runner.js";
 import type { IssueComment, Tracker } from "./ports/tracker.js";
 import { findMarkedComment } from "./templates.js";
 
@@ -58,8 +59,11 @@ export interface ProgressRow {
   point: ProgressPoint;
   /** An icon and a handful of words; details belong to the hand-off comment. */
   outcome: string;
-  /** Agent turns. CI and the merge run no agent, so they have none. */
-  turns?: number;
+  /**
+   * The main session's context when the Stage ended. A row no session reported
+   * has none: CI and the merge run no agent, and neither do setup or the rebase.
+   */
+  context?: StageContext;
   durationMs?: number;
 }
 
@@ -100,11 +104,11 @@ export function progressComment({
     ...(earlier === "" ? [] : [earlier, ""]),
     `${SECTION_HEADER} \`${version}\` · ${runLabel(runId)} · \`${branch}\``,
     "",
-    "| Stage | Outcome | Turns | Duration |",
+    "| Stage | Outcome | Context | Duration |",
     "|---|---|---|---|",
     ...rows.map(
       (row) =>
-        `| ${row.point} | ${cell(row.outcome)} | ${count(row.turns)} | ${duration(row.durationMs)} |`,
+        `| ${row.point} | ${cell(row.outcome)} | ${context(row.context)} | ${duration(row.durationMs)} |`,
     ),
     "",
   ].join("\n");
@@ -148,8 +152,37 @@ function cell(text: string): string {
   return text.replaceAll("|", "\\|");
 }
 
-function count(turns: number | undefined): string {
-  return turns === undefined ? NO_ANSWER : String(turns);
+/** A Stage's context, followed by ` · compacted` when its main session compacted. */
+function context(stageContext: StageContext | undefined): string {
+  if (stageContext === undefined) return NO_ANSWER;
+  const figure = tokenCount(stageContext.tokens);
+  return stageContext.compacted ? `${figure} · compacted` : figure;
+}
+
+/**
+ * A token count as the Claude Code app's Context card writes one: `850`,
+ * `107.6K`, `1M`. From a thousand it is in thousands or, from a million, in
+ * millions, rounded half up to one decimal with a trailing `.0` dropped. A
+ * count that rounds to a thousand thousands is a million.
+ */
+export function tokenCount(count: number): string {
+  const whole = Math.max(0, Math.round(count));
+  if (whole < 1000) return String(whole);
+  const thousands = tenths(whole, 1000);
+  if (whole < 1_000_000 && thousands < 10_000) return `${decimal(thousands)}K`;
+  return `${decimal(tenths(whole, 1_000_000))}M`;
+}
+
+/** `count` in tenths of `unit`, rounded half up, in whole numbers so no float rounds it. */
+function tenths(count: number, unit: number): number {
+  return Math.floor((count * 10 + unit / 2) / unit);
+}
+
+/** A count of tenths with its one decimal, or none where it is `.0`. */
+function decimal(tenthsCount: number): string {
+  const rest = tenthsCount % 10;
+  const units = (tenthsCount - rest) / 10;
+  return rest === 0 ? String(units) : `${units}.${rest}`;
 }
 
 /**

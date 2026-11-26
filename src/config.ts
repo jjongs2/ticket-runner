@@ -27,7 +27,6 @@ const stageSchema = z
   .object({
     model: z.string().min(1).optional(),
     effort: z.enum(EFFORT_LEVELS).optional(),
-    maxTurns: z.number().int().positive().optional(),
     maxMinutes: z.number().positive().optional(),
     extraPrompt: z.string().optional(),
   })
@@ -71,7 +70,7 @@ const configSchema = z
 export interface StageConfig {
   model: string;
   effort: Effort;
-  maxTurns: number;
+  /** The Stage's one limit, which the session is killed at. */
   maxMinutes: number;
   extraPrompt: string;
 }
@@ -144,15 +143,15 @@ export interface Config {
 }
 
 const STAGE_DEFAULTS = {
-  implement: { maxTurns: 300, maxMinutes: 60 },
-  verify: { maxTurns: 130, maxMinutes: 30 },
-  fix: { maxTurns: 150, maxMinutes: 40 },
+  implement: { maxMinutes: 60 },
+  verify: { maxMinutes: 30 },
+  fix: { maxMinutes: 40 },
   // Resolving one rebase is narrower work than mending a defect, and the
   // pull request's CI grades the whole of it once it finishes.
-  conflict: { maxTurns: 120, maxMinutes: 30 },
+  conflict: { maxMinutes: 30 },
   // Revising four answers from a diff and the answers recorded before it:
   // reading, not writing code, and nothing it does is graded after it.
-  pr: { maxTurns: 60, maxMinutes: 20 },
+  pr: { maxMinutes: 20 },
 } as const;
 
 /**
@@ -262,13 +261,12 @@ function labels(
 }
 
 function stage(
-  defaults: { maxTurns: number; maxMinutes: number },
+  defaults: { maxMinutes: number },
   configured: z.infer<typeof stageSchema> | undefined,
 ): StageConfig {
   return {
     model: configured?.model ?? DEFAULT_MODEL,
     effort: configured?.effort ?? DEFAULT_EFFORT,
-    maxTurns: configured?.maxTurns ?? defaults.maxTurns,
     maxMinutes: configured?.maxMinutes ?? defaults.maxMinutes,
     extraPrompt: configured?.extraPrompt ?? "",
   };

@@ -1325,9 +1325,9 @@ async function passOver(
 }
 
 /**
- * Start one Stage under the model, effort, turn and wall-clock limits its own
- * config names. Everything a Stage differs in is the prompt, where it runs and
- * where it logs; the limits come from one place so no Stage can quietly skip them.
+ * Start one Stage under the model, effort and wall-clock limit its own config
+ * names. Everything a Stage differs in is the prompt, where it runs and
+ * where it logs; the settings come from one place so no Stage can quietly skip them.
  *
  * What the Stages are billed to is the Run's too, and what the Stage says it
  * actually ran on is checked here for the same reason: a Stage billed somewhere the Run did not
@@ -1356,7 +1356,6 @@ async function runStage(
     pluginDir: pipeline.pluginDir,
     model: limits.model,
     effort: limits.effort,
-    maxTurns: limits.maxTurns,
     maxMinutes: limits.maxMinutes,
     ...(request.jsonSchema === undefined ? {} : { jsonSchema: request.jsonSchema }),
     ...(request.resultRequired === undefined
@@ -1449,7 +1448,7 @@ async function stageDidNotFinish(
 /**
  * Put a Stage's Notes where they belong, before its own outcome is judged.
  *
- * Before, because a Stage that ran out of turns still noticed whatever it
+ * Before, because a Stage that ran out of time still noticed whatever it
  * noticed, and the Ticket it noticed it on has no idea a Run is even happening.
  * Losing the Notes would be a second cost for the same failure.
  */
@@ -1908,7 +1907,7 @@ async function verify(
   });
 
   // Before anything else is done with the Stage at all, as the code Stages do
-  // it: a session that ran out of turns, or came back with a verdict nothing
+  // it: a session that ran out of time, or came back with a verdict nothing
   // can be made of, still noticed whatever it noticed. The scratch work it
   // noticed it in is about to be discarded, so its Notes are all that is left —
   // and a worktree that will not discard them is no reason to lose them too.
@@ -2201,7 +2200,7 @@ async function revise(
  * is left if this fails.
  *
  * The tree decides whether it worked, not the session's exit status. A Stage
- * that finished the rebase and then ran out of turns has done the job; one that
+ * that finished the rebase and then ran out of time has done the job; one that
  * came back clean because it quietly abandoned the rebase has not, and only the
  * worktree can tell the difference.
  *
@@ -2276,7 +2275,7 @@ async function conflictStage(
     const state = await pipeline.workspace.rebaseState(worktree, pipeline.baseBranch);
     if (state.resolved) {
       // The worktree decides the row, as it decides the outcome: a Stage that
-      // ran out of turns, or into the rate limit or an API failure, after
+      // ran out of time, or into the rate limit or an API failure, after
       // finishing the rebase did the job it was sent to do.
       const uncommitted = await uncommittedWork(pipeline, worktree, "rebase");
       await progress.record(
@@ -3046,9 +3045,9 @@ async function branchOnRemote(pipeline: Pipeline, ticket: number, branch: string
 }
 
 /**
- * One Stage's row, with the turns and wall-clock the runner reported.
+ * One Stage's row, with the context and wall-clock the runner reported.
  *
- * A Stage the runner could not put a turn count on gets no count rather than a
+ * A Stage the runner could not put a context figure on gets none rather than a
  * zero: nothing ran is not the same as nothing was needed.
  */
 function stageRow(
@@ -3059,14 +3058,13 @@ function stageRow(
   return {
     point: stage,
     outcome,
-    ...(result.turns === undefined ? {} : { turns: result.turns }),
+    ...(result.context === undefined ? {} : { context: result.context }),
     durationMs: result.durationMs,
   };
 }
 
 /** The limits a Stage was given, which are half of what its failure means. */
 interface StageLimits {
-  maxTurns: number;
   maxMinutes: number;
 }
 
@@ -3100,10 +3098,6 @@ const STAGE_FAILURES: Record<
   "timed-out": {
     cell: "timed out",
     sentence: (limits) => `ran past its ${limits.maxMinutes} minute limit`,
-  },
-  "turn-capped": {
-    cell: "turn capped",
-    sentence: (limits) => `hit its ${limits.maxTurns} turn limit`,
   },
   "nonzero-exit": { cell: "exited non-zero", sentence: () => "exited non-zero" },
   "invalid-result": {

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { PROGRESS_MARKER, Progress, findProgressComment, progressComment } from "./progress.js";
+import {
+  PROGRESS_MARKER,
+  Progress,
+  findProgressComment,
+  progressComment,
+  tokenCount,
+} from "./progress.js";
 import type { IssueComment } from "./ports/tracker.js";
 import { HANDOFF_MARKER, HANDOFF_TAKEN_LINE } from "./templates.js";
 import { FakeTracker } from "./testing/fakes.js";
@@ -45,7 +51,7 @@ describe("the comment body", () => {
     ]);
   });
 
-  it("carries the columns Stage, Outcome, Turns and Duration", () => {
+  it("carries the columns Stage, Outcome, Context and Duration", () => {
     const rendered = progressComment({
       version: VERSION,
       runId: "run-1",
@@ -53,7 +59,8 @@ describe("the comment body", () => {
       rows: [],
     });
 
-    expect(rendered).toContain("| Stage | Outcome | Turns | Duration |");
+    expect(rendered).toContain("| Stage | Outcome | Context | Duration |");
+    expect(rendered).not.toContain("Turns");
   });
 
   it("writes one row per Stage, in the order they finished", () => {
@@ -62,13 +69,57 @@ describe("the comment body", () => {
       runId: "run-1",
       branch: BRANCH,
       rows: [
-        { point: "implement", outcome: "✅ committed", turns: 7, durationMs: 1_200_000 },
+        {
+          point: "implement",
+          outcome: "✅ committed",
+          context: { tokens: 107_600 },
+          durationMs: 1_200_000,
+        },
         { point: "ci", outcome: "✅ passed", durationMs: 120_000 },
       ],
     });
 
-    expect(rendered).toContain("| implement | ✅ committed | 7 | 20m 0s |");
+    expect(rendered).toContain("| implement | ✅ committed | 107.6K | 20m 0s |");
     expect(rendered).toContain("| ci | ✅ passed | – | 2m 0s |");
+  });
+
+  it("follows the figure of a Stage whose main session compacted with ` · compacted`", () => {
+    const rendered = progressComment({
+      version: VERSION,
+      runId: "run-1",
+      branch: BRANCH,
+      rows: [
+        {
+          point: "implement",
+          outcome: "✅ committed",
+          context: { tokens: 200_000, compacted: true },
+          durationMs: 0,
+        },
+      ],
+    });
+
+    expect(rendered).toContain("| implement | ✅ committed | 200K · compacted | 0s |");
+  });
+
+  it.each([
+    [0, "0"],
+    [850, "850"],
+    [999, "999"],
+    [1_000, "1K"],
+    [1_049, "1K"],
+    [1_050, "1.1K"],
+    [107_600, "107.6K"],
+    [107_650, "107.7K"],
+    [200_000, "200K"],
+    [999_949, "999.9K"],
+    [999_950, "1M"],
+    [1_000_000, "1M"],
+    [1_049_999, "1M"],
+    [1_050_000, "1.1M"],
+    [545_000, "545K"],
+    [12_345_678, "12.3M"],
+  ])("writes %i tokens as %s", (count, shown) => {
+    expect(tokenCount(count)).toBe(shown);
   });
 
   it.each([
@@ -101,7 +152,7 @@ describe("the comment body", () => {
       branch: BRANCH,
       rows: [
         { point: "ci", outcome: "❌ `npm test` failed", durationMs: 0 },
-        { point: "fix", outcome: "✅ committed", turns: 4, durationMs: 0 },
+        { point: "fix", outcome: "✅ committed", context: { tokens: 4_000 }, durationMs: 0 },
         { point: "ci", outcome: "✅ passed", durationMs: 0 },
       ],
     });
@@ -169,10 +220,14 @@ describe("recording a Stage", () => {
     const tracker = new FakeTracker();
     tracker.addIssue({ number: TICKET });
 
-    await progress(tracker).record({ point: "implement", outcome: "✅ committed", turns: 7 });
+    await progress(tracker).record({
+      point: "implement",
+      outcome: "✅ committed",
+      context: { tokens: 850 },
+    });
 
     expect(tracker.comments).toHaveLength(1);
-    expect(body(tracker)).toContain("| implement | ✅ committed | 7 | – |");
+    expect(body(tracker)).toContain("| implement | ✅ committed | 850 | – |");
   });
 
   it("edits that same comment on every later Stage", async () => {
@@ -180,12 +235,12 @@ describe("recording a Stage", () => {
     tracker.addIssue({ number: TICKET });
     const recorder = progress(tracker);
 
-    await recorder.record({ point: "implement", outcome: "✅ committed", turns: 7 });
+    await recorder.record({ point: "implement", outcome: "✅ committed", context: { tokens: 850 } });
     await recorder.record({ point: "ci", outcome: "✅ passed", durationMs: 0 });
 
     expect(tracker.comments).toHaveLength(1);
     expect(tracker.updatedComments).toHaveLength(1);
-    expect(body(tracker)).toContain("| implement | ✅ committed | 7 | – |");
+    expect(body(tracker)).toContain("| implement | ✅ committed | 850 | – |");
     expect(body(tracker)).toContain("| ci | ✅ passed | – | 0s |");
   });
 
@@ -209,7 +264,14 @@ describe("recording a Stage", () => {
       version: "0.5.0",
       runId: "run-0",
       branch: BRANCH,
-      rows: [{ point: "implement", outcome: "✅ committed", turns: 46, durationMs: 1_260_000 }],
+      rows: [
+        {
+          point: "implement",
+          outcome: "✅ committed",
+          context: { tokens: 107_600 },
+          durationMs: 1_260_000,
+        },
+      ],
     });
     issue.comments.push({ id: "42", body: earlier });
 
@@ -220,7 +282,7 @@ describe("recording a Stage", () => {
         earlier,
         `**ticket-runner** \`${VERSION}\` · run \`run-1\` · \`${BRANCH}\``,
         "",
-        "| Stage | Outcome | Turns | Duration |",
+        "| Stage | Outcome | Context | Duration |",
         "|---|---|---|---|",
         "| ci | ✅ passed | – | – |",
         "",
@@ -293,6 +355,40 @@ describe("recording a Stage", () => {
     );
   });
 
+  it("carries an earlier Run's Turns column forward as written, above its own Context column", async () => {
+    const tracker = new FakeTracker();
+    const issue = tracker.addIssue({ number: TICKET });
+    const turns = [
+      PROGRESS_MARKER,
+      `**ticket-runner** \`0.6.7\` · run \`run-0\` · \`${BRANCH}\``,
+      "",
+      "| Stage | Outcome | Turns | Duration |",
+      "|---|---|---|---|",
+      "| implement | ✅ committed | 301 | 37m 48s |",
+      "",
+    ].join("\n");
+    issue.comments.push({ id: "42", body: turns });
+
+    await progress(tracker, issue.comments).record({
+      point: "verify",
+      outcome: "✅ 1 met",
+      context: { tokens: 95_250 },
+      durationMs: 65_000,
+    });
+
+    expect(body(tracker)).toBe(
+      [
+        turns,
+        `**ticket-runner** \`${VERSION}\` · run \`run-1\` · \`${BRANCH}\``,
+        "",
+        "| Stage | Outcome | Context | Duration |",
+        "|---|---|---|---|",
+        "| verify | ✅ 1 met | 95.3K | 1m 5s |",
+        "",
+      ].join("\n"),
+    );
+  });
+
   it("carries an earlier Run's whole minutes forward as written, beside its own seconds", async () => {
     const tracker = new FakeTracker();
     const issue = tracker.addIssue({ number: TICKET });
@@ -326,7 +422,14 @@ describe("recording a Stage", () => {
       version: "0.5.0",
       runId: "run-0",
       branch: BRANCH,
-      rows: [{ point: "implement", outcome: "⏸ rate limited", turns: 3, durationMs: 60_000 }],
+      rows: [
+        {
+          point: "implement",
+          outcome: "⏸ rate limited",
+          context: { tokens: 3_000 },
+          durationMs: 60_000,
+        },
+      ],
     });
     issue.comments.push({ id: "42", body: `${earlier}${CLOUD_FOOTER}` });
 
@@ -337,7 +440,7 @@ describe("recording a Stage", () => {
         earlier,
         `**ticket-runner** \`${VERSION}\` · run \`run-1\` · \`${BRANCH}\``,
         "",
-        "| Stage | Outcome | Turns | Duration |",
+        "| Stage | Outcome | Context | Duration |",
         "|---|---|---|---|",
         "| ci | ✅ passed | – | – |",
         "",

@@ -42,7 +42,6 @@ export type StageFailure =
   | "api-error"
   | "out-of-budget"
   | "timed-out"
-  | "turn-capped"
   | "nonzero-exit"
   | "invalid-result";
 
@@ -53,7 +52,7 @@ export interface StageRequest {
   cwd: string;
   model: string;
   effort: Effort;
-  maxTurns: number;
+  /** The Stage's one limit: the session is killed when it runs past it. */
   maxMinutes: number;
   permissionMode: PermissionMode;
   /**
@@ -91,7 +90,11 @@ export interface StageResult {
   /** The exact command line, reproducible by hand. */
   commandLine: string;
   transcriptPath: string;
-  turns?: number;
+  /**
+   * The main session's context when the Stage ended. Absent where the session
+   * printed no `assistant` event of its own with any usage on it.
+   */
+  context?: StageContext;
   durationMs: number;
   /**
    * When the subscription rate limit resets, ISO-8601, as the event that
@@ -126,6 +129,18 @@ export interface StageResult {
    * was using the subscription's extra usage (`isUsingOverage`).
    */
   extraUsage?: true;
+}
+
+/**
+ * How much context the main session held when its Stage ended, as its last
+ * `assistant` event with any usage on it counted it: the input, cache-creation
+ * and cache-read tokens summed. A subagent's events are not the main session's,
+ * and the CLI's own rate-limit and API-error messages carry no usage at all.
+ */
+export interface StageContext {
+  tokens: number;
+  /** Present, and true, when the main session compacted at least once. */
+  compacted?: true;
 }
 
 /**
